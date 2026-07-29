@@ -23,7 +23,8 @@
   ],
   "dependencies": {
     "@token-harness/adapters": "workspace:*",
-    "@token-harness/core": "workspace:*"
+    "@token-harness/core": "workspace:*",
+    "@token-harness/platform": "workspace:*"
   },
   "scripts": {
     "build": "tsc -b"

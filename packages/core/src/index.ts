@@ -16,6 +16,8 @@ export * from './domain/ids.js';
 export * from './domain/manifest.js';
 export * from './domain/plan.js';
 export * from './domain/platform.js';
+export * from './domain/process.js';
+export * from './domain/redaction.js';
 export * from './domain/reports.js';
 export * from './domain/verification.js';
 export * from './domain/version.js';

@@ -24,10 +24,10 @@ function manifest(): Manifest {
  * private — not as a formality, but because publishing it today would produce a
  * tarball nobody can install.
  *
- * The reason is mechanical: `dist/src` imports `@token-harness/core` and
- * `@token-harness/adapters`, which are private workspace packages, and the
- * dependency ranges use the `workspace:` protocol that npm rejects outright with
- * EUNSUPPORTEDPROTOCOL.
+ * The reason is mechanical: `dist/src` imports `@token-harness/core`,
+ * `@token-harness/platform`, and `@token-harness/adapters`, which are private
+ * workspace packages, and the dependency ranges use the `workspace:` protocol that
+ * npm rejects outright with EUNSUPPORTEDPROTOCOL.
  *
  * This test is written so it invalidates itself. Whoever removes `private` in
  * Phase 8.3 is forced by a failing assertion to resolve the dependency question

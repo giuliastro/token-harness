@@ -80,7 +80,10 @@ compatibility and attribution tests prove they compose safely.
 ## Status
 
 Phase 0 is complete. Phase 1 — the workspace, the domain contracts, and the CLI
-shell — is implemented.
+shell — is implemented, as are Phase 2.1 and 2.2: platform facts, state-path
+resolution with the RFC 0004 permission property, and the safe process runner.
+They live in a fourth workspace package, `packages/platform`, extracted per
+RFC 0001 §Repository shape now that the executor and the adapters need it.
 
 What works today:
 
@@ -105,8 +108,8 @@ Two separate limitations, both deliberate.
 
 **Not on npm.** There is no `npm install -g token-harness` and no
 `npx token-harness`. The package is marked private, because publishing it today
-would produce a tarball nobody could install: it depends on two private
-workspace packages through the `workspace:` protocol, which npm rejects.
+would produce a tarball nobody could install: it depends on private workspace
+packages through the `workspace:` protocol, which npm rejects.
 Distribution — publishing, provenance, SBOM, signing, `npx` — is Phase 8.3, and
 PLAN §17.2 keeps packaging beyond npm an open decision. `apps/cli/test/packaging.test.ts`
 fails the moment `private` is removed while the workspace dependencies remain,
