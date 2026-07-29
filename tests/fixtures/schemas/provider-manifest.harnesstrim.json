@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "harnesstrim",
+  "displayName": "HarnessTrim",
+  "description": "Deterministic reducers and harness adapters.",
+  "homepage": "https://github.com/giuliastro/HarnessTrim",
+  "sourceRepository": "https://github.com/giuliastro/HarnessTrim",
+  "license": {
+    "spdx": "Apache-2.0",
+    "distributionMode": "external",
+    "reviewRequired": false
+  },
+  "capabilities": [
+    {
+      "capability": "shell.output.reduce",
+      "mode": "exclusive",
+      "harnesses": [
+        "claude",
+        "codex",
+        "opencode"
+      ],
+      "evidence": {
+        "sourceReference": "adapter-claude/src/install.ts:6 HOOK_MATCHER = \"Bash\"",
+        "upstreamVersion": "0.0.5"
+      }
+    }
+  ],
+  "platforms": [
+    {
+      "os": "windows",
+      "wsl": false,
+      "supported": true,
+      "limitation": null
+    },
+    {
+      "os": "linux",
+      "wsl": true,
+      "supported": true,
+      "limitation": null
+    },
+    {
+      "os": "macos",
+      "wsl": false,
+      "supported": true,
+      "limitation": null
+    }
+  ],
+  "harnesses": [
+    {
+      "harness": "opencode",
+      "testedVersions": {
+        "minimum": "0.0.5",
+        "maximum": "0.0.5"
+      },
+      "verificationTier": "config-only"
+    }
+  ],
+  "installationChannels": [
+    {
+      "id": "npm",
+      "kind": "npm",
+      "priority": 0,
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "requiresNetwork": true,
+      "requiresElevation": false,
+      "digestAvailable": true
+    }
+  ],
+  "metrics": {
+    "source": "jsonl",
+    "mode": "legacy",
+    "locations": [
+      ".harnesstrim/metrics.jsonl",
+      "~/.hermes/harnesstrim-metrics.jsonl"
+    ]
+  },
+  "delegatedInstallReview": {
+    "upstreamVersion": "0.0.5",
+    "reviewedWriteSet": [
+      ".opencode/plugin/harnesstrim.ts",
+      "AGENTS.md"
+    ],
+    "containmentBoundary": [
+      ".opencode"
+    ],
+    "upstreamUninstallAvailable": false
+  }
+}

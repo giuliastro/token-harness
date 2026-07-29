@@ -1,0 +1,104 @@
+{
+  "command": "plan",
+  "exitCode": 0,
+  "data": {
+    "planId": "7f3a91c2",
+    "profile": "safe",
+    "harness": "claude",
+    "projectRoot": "C:\\work\\demo",
+    "projectId": "p_4d2f8a",
+    "ownership": [
+      {
+        "scope": {
+          "harness": "claude",
+          "toolFamily": "bash",
+          "interceptionPoint": "pre-tool-use",
+          "capability": "shell.command.rewrite"
+        },
+        "owner": "rtk",
+        "mode": "exclusive",
+        "order": 0
+      },
+      {
+        "scope": {
+          "harness": "claude",
+          "toolFamily": "bash",
+          "interceptionPoint": "post-tool-use",
+          "capability": "shell.output.reduce"
+        },
+        "owner": "rtk",
+        "mode": "exclusive",
+        "order": 0
+      },
+      {
+        "scope": {
+          "harness": "claude",
+          "toolFamily": "*",
+          "interceptionPoint": "*",
+          "capability": "metrics.observe"
+        },
+        "owner": "token-harness",
+        "mode": "observational",
+        "order": 0
+      }
+    ],
+    "exclusions": [
+      {
+        "scope": {
+          "harness": "claude",
+          "toolFamily": "bash",
+          "interceptionPoint": "post-tool-use",
+          "capability": "shell.output.reduce"
+        },
+        "excluded": "harnesstrim",
+        "retained": "rtk",
+        "reason": [
+          "contested; rtk owns it under profile safe",
+          "harnesstrim 0.0.5 reduces Bash only on claude",
+          "and exposes no surface selector, so it cannot",
+          "be narrowed to a free scope"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "kind": "patch-marker-block",
+        "id": "a1",
+        "riskClass": "reversible",
+        "requiresNetwork": false,
+        "requiresElevation": false,
+        "affectedPaths": ["C:\\Users\\dev\\.claude\\settings.json"],
+        "affectedProcesses": [],
+        "preconditions": ["settings.json parses as JSON"],
+        "postconditions": ["the owned marker block is present and matches its digest"],
+        "rollbackData": "file-snapshot",
+        "explanation": "configure rtk hook",
+        "path": "C:\\Users\\dev\\.claude\\settings.json",
+        "markerBegin": "token-harness:begin",
+        "markerEnd": "token-harness:end"
+      },
+      {
+        "kind": "write-owned-file",
+        "id": "a2",
+        "riskClass": "reversible",
+        "requiresNetwork": false,
+        "requiresElevation": false,
+        "affectedPaths": [
+          "C:\\Users\\dev\\AppData\\Local\\TokenHarness\\receipts\\7f3a91c2.json"
+        ],
+        "affectedProcesses": [],
+        "preconditions": ["the state root exists and its permissions were asserted"],
+        "postconditions": ["the receipt records the applied pipeline and both versions"],
+        "rollbackData": "file-snapshot",
+        "explanation": "",
+        "path": "C:\\Users\\dev\\AppData\\Local\\TokenHarness\\receipts\\7f3a91c2.json"
+      }
+    ],
+    "conflicts": [],
+    "network": [],
+    "elevation": [],
+    "backups": { "files": 1 },
+    "persisted": true
+  },
+  "diagnostics": []
+}

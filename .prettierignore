@@ -1,0 +1,13 @@
+dist/
+**/dist/
+node_modules/
+pnpm-lock.yaml
+.claude/
+
+# Golden files are byte-compared artifacts, not formatted source. The five human
+# transcripts are transcribed from RFC 0006 and must stay byte-identical to it.
+tests/fixtures/
+
+# Prose is a reviewed contract, not source. Reformatting an accepted RFC would
+# produce a diff nobody asked for on a document whose wording is the agreement.
+**/*.md

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "RTK",
+  "displayName": "",
+  "description": "Several problems at once, so the parser must report all of them.",
+  "homepage": "https://example.invalid",
+  "sourceRepository": "https://example.invalid",
+  "license": {
+    "spdx": null,
+    "distributionMode": "vendored",
+    "reviewRequired": "yes"
+  },
+  "capabilities": [
+    {
+      "capability": "shell.output.compress",
+      "mode": "sometimes",
+      "harnesses": []
+    }
+  ],
+  "platforms": [],
+  "harnesses": [],
+  "installationChannels": []
+}

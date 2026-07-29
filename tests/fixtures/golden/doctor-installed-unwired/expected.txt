@@ -1,0 +1,12 @@
+Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
+
+Harnesses
+  claude      detected    ~/.claude/settings.json
+  codex       detected    ~/.codex/config.toml
+  opencode    absent
+
+Providers
+  rtk           installed     1.4.2   not configured for any harness
+  harnesstrim   installed     0.0.5   not configured for any managed harness
+
+Nothing is broken. Run `token-harness plan` to see what would change.

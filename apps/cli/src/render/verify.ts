@@ -1,0 +1,52 @@
+/**
+ * Human rendering of `token-harness verify`.
+ *
+ * Pinned by RFC 0006 §Golden path, scenario "verifying RTK managed on Claude and
+ * HarnessTrim adopted on OpenCode". The `verify` *command* is Phase 7 (PLAN
+ * §12); the renderer exists now because the transcript is normative and PLAN
+ * §1.3 commits it as a golden file for the human rendering, not only the JSON.
+ */
+
+import type { VerifyReport } from '@token-harness/core';
+
+import { column, document, pluralize, type RenderContext } from './layout.js';
+
+const CHECK_STATUS_WIDTH = 6;
+const CHECK_ID_WIDTH = 27;
+
+export function renderVerifyReport(report: VerifyReport, _context: RenderContext): string {
+  const lines: string[] = [];
+
+  lines.push(`Receipt ${report.receiptId} — applied ${report.appliedAt}`);
+  lines.push('');
+
+  for (const result of report.results) {
+    const header: string[] = [result.providerId, result.harnessId];
+    // RFC 0004 §Brownfield adoption: an adopted installation is verified and
+    // measured, never modified, and the header says so before any check does.
+    if (!result.managedByTokenHarness) header.push('adopted, not managed');
+    header.push(`declared tier: ${result.declaredTier}`);
+    lines.push(header.join(' — '));
+    for (const check of result.checks) {
+      lines.push(
+        `  ${column(check.status, CHECK_STATUS_WIDTH)}${column(check.id, CHECK_ID_WIDTH)}${check.summary}`,
+      );
+    }
+  }
+
+  lines.push('');
+  if (report.healthyAtDeclaredTier) {
+    lines.push('Pipeline healthy at the declared tier for every provider.');
+  } else {
+    // RFC 0006 §Tier-aware verification status: only a result below the
+    // declared tier is a failure. `info` never contributes.
+    const failures = report.results
+      .flatMap((result) => result.checks)
+      .filter((check) => check.status === 'fail').length;
+    lines.push(
+      `${failures} ${pluralize(failures, 'check')} below the declared tier. The pipeline is not proven.`,
+    );
+  }
+
+  return document(lines);
+}

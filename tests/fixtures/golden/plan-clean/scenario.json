@@ -1,0 +1,13 @@
+{
+  "name": "plan-clean",
+  "title": "Planning against the doctor fixture above",
+  "source": "RFC 0006 §Golden path",
+  "command": "plan",
+  "rendered": true,
+  "roots": {
+    "home": "C:\\Users\\dev",
+    "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
+    "projectRoot": "C:\\work\\demo"
+  },
+  "toolVersion": "0.1.0"
+}

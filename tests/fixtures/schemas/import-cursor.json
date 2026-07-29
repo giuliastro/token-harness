@@ -1,0 +1,9 @@
+{
+  "providerId": "harnesstrim",
+  "sourceId": "project-metrics-jsonl",
+  "absolutePath": "C:\\work\\demo\\.harnesstrim\\metrics.jsonl",
+  "fileIdentity": "vol:1A2B3C4D#file:0000000000012345",
+  "byteOffset": 40928,
+  "lastLineDigest": "sha256:1f0c9d2e",
+  "updatedAt": "2026-07-29T10:15:00Z"
+}

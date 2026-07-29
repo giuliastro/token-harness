@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "eventId": "evt_02",
+  "timestamp": "2026-07-29T10:12:05Z",
+  "provider": {
+    "id": "harnesstrim",
+    "version": "0.0.5"
+  },
+  "context": {
+    "projectId": "p_4d2f8a",
+    "harnessId": "opencode",
+    "sessionId": null,
+    "operationId": "op_7713",
+    "pipelineId": "b41e",
+    "pipelineOrder": 0,
+    "toolFamily": "bash",
+    "capability": "shell.output.reduce"
+  },
+  "measurement": {
+    "class": "counterfactual",
+    "beforeChars": 9004,
+    "afterChars": 2210,
+    "beforeTokens": null,
+    "afterTokens": null,
+    "tokenizer": null,
+    "confidenceLow": null,
+    "confidenceHigh": null
+  },
+  "outcome": {
+    "changed": false,
+    "bypassReason": "adapter mode dryrun",
+    "originalReference": null,
+    "latencyMs": 4,
+    "errorCode": null
+  },
+  "source": {
+    "nativeEventId": null,
+    "importedAt": "2026-07-29T10:15:00Z"
+  }
+}

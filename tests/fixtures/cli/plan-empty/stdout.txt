@@ -1,0 +1,11 @@
+Plan unsaved — profile safe — harness all — project C:/work/demo
+
+Capability ownership
+  no capability is owned by any provider
+
+Actions
+  none
+
+Network: none. Elevation: none. Backups: none.
+
+Dry run. There is nothing to change.

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "id": "rtk",
+  "displayName": "RTK",
+  "description": "A manifest from a future build.",
+  "homepage": "https://github.com/rtk-ai/rtk",
+  "sourceRepository": "https://github.com/rtk-ai/rtk",
+  "license": {
+    "spdx": "MIT",
+    "distributionMode": "external",
+    "reviewRequired": false
+  },
+  "capabilities": [],
+  "platforms": [],
+  "harnesses": [],
+  "installationChannels": [],
+  "metrics": {
+    "source": "none",
+    "mode": "unavailable",
+    "locations": []
+  },
+  "delegatedInstallReview": null
+}

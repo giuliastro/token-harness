@@ -1,0 +1,15 @@
+{
+  "name": "metrics-week",
+  "title": "Metrics after a week of RTK on Claude and HarnessTrim adopted on OpenCode",
+  "source": "RFC 0006 §Golden path",
+  "command": "metrics",
+  "rendered": true,
+  "commandImplemented": false,
+  "note": "The `metrics` command lands in Phase 7 (PLAN §12). The renderer and this golden file exist now because the transcript is normative and PLAN §1.3 commits it for the human rendering.",
+  "roots": {
+    "home": "C:\\Users\\dev",
+    "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
+    "projectRoot": "C:\\work\\demo"
+  },
+  "toolVersion": "0.1.0"
+}

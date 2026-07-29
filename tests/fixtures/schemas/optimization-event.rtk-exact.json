@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "eventId": "evt_01",
+  "timestamp": "2026-07-29T10:12:04Z",
+  "provider": {
+    "id": "rtk",
+    "version": "1.4.2"
+  },
+  "context": {
+    "projectId": "p_4d2f8a",
+    "harnessId": "claude",
+    "sessionId": null,
+    "operationId": "op_7712",
+    "pipelineId": "b41e",
+    "pipelineOrder": 0,
+    "toolFamily": "bash",
+    "capability": "shell.output.reduce"
+  },
+  "measurement": {
+    "class": "exact-local",
+    "beforeChars": 48210,
+    "afterChars": 13024,
+    "beforeTokens": 12052,
+    "afterTokens": 3256,
+    "tokenizer": "o200k_base",
+    "confidenceLow": null,
+    "confidenceHigh": null
+  },
+  "outcome": {
+    "changed": true,
+    "bypassReason": null,
+    "originalReference": "rtk://cache/7712",
+    "latencyMs": 11,
+    "errorCode": null
+  },
+  "source": {
+    "nativeEventId": "rtk_7712",
+    "importedAt": "2026-07-29T10:15:00Z"
+  }
+}

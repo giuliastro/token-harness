@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "rtk",
+  "displayName": "RTK",
+  "description": "Command rewriting and shell-output reduction.",
+  "homepage": "https://github.com/rtk-ai/rtk",
+  "sourceRepository": "https://github.com/rtk-ai/rtk",
+  "license": {
+    "spdx": "MIT",
+    "distributionMode": "external",
+    "reviewRequired": false
+  },
+  "capabilities": [
+    {
+      "capability": "shell.command.rewrite",
+      "mode": "exclusive",
+      "harnesses": [
+        "claude",
+        "codex",
+        "opencode"
+      ],
+      "evidence": {
+        "sourceReference": "src/rewrite/registry.rs",
+        "upstreamVersion": "1.4.2"
+      }
+    },
+    {
+      "capability": "shell.output.reduce",
+      "mode": "exclusive",
+      "harnesses": [
+        "claude",
+        "codex",
+        "opencode"
+      ],
+      "evidence": {
+        "sourceReference": "src/filter/mod.rs",
+        "upstreamVersion": "1.4.2"
+      }
+    }
+  ],
+  "platforms": [
+    {
+      "os": "windows",
+      "wsl": false,
+      "supported": true,
+      "limitation": null
+    },
+    {
+      "os": "linux",
+      "wsl": true,
+      "supported": true,
+      "limitation": null
+    },
+    {
+      "os": "macos",
+      "wsl": false,
+      "supported": true,
+      "limitation": null
+    }
+  ],
+  "harnesses": [
+    {
+      "harness": "claude",
+      "testedVersions": {
+        "minimum": "2.0.0",
+        "maximum": "2.0.14"
+      },
+      "verificationTier": "canary"
+    },
+    {
+      "harness": "codex",
+      "testedVersions": {
+        "minimum": "0.40.0",
+        "maximum": null
+      },
+      "verificationTier": "canary"
+    }
+  ],
+  "installationChannels": [
+    {
+      "id": "github-release",
+      "kind": "github-release",
+      "priority": 0,
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "requiresNetwork": true,
+      "requiresElevation": false,
+      "digestAvailable": true
+    }
+  ],
+  "metrics": {
+    "source": "cli-json",
+    "mode": "native",
+    "locations": []
+  },
+  "delegatedInstallReview": null
+}

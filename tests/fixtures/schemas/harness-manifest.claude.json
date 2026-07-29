@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "claude",
+  "displayName": "Claude Code",
+  "homepage": "https://claude.com/claude-code",
+  "testedVersions": {
+    "minimum": "2.0.0",
+    "maximum": "2.0.14"
+  },
+  "verificationTier": "canary",
+  "interceptionPoints": [
+    "pre-tool-use",
+    "post-tool-use"
+  ],
+  "userScopedConfigPaths": [
+    "~/.claude/settings.json"
+  ],
+  "projectScopedConfigPaths": [
+    ".claude/settings.json",
+    ".claude/settings.local.json"
+  ]
+}

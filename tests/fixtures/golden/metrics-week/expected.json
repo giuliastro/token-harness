@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "command": "metrics",
+  "toolVersion": "0.1.0",
+  "status": "ok",
+  "exitCode": 0,
+  "data": {
+    "windowStart": "2026-07-22",
+    "windowEnd": "2026-07-29",
+    "pipelineId": "b41e",
+    "classes": [
+      {
+        "class": "exact-local",
+        "unit": "tokens",
+        "before": 1204880,
+        "after": 331402,
+        "saved": 873478,
+        "note": null
+      },
+      {
+        "class": "estimated-local",
+        "unit": "chars",
+        "before": 412006,
+        "after": 98220,
+        "saved": 313786,
+        "note": null
+      },
+      {
+        "class": "counterfactual",
+        "unit": null,
+        "before": null,
+        "after": null,
+        "saved": null,
+        "note": "none recorded"
+      },
+      {
+        "class": "end-to-end-billed",
+        "unit": null,
+        "before": null,
+        "after": null,
+        "saved": null,
+        "note": "no A/B run"
+      }
+    ],
+    "providers": [
+      {
+        "providerId": "rtk",
+        "saved": 873478,
+        "unit": "tokens",
+        "class": "exact-local",
+        "operations": 4118,
+        "harnesses": [
+          "claude"
+        ],
+        "managedByTokenHarness": true,
+        "adapterMode": null
+      },
+      {
+        "providerId": "harnesstrim",
+        "saved": 313786,
+        "unit": "chars",
+        "class": "estimated-local",
+        "operations": 1440,
+        "harnesses": [
+          "opencode"
+        ],
+        "managedByTokenHarness": false,
+        "adapterMode": "active"
+      }
+    ],
+    "coveragePercent": 91,
+    "bypassed": 402,
+    "errors": 0,
+    "addedMedianLatencyMs": 11
+  },
+  "diagnostics": []
+}

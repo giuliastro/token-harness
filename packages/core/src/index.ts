@@ -1,0 +1,29 @@
+/**
+ * Public surface of `@token-harness/core`.
+ *
+ * The barrel is the boundary: `@token-harness/adapters` and `apps/cli` import
+ * this module and never a path inside `src/`. The rule is enforced by
+ * `tests/integration/architecture.test.ts` (PLAN §1.1).
+ */
+
+export * from './domain/actions.js';
+export * from './domain/capabilities.js';
+export * from './domain/compatibility.js';
+export * from './domain/detection.js';
+export * from './domain/diagnostics.js';
+export * from './domain/evidence.js';
+export * from './domain/ids.js';
+export * from './domain/manifest.js';
+export * from './domain/plan.js';
+export * from './domain/platform.js';
+export * from './domain/reports.js';
+export * from './domain/verification.js';
+export * from './domain/version.js';
+
+export * from './envelope/envelope.js';
+export * from './envelope/exit-codes.js';
+export * from './envelope/parse.js';
+
+export * from './metrics/events.js';
+export * from './metrics/report.js';
+export * from './metrics/store.js';

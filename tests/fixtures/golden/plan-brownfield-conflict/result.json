@@ -1,0 +1,39 @@
+{
+  "command": "plan",
+  "exitCode": 4,
+  "data": {
+    "planId": null,
+    "profile": "safe",
+    "harness": "claude",
+    "projectRoot": "C:\\work\\demo",
+    "projectId": "p_4d2f8a",
+    "ownership": [],
+    "exclusions": [],
+    "actions": [],
+    "conflicts": [
+      {
+        "code": "exclusive-scope-contested",
+        "scope": "claude/bash/post-tool-use/shell.output.reduce",
+        "claimants": ["rtk", "harnesstrim"],
+        "detail": [
+          "claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and harnesstrim",
+          "and no compatibility rule covers that pair."
+        ],
+        "remediation": "choose an owner with `--provider`, or set the surface in token-harness.yaml."
+      }
+    ],
+    "network": [],
+    "elevation": [],
+    "backups": { "files": 0 },
+    "persisted": false
+  },
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "exclusive-scope-contested",
+      "message": "claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and harnesstrim and no compatibility rule covers that pair",
+      "path": "C:\\Users\\dev\\.claude\\settings.json",
+      "remediation": "choose an owner with `--provider`, or set the surface in token-harness.yaml"
+    }
+  ]
+}

@@ -79,9 +79,46 @@ compatibility and attribution tests prove they compose safely.
 
 ## Status
 
-Phase 0 is complete at the design level. This repository currently contains the
-contracts and implementation roadmap from which the greenfield implementation will
-start.
+Phase 0 is complete. Phase 1 — the workspace, the domain contracts, and the CLI
+shell — is implemented.
+
+What works today:
+
+```text
+token-harness --help
+token-harness --version
+token-harness doctor [--json]
+token-harness plan   [--json]
+token-harness status [--json]
+```
+
+The exit-code table, the `--json` envelope, and the stream discipline from
+RFC 0006 are implemented in full. The harness and provider registries are empty:
+detection, planning, and mutation land in Phases 2 through 6, and until then
+`doctor` truthfully reports an environment it cannot yet inspect. `apply`,
+`verify`, `metrics`, `update`, `rollback`, and `uninstall` are rejected as
+unavailable rather than as unknown.
+
+## Development
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm smoke
+```
+
+`pnpm build` produces a self-contained ESM artifact at
+`dist/bundle/token-harness.mjs`; `pnpm smoke` runs it from a temporary directory
+outside the repository, so a missing inline shows up as a resolution failure.
+
+`pnpm golden` regenerates the derived halves of the golden fixtures. It never
+touches the five human transcripts transcribed from RFC 0006 — see
+[tests/fixtures/README.md](tests/fixtures/README.md).
+
+CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
+matrix set not to fail fast.
 
 - [Development plan](PLAN.md)
 - [Foundation decisions](docs/rfcs/0001-foundation.md)

@@ -1,0 +1,8 @@
+Plan aborted — 1 hard conflict.
+
+  conflict  exclusive-scope-contested
+    claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and harnesstrim
+    and no compatibility rule covers that pair.
+    Fix: choose an owner with `--provider`, or set the surface in token-harness.yaml.
+
+No plan was produced.
