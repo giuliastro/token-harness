@@ -1,0 +1,37 @@
+{
+  "name": "token-harness-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "compile": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "tsc -b && node --test --test-reporter=spec \"packages/*/dist/test/**/*.test.js\" \"apps/*/dist/test/**/*.test.js\" \"tests/dist/integration/**/*.test.js\"",
+    "build": "tsc -b && node scripts/bundle.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "golden": "node tests/tools/scenarios.mjs && node tests/tools/regenerate-golden.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "22.13.0",
+    "esbuild": "0.25.12",
+    "eslint": "9.39.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4"
+  }
+}

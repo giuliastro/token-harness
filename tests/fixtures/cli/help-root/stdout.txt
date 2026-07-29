@@ -1,0 +1,26 @@
+token-harness — one control plane for token-efficient coding agents
+
+Usage
+  token-harness <command> [flags]
+
+Commands
+  doctor      Report detected harnesses and providers
+  plan        Compute a dry-run plan; nothing is changed
+  status      Report applied pipelines, drift, and importer modes
+  apply       Not in this build
+  verify      Not in this build
+  metrics     Not in this build
+  update      Not in this build
+  rollback    Not in this build
+  uninstall   Not in this build
+
+Flags
+  --json               Emit one machine-readable envelope on stdout
+  --harness <id>       Restrict the operation to one harness
+  --provider <id>      Restrict the operation to one provider
+  --project <dir>      Operate on that project instead of the current directory
+  --version            Print the version and exit 0
+  --help               Print usage and exit 0
+
+Mutating commands are dry-run by default and there is no flag that skips
+planning. Exit codes and the JSON envelope are specified in RFC 0006.

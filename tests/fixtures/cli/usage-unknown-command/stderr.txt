@@ -1,0 +1,2 @@
+error  unknown-command: Unknown command "nope"
+       Fix: Run `token-harness --help` to see the available commands

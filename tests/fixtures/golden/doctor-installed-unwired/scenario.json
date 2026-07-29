@@ -1,0 +1,13 @@
+{
+  "name": "doctor-installed-unwired",
+  "title": "RTK and HarnessTrim installed, neither wired to a harness",
+  "source": "RFC 0006 §Golden path",
+  "command": "doctor",
+  "rendered": true,
+  "roots": {
+    "home": "C:\\Users\\dev",
+    "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
+    "projectRoot": "C:\\work\\demo"
+  },
+  "toolVersion": "0.1.0"
+}

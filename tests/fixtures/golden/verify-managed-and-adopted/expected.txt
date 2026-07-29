@@ -1,0 +1,14 @@
+Receipt 7f3a91c2 — applied 2026-07-29T10:12:04Z
+
+rtk — claude — declared tier: canary
+  pass  executable-resolves        rtk 1.4.2 at ~/.local/bin/rtk
+  pass  hook-registered            PreToolUse entry present and owned
+  pass  canary-intercepted         sentinel command was rewritten
+harnesstrim — opencode — adopted, not managed — declared tier: config-only
+  pass  executable-resolves        harnesstrim 0.0.5
+  pass  adapter-config-readable    .opencode/plugin/harnesstrim.ts, mode active
+  pass  no-contested-scope         rtk is not configured for opencode
+  info  tier-limit                 no observable receipt for a generated plugin wrapper
+  info  not-managed                installed by the user; Token Harness will not modify it
+
+Pipeline healthy at the declared tier for every provider.

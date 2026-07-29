@@ -1,0 +1,12 @@
+Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
+
+Pipelines
+  nothing has been applied on this machine
+
+Drift
+  none
+
+Importers
+  none
+
+No drift and no contested scope.

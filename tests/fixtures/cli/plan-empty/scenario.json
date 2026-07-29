@@ -1,0 +1,23 @@
+{
+  "name": "plan-empty",
+  "title": "plan with empty registries",
+  "argv": [
+    "plan"
+  ],
+  "expectedExitCode": 0,
+  "expectStderr": true,
+  "source": "project-local",
+  "roots": {
+    "home": "C:\\Users\\dev",
+    "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
+    "projectRoot": "C:\\work\\demo"
+  },
+  "platform": {
+    "os": "windows",
+    "osDisplayName": "Windows 11",
+    "arch": "x64",
+    "nodeVersion": "22.14.0",
+    "isWsl": false
+  },
+  "toolVersion": "0.1.0"
+}

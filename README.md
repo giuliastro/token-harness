@@ -79,9 +79,75 @@ compatibility and attribution tests prove they compose safely.
 
 ## Status
 
-Phase 0 is complete at the design level. This repository currently contains the
-contracts and implementation roadmap from which the greenfield implementation will
-start.
+Phase 0 is complete. Phase 1 — the workspace, the domain contracts, and the CLI
+shell — is implemented.
+
+What works today:
+
+```text
+token-harness --help
+token-harness --version
+token-harness doctor [--json]
+token-harness plan   [--json]
+token-harness status [--json]
+```
+
+The exit-code table, the `--json` envelope, and the stream discipline from
+RFC 0006 are implemented in full. The harness and provider registries are empty:
+detection, planning, and mutation land in Phases 2 through 6, and until then
+`doctor` truthfully reports an environment it cannot yet inspect. `apply`,
+`verify`, `metrics`, `update`, `rollback`, and `uninstall` are rejected as
+unavailable rather than as unknown.
+
+### Not installable yet, and not yet useful
+
+Two separate limitations, both deliberate.
+
+**Not on npm.** There is no `npm install -g token-harness` and no
+`npx token-harness`. The package is marked private, because publishing it today
+would produce a tarball nobody could install: it depends on two private
+workspace packages through the `workspace:` protocol, which npm rejects.
+Distribution — publishing, provenance, SBOM, signing, `npx` — is Phase 8.3, and
+PLAN §17.2 keeps packaging beyond npm an open decision. `apps/cli/test/packaging.test.ts`
+fails the moment `private` is removed while the workspace dependencies remain,
+so that question cannot be skipped when the time comes.
+
+**Nothing to detect.** Even built and run locally, `doctor` finds no harnesses
+and no providers, because no adapter exists yet. What the shell does today is
+the contract, not the product: exit codes, the envelope, stream discipline, and
+the rendering pinned by the RFC 0006 golden transcripts. The first release that
+does something for a user is `0.1.0`, after Phases 2 through 7.
+
+To run it from a clone:
+
+```bash
+pnpm install && pnpm build
+node dist/bundle/token-harness.mjs doctor
+```
+
+`dist/bundle/token-harness.mjs` is a self-contained ESM artifact and needs no
+`node_modules` beside it.
+
+## Development
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm smoke
+```
+
+`pnpm build` produces a self-contained ESM artifact at
+`dist/bundle/token-harness.mjs`; `pnpm smoke` runs it from a temporary directory
+outside the repository, so a missing inline shows up as a resolution failure.
+
+`pnpm golden` regenerates the derived halves of the golden fixtures. It never
+touches the five human transcripts transcribed from RFC 0006 — see
+[tests/fixtures/README.md](tests/fixtures/README.md).
+
+CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
+matrix set not to fail fast.
 
 - [Development plan](PLAN.md)
 - [Foundation decisions](docs/rfcs/0001-foundation.md)

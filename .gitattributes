@@ -1,0 +1,14 @@
+# Everything is LF in the repository. `core.autocrlf` is a per-developer setting
+# and golden files are byte-compared artifacts, so the line ending is pinned here
+# rather than left to whoever cloned it.
+* text=auto eol=lf
+
+# Golden fixtures are compared byte for byte, including trailing whitespace and
+# the exact bytes transcribed from RFC 0006. Never let a filter touch them.
+tests/fixtures/** -text
+tests/fixtures/**/*.txt -text
+tests/fixtures/**/*.json -text
+
+*.png binary
+*.jpg binary
+*.ico binary

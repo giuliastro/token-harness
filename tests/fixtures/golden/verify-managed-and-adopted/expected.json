@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "command": "verify",
+  "toolVersion": "0.1.0",
+  "status": "ok",
+  "exitCode": 0,
+  "data": {
+    "receiptId": "7f3a91c2",
+    "appliedAt": "2026-07-29T10:12:04Z",
+    "healthyAtDeclaredTier": true,
+    "results": [
+      {
+        "providerId": "rtk",
+        "harnessId": "claude",
+        "status": "healthy",
+        "declaredTier": "canary",
+        "managedByTokenHarness": true,
+        "checks": [
+          {
+            "id": "executable-resolves",
+            "status": "pass",
+            "summary": "rtk 1.4.2 at ~/.local/bin/rtk",
+            "achievedTier": "presence",
+            "evidence": [
+              {
+                "kind": "executable-resolution",
+                "source": "rtk",
+                "path": "C:\\Users\\dev\\.local\\bin\\rtk",
+                "detail": "resolved and reported 1.4.2"
+              }
+            ],
+            "remediation": null
+          },
+          {
+            "id": "hook-registered",
+            "status": "pass",
+            "summary": "PreToolUse entry present and owned",
+            "achievedTier": "config-only",
+            "evidence": [
+              {
+                "kind": "config-entry",
+                "source": "settings.json",
+                "path": "C:\\Users\\dev\\.claude\\settings.json",
+                "detail": "owned marker block digest matches the receipt"
+              }
+            ],
+            "remediation": null
+          },
+          {
+            "id": "canary-intercepted",
+            "status": "pass",
+            "summary": "sentinel command was rewritten",
+            "achievedTier": "canary",
+            "evidence": [
+              {
+                "kind": "smoke-test",
+                "source": "sentinel",
+                "path": null,
+                "detail": "the sentinel receipt was observed after one harness invocation"
+              }
+            ],
+            "remediation": null
+          }
+        ]
+      },
+      {
+        "providerId": "harnesstrim",
+        "harnessId": "opencode",
+        "status": "healthy",
+        "declaredTier": "config-only",
+        "managedByTokenHarness": false,
+        "checks": [
+          {
+            "id": "executable-resolves",
+            "status": "pass",
+            "summary": "harnesstrim 0.0.5",
+            "achievedTier": "presence",
+            "evidence": [
+              {
+                "kind": "version-output",
+                "source": "harnesstrim --version",
+                "path": null,
+                "detail": "reported 0.0.5"
+              }
+            ],
+            "remediation": null
+          },
+          {
+            "id": "adapter-config-readable",
+            "status": "pass",
+            "summary": ".opencode/plugin/harnesstrim.ts, mode active",
+            "achievedTier": "config-only",
+            "evidence": [
+              {
+                "kind": "config-entry",
+                "source": "harnesstrim.ts",
+                "path": "C:\\work\\demo\\.opencode\\plugin\\harnesstrim.ts",
+                "detail": "generated wrapper resolves to mode active"
+              }
+            ],
+            "remediation": null
+          },
+          {
+            "id": "no-contested-scope",
+            "status": "pass",
+            "summary": "rtk is not configured for opencode",
+            "achievedTier": "config-only",
+            "evidence": [
+              {
+                "kind": "absence",
+                "source": "rtk",
+                "path": null,
+                "detail": "no rtk entry on any opencode interception point"
+              }
+            ],
+            "remediation": null
+          },
+          {
+            "id": "tier-limit",
+            "status": "info",
+            "summary": "no observable receipt for a generated plugin wrapper",
+            "achievedTier": "config-only",
+            "evidence": [],
+            "remediation": null
+          },
+          {
+            "id": "not-managed",
+            "status": "info",
+            "summary": "installed by the user; Token Harness will not modify it",
+            "achievedTier": null,
+            "evidence": [],
+            "remediation": null
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostics": []
+}

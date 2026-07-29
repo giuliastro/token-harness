@@ -1,0 +1,24 @@
+{
+  "id": "rtk-harnesstrim-shell-output-reduce",
+  "providers": [
+    "rtk",
+    "harnesstrim"
+  ],
+  "harnesses": [
+    "claude",
+    "codex",
+    "opencode"
+  ],
+  "capabilities": [
+    "shell.output.reduce"
+  ],
+  "outcome": "conflict",
+  "testedVersions": {
+    "rtk": "1.4.2",
+    "harnesstrim": "0.0.5"
+  },
+  "rationale": "HarnessTrim 0.0.5 reduces the same Bash result RTK owns, and exposes no surface selector on any managed harness.",
+  "fixtures": [
+    "brownfield/claude-harnesstrim-hooked"
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "command": "doctor",
+  "toolVersion": "0.1.0",
+  "status": "ok",
+  "exitCode": 0,
+  "data": {
+    "platform": {
+      "os": "windows",
+      "osDisplayName": "Windows 11",
+      "arch": "x64",
+      "nodeVersion": "22.14.0",
+      "isWsl": false
+    },
+    "harnesses": [
+      {
+        "harnessId": "claude",
+        "state": "detected",
+        "version": "2.0.14",
+        "versionVerdict": "in-range",
+        "configPath": "C:\\Users\\dev\\.claude\\settings.json",
+        "declaredVerificationTier": "canary",
+        "evidence": [
+          {
+            "kind": "config-entry",
+            "source": "settings.json",
+            "path": "C:\\Users\\dev\\.claude\\settings.json",
+            "detail": "readable settings file with no Token Harness owned block"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "harnessId": "codex",
+        "state": "detected",
+        "version": "0.48.0",
+        "versionVerdict": "in-range",
+        "configPath": "C:\\Users\\dev\\.codex\\config.toml",
+        "declaredVerificationTier": "canary",
+        "evidence": [
+          {
+            "kind": "config-entry",
+            "source": "config.toml",
+            "path": "C:\\Users\\dev\\.codex\\config.toml",
+            "detail": "readable config file with no Token Harness owned block"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "harnessId": "opencode",
+        "state": "absent",
+        "version": null,
+        "versionVerdict": null,
+        "configPath": null,
+        "declaredVerificationTier": null,
+        "evidence": [
+          {
+            "kind": "absence",
+            "source": "opencode",
+            "path": null,
+            "detail": "no executable and no configuration directory"
+          }
+        ],
+        "warnings": []
+      }
+    ],
+    "providers": [
+      {
+        "providerId": "rtk",
+        "state": "installed",
+        "version": "1.4.2",
+        "executable": "C:\\Users\\dev\\.local\\bin\\rtk.exe",
+        "installationChannel": "github-release",
+        "versionVerdict": "in-range",
+        "configuredHarnesses": [],
+        "unmanagedHarnessesConfigured": [],
+        "supportsUnmanagedHarnesses": false,
+        "managedByTokenHarness": false,
+        "evidence": [
+          {
+            "kind": "executable-resolution",
+            "source": "rtk",
+            "path": "C:\\Users\\dev\\.local\\bin\\rtk.exe",
+            "detail": "resolved through PATH with PATHEXT"
+          },
+          {
+            "kind": "version-output",
+            "source": "rtk --version",
+            "path": null,
+            "detail": "reported 1.4.2"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "providerId": "harnesstrim",
+        "state": "installed",
+        "version": "0.0.5",
+        "executable": "C:\\Users\\dev\\AppData\\Roaming\\npm\\harnesstrim.cmd",
+        "installationChannel": "npm",
+        "versionVerdict": "in-range",
+        "configuredHarnesses": [],
+        "unmanagedHarnessesConfigured": [],
+        "supportsUnmanagedHarnesses": true,
+        "managedByTokenHarness": false,
+        "evidence": [
+          {
+            "kind": "executable-resolution",
+            "source": "harnesstrim",
+            "path": "C:\\Users\\dev\\AppData\\Roaming\\npm\\harnesstrim.cmd",
+            "detail": "resolved through the npm global shim directory"
+          },
+          {
+            "kind": "package-inventory",
+            "source": "npm ls -g",
+            "path": null,
+            "detail": "harnesstrim 0.0.5 installed globally"
+          }
+        ],
+        "warnings": []
+      }
+    ],
+    "problemCount": 0
+  },
+  "diagnostics": []
+}

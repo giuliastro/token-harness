@@ -1,0 +1,13 @@
+Savings — 2026-07-22 to 2026-07-29 — pipeline b41e
+
+Exact local            1,204,880 -> 331,402 tokens    saved 873,478
+Estimated local          412,006 ->  98,220 chars     saved 313,786
+Counterfactual                                        none recorded
+End-to-end billed                                     no A/B run
+
+By provider (marginal)
+  rtk            saved 873,478 tokens   exact-local      4,118 operations   claude
+  harnesstrim    saved 313,786 chars    estimated-local  1,440 operations   opencode
+                 adopted, not managed — adapter mode active
+
+Coverage 91%. Bypassed 402. Errors 0. Added median latency 11ms.

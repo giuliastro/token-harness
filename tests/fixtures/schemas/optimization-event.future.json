@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 3,
+  "eventId": "evt_03",
+  "timestamp": "2026-07-29T10:12:06Z",
+  "measurement": {
+    "class": "exact-local"
+  }
+}

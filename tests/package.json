@@ -1,0 +1,25 @@
+{
+  "name": "@token-harness/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "dependencies": {
+    "@token-harness/adapters": "workspace:*",
+    "@token-harness/core": "workspace:*",
+    "token-harness": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "regenerate-golden": "node ./tools/regenerate-golden.mjs"
+  }
+}

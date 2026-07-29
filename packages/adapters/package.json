@@ -1,0 +1,25 @@
+{
+  "name": "@token-harness/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src"
+  ],
+  "dependencies": {
+    "@token-harness/core": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}
