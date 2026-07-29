@@ -99,6 +99,35 @@ detection, planning, and mutation land in Phases 2 through 6, and until then
 `verify`, `metrics`, `update`, `rollback`, and `uninstall` are rejected as
 unavailable rather than as unknown.
 
+### Not installable yet, and not yet useful
+
+Two separate limitations, both deliberate.
+
+**Not on npm.** There is no `npm install -g token-harness` and no
+`npx token-harness`. The package is marked private, because publishing it today
+would produce a tarball nobody could install: it depends on two private
+workspace packages through the `workspace:` protocol, which npm rejects.
+Distribution — publishing, provenance, SBOM, signing, `npx` — is Phase 8.3, and
+PLAN §17.2 keeps packaging beyond npm an open decision. `apps/cli/test/packaging.test.ts`
+fails the moment `private` is removed while the workspace dependencies remain,
+so that question cannot be skipped when the time comes.
+
+**Nothing to detect.** Even built and run locally, `doctor` finds no harnesses
+and no providers, because no adapter exists yet. What the shell does today is
+the contract, not the product: exit codes, the envelope, stream discipline, and
+the rendering pinned by the RFC 0006 golden transcripts. The first release that
+does something for a user is `0.1.0`, after Phases 2 through 7.
+
+To run it from a clone:
+
+```bash
+pnpm install && pnpm build
+node dist/bundle/token-harness.mjs doctor
+```
+
+`dist/bundle/token-harness.mjs` is a self-contained ESM artifact and needs no
+`node_modules` beside it.
+
 ## Development
 
 ```bash
