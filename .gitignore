@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.pnpm-store/
+*.log
+
+# Local runtime state
+.token-harness/
+token-harness.local.yaml
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
