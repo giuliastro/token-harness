@@ -48,13 +48,24 @@ export const DEFAULT_COMMANDS: CommandTable = {
 export interface RunOptions {
   argv: readonly string[];
   streams: Streams;
-  platform: PlatformFacts;
+  /**
+   * Null when the operating system is not one of the three Token Harness
+   * supports. There are no honest facts to report in that case, and the run ends
+   * with the unsupported-environment code before anything reads them.
+   */
+  platform: PlatformFacts | null;
   /** Absolute working directory. */
   cwd: string;
   /** Absolute home directory, or null when it could not be resolved. */
   home: string | null;
-  /** Absolute state root, or null while Phase 2 has not resolved one. */
+  /** Absolute state root, or null when path resolution failed. */
   stateRoot?: string | null;
+  /**
+   * Failures from the platform layer: an unsupported operating system, an
+   * unresolvable `%LOCALAPPDATA%`, a state root that would land in the system
+   * temporary directory. Any `error` here ends the run with exit 9.
+   */
+  environmentDiagnostics?: readonly Diagnostic[];
   env?: Readonly<Record<string, string | undefined>>;
   stdoutIsTty?: boolean;
   toolVersion?: string;
@@ -182,6 +193,32 @@ export async function run(options: RunOptions): Promise<number> {
     }),
   };
 
+  // An unsupported operating system is checked before anything else, for the same
+  // reason as the runtime floor below: there is no version of this program that
+  // runs correctly here, so printing a usage page would imply otherwise.
+  if (options.platform === null) {
+    return emit(
+      commandResult({
+        command: 'token-harness',
+        exitCode: EXIT_CODES['unsupported-environment'],
+        diagnostics:
+          options.environmentDiagnostics !== undefined && options.environmentDiagnostics.length > 0
+            ? [...options.environmentDiagnostics]
+            : [
+                diagnostic({
+                  severity: 'error',
+                  code: 'unsupported-operating-system',
+                  message: 'Token Harness supports Windows, macOS, and Linux',
+                  remediation: 'Run Token Harness on Windows, macOS, Linux, or WSL',
+                }),
+              ],
+      }),
+      options,
+      renderContext,
+      json,
+    );
+  }
+
   // The runtime floor is checked before anything else, including `--help`. A
   // process that cannot be trusted to run correctly should say so rather than
   // print a usage page that implies it can.
@@ -211,6 +248,27 @@ export async function run(options: RunOptions): Promise<number> {
         command: 'token-harness',
         exitCode: EXIT_CODES['usage-error'],
         diagnostics: invocation.diagnostics,
+      }),
+      options,
+      renderContext,
+      json,
+    );
+  }
+
+  // Checked here rather than beside the runtime floor: an unresolvable state
+  // directory does not make `--help` or `--version` untrustworthy, and it does not
+  // make a mistyped command line correct either. What it does block is every
+  // command, because RFC 0004 §State directory permissions requires failing with
+  // the unsupported-environment code instead of continuing into a location whose
+  // protection has not been verified. There is deliberately no fallback to a
+  // writable directory.
+  const environmentDiagnostics = options.environmentDiagnostics ?? [];
+  if (environmentDiagnostics.some((entry) => entry.severity === 'error')) {
+    return emit(
+      commandResult({
+        command: invocation.command,
+        exitCode: EXIT_CODES['unsupported-environment'],
+        diagnostics: [...environmentDiagnostics],
       }),
       options,
       renderContext,

@@ -1,5 +1,5 @@
 {
-  "name": "@token-harness/tests",
+  "name": "@token-harness/platform",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,14 +13,13 @@
       "default": "./dist/src/index.js"
     }
   },
+  "files": [
+    "dist/src"
+  ],
   "dependencies": {
-    "@token-harness/adapters": "workspace:*",
-    "@token-harness/core": "workspace:*",
-    "@token-harness/platform": "workspace:*",
-    "token-harness": "workspace:*"
+    "@token-harness/core": "workspace:*"
   },
   "scripts": {
-    "build": "tsc -b",
-    "regenerate-golden": "node ./tools/regenerate-golden.mjs"
+    "build": "tsc -b"
   }
 }

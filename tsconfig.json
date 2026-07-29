@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/platform" },
     { "path": "packages/adapters" },
     { "path": "apps/cli" },
     { "path": "tests" }

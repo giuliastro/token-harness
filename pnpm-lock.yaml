@@ -38,6 +38,9 @@ importers:
       '@token-harness/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@token-harness/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
 
   packages/adapters:
     dependencies:
@@ -47,6 +50,12 @@ importers:
 
   packages/core: {}
 
+  packages/platform:
+    dependencies:
+      '@token-harness/core':
+        specifier: workspace:*
+        version: link:../core
+
   tests:
     dependencies:
       '@token-harness/adapters':
@@ -55,6 +64,9 @@ importers:
       '@token-harness/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@token-harness/platform':
+        specifier: workspace:*
+        version: link:../packages/platform
       token-harness:
         specifier: workspace:*
         version: link:../apps/cli

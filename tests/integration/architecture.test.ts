@@ -18,14 +18,25 @@ import { REPO_ROOT } from '../src/index.js';
 
 const SOURCE_ROOTS = [
   join(REPO_ROOT, 'packages', 'core', 'src'),
+  join(REPO_ROOT, 'packages', 'platform', 'src'),
   join(REPO_ROOT, 'packages', 'adapters', 'src'),
   join(REPO_ROOT, 'apps', 'cli', 'src'),
+];
+
+const TEST_ROOTS = [
+  join(REPO_ROOT, 'packages', 'core', 'test'),
+  join(REPO_ROOT, 'packages', 'platform', 'test'),
+  join(REPO_ROOT, 'packages', 'adapters', 'test'),
+  join(REPO_ROOT, 'apps', 'cli', 'test'),
+  join(REPO_ROOT, 'tests', 'integration'),
+  join(REPO_ROOT, 'tests', 'src'),
 ];
 
 interface SourceFile {
   /** Repo-relative, POSIX separators. */
   path: string;
   imports: string[];
+  text: string;
 }
 
 function listTypeScript(dir: string): string[] {
@@ -41,9 +52,9 @@ function listTypeScript(dir: string): string[] {
 const IMPORT_PATTERN = /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]/g;
 const BARE_IMPORT_PATTERN = /(?:^|\n)\s*import\s+['"]([^'"]+)['"]/g;
 
-function readSources(): SourceFile[] {
+function readSources(roots: readonly string[]): SourceFile[] {
   const files: SourceFile[] = [];
-  for (const root of SOURCE_ROOTS) {
+  for (const root of roots) {
     for (const file of listTypeScript(root)) {
       const text = readFileSync(file, 'utf8');
       const imports = new Set<string>();
@@ -52,13 +63,15 @@ function readSources(): SourceFile[] {
       files.push({
         path: relative(REPO_ROOT, file).split(sep).join('/'),
         imports: [...imports],
+        text,
       });
     }
   }
   return files;
 }
 
-const SOURCES = readSources();
+const SOURCES = readSources(SOURCE_ROOTS);
+const TESTS = readSources(TEST_ROOTS);
 
 function inPackage(file: SourceFile, prefix: string): boolean {
   return file.path.startsWith(prefix);
@@ -135,6 +148,116 @@ describe('module boundaries', () => {
     for (const file of SOURCES.filter((f) => inPackage(f, 'packages/core/'))) {
       for (const specifier of file.imports) {
         assert.ok(!forbidden.includes(specifier), `${file.path} imports ${specifier}`);
+      }
+    }
+  });
+
+  /**
+   * The Phase 2 decision, enforced rather than described.
+   *
+   * RFC 0001 §Repository shape lists neither `platform` nor `process` under `core`,
+   * and the rule above forbids `node:fs`, `node:os`, `node:path`,
+   * `node:child_process`, and `node:process` across the whole of `core`. The
+   * platform layer cannot satisfy both, so RFC 0001's own extraction rule applies —
+   * "a package is extracted when a concrete consumer appears" — and
+   * `packages/platform` is that extraction. The consumers are the PLAN §2.3
+   * executor, the Phase 3 adapters, and `apps/cli`.
+   *
+   * The rule for `core` is therefore *unchanged*: relaxing it was the alternative,
+   * and it was rejected because a rule that admits exceptions can no longer tell an
+   * intended `node:fs` from an accidental one.
+   */
+  it('core never imports the platform layer, so the dependency direction stays acyclic', () => {
+    for (const file of SOURCES.filter((f) => inPackage(f, 'packages/core/'))) {
+      for (const specifier of file.imports) {
+        assert.ok(
+          !specifier.startsWith('@token-harness/platform') && !specifier.includes('/platform/src'),
+          `${file.path} imports ${specifier}; core is below platform, not above it`,
+        );
+      }
+    }
+  });
+
+  it('platform imports neither adapters nor the cli', () => {
+    for (const file of SOURCES.filter((f) => inPackage(f, 'packages/platform/'))) {
+      for (const specifier of file.imports) {
+        assert.ok(
+          !specifier.startsWith('@token-harness/adapters') && specifier !== 'token-harness',
+          `${file.path} imports ${specifier}`,
+        );
+      }
+    }
+  });
+
+  it('platform reaches core only through its package entry point', () => {
+    for (const file of SOURCES.filter((f) => inPackage(f, 'packages/platform/'))) {
+      for (const specifier of file.imports) {
+        assert.ok(
+          !specifier.startsWith('@token-harness/core/'),
+          `${file.path} deep-imports core: ${specifier}`,
+        );
+        assert.ok(
+          !specifier.includes('../core'),
+          `${file.path} reaches into core by relative path: ${specifier}`,
+        );
+      }
+    }
+  });
+
+  it('adapters and the cli reach platform only through its package entry point', () => {
+    for (const file of SOURCES.filter(
+      (f) => inPackage(f, 'packages/adapters/') || inPackage(f, 'apps/cli/'),
+    )) {
+      for (const specifier of file.imports) {
+        assert.ok(
+          !specifier.startsWith('@token-harness/platform/'),
+          `${file.path} deep-imports platform: ${specifier}`,
+        );
+        assert.ok(
+          !specifier.includes('../platform'),
+          `${file.path} reaches into platform by relative path: ${specifier}`,
+        );
+      }
+    }
+  });
+
+  /**
+   * RFC 0004 §Process policy is a safety invariant, and an invariant that lives in
+   * one file can be verified by reading one file. The `icacls` call RFC 0004 §State
+   * directory permissions requires goes "through the process runner" because there
+   * is nowhere else for it to go.
+   */
+  it('only the process runner can spawn', () => {
+    const allowed = new Set(['packages/platform/src/process/node-runner.ts']);
+    for (const file of SOURCES) {
+      if (allowed.has(file.path)) continue;
+      for (const specifier of file.imports) {
+        assert.ok(
+          specifier !== 'node:child_process' && specifier !== 'child_process',
+          `${file.path} imports ${specifier}; spawning belongs to NodeProcessRunner`,
+        );
+      }
+    }
+  });
+
+  /**
+   * AGENTS.md and PLAN §2.1 acceptance: "no test reads or writes the developer's
+   * actual home."
+   *
+   * The three names below are the only ways to reach it: `homedir` returns it, and
+   * `nodeSystemProbe`/`resolveHostEnvironment` are the composition roots that call
+   * `homedir` for you. A test that needs platform facts builds its own probe, which
+   * is why the probe is an interface.
+   */
+  it('no test can reach the real home directory', () => {
+    const forbidden = ['homedir', 'nodeSystemProbe', 'resolveHostEnvironment'];
+    // This file names all three in order to forbid them.
+    for (const file of TESTS.filter((f) => f.path !== 'tests/integration/architecture.test.ts')) {
+      for (const name of forbidden) {
+        assert.ok(
+          !new RegExp(`\\b${name}\\b`).test(file.text),
+          `${file.path} references ${name}; build a SystemProbe fixture instead`,
+        );
       }
     }
   });

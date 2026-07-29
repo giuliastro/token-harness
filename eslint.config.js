@@ -68,6 +68,44 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/platform/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@token-harness/core/*',
+                '**/core/src/**',
+                '@token-harness/adapters',
+                'token-harness',
+              ],
+              message:
+                'platform sits directly above core: entry-point imports only, and never adapters or the cli (PLAN §2.1).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // RFC 0004 §Process policy: spawning lives in one file, so the invariant can be
+    // verified by reading one file.
+    files: ['packages/platform/src/**/*.ts'],
+    ignores: ['packages/platform/src/process/node-runner.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'node:child_process', message: 'Spawning belongs to NodeProcessRunner.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/adapters/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
@@ -75,9 +113,14 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@token-harness/core/*', '**/core/src/**', 'token-harness'],
+              group: [
+                '@token-harness/core/*',
+                '**/core/src/**',
+                '@token-harness/platform/*',
+                'token-harness',
+              ],
               message:
-                'adapters reach core only through its package entry point, and never reach the cli (PLAN §1.1).',
+                'adapters reach core and platform only through their package entry points, and never reach the cli (PLAN §1.1).',
             },
           ],
         },
@@ -92,7 +135,11 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@token-harness/core/*', '@token-harness/adapters/*'],
+              group: [
+                '@token-harness/core/*',
+                '@token-harness/platform/*',
+                '@token-harness/adapters/*',
+              ],
               message: 'Import workspace packages through their entry points.',
             },
           ],
