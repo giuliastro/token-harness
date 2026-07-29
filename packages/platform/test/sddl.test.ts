@@ -16,6 +16,7 @@ import {
   evaluateStateRootAcl,
   grantsRead,
   parseSecurityDescriptor,
+  resolveAcePrincipal,
   stateRootGrantArguments,
 } from '../src/index.js';
 
@@ -146,6 +147,42 @@ describe('state root ACL evaluation', () => {
     for (const bad of ['', '   ', 'not a descriptor', 'D:PAI(A;OICI;FA;;;)']) {
       assert.equal(evaluateStateRootAcl(bad, OWNER), null, JSON.stringify(bad));
     }
+  });
+
+  /**
+   * The case CI found on the first push. The GitHub Windows runner's interactive
+   * user *is* the built-in Administrator account, so `whoami` reports a SID ending
+   * in -500 and `icacls` writes that same principal back as the alias `LA`.
+   * Comparing the alias to the raw SID rejected the owner's own ACE.
+   */
+  it('accepts LA when the owner is account 500, and rejects it when the owner is not', () => {
+    const builtIn = 'S-1-5-21-1742564184-1656218818-310408600-500';
+    const ordinary = 'S-1-5-21-1742564184-1656218818-310408600-1001';
+    const sddl = 'D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;LA)';
+
+    assert.equal(evaluateStateRootAcl(sddl, builtIn)?.ok, true);
+
+    const other = evaluateStateRootAcl(sddl, ordinary);
+    assert.equal(other?.ok, false);
+    assert.deepEqual(other?.unexpectedPrincipals, ['LA']);
+  });
+
+  it('resolves a domain-relative alias against the owner authority, not a fixed SID', () => {
+    const owner = 'S-1-5-21-1-2-3-1001';
+    assert.equal(resolveAcePrincipal('LA', owner), 'S-1-5-21-1-2-3-500');
+    assert.equal(resolveAcePrincipal('DA', owner), 'S-1-5-21-1-2-3-512');
+    assert.equal(resolveAcePrincipal('SY', owner), 'S-1-5-18');
+    assert.equal(resolveAcePrincipal('WD', owner), 'WD');
+    // With no machine authority to resolve against, the alias stays an alias — and
+    // therefore stays unpermitted.
+    assert.equal(resolveAcePrincipal('LA', 'S-1-5-18'), 'LA');
+  });
+
+  it('does not accept Domain Admins as an alias for the local Administrators group', () => {
+    const owner = 'S-1-5-21-1-2-3-1001';
+    const evaluation = evaluateStateRootAcl(`D:PAI(A;OICI;FA;;;DA)(A;OICI;FA;;;${owner})`, owner);
+    assert.equal(evaluation?.ok, false);
+    assert.deepEqual(evaluation?.unexpectedPrincipals, ['DA']);
   });
 
   it('matches the owner SID case-insensitively', () => {

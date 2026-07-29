@@ -57,6 +57,54 @@ export const WELL_KNOWN_PERMITTED_SIDS: readonly string[] = [
   SID_OWNER_RIGHTS,
 ];
 
+/**
+ * SDDL aliases that are *domain-relative*: they abbreviate a machine-specific SID
+ * rather than a fixed one, so they cannot be compared as literals.
+ *
+ * This is not a theoretical concern. On a machine whose interactive user is the
+ * built-in Administrator account — which is how the GitHub Windows runner is set up
+ * — `whoami` reports `S-1-5-21-…-500` and `icacls` writes that same principal into
+ * the descriptor as `LA`. Comparing the alias against the owner's raw SID rejects
+ * the owner's own ACE, which is how this table came to exist: CI found it, on the
+ * first push, on the platform PLAN §7 says to develop this layer on.
+ *
+ * The relative identifier is resolved against the prefix of the owner SID, which is
+ * the same machine or domain authority.
+ */
+const DOMAIN_RELATIVE_RIDS: Readonly<Record<string, number>> = {
+  LA: 500, // the built-in Administrator account
+  LG: 501, // the built-in Guest account
+  DA: 512, // Domain Admins
+  DU: 513, // Domain Users
+  DG: 514, // Domain Guests
+  DC: 515, // Domain Computers
+  DD: 516, // Domain Controllers
+  CA: 517, // Cert Publishers
+  SA: 518, // Schema Admins
+  EA: 519, // Enterprise Admins
+  PA: 520, // Group Policy Creator Owners
+};
+
+const MACHINE_SID = /^(S-1-5-21(?:-\d+){3})-\d+$/i;
+
+/**
+ * Expands an ACE principal to a comparable SID.
+ *
+ * A fixed alias becomes its fixed SID. A domain-relative alias becomes the owner's
+ * authority plus its relative identifier — so `LA` is the owner when the owner is
+ * account 500, and is a different principal when it is not. Anything else is
+ * returned unchanged.
+ */
+export function resolveAcePrincipal(principal: string, ownerSid: string): string {
+  const upper = principal.trim().toUpperCase();
+  const fixed = PERMITTED_ALIASES[upper];
+  if (fixed !== undefined) return fixed;
+  const rid = DOMAIN_RELATIVE_RIDS[upper];
+  const authority = MACHINE_SID.exec(ownerSid.trim().toUpperCase())?.[1];
+  if (rid !== undefined && authority !== undefined) return `${authority}-${String(rid)}`;
+  return upper;
+}
+
 export interface SddlAce {
   /** `A` allow, `D` deny, and the object/audit variants. */
   type: string;
@@ -233,8 +281,9 @@ export function evaluateStateRootAcl(sddl: string, ownerSid: string): AclEvaluat
     // `IO` marks an ACE that applies only to children, not to this object.
     if (ace.flags.includes('IO')) continue;
     if (!grantsRead(ace.rights)) continue;
-    const sid = PERMITTED_ALIASES[ace.sid] ?? ace.sid;
-    if (permitted.has(sid)) continue;
+    if (permitted.has(resolveAcePrincipal(ace.sid, ownerSid))) continue;
+    // Reported with the spelling the descriptor used, so a user pasting the
+    // diagnostic into `icacls` sees what they will see.
     unexpected.add(ace.sid);
   }
 
