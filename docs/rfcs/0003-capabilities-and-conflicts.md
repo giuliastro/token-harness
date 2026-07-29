@@ -107,6 +107,56 @@ interface CompatibilityRule {
 
 No rule means conservative conflict for overlapping exclusive capabilities.
 
+## Scope of the resolver at 0.1.0
+
+`0.1.0` ships two providers, and the ownership policy for that pair is already known and
+written below. A general resolution engine built now would be designed against one data
+point.
+
+The `0.1.0` resolver is therefore deliberately small:
+
+1. a static compatibility-rule table, committed as data;
+2. exclusive-scope ownership resolved by lookup in that table;
+3. fail-closed on any overlapping exclusive scope not covered by a rule;
+4. a pipeline ID derived from the ordered owner list, because metrics attribution
+   depends on it.
+
+Deferred to `0.2.0`, when a third provider supplies the second data point:
+
+- goal-based profiles and the `goals` YAML block;
+- automatic provider substitution from goals;
+- repository-size and workflow heuristics;
+- the general chain-ordering solver.
+
+Until then, `profile: safe` and `profile: custom` are the only profiles, and `custom`
+means explicit provider and capability assignment. `balanced` is not shipped, because a
+profile identical to `safe` is a promise with no content.
+
+This is a reduction in machinery, not in safety: fail-closed behavior on undeclared
+overlap is present from the first release, which is the property that actually protects
+users.
+
+## Continuous conflict detection
+
+Ownership is resolved when a plan is built, but the configuration it writes lives in
+files that other tools and the user can edit afterwards. A second hook added by hand the
+next day produces double reduction with nothing to signal it, because every harness in
+scope runs all matching hooks rather than only the first.
+
+Conflict detection therefore also runs after apply:
+
+- `status` and `verify` compare the live harness configuration against the installation
+  receipt;
+- an entry on an exclusive scope that Token Harness does not own is reported as
+  `unowned-entry-on-exclusive-scope` with the file, the surface, and the competing
+  command;
+- the finding is actionable, so the command exits with the problems-found code from
+  RFC 0006;
+- Token Harness reports it and never silently removes a third party's entry.
+
+Plan-time resolution alone would make the one-owner invariant a claim about a moment
+rather than about the system.
+
 ## Planner result
 
 The resolver returns:
@@ -122,7 +172,8 @@ An apply operation is blocked by a hard conflict.
 
 ## MVP ownership
 
-The intended MVP policy is:
+The intended policy — which the two sections below then reconcile against what HarnessTrim
+`0.0.5` can actually be asked to do, arriving at a narrower `0.1.0` scope:
 
 | Surface | Owner | Notes |
 | --- | --- | --- |
@@ -132,9 +183,74 @@ The intended MVP policy is:
 | Progressive instructions/skills | HarnessTrim | Installed without duplicating RTK awareness text |
 | Metrics observation | Token Harness | Imports both provider streams |
 
-This policy creates an explicit HarnessTrim prerequisite: its integration must expose
-surface-level controls where an existing adapter currently treats all output as one
-stream.
+### The table is an intent, not a reachable state on every harness
+
+Ownership can only be assigned to a provider that can actually implement it on that
+harness. Checked against the HarnessTrim `0.0.5` source, none of the three MVP harnesses
+supports the per-surface narrowing the table assumes:
+
+| Harness | Reduction surface | Source | Narrowing available |
+| --- | --- | --- | --- |
+| Claude Code | Bash only | `adapter-claude/src/install.ts:6`, `HOOK_MATCHER = "Bash"` | None. Skills and hook install as one unit |
+| Codex | Bash only | `adapter-codex/src/index.ts:23`, `CODEX_HOOK_MATCHER = "^Bash$"` | The hook can be omitted entirely: it is opt-in behind `--hook` |
+| OpenCode | Every tool result | `adapter-opencode/src/plugin.ts:37`, `tool.execute.after` reduces `output.output` with `input.tool` never used as a filter | `mode: active \| dryrun \| off` and `minLength`. No per-surface selector |
+
+Three consequences follow, and they are not Claude-specific:
+
+1. the row assigning `tool.output.reduce` to HarnessTrim is **unreachable on Claude and
+   Codex**, whose adapters implement Bash reduction and no non-shell reduction at all;
+2. on OpenCode the opposite holds — it reduces *every* tool result, so it cannot be
+   confined to non-shell surfaces either;
+3. therefore, on every MVP harness, HarnessTrim's reducing surface either is exactly the
+   one assigned to RTK or strictly contains it, and no configuration narrows it.
+
+### Resolution at 0.1.0
+
+An assignment also requires a **producible target state**: the provider's installer must
+be invocable in a way that yields it. Checked against `0.0.5`, no narrowed state is:
+
+| Harness | Narrowed state wanted | Why the installer cannot produce it |
+| --- | --- | --- |
+| Claude Code | Skills without the Bash hook | Installed as one unit; no flag separates them |
+| Codex | Skills without the reduction guidance | `install codex` always writes `REDUCE_INSTRUCTION_SNIPPET` into `AGENTS.md` |
+| OpenCode | `mode: "dryrun"` | `DEFAULT_OPENCODE_ADAPTER_CONFIG` and all four presets set `mode: "active"`; the value is baked into a generated wrapper, and `resolveConfig` gives it precedence over `HARNESSTRIM_MODE` |
+
+Therefore, under `safe`, RTK owns shell reduction on all three harnesses and **HarnessTrim
+is not installed by Token Harness at all**. It is detected, adopted, reconciled against
+RTK's ownership, and measured. PLAN §6.1 records the full division of roles.
+
+Under `custom`, a user may invert the assignment — giving `shell.output.reduce` to
+HarnessTrim and excluding RTK from that scope on that harness. That state is producible,
+because it is the installer's own default. What is not offered is both providers mutating
+the same payload.
+
+The general rule this yields: an ownership assignment needs both a demonstrated capability
+and a reachable configuration. A capability the provider has but cannot be asked for is not
+an assignable capability.
+
+### The instruction-level path
+
+Codex's `REDUCE_INSTRUCTION_SNIPPET` writes guidance into `AGENTS.md` telling the model to
+pipe noisy commands through `harnesstrim reduce`. That is a second shell-reduction path
+that hook ownership does not cover: it operates through the model's behavior rather than
+through an interception point.
+
+It is therefore treated as part of the `shell.output.reduce` scope, not as separate
+instruction text. When RTK owns that scope, the planner must either omit the snippet or
+reconcile it with RTK's own guidance, and `verify` checks which instruction text is
+actually present. Two documents telling the model to reduce the same output through
+different tools is a conflict even though no hook is duplicated.
+
+### Rule
+
+An ownership assignment requires a demonstrated capability at the assigned scope on the
+assigned harness, evidenced in the provider's own source at a recorded version. An
+assignment the provider cannot implement there is a planning error, not a configuration
+to attempt.
+
+Compatibility data therefore carries the harness dimension. A provider does not behave
+identically across harnesses, and `0.0.5` demonstrates the point: the same tool reduces
+one tool family on two harnesses and all of them on a third.
 
 ## Dejavu policy
 
@@ -164,7 +280,34 @@ results have size limits and an attribution fixture.
 
 ## Profiles
 
-Profiles select goals, not hard-coded package lists:
+### 0.1.0
+
+Two profiles ship:
+
+```yaml
+profile: safe
+```
+
+`safe` applies the MVP ownership table above: deterministic local optimization, RTK owns
+shell rewriting and shell output reduction, HarnessTrim owns only non-overlapping
+surfaces, no experimental providers.
+
+```yaml
+profile: custom
+
+providers:
+  rtk:
+    owns: [shell.command.rewrite, shell.output.reduce]
+  harnesstrim:
+    owns: [tool.output.reduce, instructions.progressive]
+```
+
+`custom` is explicit assignment. An unsafe overlap requires a named compatibility rule,
+never a generic force flag.
+
+### 0.2.0 and later
+
+Once a third provider exists, profiles select goals rather than assignments:
 
 ```yaml
 profile: balanced
@@ -177,15 +320,12 @@ goals:
   terseReplies: false
 ```
 
-The resolver converts goals into providers according to:
+The resolver will convert goals into providers according to installed harness, OS
+support, repository size and detected workflow, provider availability, license policy,
+verified compatibility, and user overrides. That mapping is what keeps profiles from
+becoming stale installer recipes — but it needs more than one provider pair to be
+designed against, so it is deferred rather than guessed.
 
-- installed harness;
-- OS support;
-- repository size and detected workflow;
-- provider availability;
-- license policy;
-- verified compatibility;
-- user overrides.
-
-This prevents profiles from becoming stale installer recipes.
+The `goals` schema is reserved now so that adding it later is not a breaking change to
+`token-harness.yaml`.
 

@@ -130,10 +130,20 @@ savings and marks per-provider attribution unavailable.
 
 ## Storage
 
-Normalized events and installation receipts use a local SQLite database in the
-platform state directory.
+The domain layer depends on a storage interface. No provider, planner, or report knows
+which backend is in use.
 
-The database stores:
+```ts
+interface MetricsStore {
+  appendEvents(events: OptimizationEvent[]): Promise<void>;
+  readCursor(providerId: string, sourceId: string): Promise<ImportCursor | null>;
+  writeCursor(cursor: ImportCursor): Promise<void>;
+  query(filter: EventFilter): AsyncIterable<OptimizationEvent>;
+  upsertReceipt(receipt: VerificationReceipt): Promise<void>;
+}
+```
+
+The store holds:
 
 - provider inventory;
 - metric import cursors;
@@ -142,8 +152,41 @@ The database stores:
 - benchmark runs;
 - verification receipts.
 
-The selected Node SQLite driver is a Phase 1 implementation spike. The domain layer
-depends on a storage interface so the choice does not leak into providers.
+### 0.1.0 backend
+
+`0.1.0` implements `JsonlStore`: append-only JSONL files under the platform state
+directory, with aggregation in memory at query time.
+
+Rationale, per RFC 0001: append-only JSONL fits the workload exactly. Ingestion is
+append, reporting is a full scan over a bounded window, and there are no updates except
+cursors, which live in a separate small file. At single-developer volume the difference
+against an indexed store is unmeasurable.
+
+`node:sqlite` is available without a flag from Node 22.13.0, so the flag is not an
+argument against it. What remains is that on the minimum supported runtime it is
+Stability 1.1, "Active development", and that importing it emits `ExperimentalWarning` on
+stderr, which conflicts with the stream discipline in RFC 0006. `better-sqlite3` needs
+per-platform prebuilt native binaries that fight a self-contained ESM bundle.
+
+None of that is disqualifying. It is the reason to wait for a need rather than to pick
+now.
+
+### When a driver is chosen
+
+A driver is selected, and RFC 0008 written, when one of these is observed:
+
+- a report whose window makes a full scan exceed roughly one second on typical hardware;
+- a need for concurrent writers, which JSONL append tolerates only coarsely;
+- benchmark result sets that require joins rather than grouping;
+- `node:sqlite` reaching Stability 2 on the minimum supported runtime, at which point the
+  remaining objections expire and the comparison is worth running on its merits.
+
+The last trigger is a date, not a defect, which makes it the likeliest one. Until then
+the decision stays open and costs nothing. Migration from JSONL is a one-time import, and
+the storage interface is the seam that makes it so.
+
+The `MetricsStore` interface is therefore not decoration. It is what keeps this a
+deferred decision rather than an assumption baked into every importer and report.
 
 ## Importers
 
@@ -160,17 +203,102 @@ retaining command arguments.
 
 ### HarnessTrim
 
-Initial source: its JSONL `TrimEvent` files.
+Source: its JSONL telemetry files. As of HarnessTrim `0.0.5` the on-disk record is:
 
-Before the Token Harness MVP, HarnessTrim should add:
+```ts
+interface TrimEvent {
+  ts: string;              // ISO timestamp stamped by the emitter
+  harness: string;         // "opencode", "codex", "claude", "hermes", "pi"
+  tool: string;            // "bash", "read", ...
+  reducer: string | null;  // null when no reducer matched
+  beforeChars: number;
+  afterChars: number;
+}
+```
 
-- schema version;
-- native event ID;
-- token counts or declared estimation method;
-- harness/session/operation identifiers where available;
-- machine-readable metrics output.
+Default locations are `.harnesstrim/metrics.jsonl` in the project and
+`~/.hermes/harnesstrim-metrics.jsonl` for the Hermes adapter. Telemetry is off by default
+upstream and is enabled by the `--metrics` flag on the reducing command.
 
-Legacy character-only events remain importable as `estimated-local`.
+The importer works against exactly this shape. No upstream change is required.
+
+Mapping to the normalized event:
+
+| Normalized field | Source |
+| --- | --- |
+| `measurement.class` | `estimated-local` when the reduction was applied; `counterfactual` when it was not — see below |
+| `measurement.beforeChars` / `afterChars` | direct |
+| `measurement.beforeTokens` / `afterTokens` | `null` — never derived silently |
+| `context.harnessId` | `harness` |
+| `context.toolFamily` | `tool` |
+| `context.capability` | resolved from the pipeline for that harness and tool |
+| `outcome.changed` | whether the payload the model saw was actually modified |
+| `source.nativeEventId` | `null` upstream; synthesized as described below |
+
+### A measured reduction is not always a realized one
+
+`TrimEvent` records what the reducer computed, not whether the result reached the model.
+HarnessTrim's OpenCode adapter emits an event in `mode: "dryrun"` as well as in
+`mode: "active"`: it measures `beforeChars` and `afterChars` identically, and in `dryrun`
+leaves `output.output` untouched.
+
+Two events with identical numbers can therefore mean opposite things, and the importer must
+not collapse them:
+
+| Upstream mode | Payload modified | `measurement.class` | `outcome.changed` |
+| --- | --- | --- | --- |
+| `active` | yes | `estimated-local` | `true` |
+| `dryrun` | no | `counterfactual` | `false` |
+
+`estimated-local` asserts that a real transformation happened and only the token count is
+approximate. A `dryrun` event asserts nothing of the kind: the bytes stayed in context, and
+the figure describes a saving that did *not* occur. Filing it as `estimated-local` would
+inflate reported savings with output the model actually received — the precise failure the
+measurement classes exist to prevent.
+
+Counterfactual is the correct class, with one qualification worth recording: this
+counterfactual comes from a deterministic reducer replayed on observed input, not from a
+model-inferred baseline, so its confidence interval is narrow. It is still not a saving.
+
+Reports show `dryrun` figures on the counterfactual line only, never in realized totals and
+never added to the pipeline saving. Because `outcome.changed` is `false`, a coverage or
+bypass metric derived from it also stays correct without special-casing.
+
+Determining the mode is part of detection: the importer reads the effective adapter
+configuration for that harness and records it in the import receipt, so an event's class is
+reproducible rather than guessed.
+
+### Deduplicating a stream without event IDs
+
+`TrimEvent` has no native identifier, and `ts` is not unique under concurrency, so
+identity must be reconstructed. The importer uses the file as the ordering authority:
+
+- the cursor is `(absolute path, device/inode or volume identity, byte offset, digest of
+  the last imported line)`;
+- ingestion resumes at the stored byte offset;
+- the digest confirms the file was appended to rather than rewritten or rotated;
+- a digest mismatch means the file was truncated or replaced, so the importer restarts
+  from offset zero and relies on the synthesized identity to discard what it already has;
+- the synthesized identity is a hash of the source identity, the line ordinal, and the
+  line content.
+
+This makes repeated imports idempotent without upstream cooperation. When HarnessTrim
+later adds `schemaVersion` and a native event ID, the importer prefers them and the
+synthesized path becomes the fallback for older files.
+
+### Importer degradation policy
+
+An importer states which fidelity mode it is running in, and the mode appears in
+`status` output. For HarnessTrim:
+
+| Mode | Condition | Consequence |
+| --- | --- | --- |
+| `native` | Upstream exposes `metrics --json` with IDs and tokens | Exact or declared-estimate classes, native dedup |
+| `legacy` | Character-only `TrimEvent` JSONL | `estimated-local` only, synthesized dedup |
+
+Running in `legacy` mode is a supported steady state, not a warning. What would be a
+defect is presenting legacy character estimates as exact token savings, which the
+measurement class prevents by construction.
 
 ### Other providers
 
@@ -201,6 +329,30 @@ Human reports show:
 - errors and full-output retrieval rate.
 
 ## Benchmark standard
+
+### Release gating
+
+The full A/B benchmark below requires a control design, task-quality scoring, and access
+to billed-token reporting. It is closer to a measurement study than to a test suite, and
+gating `0.1.0` on it would block the release on the hardest thing in the project.
+
+The gates are therefore split:
+
+| Gate | `0.1.0` | `1.0.0` |
+| --- | --- | --- |
+| Deterministic must-keep recall on committed fixtures | required, 100% | required |
+| No exact-savings claim without both payloads observed | required | required |
+| Rollback restores fixtures byte-for-byte | required | required |
+| Measurement class labelled on every reported figure | required | required |
+| Provider overhead attributable to the provider | required | required |
+| Full A/B matrix with task-success scoring | not required | required |
+| Published raw benchmark results | not required | required |
+
+`0.1.0` must therefore prove that Token Harness does not lie about savings and does not
+damage configuration. It does not have to prove how large the savings are — the A/B
+matrix is what establishes that, and it lands with `0.2.0` and `1.0.0`.
+
+### Benchmark scenarios
 
 Benchmark scenarios:
 
