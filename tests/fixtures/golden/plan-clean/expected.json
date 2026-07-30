@@ -65,7 +65,7 @@
     ],
     "actions": [
       {
-        "kind": "patch-marker-block",
+        "kind": "merge-json",
         "id": "a1",
         "riskClass": "reversible",
         "requiresNetwork": false,
@@ -75,20 +75,33 @@
         ],
         "affectedProcesses": [],
         "preconditions": [
-          "settings.json parses as JSON"
+          "settings.json parses as JSON and carries no comments"
         ],
         "postconditions": [
-          "the owned marker block is present and matches its digest"
+          "the owned hook entry is present and matches its digest"
         ],
         "rollbackData": "file-snapshot",
         "explanation": "configure rtk hook",
         "path": "C:\\Users\\dev\\.claude\\settings.json",
-        "markerBegin": "token-harness:begin",
-        "markerEnd": "token-harness:end",
-        "commentPrefix": "//",
-        "commentSuffix": "",
-        "body": "\"PreToolUse\": [{ \"matcher\": \"Bash\", \"hooks\": [{ \"type\": \"command\", \"command\": \"rtk hook pre\" }] }]",
-        "expectedBodyDigest": null,
+        "ownedPointers": [
+          "hooks.PreToolUse"
+        ],
+        "operations": [
+          {
+            "kind": "append",
+            "pointer": "hooks.PreToolUse",
+            "value": {
+              "matcher": "Bash",
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "rtk hook claude"
+                }
+              ]
+            },
+            "expectedValueDigest": null
+          }
+        ],
         "createIfMissing": false
       },
       {

@@ -12,7 +12,7 @@ Excluded
                                       be narrowed to a free scope
 
 Actions
-  1. patch marker block   ~/.claude/settings.json     configure rtk hook
+  1. merge json           ~/.claude/settings.json     configure rtk hook
   2. write owned file     <state>/receipts/7f3a91c2.json
 
 Network: none. Elevation: none. Backups: 1 file.

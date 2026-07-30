@@ -242,7 +242,7 @@ Excluded
                                       be narrowed to a free scope
 
 Actions
-  1. patch marker block   ~/.claude/settings.json     configure rtk hook
+  1. merge json           ~/.claude/settings.json     configure rtk hook
   2. write owned file     <state>/receipts/7f3a91c2.json
 
 Network: none. Elevation: none. Backups: 1 file.
@@ -258,6 +258,21 @@ and described a delegated install that would "narrow to non-shell surfaces". RFC
 §Resolution at 0.1.0 establishes that neither is possible with `0.0.5`. Since these
 transcripts are committed as golden files, that draft would have frozen an unreachable
 state as the expected output.
+
+A second draft of the same transcript showed action 1 as `patch marker block`. It is
+`merge json`, and the correction is not cosmetic: RFC 0004 §Ownership lists marker-fenced
+blocks and "exact JSON/TOML/YAML entries recorded in its journal" as *separate* ownership
+mechanisms, and `~/.claude/settings.json` is strict JSON. A marker fence is a comment, JSON
+has no comment syntax, and a fence written into that file would produce a document the
+harness can no longer parse — so the earlier draft named an action that cannot be performed
+on the file it names.
+
+The Phase 2.5 spike confirmed the live shape: hooks sit at `hooks.PreToolUse[]` with a
+`matcher`, so the owning operation is an `append` of one array element identified by the
+digest of its value, which is what keeps the user's other hook entries and their order
+intact. RFC 0007 §Per-harness findings records it. This is the shape a golden file exists
+to freeze, and freezing the wrong one would have made the first correct harness adapter
+fail its own transcript.
 
 ### Scenario: brownfield — HarnessTrim already wired to Claude by hand
 
@@ -395,7 +410,7 @@ To keep numbering coherent, the next identifiers are reserved now:
 | RFC | Subject | Status |
 | --- | --- | --- |
 | 0006 | CLI contract | Accepted (this document) |
-| 0007 | Live verification mechanism | Reserved — written after the Phase 2.5 spike |
+| 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL storage is outgrown |
 
 ## Decisions
