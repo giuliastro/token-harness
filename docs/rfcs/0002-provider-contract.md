@@ -246,12 +246,31 @@ interface VerificationResult {
   status: "healthy" | "degraded" | "failed" | "not-applicable";
   checks: Array<{
     id: string;
-    status: "pass" | "warn" | "fail" | "skip";
+    status: "pass" | "warn" | "fail" | "info" | "not-exercised" | "skip";
     evidence: Evidence[];
     remediation?: string;
   }>;
 }
 ```
+
+The check-status union has been extended twice by observation rather than by design,
+and both extensions are recorded here because the first was carried in code for two
+phases while this document still contradicted it.
+
+`info` was added because RFC 0006 §Golden path emits it — twice, for `tier-limit` and
+`not-managed` — and RFC 0006 §Tier-aware verification status states outright that "the
+tier limitation itself is reported as `info`". Dropping a status the normative transcript
+uses would have made that transcript unrenderable, so Phase 1 implemented `info` and
+reported the divergence against this section rather than resolving it silently.
+
+`not-exercised` was added because RFC 0007 §Active and passive canaries needs it. A
+passive canary reads the receipt of an operation the harness performed anyway; when no
+such operation has happened yet, nothing is known. That is not a `pass` — asserting one
+on no evidence is the failure this whole tier system exists to prevent — and it is not a
+`fail`, because nothing has gone wrong. It is a third thing, and the honest report says
+so. `not-exercised` never contributes to the problems-found exit code, for the same
+reason `info` does not: a supported configuration that has simply not been used yet must
+be able to exit 0.
 
 Installing a binary is insufficient. The adapter must verify that the selected harness
 actually reaches the provider at the intended hook or routing point.

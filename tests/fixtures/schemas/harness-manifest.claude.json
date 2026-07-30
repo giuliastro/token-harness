@@ -5,18 +5,64 @@
   "homepage": "https://claude.com/claude-code",
   "testedVersions": {
     "minimum": "2.0.0",
-    "maximum": "2.0.14"
+    "maximum": "2.1.212"
   },
   "verificationTier": "canary",
+  "versionCommand": {
+    "executable": "claude",
+    "args": [
+      "--version"
+    ]
+  },
   "interceptionPoints": [
-    "pre-tool-use",
-    "post-tool-use"
+    {
+      "scopeId": "pre-tool-use",
+      "eventName": "PreToolUse"
+    },
+    {
+      "scopeId": "post-tool-use",
+      "eventName": "PostToolUse"
+    }
   ],
-  "userScopedConfigPaths": [
-    "~/.claude/settings.json"
+  "configFiles": [
+    {
+      "path": ".claude/settings.json",
+      "scope": "user",
+      "parser": "json",
+      "primary": true
+    },
+    {
+      "path": ".claude/settings.json",
+      "scope": "project",
+      "parser": "json",
+      "primary": false
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "scope": "project",
+      "parser": "json",
+      "primary": false
+    }
   ],
-  "projectScopedConfigPaths": [
-    ".claude/settings.json",
-    ".claude/settings.local.json"
-  ]
+  "toolFamilies": [
+    {
+      "id": "Bash",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ],
+      "executesShellCommands": true
+    },
+    {
+      "id": "PowerShell",
+      "platforms": [
+        "windows"
+      ],
+      "executesShellCommands": true
+    }
+  ],
+  "requiresEnablement": false,
+  "enablementNote": null,
+  "receiptFamily": "provider-telemetry"
 }
