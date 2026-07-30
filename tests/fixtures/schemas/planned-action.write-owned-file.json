@@ -1,0 +1,23 @@
+{
+  "kind": "write-owned-file",
+  "id": "a2",
+  "riskClass": "reversible",
+  "requiresNetwork": false,
+  "requiresElevation": false,
+  "affectedPaths": [
+    "/home/dev/.local/state/token-harness/receipts/7f3a91c2.json"
+  ],
+  "affectedProcesses": [],
+  "preconditions": [
+    "the state root exists and its permissions were asserted"
+  ],
+  "postconditions": [
+    "the receipt records the applied pipeline and both versions"
+  ],
+  "rollbackData": "file-snapshot",
+  "explanation": "record the verification receipt",
+  "path": "/home/dev/.local/state/token-harness/receipts/7f3a91c2.json",
+  "content": "{\n  \"schemaVersion\": 1\n}\n",
+  "mode": "0600",
+  "expectedDigest": "sha256:609b0270c380969286ce2be72aad387758e8169c221f93c3bb14a4b352c5e65c"
+}

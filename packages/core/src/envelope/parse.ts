@@ -10,7 +10,9 @@
  * every failure carries a stable code and a remediation.
  */
 
+import { isPlannedActionKind, type PlannedAction } from '../domain/actions.js';
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
+import { isDigest } from '../domain/digest.js';
 import { isProviderId } from '../domain/ids.js';
 import { isCapabilityId } from '../domain/capabilities.js';
 import { MANIFEST_SCHEMA_VERSION, type ProviderManifest } from '../domain/manifest.js';
@@ -333,6 +335,152 @@ export function parseOptimizationEvent(input: unknown): ParseResult<Optimization
 
   if (problems.length > 0) return failure(problems);
   return { ok: true, value: input as unknown as OptimizationEvent };
+}
+
+/**
+ * Parses one planned action.
+ *
+ * A plan crosses a process boundary: RFC 0006 §Plan persistence stores it under its
+ * ID and `apply --plan <id>` reads it back, possibly written by a different build.
+ * So the payload an action carries is a public schema, and a stored plan whose
+ * actions do not parse must be rejected rather than half-executed — which is why the
+ * `plan-schema-unsupported` rejection in that section needs something to fail on.
+ *
+ * The checks are the ones that make an action *executable*: the fields the executor
+ * would otherwise read as `undefined` and write as `"undefined"`.
+ */
+export function parsePlannedAction(input: unknown): ParseResult<PlannedAction> {
+  if (!isRecord(input)) return failure([notAnObject('planned action')]);
+
+  const kind = input['kind'];
+  if (typeof kind !== 'string' || !isPlannedActionKind(kind)) {
+    return failure([
+      diagnostic({
+        severity: 'error',
+        code: 'action-kind-unknown',
+        message: `Action kind ${JSON.stringify(kind)} is not one of the RFC 0002 action families`,
+        remediation: 'Upgrade Token Harness, or recompute the plan with this build',
+      }),
+    ]);
+  }
+
+  const problems: Diagnostic[] = [];
+  const what = `${kind} action`;
+  requireString(input, 'id', what, problems);
+  requireArray(input, 'affectedPaths', what, problems);
+  if (typeof input['explanation'] !== 'string') {
+    // Present but possibly empty: the RFC 0006 golden transcript renders one action
+    // line with no trailing explanation, so an empty string is a legitimate value and
+    // the field being absent is not.
+    problems.push(
+      diagnostic({
+        severity: 'error',
+        code: 'field-invalid',
+        message: `The ${what} field \`explanation\` must be a string`,
+        remediation: 'Explain in one sentence what the action does, or set it to ""',
+      }),
+    );
+  }
+
+  const risk = input['riskClass'];
+  if (
+    risk !== 'read-only' &&
+    risk !== 'reversible' &&
+    risk !== 'delegated' &&
+    risk !== 'destructive'
+  ) {
+    problems.push(
+      diagnostic({
+        severity: 'error',
+        code: 'field-invalid',
+        message: `The ${what} field \`riskClass\` must be read-only, reversible, delegated, or destructive`,
+        remediation: 'Declare one risk class from RFC 0002 §Planning',
+      }),
+    );
+  }
+
+  const requireContent = (key: string): void => {
+    if (typeof input[key] !== 'string') {
+      problems.push(
+        diagnostic({
+          severity: 'error',
+          code: 'field-invalid',
+          message: `The ${what} field \`${key}\` must be a string, because a plan records the exact bytes apply will write`,
+          remediation: `Set \`${key}\` on the action, or recompute the plan`,
+        }),
+      );
+    }
+  };
+
+  const requireDigestOrNull = (key: string): void => {
+    const value = input[key];
+    if (value === null) return;
+    if (typeof value !== 'string' || !isDigest(value)) {
+      problems.push(
+        diagnostic({
+          severity: 'error',
+          code: 'field-invalid',
+          message: `The ${what} field \`${key}\` must be null or a sha256 digest`,
+          remediation: `Set \`${key}\` to null when nothing must be there, or to the digest that must be`,
+        }),
+      );
+    }
+  };
+
+  switch (kind) {
+    case 'write-owned-file':
+      requireString(input, 'path', what, problems);
+      requireContent('content');
+      requireDigestOrNull('expectedDigest');
+      break;
+    case 'patch-marker-block':
+      requireString(input, 'path', what, problems);
+      requireString(input, 'markerBegin', what, problems);
+      requireString(input, 'markerEnd', what, problems);
+      requireString(input, 'commentPrefix', what, problems);
+      requireContent('body');
+      requireContent('commentSuffix');
+      requireDigestOrNull('expectedBodyDigest');
+      if (typeof input['createIfMissing'] !== 'boolean') {
+        problems.push(
+          diagnostic({
+            severity: 'error',
+            code: 'field-invalid',
+            message: `The ${what} field \`createIfMissing\` must be a boolean`,
+            remediation: 'State explicitly whether the file may be created',
+          }),
+        );
+      }
+      break;
+    case 'remove-owned-change': {
+      requireString(input, 'path', what, problems);
+      requireString(input, 'reverses', what, problems);
+      const target = input['target'];
+      if (
+        !isRecord(target) ||
+        (target['kind'] !== 'owned-file' && target['kind'] !== 'owned-marker-block')
+      ) {
+        problems.push(
+          diagnostic({
+            severity: 'error',
+            code: 'field-invalid',
+            message: `The ${what} field \`target\` must be an owned-file or owned-marker-block record`,
+            remediation:
+              'Record what the plan believes it owns, so the claim can be checked before removal',
+          }),
+        );
+      }
+      break;
+    }
+    case 'create-directory':
+      requireString(input, 'path', what, problems);
+      break;
+    default:
+      break;
+  }
+
+  if (problems.length > 0) return failure(problems);
+  return { ok: true, value: input as unknown as PlannedAction };
 }
 
 /** Parses JSON text, turning a syntax error into a diagnostic rather than a throw. */

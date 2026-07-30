@@ -6,11 +6,21 @@
  * upstream; the remaining payloads carry the minimum each family needs to be
  * displayed, serialized, and later executed.
  *
- * These are *types*. The executor is Phase 2 (PLAN §2.3) and deliberately does
- * not exist yet, which is why nothing here contains a closure or a side effect.
+ * These are *types*: nothing here contains a closure or a side effect, per RFC
+ * 0002 §Planning — "a provider plan contains no executable closures and can be
+ * serialized as JSON".
+ *
+ * The file-touching families carry their *payload* as data, which PLAN §15 issue 6
+ * added to what Phase 1 left as the display minimum. That is not a convenience.
+ * RFC 0006 §Plan persistence makes `apply --plan <id>` the mechanism by which "the
+ * artifact a human or a reviewer approved is the artifact that runs", and a plan
+ * that does not record the bytes it will write is a plan nobody can approve. The
+ * same clause is why each of them carries a precondition digest: RFC 0006 rejects a
+ * stored plan when "a recorded precondition digest no longer matches".
  */
 
 import type { ProviderId } from './ids.js';
+import type { OwnedArtifact } from './ownership.js';
 
 export type ActionRiskClass = 'read-only' | 'reversible' | 'delegated' | 'destructive';
 
@@ -78,6 +88,18 @@ export interface CreateDirectoryAction extends PlannedActionBase {
 export interface WriteOwnedFileAction extends PlannedActionBase {
   kind: 'write-owned-file';
   path: string;
+  /** The exact content to write, UTF-8. */
+  content: string;
+  /** Four-digit octal POSIX mode, or null to leave it to the platform default. */
+  mode: string | null;
+  /**
+   * What must already be there.
+   *
+   * Null means the file must not exist. A digest means it must exist with exactly
+   * that content — which is how a file the user created since planning stops an
+   * overwrite instead of becoming one.
+   */
+  expectedDigest: string | null;
 }
 
 export interface MergeJsonAction extends PlannedActionBase {
@@ -102,8 +124,25 @@ export interface MergeYamlAction extends PlannedActionBase {
 export interface PatchMarkerBlockAction extends PlannedActionBase {
   kind: 'patch-marker-block';
   path: string;
+  /** A token, not a whole line: the fence is located by a line containing it. */
   markerBegin: string;
   markerEnd: string;
+  /**
+   * Comment syntax for the fence lines, in the host file's language: `#` with no
+   * suffix for a shell or TOML file, `<!--` and `-->` for Markdown.
+   *
+   * Carried by the action rather than inferred from the file extension, because a
+   * fence written in the wrong syntax is a fence that breaks the file it is in, and
+   * the adapter that chose the file knows its language.
+   */
+  commentPrefix: string;
+  commentSuffix: string;
+  /** The body between the fences. Everything outside them belongs to the user. */
+  body: string;
+  /** Null means no block must be there yet; a digest means our block must be exactly that. */
+  expectedBodyDigest: string | null;
+  /** Whether the file may be created when it does not exist, as `AGENTS.md` often will not. */
+  createIfMissing: boolean;
 }
 
 export interface RemoveOwnedChangeAction extends PlannedActionBase {
@@ -111,6 +150,16 @@ export interface RemoveOwnedChangeAction extends PlannedActionBase {
   path: string;
   /** The action ID whose effect this reverses. */
   reverses: string;
+  /**
+   * What the plan believes it owns, stated in the plan rather than looked up while
+   * applying.
+   *
+   * RFC 0004 §Ownership permits removal only while the claim still holds, so the
+   * claim has to be reviewable *before* apply — and it has to be checkable against
+   * the live file, which is what turns "user edits block automatic deletion" into a
+   * refusal rather than a hope.
+   */
+  target: OwnedArtifact;
 }
 
 export interface RegisterMcpServerAction extends PlannedActionBase {
@@ -166,6 +215,10 @@ const ACTION_LABELS: Readonly<Record<PlannedActionKind, string>> = {
 
 export function actionLabel(kind: PlannedActionKind): string {
   return ACTION_LABELS[kind];
+}
+
+export function isPlannedActionKind(value: string): value is PlannedActionKind {
+  return Object.hasOwn(ACTION_LABELS, value);
 }
 
 /** The path a plan line points at, or null for actions without a single target. */

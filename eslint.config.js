@@ -49,8 +49,12 @@ export default tseslint.config(
         {
           patterns: [
             {
+              // `node:crypto` is the one exception, for the digests RFC 0004
+              // §Ownership and RFC 0006 §Plan persistence require. Hashing is
+              // arithmetic; the rule is about the machine.
               group: [
                 'node:*',
+                '!node:crypto',
                 'fs',
                 'path',
                 'os',

@@ -46,6 +46,8 @@
  * here in PLAN §2.4.
  */
 
+export * from './fs/node-filesystem.js';
+
 export * from './platform/detect.js';
 export * from './platform/executable.js';
 export * from './platform/package-managers.js';

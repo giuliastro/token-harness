@@ -1,0 +1,484 @@
+/**
+ * Action execution — PLAN §2.3, RFC 0004 §Transaction lifecycle.
+ *
+ * ## What an action does, and what it refuses to do
+ *
+ * Every mutating action here snapshots before it writes, so the transaction engine
+ * (PLAN §15 issue 7) can reverse it by restoring rather than by inventing an inverse
+ * operation. That is not a shortcut: restore-from-snapshot is what makes "a
+ * simulated mid-plan failure restores the initial fixture byte-for-byte" true for an
+ * action whose inverse would otherwise have to reconstruct a file it only partly
+ * wrote.
+ *
+ * Every action also states what it expects to find, and stops when it does not find
+ * it. RFC 0006 §Plan persistence rejects a plan when "a recorded precondition digest
+ * no longer matches", and this is where that happens: a file the user created since
+ * planning, an owned block the user edited, a marker fence somebody removed. The
+ * outcome is `precondition-drift`, which the CLI reports as exit 5 — never a write.
+ *
+ * Four of the thirteen action families are implemented, per PLAN §15 issue 6: the
+ * ones that touch files without needing a parser. The rest report
+ * `action-not-implemented` rather than silently succeeding, and a test asserts that
+ * for every one of them.
+ */
+
+import type {
+  CreateDirectoryAction,
+  PatchMarkerBlockAction,
+  PlannedAction,
+  PlannedActionKind,
+  RemoveOwnedChangeAction,
+  WriteOwnedFileAction,
+} from '../domain/actions.js';
+import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
+import { digestBytes, digestText } from '../domain/digest.js';
+import {
+  mayRemoveAutomatically,
+  verifyOwnership,
+  type FileSnapshot,
+  type OwnedArtifact,
+  type OwnershipVerdict,
+} from '../domain/ownership.js';
+
+import type { FileSystemPort } from './filesystem.js';
+import { findMarkerBlock, removeMarkerBlock, upsertMarkerBlock } from './marker-block.js';
+import type { SnapshotStore } from './snapshots.js';
+
+export interface ActionContext {
+  fs: FileSystemPort;
+  snapshots: SnapshotStore;
+}
+
+export type ActionStatus =
+  /** The action ran and changed something. */
+  | 'applied'
+  /** The desired state was already in place. Applying again is a no-op, not an error. */
+  | 'already-satisfied'
+  /** The environment no longer matches what the plan recorded. RFC 0006 exit 5. */
+  | 'precondition-drift'
+  /** The action is well-formed but must not run: doing so would destroy the user's work. */
+  | 'refused'
+  /** An I/O failure, or an action family this build does not implement. */
+  | 'failed';
+
+export interface ActionOutcome {
+  actionId: string;
+  kind: PlannedActionKind;
+  status: ActionStatus;
+  /** Captured before any write, in the order captured. Rollback restores in reverse. */
+  snapshots: FileSnapshot[];
+  /** What Token Harness owns as a result. Empty unless the status is `applied`. */
+  ownership: OwnedArtifact[];
+  diagnostics: Diagnostic[];
+}
+
+function outcome(
+  action: PlannedAction,
+  status: ActionStatus,
+  parts: Partial<Pick<ActionOutcome, 'snapshots' | 'ownership' | 'diagnostics'>> = {},
+): ActionOutcome {
+  return {
+    actionId: action.id,
+    kind: action.kind,
+    status,
+    snapshots: parts.snapshots ?? [],
+    ownership: parts.ownership ?? [],
+    diagnostics: parts.diagnostics ?? [],
+  };
+}
+
+function drift(action: PlannedAction, path: string, message: string): ActionOutcome {
+  return outcome(action, 'precondition-drift', {
+    diagnostics: [
+      diagnostic({
+        severity: 'error',
+        code: 'action-precondition-drift',
+        message,
+        path,
+        remediation: 'Run `token-harness plan` again to compute a plan against the current state',
+      }),
+    ],
+  });
+}
+
+function refusal(
+  action: PlannedAction,
+  code: string,
+  path: string,
+  message: string,
+  remediation: string,
+): ActionOutcome {
+  return outcome(action, 'refused', {
+    diagnostics: [diagnostic({ severity: 'error', code, message, path, remediation })],
+  });
+}
+
+const UTF8 = new TextEncoder();
+
+async function readText(fs: FileSystemPort, path: string): Promise<string> {
+  return new TextDecoder().decode(await fs.readFile(path));
+}
+
+/**
+ * `create-directory`.
+ *
+ * The absence is captured even though creating a directory looks harmless, because
+ * rollback has to be able to remove it again — RFC 0004 §Backup policy, "absence is
+ * the state rollback must restore".
+ */
+async function applyCreateDirectory(
+  action: CreateDirectoryAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const stat = await context.fs.stat(action.path);
+  if (stat !== null) {
+    if (stat.kind === 'directory') return outcome(action, 'already-satisfied');
+    return refusal(
+      action,
+      'path-is-not-a-directory',
+      action.path,
+      'A file already exists where Token Harness needs a directory',
+      'Move or remove the file, then run the command again',
+    );
+  }
+
+  const snapshot = await context.snapshots.capture(action.path);
+  await context.fs.createDirectory(action.path);
+  return outcome(action, 'applied', { snapshots: [snapshot] });
+}
+
+/**
+ * `write-owned-file`.
+ *
+ * The precondition is the whole safety story. `expectedDigest: null` means the file
+ * must not exist, so a file the user put there in the meantime produces drift rather
+ * than being overwritten; a digest means the file must be exactly what Token Harness
+ * last wrote, so a file the user edited produces drift too.
+ */
+async function applyWriteOwnedFile(
+  action: WriteOwnedFileAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const { fs } = context;
+  const content = UTF8.encode(action.content);
+  const targetDigest = digestBytes(content);
+  const stat = await fs.stat(action.path);
+
+  if (stat !== null && stat.kind !== 'file') {
+    return refusal(
+      action,
+      'path-is-not-a-file',
+      action.path,
+      'A directory exists where Token Harness needs to write a file',
+      'Move or remove the directory, then run the command again',
+    );
+  }
+
+  const liveDigest = stat === null ? null : digestBytes(await fs.readFile(action.path));
+
+  if (action.expectedDigest === null && liveDigest !== null) {
+    if (liveDigest === targetDigest) {
+      // Byte-identical to what this action would write. Almost certainly a re-run
+      // whose receipt was lost, and overwriting identical bytes is not worth an error.
+      return outcome(action, 'already-satisfied', {
+        ownership: [
+          { kind: 'owned-file', path: action.path, digest: targetDigest, mode: action.mode },
+        ],
+      });
+    }
+    return drift(
+      action,
+      action.path,
+      'The plan expected to create this file, but a different file already exists there',
+    );
+  }
+
+  if (action.expectedDigest !== null && liveDigest === null) {
+    return drift(
+      action,
+      action.path,
+      'The plan expected to update this file, but it no longer exists',
+    );
+  }
+
+  if (action.expectedDigest !== null && liveDigest !== action.expectedDigest) {
+    return drift(
+      action,
+      action.path,
+      'This file has changed since the plan was computed, so Token Harness will not overwrite it',
+    );
+  }
+
+  const record: OwnedArtifact = {
+    kind: 'owned-file',
+    path: action.path,
+    digest: targetDigest,
+    mode: action.mode,
+  };
+
+  if (liveDigest === targetDigest) {
+    return outcome(action, 'already-satisfied', { ownership: [record] });
+  }
+
+  const snapshot = await context.snapshots.capture(action.path);
+  await fs.writeFile(action.path, content, action.mode);
+  return outcome(action, 'applied', { snapshots: [snapshot], ownership: [record] });
+}
+
+/**
+ * `patch-marker-block`.
+ *
+ * Only the body between the fences is written. Everything outside is the user's, and
+ * the round-trip property in `marker-block.ts` is what makes "configuration the user
+ * wrote is preserved byte-for-byte" (RFC 0004 §Brownfield adoption, clause 5) a
+ * property rather than an intention.
+ */
+async function applyPatchMarkerBlock(
+  action: PatchMarkerBlockAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const { fs } = context;
+  const fence = { begin: action.markerBegin, end: action.markerEnd };
+  const stat = await fs.stat(action.path);
+
+  if (stat !== null && stat.kind !== 'file') {
+    return refusal(
+      action,
+      'path-is-not-a-file',
+      action.path,
+      'A directory exists where Token Harness needs to patch a file',
+      'Move or remove the directory, then run the command again',
+    );
+  }
+
+  if (stat === null && !action.createIfMissing) {
+    return drift(
+      action,
+      action.path,
+      'The file this plan patches no longer exists, and the plan does not permit creating it',
+    );
+  }
+
+  const original = stat === null ? '' : await readText(fs, action.path);
+  const lookup = findMarkerBlock(original, fence);
+
+  if (lookup.state === 'malformed') {
+    return refusal(
+      action,
+      'marker-block-malformed',
+      action.path,
+      `The Token Harness marker block in this file cannot be located safely: ${lookup.reason}`,
+      'Repair the marker lines by hand, or remove them so Token Harness can write a fresh block',
+    );
+  }
+
+  if (lookup.state === 'absent' && action.expectedBodyDigest !== null) {
+    // RFC 0004 §Post-apply drift: "an owned marker block that was edited or removed".
+    return drift(
+      action,
+      action.path,
+      'The Token Harness marker block this plan updates has been removed from the file',
+    );
+  }
+
+  if (lookup.state === 'found' && action.expectedBodyDigest === null) {
+    return drift(
+      action,
+      action.path,
+      'A Token Harness marker block already exists in this file, but the plan expected none',
+    );
+  }
+
+  if (
+    lookup.state === 'found' &&
+    action.expectedBodyDigest !== null &&
+    lookup.block.bodyDigest !== action.expectedBodyDigest
+  ) {
+    return drift(
+      action,
+      action.path,
+      'The Token Harness marker block in this file has been edited since the plan was computed',
+    );
+  }
+
+  const upsert = upsertMarkerBlock({
+    text: original,
+    fence,
+    syntax: { prefix: action.commentPrefix, suffix: action.commentSuffix },
+    body: action.body,
+  });
+  if (!upsert.ok) {
+    return refusal(
+      action,
+      'marker-block-malformed',
+      action.path,
+      `The marker block could not be written: ${upsert.reason}`,
+      'Repair the marker lines by hand',
+    );
+  }
+
+  const record: OwnedArtifact = {
+    kind: 'owned-marker-block',
+    path: action.path,
+    markerBegin: action.markerBegin,
+    markerEnd: action.markerEnd,
+    bodyDigest: upsert.bodyDigest,
+  };
+
+  if (!upsert.changed) return outcome(action, 'already-satisfied', { ownership: [record] });
+
+  const snapshot = await context.snapshots.capture(action.path);
+  await fs.writeFile(action.path, UTF8.encode(upsert.text), stat?.mode ?? null);
+  return outcome(action, 'applied', { snapshots: [snapshot], ownership: [record] });
+}
+
+/** Reads back enough of the live file to judge an ownership claim. */
+async function observeOwnership(
+  target: OwnedArtifact,
+  context: ActionContext,
+): Promise<OwnershipVerdict> {
+  const { fs } = context;
+  const stat = await fs.stat(target.path);
+  if (stat === null || stat.kind !== 'file') {
+    return verifyOwnership(target, { exists: false });
+  }
+  if (target.kind === 'owned-file') {
+    return verifyOwnership(target, {
+      exists: true,
+      fileDigest: digestBytes(await fs.readFile(target.path)),
+    });
+  }
+  const lookup = findMarkerBlock(await readText(fs, target.path), {
+    begin: target.markerBegin,
+    end: target.markerEnd,
+  });
+  return verifyOwnership(target, {
+    exists: true,
+    bodyDigest: lookup.state === 'found' ? lookup.block.bodyDigest : null,
+  });
+}
+
+/**
+ * `remove-owned-change`.
+ *
+ * The destructive one, and the only place RFC 0004 §Ownership's limits are enforced:
+ * "Token Harness can remove only files it created and whose digest or ownership
+ * marker still matches" and "user edits inside an owned file ... block automatic
+ * deletion until the user reviews the new uninstall plan".
+ *
+ * A modified artifact is a refusal, not a warning, and the diagnostic names the path.
+ */
+async function applyRemoveOwnedChange(
+  action: RemoveOwnedChangeAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const { fs, snapshots } = context;
+  const verdict = await observeOwnership(action.target, context);
+
+  if (verdict === 'missing') {
+    // Already gone. Uninstall is idempotent: someone removing our file by hand is not
+    // a failure of uninstall, it is uninstall's goal reached by another route.
+    return outcome(action, 'already-satisfied');
+  }
+
+  if (!mayRemoveAutomatically(verdict)) {
+    return refusal(
+      action,
+      'owned-artifact-modified',
+      action.target.path,
+      verdict === 'owned-modified'
+        ? 'This has been edited since Token Harness wrote it, so it will not be removed automatically'
+        : 'Nothing here is marked as owned by Token Harness, so it will not be removed',
+      'Review the change and remove it by hand, or re-run uninstall after reverting it',
+    );
+  }
+
+  const snapshot = await snapshots.capture(action.target.path);
+
+  if (action.target.kind === 'owned-file') {
+    await fs.remove(action.target.path);
+    return outcome(action, 'applied', { snapshots: [snapshot] });
+  }
+
+  const removal = removeMarkerBlock(await readText(fs, action.target.path), {
+    begin: action.target.markerBegin,
+    end: action.target.markerEnd,
+  });
+  if (!removal.ok) {
+    return refusal(
+      action,
+      'marker-block-malformed',
+      action.target.path,
+      `The owned marker block could not be removed: ${removal.reason}`,
+      'Remove the marker lines by hand',
+    );
+  }
+  await fs.writeFile(action.target.path, UTF8.encode(removal.text), null);
+  return outcome(action, 'applied', { snapshots: [snapshot] });
+}
+
+/**
+ * The action families PLAN §15 issue 6 does not cover.
+ *
+ * They report rather than no-op, because an executor that silently skips an action it
+ * does not understand produces a plan that claims to have been applied and was not.
+ */
+function notImplemented(action: PlannedAction): ActionOutcome {
+  return outcome(action, 'failed', {
+    diagnostics: [
+      diagnostic({
+        severity: 'error',
+        code: 'action-not-implemented',
+        message: `This build cannot execute a ${JSON.stringify(action.kind)} action`,
+        remediation: 'Upgrade Token Harness, or remove the provider that planned this action',
+      }),
+    ],
+  });
+}
+
+export async function applyAction(
+  action: PlannedAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  switch (action.kind) {
+    case 'create-directory':
+      return applyCreateDirectory(action, context);
+    case 'write-owned-file':
+      return applyWriteOwnedFile(action, context);
+    case 'patch-marker-block':
+      return applyPatchMarkerBlock(action, context);
+    case 'remove-owned-change':
+      return applyRemoveOwnedChange(action, context);
+    case 'download-artifact':
+    case 'package-manager-install':
+    case 'run-installer-command':
+    case 'delegated-provider-install':
+    case 'merge-json':
+    case 'merge-toml':
+    case 'merge-yaml':
+    case 'register-mcp-server':
+    case 'register-hook':
+      return notImplemented(action);
+  }
+}
+
+/** The families this build can execute, exported so a planner can refuse to plan the rest. */
+export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
+  'create-directory',
+  'write-owned-file',
+  'patch-marker-block',
+  'remove-owned-change',
+];
+
+export function isExecutableActionKind(kind: PlannedActionKind): boolean {
+  return EXECUTABLE_ACTION_KINDS.includes(kind);
+}
+
+/**
+ * The digest a `write-owned-file` action should record as its precondition when it is
+ * planned as an update. Exported so a planner and the executor agree by construction
+ * rather than by coincidence.
+ */
+export function ownedFileDigest(content: string): string {
+  return digestText(content);
+}
