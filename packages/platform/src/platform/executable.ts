@@ -171,13 +171,66 @@ export interface ResolveExecutableInput {
   probe: ExecutableProbe;
 }
 
+/**
+ * The candidate file names to try, in order.
+ *
+ * The ordering is the whole content of this function, and an earlier version got it
+ * backwards. It tried the bare name *first*, which on Windows means an npm or pnpm
+ * global `bin` entry resolves to its extensionless Unix shell script — `opencode`,
+ * `pnpm`, `harnesstrim` are all installed as a triple of extensionless, `.cmd`, and
+ * `.ps1` — and Windows cannot launch the extensionless one at all. Every package
+ * manager and every npm-installed provider was therefore reported as
+ * `windows-unsupported-extension` on a real machine, which is exactly what
+ * `PATHEXT` handling exists to prevent.
+ *
+ * Windows itself appends `PATHEXT` when the name has no extension and does not
+ * execute an extensionless file, so `PATHEXT` candidates come first. The bare name
+ * comes last rather than not at all: reporting "found, but this platform cannot
+ * start it" is more use than reporting nothing, and `isStartableExecutable` is what
+ * callers gate on.
+ */
 function candidatesFor(name: string, nativeWindows: boolean, extensions: string[]): string[] {
   if (!nativeWindows) return [name];
   const lower = name.toLowerCase();
   if (extensions.some((extension) => lower.endsWith(extension))) return [name];
-  // A name with some other extension is still tried verbatim first — `python3.11`
-  // is a name, not an extension — and then with each PATHEXT suffix.
-  return [name, ...extensions.map((extension) => `${name}${extension}`)];
+  return [...extensions.map((extension) => `${name}${extension}`), name];
+}
+
+/**
+ * Names that must mean the Windows utility, resolved from `%SystemRoot%\System32`
+ * rather than by searching `PATH`.
+ *
+ * Two reasons, and the first is not hypothetical. Git for Windows puts
+ * `usr/bin` on `PATH` on a large share of Windows development machines, and its
+ * coreutils `whoami` does not understand `/user /fo csv` — it exits 1 with "extra
+ * operand". The RFC 0004 §State directory permissions check then cannot obtain the
+ * current user's SID, reports `state-directory-unverifiable`, and Token Harness
+ * refuses to run at all. It fails safe, and it fails for everyone.
+ *
+ * The second reason is that letting `PATH` choose `icacls` lets `PATH` choose what
+ * the permission check reads. RFC 0004 §Repository trust treats project-local
+ * content as untrusted, and Token Harness runs with the user's repository as its
+ * working directory; the check that enforces the state invariant must not be
+ * selectable by an entry in front of `System32`.
+ *
+ * The list is exactly the utilities Token Harness invokes, so adding one is a
+ * deliberate act. It is not "prefer System32 for everything": `System32` also holds
+ * `curl`, `tar`, `find`, and `bash`, and shadowing a user's own would be its own
+ * defect.
+ */
+export const WINDOWS_SYSTEM_UTILITIES: readonly string[] = ['icacls', 'whoami', 'taskkill'];
+
+function systemUtilityPath(
+  name: string,
+  env: Readonly<Record<string, string | undefined>>,
+  probe: ExecutableProbe,
+): string | null {
+  const stem = win32.basename(name, win32.extname(name)).toLowerCase();
+  if (!WINDOWS_SYSTEM_UTILITIES.includes(stem)) return null;
+  const systemRoot = env['SystemRoot'] ?? env['windir'];
+  if (systemRoot === undefined || systemRoot.trim() === '') return null;
+  const candidate = win32.join(systemRoot, 'System32', `${stem}.exe`);
+  return probe.entryKind(candidate) === 'file' ? candidate : null;
 }
 
 export function resolveExecutable(input: ResolveExecutableInput): ResolvedExecutable | null {
@@ -190,6 +243,12 @@ export function resolveExecutable(input: ResolveExecutableInput): ResolvedExecut
   const names = candidatesFor(name, nativeWindows, extensions);
 
   const hasSeparator = name.includes('/') || (nativeWindows && name.includes('\\'));
+
+  if (nativeWindows && !hasSeparator) {
+    const system = systemUtilityPath(name, env, probe);
+    if (system !== null) return { requested: name, path: system, kind: 'native' };
+  }
+
   const directories = hasSeparator ? [null] : searchPath(env, facts);
 
   for (const directory of directories) {

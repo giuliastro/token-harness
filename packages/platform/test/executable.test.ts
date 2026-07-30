@@ -12,7 +12,12 @@ import { describe, it } from 'node:test';
 
 import type { PlatformFacts } from '@token-harness/core';
 
-import { DEFAULT_PATHEXT, resolveExecutable, type ExecutableProbe } from '../src/index.js';
+import {
+  DEFAULT_PATHEXT,
+  WINDOWS_SYSTEM_UTILITIES,
+  resolveExecutable,
+  type ExecutableProbe,
+} from '../src/index.js';
 
 const WINDOWS: PlatformFacts = {
   os: 'windows',
@@ -74,6 +79,45 @@ describe('Windows resolution', () => {
     assert.equal(resolved?.path, 'C:\\Users\\dev\\AppData\\Roaming\\npm\\pnpm.cmd');
     assert.equal(resolved?.kind, 'windows-batch-shim');
     assert.equal(resolved?.requested, 'pnpm');
+  });
+
+  /**
+   * The regression test for the ordering bug, taken from a real machine.
+   *
+   * npm and pnpm install a global `bin` entry as a triple: an extensionless Unix
+   * shell script, a `.cmd`, and a `.ps1`. Trying the bare name first resolved
+   * `opencode`, `pnpm`, and `harnesstrim` to the shell script, which Windows cannot
+   * launch — so every npm-installed provider and every package manager came back
+   * `windows-unsupported-extension` on a stock Windows development machine.
+   */
+  it('resolves an npm shim triple to the .cmd, not to the extensionless shell script', () => {
+    const resolved = resolveExecutable({
+      name: 'opencode',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: fakeProbe({
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\opencode': {},
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\opencode.cmd': {},
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\opencode.ps1': {},
+      }),
+    });
+    assert.equal(resolved?.path, 'C:\\Users\\dev\\AppData\\Roaming\\npm\\opencode.cmd');
+    assert.equal(resolved?.kind, 'windows-batch-shim');
+  });
+
+  it('reports an extensionless file when there is nothing launchable beside it', () => {
+    // Found, but not startable. More use than reporting nothing, and
+    // `isStartableExecutable` is what callers gate on.
+    const resolved = resolveExecutable({
+      name: 'opencode',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: fakeProbe({ 'C:\\tools\\opencode': {} }),
+    });
+    assert.equal(resolved?.path, 'C:\\tools\\opencode');
+    assert.equal(resolved?.kind, 'windows-unsupported-extension');
   });
 
   it('prefers the PATHEXT order the machine declares', () => {
@@ -186,6 +230,126 @@ describe('Windows resolution', () => {
       probe: fakeProbe({}, ['C:\\tools\\rtk.exe']),
     });
     assert.equal(resolved, null);
+  });
+});
+
+/**
+ * RFC 0004 §State directory permissions runs `icacls` and `whoami` through the
+ * process runner, and both must be the Windows ones.
+ *
+ * The first case is not hypothetical: Git for Windows puts `usr/bin` on `PATH` on a
+ * large share of Windows development machines, and its coreutils `whoami` exits 1 on
+ * `/user /fo csv`. The ACL check then cannot obtain the current user's SID and Token
+ * Harness refuses to run — safely, and for everyone.
+ */
+describe('Windows system utilities', () => {
+  const SYSTEM32 = 'C:\\Windows\\System32';
+  const env = {
+    PATH: 'C:\\Program Files\\Git\\usr\\bin;C:\\Windows\\System32',
+    PATHEXT: DEFAULT_PATHEXT,
+    SystemRoot: 'C:\\Windows',
+  };
+
+  function probeWithDecoy(): ExecutableProbe {
+    return fakeProbe({
+      // Git's coreutils build, earlier on PATH than System32.
+      'C:\\Program Files\\Git\\usr\\bin\\whoami.exe': {},
+      [`${SYSTEM32}\\whoami.exe`]: {},
+      [`${SYSTEM32}\\icacls.exe`]: {},
+      [`${SYSTEM32}\\taskkill.exe`]: {},
+      // Also in System32, and deliberately not on the allowlist.
+      'C:\\Program Files\\Git\\usr\\bin\\bash.exe': {},
+      [`${SYSTEM32}\\bash.exe`]: {},
+    });
+  }
+
+  for (const name of ['whoami', 'icacls', 'taskkill']) {
+    it(`resolves ${name} from System32, whatever PATH says`, () => {
+      const resolved = resolveExecutable({
+        name,
+        facts: WINDOWS,
+        env,
+        cwd: 'C:\\work',
+        probe: probeWithDecoy(),
+      });
+      assert.equal(resolved?.path, `${SYSTEM32}\\${name}.exe`);
+      assert.equal(resolved?.kind, 'native');
+    });
+  }
+
+  it('applies the rule to the name with its extension spelled out', () => {
+    const resolved = resolveExecutable({
+      name: 'whoami.exe',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: probeWithDecoy(),
+    });
+    assert.equal(resolved?.path, `${SYSTEM32}\\whoami.exe`);
+  });
+
+  it('does not shadow a name that merely happens to exist in System32', () => {
+    // System32 also holds curl, tar, find, and bash. An allowlist, not a preference.
+    const resolved = resolveExecutable({
+      name: 'bash',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: probeWithDecoy(),
+    });
+    assert.equal(resolved?.path, 'C:\\Program Files\\Git\\usr\\bin\\bash.exe');
+  });
+
+  it('falls back to PATH when System32 does not hold the utility', () => {
+    const resolved = resolveExecutable({
+      name: 'whoami',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: fakeProbe({ 'C:\\Program Files\\Git\\usr\\bin\\whoami.exe': {} }),
+    });
+    assert.equal(resolved?.path, 'C:\\Program Files\\Git\\usr\\bin\\whoami.exe');
+  });
+
+  it('falls back to PATH when there is no system root to resolve against', () => {
+    const resolved = resolveExecutable({
+      name: 'whoami',
+      facts: WINDOWS,
+      env: { PATH: 'C:\\Windows\\System32', PATHEXT: DEFAULT_PATHEXT },
+      cwd: 'C:\\work',
+      probe: probeWithDecoy(),
+    });
+    assert.equal(resolved?.path, `${SYSTEM32}\\whoami.exe`);
+  });
+
+  it('does not redirect a path-qualified name', () => {
+    const resolved = resolveExecutable({
+      name: '.\\vendor\\whoami',
+      facts: WINDOWS,
+      env,
+      cwd: 'C:\\work',
+      probe: fakeProbe({
+        'C:\\work\\vendor\\whoami.exe': {},
+        [`${SYSTEM32}\\whoami.exe`]: {},
+      }),
+    });
+    assert.equal(resolved?.path, 'C:\\work\\vendor\\whoami.exe');
+  });
+
+  it('leaves POSIX resolution alone', () => {
+    const resolved = resolveExecutable({
+      name: 'whoami',
+      facts: LINUX,
+      env: { PATH: '/usr/bin', SystemRoot: 'C:\\Windows' },
+      cwd: '/work',
+      probe: fakeProbe({ '/usr/bin/whoami': { magic: ELF } }),
+    });
+    assert.equal(resolved?.path, '/usr/bin/whoami');
+  });
+
+  it('names exactly the utilities Token Harness invokes', () => {
+    // Adding one is a deliberate act, so the list is asserted rather than sampled.
+    assert.deepEqual([...WINDOWS_SYSTEM_UTILITIES], ['icacls', 'whoami', 'taskkill']);
   });
 });
 
