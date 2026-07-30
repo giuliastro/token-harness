@@ -94,7 +94,7 @@ Exit criteria:
 | 0004 | Safety and installation model | Accepted |
 | 0005 | Metrics and attribution | Accepted |
 | 0006 | CLI contract | Accepted |
-| 0007 | Live verification mechanism | Reserved — written after the Phase 2.5 spike |
+| 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL is outgrown |
 
 ## 6. Phase 1 — Repository and domain skeleton
