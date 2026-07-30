@@ -195,3 +195,27 @@ export interface HarnessManifest {
   enablementNote: string | null;
   receiptFamily: HarnessReceiptFamily;
 }
+
+/**
+ * What a harness adapter tells a *provider* adapter about a configuration file.
+ *
+ * This is the seam between the two adapter families, so it lives in `core`:
+ * `tests/integration/architecture.test.ts` forbids the harness and provider registries
+ * from importing each other, and for a good reason — a provider that knew how to parse
+ * `settings.json` would be a second implementation of the harness adapter, drifting from
+ * the first.
+ *
+ * `commands` is the field that makes the seam work. A harness adapter reports the hook
+ * command strings it found without interpreting them; a provider recognises *itself* in
+ * that list. Neither has to know anything about the other.
+ */
+export interface HarnessConfigSummary {
+  harnessId: HarnessId;
+  configPath: string;
+  scope: HarnessConfigScope;
+  /** Interception points carrying entries, by `scopeId`. */
+  interceptionPoints: string[];
+  matchers: string[];
+  /** Hook command strings, verbatim. Never parsed here. */
+  commands: string[];
+}

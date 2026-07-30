@@ -20,6 +20,7 @@ import type {
   Diagnostic,
   FileSystemPort,
   HarnessConfigFile,
+  HarnessConfigSummary,
   HarnessDetection,
   HarnessId,
   HarnessManifest,
@@ -60,6 +61,12 @@ export interface ResolvedHarnessConfig {
   configuredPoints: string[];
   /** Matcher values found on those entries, for the tool-family comparison. */
   matchers: string[];
+  /**
+   * Hook command strings, verbatim and uninterpreted. A provider adapter recognises
+   * itself in this list, which is how it learns which harnesses it is wired to without
+   * knowing how to parse a harness configuration file.
+   */
+  commands: string[];
 }
 
 /**
@@ -86,6 +93,8 @@ export interface HarnessInspection {
    * state exists but could not be read. Never defaulted to true.
    */
   enabled: boolean | null;
+  /** The same facts, in the shape `core` declares for provider adapters to consume. */
+  summaries: HarnessConfigSummary[];
   diagnostics: Diagnostic[];
 }
 
