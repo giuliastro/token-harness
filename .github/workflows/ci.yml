@@ -57,5 +57,17 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Package smoke test
+      - name: Bundle smoke test
         run: pnpm smoke
+
+      - name: Stage the publishable package
+        run: pnpm package
+
+      # The bundle running is not the same as the package installing: the manifest
+      # could name the wrong bin, omit the file, or carry a dependency npm cannot
+      # resolve, and the bundle would still run when invoked directly. This packs,
+      # installs the tarball with no workspace above it, and runs the result — on all
+      # three platforms, because a package that installs on Linux and not on Windows is
+      # the failure PLAN §1.1 puts Windows first in the matrix to catch.
+      - name: Install smoke test
+        run: pnpm smoke:install
