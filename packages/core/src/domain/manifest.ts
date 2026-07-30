@@ -96,16 +96,102 @@ export interface ProviderManifest {
  * tested ranges, unknown-newer warnings, and a declared verification tier for
  * harnesses on the same terms as providers; PLAN §3.1 lists the rest.
  */
+/**
+ * How a configuration file must be edited — RFC 0007 §The harness adapter contract,
+ * declaration 1.
+ *
+ * Declared rather than inferred from the extension, because the extension lies. Claude
+ * Code's `settings.json` is strict JSON and cannot hold a marker fence; OpenCode's
+ * `opencode.jsonc` is named for comments and, on a real machine, was rejected by
+ * `JSON.parse` for a trailing comma. Picking the parser from the file name would have
+ * produced a destructive edit in both directions.
+ */
+export type HarnessConfigParser = 'json' | 'jsonc' | 'toml' | 'yaml' | 'markers';
+
+export type HarnessConfigScope = 'user' | 'project';
+
+export interface HarnessConfigFile {
+  /**
+   * Path relative to the home directory for a `user` scope, or to the project root for
+   * a `project` scope. Never absolute: the adapter resolves it against the paths the
+   * platform layer supplies.
+   */
+  path: string;
+  scope: HarnessConfigScope;
+  parser: HarnessConfigParser;
+  /** The file `doctor` names when it reports the harness as detected. */
+  primary: boolean;
+}
+
+/**
+ * An interception point, in both spellings that matter.
+ *
+ * RFC 0003 addresses a capability scope with its own identifier (`pre-tool-use`); the
+ * harness's configuration uses the harness's event name (`PreToolUse`). They are not
+ * the same string and an adapter needs both — one to resolve ownership, one to write
+ * the file.
+ */
+export interface HarnessInterceptionPoint {
+  /** The segment used in a `<harness>/<tool-family>/<point>/<capability>` scope. */
+  scopeId: string;
+  /** The event name as the harness's own configuration spells it. */
+  eventName: string;
+}
+
+/**
+ * A family of tools whose execution can be intercepted — RFC 0007 §A tier is per
+ * harness, per version, and per tool family.
+ *
+ * This exists because of a measured coverage hole rather than for symmetry. On the
+ * Phase 2.5 spike machine a hook matching `Bash` did not see the identical command
+ * routed through the harness's PowerShell tool, which is the default on Windows. A
+ * matcher covering one family is a correctly installed and largely ineffective
+ * integration, and nothing can report that without knowing the full list.
+ */
+export interface HarnessToolFamily {
+  /** The matcher value the harness uses for this family. */
+  id: string;
+  /** Platforms on which the harness exposes it. */
+  platforms: OperatingSystem[];
+  /** True when the harness routes shell commands through it. */
+  executesShellCommands: boolean;
+}
+
+/** RFC 0007 §What a receipt is. */
+export type HarnessReceiptFamily =
+  /** The harness emits a machine-readable stream naming what it ran. */
+  | 'harness-event-stream'
+  /** Only the provider's own records show that interception happened. */
+  | 'provider-telemetry'
+  /** Neither is available, which caps the harness below `canary`. */
+  | 'none';
+
 export interface HarnessManifest {
   schemaVersion: typeof MANIFEST_SCHEMA_VERSION;
   id: HarnessId;
   displayName: string;
   homepage: string;
+  /**
+   * The versions whose configuration schema has been observed.
+   *
+   * A harness whose verification tier changes across versions needs one manifest entry
+   * per range, because `verificationTier` below is declared for *this* range. RFC 0007
+   * requires the tier to be per version, and this pairing is how that is expressed.
+   */
   testedVersions: TestedVersionRange;
   verificationTier: VerificationTier;
-  /** Interception points the harness exposes, addressable in a capability scope. */
-  interceptionPoints: string[];
-  /** Scopes at which configuration is user-level rather than project-level. */
-  userScopedConfigPaths: string[];
-  projectScopedConfigPaths: string[];
+  /** The command that resolves and reports the version, for RFC 0002 §Detection evidence. */
+  versionCommand: { executable: string; args: string[] } | null;
+  interceptionPoints: HarnessInterceptionPoint[];
+  configFiles: HarnessConfigFile[];
+  toolFamilies: HarnessToolFamily[];
+  /**
+   * True when a declared interception point can be configured correctly and still not
+   * run — RFC 0007 §Configuration presence is not evidence. Codex is the case: hook
+   * enablement is persisted state, separate from the configuration and from trust.
+   */
+  requiresEnablement: boolean;
+  /** Where that state lives, when it is required. Null otherwise. */
+  enablementNote: string | null;
+  receiptFamily: HarnessReceiptFamily;
 }

@@ -24,17 +24,53 @@ function isBroken(detection: HarnessDetection | ProviderDetection): boolean {
 }
 
 export async function runDoctor(context: CommandContext): Promise<CommandResult<DoctorReport>> {
-  const detectionContext = { projectRoot: context.projectRoot };
+  const detectionContext =
+    context.adapters === null
+      ? null
+      : {
+          fs: context.adapters.fs,
+          runner: context.adapters.runner,
+          facts: context.platform,
+          paths: context.adapters.paths,
+          projectRoot: context.projectRoot,
+        };
 
-  const harnesses = await Promise.all(
-    listHarnessAdapters()
-      .filter((adapter) => context.harness === null || adapter.manifest.id === context.harness)
-      .map((adapter) => adapter.detect(detectionContext)),
-  );
+  // No adapter access means no detection. Reporting an empty list is honest — nothing
+  // was inspected — and inventing a result from the registry alone would be the
+  // config-only mistake RFC 0007 exists to name.
+  const adapters =
+    detectionContext === null
+      ? []
+      : listHarnessAdapters().filter(
+          (adapter) => context.harness === null || adapter.manifest.id === context.harness,
+        );
+
+  const harnesses =
+    detectionContext === null
+      ? []
+      : await Promise.all(adapters.map((adapter) => adapter.detect(detectionContext)));
+
+  /**
+   * `doctor` inspects as well as detects.
+   *
+   * Detection answers "is this harness here"; inspection answers "does its integration
+   * actually cover this machine". RFC 0007 §A tier is per harness, per version, and per
+   * tool family exists because a hook matching one tool family leaves another entirely
+   * bypassed, and a report that found the harness and stayed silent about that would be
+   * the most useful thing the Phase 2.5 spike learned, kept to itself.
+   *
+   * Inspection is read-only, so this keeps `doctor` within RFC 0004 §Command behavior.
+   */
+  const inspectionDiagnostics =
+    detectionContext === null
+      ? []
+      : (await Promise.all(adapters.map((adapter) => adapter.inspect(detectionContext)))).flatMap(
+          (inspection) => inspection.diagnostics,
+        );
   const providers = await Promise.all(
     listProviderAdapters()
       .filter((adapter) => context.provider === null || adapter.manifest.id === context.provider)
-      .map((adapter) => adapter.detect(detectionContext)),
+      .map((adapter) => adapter.detect({ projectRoot: context.projectRoot })),
   );
 
   // RFC 0006 §Exit codes: exit 3 means "a broken integration, an unowned edit on
@@ -58,5 +94,9 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
     command: 'doctor',
     exitCode: problemCount === 0 ? EXIT_CODES.ok : EXIT_CODES['problems-found'],
     data: report,
+    // Detection warnings are already inside each detection object and rendered with it.
+    // Inspection has no row in the report, so its diagnostics travel here: on stderr in
+    // human mode, inside the envelope under `--json`, per RFC 0006 §Streams.
+    diagnostics: inspectionDiagnostics,
   });
 }

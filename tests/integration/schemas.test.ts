@@ -28,6 +28,8 @@ import {
   type VerificationReceipt,
 } from '@token-harness/core';
 
+import { claudeAdapter } from '@token-harness/adapters';
+
 import { FIXTURES_ROOT, listGoldenScenarios, loadGolden } from '../src/index.js';
 
 const SCHEMAS = `${FIXTURES_ROOT}schemas/`;
@@ -94,7 +96,38 @@ describe('schema fixtures', () => {
     const value = assertRoundTrips('harness-manifest.claude.json') as HarnessManifest;
     assert.equal(value.id, 'claude');
     assert.equal(value.verificationTier, 'canary');
-    assert.equal(value.testedVersions.maximum, '2.0.14');
+    // The version whose settings.json the Phase 2.5 spike actually read. A claim about
+    // the configuration schema, not about a test suite having run against it.
+    assert.equal(value.testedVersions.maximum, '2.1.212');
+    assert.equal(value.receiptFamily, 'provider-telemetry');
+    assert.equal(value.requiresEnablement, false);
+  });
+
+  /**
+   * The fixture is the shipped manifest, asserted rather than transcribed.
+   *
+   * A hand-copied manifest fixture goes stale the first time the adapter changes and
+   * every test keeps passing, which is the failure golden files exist to prevent. This
+   * makes the committed file a review surface for a real change to the adapter's declared
+   * contract.
+   */
+  it('is byte-identical to the manifest the adapter actually ships', () => {
+    const { text } = readFixture('harness-manifest.claude.json');
+    assert.equal(
+      text.replace(/\r\n/g, '\n'),
+      `${JSON.stringify(claudeAdapter.manifest, null, 2)}\n`,
+    );
+  });
+
+  it('declares a tool family the spike found uncovered, so the gap is reportable', () => {
+    const windowsFamilies = claudeAdapter.manifest.toolFamilies.filter((family) =>
+      family.platforms.includes('windows'),
+    );
+    assert.deepEqual(
+      windowsFamilies.map((family) => family.id),
+      ['Bash', 'PowerShell'],
+    );
+    assert.ok(windowsFamilies.every((family) => family.executesShellCommands));
   });
 
   it('an exact-local rtk event', () => {

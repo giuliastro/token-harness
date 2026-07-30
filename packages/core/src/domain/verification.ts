@@ -13,7 +13,19 @@ import type { Evidence } from './evidence.js';
 import type { HarnessId, ProviderId } from './ids.js';
 import type { VerificationTier } from './detection.js';
 
-export type CheckStatus = 'pass' | 'warn' | 'fail' | 'info' | 'skip';
+export type CheckStatus =
+  | 'pass'
+  | 'warn'
+  | 'fail'
+  | 'info'
+  /**
+   * RFC 0007 §Active and passive canaries. A passive canary reads the receipt of an
+   * operation the harness performed anyway; before any such operation, nothing is
+   * known. That is not a pass — asserting one on no evidence is the failure the tier
+   * system exists to prevent — and not a fail, because nothing has gone wrong.
+   */
+  | 'not-exercised'
+  | 'skip';
 
 export interface VerificationCheck {
   id: string;

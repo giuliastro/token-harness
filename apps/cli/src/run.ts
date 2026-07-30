@@ -25,7 +25,7 @@ import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } fro
 import { runDoctor } from './commands/doctor.js';
 import { runPlan } from './commands/plan.js';
 import { runStatus } from './commands/status.js';
-import type { CommandContext } from './commands/context.js';
+import type { AdapterAccess, CommandContext } from './commands/context.js';
 import { renderHuman, shouldDecorate, type RenderContext } from './render/index.js';
 import { usageText } from './usage.js';
 import { TOOL_VERSION } from './version.js';
@@ -66,6 +66,11 @@ export interface RunOptions {
    * temporary directory. Any `error` here ends the run with exit 9.
    */
   environmentDiagnostics?: readonly Diagnostic[];
+  /**
+   * The ports adapters need. Omitted by tests that assert the CLI contract without a
+   * filesystem; `doctor` then inspects nothing rather than reading the real machine.
+   */
+  adapters?: AdapterAccess | null;
   env?: Readonly<Record<string, string | undefined>>;
   stdoutIsTty?: boolean;
   toolVersion?: string;
@@ -277,6 +282,7 @@ export async function run(options: RunOptions): Promise<number> {
   }
 
   const context: CommandContext = {
+    adapters: options.adapters ?? null,
     platform: options.platform,
     projectRoot: invocation.options.project ?? options.cwd,
     home: options.home,

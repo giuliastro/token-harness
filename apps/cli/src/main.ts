@@ -14,7 +14,7 @@
 
 import process from 'node:process';
 
-import { resolveHostEnvironment } from '@token-harness/platform';
+import { NodeFileSystem, resolveHostEnvironment } from '@token-harness/platform';
 
 import { run } from './run.js';
 
@@ -35,6 +35,15 @@ export async function main(argv: readonly string[]): Promise<void> {
     home: resolution.ok ? resolution.environment.paths.home : null,
     stateRoot: resolution.ok ? resolution.environment.paths.state : null,
     environmentDiagnostics: resolution.ok ? [] : resolution.diagnostics,
+    // The ports adapters need. Built here because this is the only file allowed to know
+    // there is a real machine underneath.
+    adapters: resolution.ok
+      ? {
+          fs: new NodeFileSystem(resolution.environment.facts),
+          runner: resolution.environment.runner,
+          paths: resolution.environment.paths,
+        }
+      : null,
     env: process.env,
     stdoutIsTty: process.stdout.isTTY === true,
   });

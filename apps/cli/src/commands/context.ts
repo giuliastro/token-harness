@@ -6,7 +6,14 @@
  * developer's real home directory (AGENTS.md, PLAN §2.1).
  */
 
-import type { HarnessId, PlatformFacts, ProviderId } from '@token-harness/core';
+import type {
+  FileSystemPort,
+  HarnessId,
+  PlatformFacts,
+  PlatformPaths,
+  ProcessRunner,
+  ProviderId,
+} from '@token-harness/core';
 
 export interface CommandContext {
   platform: PlatformFacts;
@@ -18,4 +25,19 @@ export interface CommandContext {
   stateRoot: string | null;
   harness: HarnessId | null;
   provider: ProviderId | null;
+  /**
+   * What an adapter is allowed to reach — the ports from `core`, never the
+   * implementations from `@token-harness/platform`.
+   *
+   * Null when the caller supplied none, which is how a test asserts the CLI contract
+   * without a filesystem: adapters are skipped and the report says so, rather than the
+   * command reaching for the developer's home. AGENTS.md forbids the second.
+   */
+  adapters: AdapterAccess | null;
+}
+
+export interface AdapterAccess {
+  fs: FileSystemPort;
+  runner: ProcessRunner;
+  paths: PlatformPaths;
 }

@@ -1,34 +1,26 @@
 /**
- * Harness adapter registry.
+ * Harness adapter registry — PLAN §3.1.
  *
- * Empty at Phase 1 by design. PLAN §1.3: "Implement the contract in RFC 0006 in
- * full, even where the underlying registries are still empty." Codex, Claude
- * Code, and OpenCode adapters land in Phase 3, after the RFC 0007 spike fixes
- * the verification surface they are written against.
+ * The contract lives in `contract.ts`; this file is only the list, so an adapter can
+ * import the contract without importing the list it appears in.
  */
 
-import type { HarnessDetection, HarnessId, HarnessManifest } from '@token-harness/core';
+import type { HarnessId } from '@token-harness/core';
+
+import { claudeAdapter } from './claude.js';
+import type { HarnessAdapter } from './contract.js';
+
+export * from './contract.js';
+export { claudeAdapter } from './claude.js';
+export { matcherCoversFamily } from './claude.js';
 
 /**
- * The detection half of the harness contract. The configuration, planning, and
- * verification halves are deliberately absent until RFC 0007 exists (PLAN §2.5),
- * because guessing them here is what the spike is scheduled to prevent.
+ * Claude Code first, inverting PLAN §15 issue 10, which names Codex. The Phase 2.5 spike
+ * reached tier 3 on Claude Code and could not declare a tier for Codex without writing to
+ * the user's configuration, and writing an adapter against an undeclared verification
+ * surface is what PLAN §4 puts the spike before the adapters to avoid.
  */
-export interface HarnessAdapter {
-  readonly manifest: HarnessManifest;
-  detect(context: HarnessDetectionContext): Promise<HarnessDetection>;
-}
-
-/**
- * Everything an adapter is allowed to read. Phase 2 fills it with the platform
- * abstraction and the process runner; until then it carries only the project
- * root, so no adapter can quietly reach for `node:fs`.
- */
-export interface HarnessDetectionContext {
-  readonly projectRoot: string;
-}
-
-const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [];
+const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [claudeAdapter];
 
 export function listHarnessAdapters(): readonly HarnessAdapter[] {
   return HARNESS_ADAPTERS;
