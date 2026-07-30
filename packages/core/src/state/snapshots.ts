@@ -29,6 +29,15 @@ export interface SnapshotStore {
   restore(snapshot: FileSnapshot): Promise<void>;
   /** Restores in reverse order, so a directory created last is removed first. */
   restoreAll(snapshots: readonly FileSnapshot[]): Promise<void>;
+  /**
+   * Every snapshot taken through this store, in capture order.
+   *
+   * The store is the authority on what to roll back, not the action outcomes. An
+   * action that captures a snapshot and then fails while writing throws instead of
+   * returning an outcome, and a rollback driven by returned outcomes would not know
+   * that snapshot existed — which is precisely the case where rollback matters most.
+   */
+  readonly captured: readonly FileSnapshot[];
 }
 
 export interface TransactionSnapshotStoreInput {
@@ -49,10 +58,15 @@ export type SnapshotStoreCreation =
 
 export class TransactionSnapshotStore implements SnapshotStore {
   private readonly input: TransactionSnapshotStoreInput;
+  private readonly taken: FileSnapshot[] = [];
   private counter = 0;
 
   private constructor(input: TransactionSnapshotStoreInput) {
     this.input = input;
+  }
+
+  get captured(): readonly FileSnapshot[] {
+    return this.taken;
   }
 
   /**
@@ -84,6 +98,11 @@ export class TransactionSnapshotStore implements SnapshotStore {
     return this.input.fs.join(this.input.backupRoot, this.input.transactionId);
   }
 
+  private remember(snapshot: FileSnapshot): FileSnapshot {
+    this.taken.push(snapshot);
+    return snapshot;
+  }
+
   async capture(path: string): Promise<FileSnapshot> {
     const { fs } = this.input;
     const stat = await fs.stat(path);
@@ -92,7 +111,7 @@ export class TransactionSnapshotStore implements SnapshotStore {
     if (stat === null) {
       // The absence *is* the snapshot. Without this record a rollback could restore
       // content but never undo a creation.
-      return {
+      return this.remember({
         schemaVersion: 1,
         path,
         existed: false,
@@ -102,11 +121,11 @@ export class TransactionSnapshotStore implements SnapshotStore {
         byteLength: null,
         contentRef: null,
         capturedAt,
-      };
+      });
     }
 
     if (stat.kind === 'directory') {
-      return {
+      return this.remember({
         schemaVersion: 1,
         path,
         existed: true,
@@ -116,7 +135,7 @@ export class TransactionSnapshotStore implements SnapshotStore {
         byteLength: null,
         contentRef: null,
         capturedAt,
-      };
+      });
     }
 
     this.counter += 1;
@@ -125,7 +144,7 @@ export class TransactionSnapshotStore implements SnapshotStore {
     await fs.createDirectory(this.directory);
     await fs.writeFile(fs.join(this.directory, contentRef), content);
 
-    const snapshot: FileSnapshot = {
+    const snapshot: FileSnapshot = this.remember({
       schemaVersion: 1,
       path,
       existed: true,
@@ -135,7 +154,7 @@ export class TransactionSnapshotStore implements SnapshotStore {
       byteLength: content.byteLength,
       contentRef,
       capturedAt,
-    };
+    });
 
     // The record is written next to the bytes, so a backup directory explains itself
     // without the journal. The journal (PLAN §15 issue 7) references these; it is not

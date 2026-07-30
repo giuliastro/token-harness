@@ -20,6 +20,7 @@
  */
 
 import type { ProviderId } from './ids.js';
+import type { JsonMergeOperation } from './json.js';
 import type { OwnedArtifact } from './ownership.js';
 
 export type ActionRiskClass = 'read-only' | 'reversible' | 'delegated' | 'destructive';
@@ -105,8 +106,18 @@ export interface WriteOwnedFileAction extends PlannedActionBase {
 export interface MergeJsonAction extends PlannedActionBase {
   kind: 'merge-json';
   path: string;
-  /** Dotted pointers into the document that this action owns. */
+  /**
+   * Dotted pointers into the document that this action owns.
+   *
+   * Declared separately from the operations, and checked against them: RFC 0004
+   * §Ownership scopes removal to "exact JSON/TOML/YAML entries recorded in its
+   * journal", so the claim a reviewer reads must be the claim the executor makes.
+   */
   ownedPointers: string[];
+  /** What to write, and what must already be there. */
+  operations: JsonMergeOperation[];
+  /** Whether the document may be created when it does not exist. */
+  createIfMissing: boolean;
 }
 
 export interface MergeTomlAction extends PlannedActionBase {

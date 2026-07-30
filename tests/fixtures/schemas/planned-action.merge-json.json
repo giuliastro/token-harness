@@ -1,0 +1,35 @@
+{
+  "kind": "merge-json",
+  "id": "a3",
+  "riskClass": "reversible",
+  "requiresNetwork": false,
+  "requiresElevation": false,
+  "affectedPaths": [
+    "/home/dev/.claude/settings.json"
+  ],
+  "affectedProcesses": [],
+  "preconditions": [
+    "settings.json parses as JSON and carries no comments"
+  ],
+  "postconditions": [
+    "the owned hook entry is present and matches its digest"
+  ],
+  "rollbackData": "file-snapshot",
+  "explanation": "configure the rtk pre-tool hook",
+  "path": "/home/dev/.claude/settings.json",
+  "ownedPointers": [
+    "hooks.PreToolUse"
+  ],
+  "operations": [
+    {
+      "kind": "append",
+      "pointer": "hooks.PreToolUse",
+      "value": {
+        "matcher": "Bash",
+        "command": "rtk hook pre"
+      },
+      "expectedValueDigest": "sha256:dad47a76637da1d23c5bfbac319ea28129a94d6d5b42e6aae0eef694cdaa003e"
+    }
+  ],
+  "createIfMissing": false
+}

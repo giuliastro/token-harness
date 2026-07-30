@@ -14,6 +14,7 @@ import { isPlannedActionKind, type PlannedAction } from '../domain/actions.js';
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
 import { isDigest } from '../domain/digest.js';
 import { isProviderId } from '../domain/ids.js';
+import { isJsonMergeOperationKind } from '../domain/json.js';
 import { isCapabilityId } from '../domain/capabilities.js';
 import { MANIFEST_SCHEMA_VERSION, type ProviderManifest } from '../domain/manifest.js';
 import {
@@ -469,6 +470,75 @@ export function parsePlannedAction(input: unknown): ParseResult<PlannedAction> {
               'Record what the plan believes it owns, so the claim can be checked before removal',
           }),
         );
+      }
+      break;
+    }
+    case 'merge-json': {
+      requireString(input, 'path', what, problems);
+      if (typeof input['createIfMissing'] !== 'boolean') {
+        problems.push(
+          diagnostic({
+            severity: 'error',
+            code: 'field-invalid',
+            message: `The ${what} field \`createIfMissing\` must be a boolean`,
+            remediation: 'State explicitly whether the document may be created',
+          }),
+        );
+      }
+      const pointers = requireArray(input, 'ownedPointers', what, problems);
+      const operations = requireArray(input, 'operations', what, problems);
+      if (pointers !== null && operations !== null) {
+        const declared = new Set(
+          pointers.filter((value): value is string => typeof value === 'string'),
+        );
+        for (const [index, operation] of operations.entries()) {
+          if (!isRecord(operation) || !isJsonMergeOperationKind(operation['kind'])) {
+            problems.push(
+              diagnostic({
+                severity: 'error',
+                code: 'field-invalid',
+                message: `The ${what} entry \`operations[${index}]\` must declare kind "set" or "append"`,
+                remediation:
+                  'Use "set" for a value Token Harness owns, "append" for one element of a shared array',
+              }),
+            );
+            continue;
+          }
+          const pointer = operation['pointer'];
+          if (typeof pointer !== 'string' || !declared.has(pointer)) {
+            // RFC 0004 §Ownership scopes removal to the entries recorded in the journal,
+            // so an operation outside the declared claim is a claim a reviewer never saw.
+            problems.push(
+              diagnostic({
+                severity: 'error',
+                code: 'action-claims-undeclared-pointer',
+                message: `The ${what} entry \`operations[${index}]\` edits ${JSON.stringify(pointer)}, which is not in ownedPointers`,
+                remediation: 'Declare every pointer the action edits',
+              }),
+            );
+          }
+          if (!('value' in operation)) {
+            problems.push(
+              diagnostic({
+                severity: 'error',
+                code: 'field-invalid',
+                message: `The ${what} entry \`operations[${index}]\` must carry the value it writes`,
+                remediation: 'A plan records the exact entry apply will write',
+              }),
+            );
+          }
+          const expected = operation['expectedValueDigest'];
+          if (expected !== null && (typeof expected !== 'string' || !isDigest(expected))) {
+            problems.push(
+              diagnostic({
+                severity: 'error',
+                code: 'field-invalid',
+                message: `The ${what} entry \`operations[${index}].expectedValueDigest\` must be null or a sha256 digest`,
+                remediation: 'Set it to null when nothing of ours must be there yet',
+              }),
+            );
+          }
+        }
       }
       break;
     }
