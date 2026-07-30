@@ -16,14 +16,15 @@
  * planning, an owned block the user edited, a marker fence somebody removed. The
  * outcome is `precondition-drift`, which the CLI reports as exit 5 — never a write.
  *
- * Four of the thirteen action families are implemented, per PLAN §15 issue 6: the
- * ones that touch files without needing a parser. The rest report
+ * Five of the thirteen action families are implemented: the four that touch files
+ * without a parser (PLAN §15 issue 6) and `merge-json` (issue 7). The rest report
  * `action-not-implemented` rather than silently succeeding, and a test asserts that
  * for every one of them.
  */
 
 import type {
   CreateDirectoryAction,
+  MergeJsonAction,
   PatchMarkerBlockAction,
   PlannedAction,
   PlannedActionKind,
@@ -41,6 +42,15 @@ import {
 } from '../domain/ownership.js';
 
 import type { FileSystemPort } from './filesystem.js';
+import {
+  formatJsonDocument,
+  jsonValueDigest,
+  mergeJsonEntries,
+  parseJsonDocumentText,
+  parseJsonPointer,
+  removeJsonEntry,
+  resolveJsonPointer,
+} from './json-merge.js';
 import { findMarkerBlock, removeMarkerBlock, upsertMarkerBlock } from './marker-block.js';
 import type { SnapshotStore } from './snapshots.js';
 
@@ -332,6 +342,141 @@ async function applyPatchMarkerBlock(
   return outcome(action, 'applied', { snapshots: [snapshot], ownership: [record] });
 }
 
+/**
+ * `merge-json`.
+ *
+ * The declared `ownedPointers` are checked against the operations before anything is
+ * read. RFC 0004 §Ownership scopes removal to the entries recorded in the journal, so
+ * an action whose operations reach outside what it claimed is a plan a reviewer did
+ * not approve — and it is rejected as such rather than trusted because it came from
+ * our own planner.
+ */
+async function applyMergeJson(
+  action: MergeJsonAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const { fs } = context;
+
+  const declared = new Set(action.ownedPointers);
+  const undeclared = action.operations
+    .map((operation) => operation.pointer)
+    .filter((pointer) => !declared.has(pointer));
+  if (undeclared.length > 0) {
+    return refusal(
+      action,
+      'action-claims-undeclared-pointer',
+      action.path,
+      `This action edits ${undeclared.join(', ')}, which it does not declare in ownedPointers`,
+      'Recompute the plan; an action may only touch what it declares',
+    );
+  }
+  for (const pointer of action.ownedPointers) {
+    if (parseJsonPointer(pointer) === null) {
+      return refusal(
+        action,
+        'json-pointer-invalid',
+        action.path,
+        `The pointer ${JSON.stringify(pointer)} is not a valid dotted path`,
+        'Use dot-separated keys, escaping a literal dot as \\.',
+      );
+    }
+  }
+
+  const stat = await fs.stat(action.path);
+  if (stat !== null && stat.kind !== 'file') {
+    return refusal(
+      action,
+      'path-is-not-a-file',
+      action.path,
+      'A directory exists where Token Harness needs to merge a JSON document',
+      'Move or remove the directory, then run the command again',
+    );
+  }
+  if (stat === null && !action.createIfMissing) {
+    return drift(
+      action,
+      action.path,
+      'The document this plan merges into no longer exists, and the plan does not permit creating it',
+    );
+  }
+
+  const original = stat === null ? '{}\n' : await readText(fs, action.path);
+  const parsed = parseJsonDocumentText(original);
+
+  if (parsed.state === 'comments') {
+    // RFC 0004: "When comment-preserving mutation is not reliable, the planner reports
+    // that limitation before apply." PLAN §17.1 keeps the comment-preserving strategy
+    // open; destroying the user's comments while waiting for it is not an interim.
+    return refusal(
+      action,
+      'json-comments-unsupported',
+      action.path,
+      'This document contains comments, and Token Harness cannot edit it without deleting them',
+      'Remove the comments, or configure this integration by hand',
+    );
+  }
+  if (parsed.state === 'malformed') {
+    return refusal(
+      action,
+      'json-malformed',
+      action.path,
+      `This document is not valid JSON: ${parsed.reason}`,
+      'Repair the JSON syntax, then run the command again',
+    );
+  }
+
+  const merged = mergeJsonEntries(parsed.document, action.operations);
+  if (merged.state === 'drift') {
+    return drift(action, action.path, `\`${merged.pointer}\`: ${merged.reason}`);
+  }
+  if (merged.state === 'unmergeable') {
+    return refusal(
+      action,
+      'json-pointer-unmergeable',
+      action.path,
+      `\`${merged.pointer}\`: ${merged.reason}`,
+      'Adjust the document by hand, or recompute the plan against its current shape',
+    );
+  }
+
+  const ownership: OwnedArtifact[] = merged.entries.map((entry) => ({
+    kind: 'owned-json-entry',
+    path: action.path,
+    pointer: entry.pointer,
+    placement: entry.placement,
+    valueDigest: entry.valueDigest,
+  }));
+
+  const text = formatJsonDocument(merged.document, parsed.formatting);
+  if (text === original) return outcome(action, 'already-satisfied', { ownership });
+
+  const diagnostics: Diagnostic[] = [];
+  // RFC 0004 §Shared config merges preserves "user formatting when practical", and
+  // "when comment-preserving mutation is not reliable, the planner reports that
+  // limitation before apply". Indentation, line ending, and key order survive a
+  // `JSON.stringify` round trip; per-node compactness does not — a hand-written
+  // `{ "matcher": "Read" }` on one line comes back expanded. Detected by
+  // re-serializing the *unmodified* document and comparing, so the report is about
+  // this file rather than about JSON in general.
+  if (formatJsonDocument(parsed.document, parsed.formatting) !== original) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'json-formatting-not-preserved',
+        message:
+          'Editing this document reformats parts of it that Token Harness cannot reproduce exactly, such as an object written on a single line',
+        path: action.path,
+        remediation:
+          'Review the diff after apply; rollback restores the original bytes if the result is unacceptable',
+      }),
+    );
+  }
+
+  const snapshot = await context.snapshots.capture(action.path);
+  await fs.writeFile(action.path, UTF8.encode(text), stat?.mode ?? null);
+  return outcome(action, 'applied', { snapshots: [snapshot], ownership, diagnostics });
+}
+
 /** Reads back enough of the live file to judge an ownership claim. */
 async function observeOwnership(
   target: OwnedArtifact,
@@ -346,6 +491,32 @@ async function observeOwnership(
     return verifyOwnership(target, {
       exists: true,
       fileDigest: digestBytes(await fs.readFile(target.path)),
+    });
+  }
+  if (target.kind === 'owned-json-entry') {
+    const parsed = parseJsonDocumentText(await readText(fs, target.path));
+    if (parsed.state !== 'parsed') return 'unowned';
+    const segments = parseJsonPointer(target.pointer);
+    if (segments === null) return 'unowned';
+    if (target.placement === 'array-element') {
+      const lookup = resolveJsonPointer(parsed.document, segments);
+      const array = Array.isArray(lookup.value) ? lookup.value : null;
+      const present =
+        array !== null && array.some((element) => jsonValueDigest(element) === target.valueDigest);
+      return verifyOwnership(target, {
+        exists: true,
+        entryDigest: present ? target.valueDigest : null,
+        // An array that no longer holds our element is a removal, not an edit: the
+        // element we wrote is not there in any form we can recognise.
+        entryPresent: false,
+      });
+    }
+    const lookup = resolveJsonPointer(parsed.document, segments);
+    return verifyOwnership(target, {
+      exists: true,
+      entryDigest:
+        lookup.found && lookup.value !== undefined ? jsonValueDigest(lookup.value) : null,
+      entryPresent: lookup.found,
     });
   }
   const lookup = findMarkerBlock(await readText(fs, target.path), {
@@ -400,6 +571,39 @@ async function applyRemoveOwnedChange(
     return outcome(action, 'applied', { snapshots: [snapshot] });
   }
 
+  if (action.target.kind === 'owned-json-entry') {
+    const parsed = parseJsonDocumentText(await readText(fs, action.target.path));
+    if (parsed.state !== 'parsed') {
+      return refusal(
+        action,
+        parsed.state === 'comments' ? 'json-comments-unsupported' : 'json-malformed',
+        action.target.path,
+        'This document can no longer be edited without damaging it, so the entry was left in place',
+        'Remove the entry by hand',
+      );
+    }
+    const removal = removeJsonEntry(parsed.document, {
+      pointer: action.target.pointer,
+      placement: action.target.placement,
+      valueDigest: action.target.valueDigest,
+    });
+    if (removal.state !== 'removed') {
+      return refusal(
+        action,
+        'owned-artifact-modified',
+        action.target.path,
+        `The owned entry \`${action.target.pointer}\` could not be removed: it is ${removal.state}`,
+        'Review the entry and remove it by hand',
+      );
+    }
+    await fs.writeFile(
+      action.target.path,
+      UTF8.encode(formatJsonDocument(removal.document, parsed.formatting)),
+      null,
+    );
+    return outcome(action, 'applied', { snapshots: [snapshot] });
+  }
+
   const removal = removeMarkerBlock(await readText(fs, action.target.path), {
     begin: action.target.markerBegin,
     end: action.target.markerEnd,
@@ -449,11 +653,12 @@ export async function applyAction(
       return applyPatchMarkerBlock(action, context);
     case 'remove-owned-change':
       return applyRemoveOwnedChange(action, context);
+    case 'merge-json':
+      return applyMergeJson(action, context);
     case 'download-artifact':
     case 'package-manager-install':
     case 'run-installer-command':
     case 'delegated-provider-install':
-    case 'merge-json':
     case 'merge-toml':
     case 'merge-yaml':
     case 'register-mcp-server':
@@ -467,6 +672,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'create-directory',
   'write-owned-file',
   'patch-marker-block',
+  'merge-json',
   'remove-owned-change',
 ];
 

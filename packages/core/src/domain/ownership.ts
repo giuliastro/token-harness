@@ -13,9 +13,9 @@
  * to be able to come back *no*. "User edits inside an owned file change its digest
  * and block automatic deletion until the user reviews the new uninstall plan."
  *
- * Two of the four mechanisms are implemented here — owned files and owned marker
- * blocks. Structured-entry ownership (`ownedPointers` on the merge actions) needs a
- * parser and lands with PLAN §15 issue 7. Package ownership is a provider concern.
+ * Three of the four mechanisms are implemented here — owned files, owned marker
+ * blocks, and, since PLAN §15 issue 7, owned structured entries. Package ownership is
+ * a provider concern.
  *
  * These are records, not behaviour: they serialize into the transaction journal and
  * the verification receipt, and nothing here touches a filesystem.
@@ -49,7 +49,28 @@ export interface OwnedMarkerBlockRecord {
   bodyDigest: string;
 }
 
-export type OwnedArtifact = OwnedFileRecord | OwnedMarkerBlockRecord;
+/**
+ * Where an owned structured entry sits.
+ *
+ * `array-element` exists because a hook list belongs to the harness and to every
+ * other tool that added to it. Owning the whole array would mean owning their
+ * entries; owning one element by the digest of its value does not.
+ */
+export type JsonEntryPlacement = 'value' | 'array-element';
+
+/** RFC 0004 §Ownership, third bullet: "exact JSON/TOML/YAML entries recorded in its journal". */
+export interface OwnedJsonEntryRecord {
+  kind: 'owned-json-entry';
+  /** Absolute path of the document. Token Harness does not own the document. */
+  path: string;
+  /** Dotted pointer, per RFC 0002 §Planning. */
+  pointer: string;
+  placement: JsonEntryPlacement;
+  /** Digest of the canonical form of the value that was written. */
+  valueDigest: string;
+}
+
+export type OwnedArtifact = OwnedFileRecord | OwnedMarkerBlockRecord | OwnedJsonEntryRecord;
 
 /**
  * What a live artifact turned out to be.
@@ -75,6 +96,14 @@ export interface OwnershipObservation {
   fileDigest?: string | null;
   /** For a marker block: the digest of the body found between the fences, or null when no fence was found. */
   bodyDigest?: string | null;
+  /**
+   * For a structured entry: the digest of the value found at the pointer, or null when
+   * nothing is there. `'modified'` distinguishes an entry that is present but different
+   * from one that is gone, which the digest alone cannot.
+   */
+  entryDigest?: string | null;
+  /** True when a value exists at the pointer but does not match. */
+  entryPresent?: boolean;
   /** Whether the path exists at all. */
   exists: boolean;
 }
@@ -89,6 +118,14 @@ export function verifyOwnership(
     const live = observed.fileDigest ?? null;
     if (live === null) return 'missing';
     return digestsMatch(live, record.digest) ? 'owned-unchanged' : 'owned-modified';
+  }
+
+  if (record.kind === 'owned-json-entry') {
+    const live = observed.entryDigest ?? null;
+    if (digestsMatch(live, record.valueDigest)) return 'owned-unchanged';
+    // A value at the pointer that does not match is an edit; nothing at the pointer is
+    // a removal. The document itself was never ours, so neither is `unowned`.
+    return observed.entryPresent === true ? 'owned-modified' : 'missing';
   }
 
   const body = observed.bodyDigest ?? null;

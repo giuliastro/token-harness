@@ -1,0 +1,265 @@
+/**
+ * The transaction engine — RFC 0004 §Transaction lifecycle.
+ *
+ * ```text
+ * snapshot affected state -> apply actions -> verify postconditions -> commit journal
+ * ```
+ *
+ * and, when anything fails:
+ *
+ * ```text
+ * stop -> reverse completed actions -> restore owned configuration
+ *      -> verify restoration -> retain failure receipt
+ * ```
+ *
+ * Four clauses in that second sequence are easy to implement as three. The one that
+ * gets dropped is **verify restoration**, and it is the one that decides between RFC
+ * 0006 exit 6 and exit 7 — "a mutation failed and the rollback was verified" versus
+ * "rollback did not fully restore state". A rollback that is assumed to have worked
+ * always reports 6, which means exit 7 never fires and the only code the RFC calls
+ * critical is dead. So restoration is read back from disk here, per snapshot, and a
+ * mismatch names the exact paths and the transaction ID as RFC 0006 requires.
+ */
+
+import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
+import { digestBytes } from '../domain/digest.js';
+import type { PlannedAction } from '../domain/actions.js';
+import { snapshotIsAbsence, type FileSnapshot, type OwnedArtifact } from '../domain/ownership.js';
+
+import { applyAction, type ActionContext, type ActionOutcome } from './actions.js';
+import type { FileSystemPort } from './filesystem.js';
+import type {
+  JournalStore,
+  TransactionJournal,
+  TransactionJournalEntry,
+  TransactionOutcomeKind,
+} from './journal.js';
+import { JOURNAL_SCHEMA_VERSION } from './journal.js';
+import type { SnapshotStore } from './snapshots.js';
+
+/**
+ * The exit codes a transaction can produce, from the RFC 0006 table. Named rather than
+ * imported, because `state` sits below `envelope` in the layer order.
+ */
+export const TRANSACTION_EXIT_CODES = {
+  ok: 0,
+  preconditionDrift: 5,
+  appliedFailedRolledBack: 6,
+  applyFailedDirty: 7,
+} as const;
+
+export type TransactionExitCode =
+  (typeof TRANSACTION_EXIT_CODES)[keyof typeof TRANSACTION_EXIT_CODES];
+
+export interface TransactionRequest {
+  transactionId: string;
+  planId: string | null;
+  projectId: string | null;
+  projectRoot: string;
+  actions: readonly PlannedAction[];
+  fs: FileSystemPort;
+  snapshots: SnapshotStore;
+  journal: JournalStore;
+  /** ISO 8601 instants, injected so a journal is deterministic in tests. */
+  now(): string;
+  /**
+   * RFC 0004 §Transaction lifecycle: "verify postconditions" before committing.
+   *
+   * Injected because what a postcondition *is* belongs to the provider and harness
+   * adapters (RFC 0002 §Verification), not to the engine. Returning any `error`
+   * diagnostic rolls the transaction back.
+   */
+  verifyPostconditions?(applied: readonly ActionOutcome[]): Promise<readonly Diagnostic[]>;
+}
+
+export interface TransactionResult {
+  journal: TransactionJournal;
+  exitCode: TransactionExitCode;
+  /** Everything worth showing the user, in the order it was produced. */
+  diagnostics: Diagnostic[];
+}
+
+function terminal(status: ActionOutcome['status']): boolean {
+  return status !== 'applied' && status !== 'already-satisfied';
+}
+
+/**
+ * Reads the filesystem back and reports which snapshots did not take.
+ *
+ * This is the check that makes exit 7 reachable. It compares against the recorded
+ * digest, not against "the write did not throw".
+ */
+export async function verifyRestoration(
+  fs: FileSystemPort,
+  snapshots: readonly FileSnapshot[],
+): Promise<string[]> {
+  const unrestored: string[] = [];
+  for (const snapshot of snapshots) {
+    const stat = await fs.stat(snapshot.path);
+    if (snapshotIsAbsence(snapshot)) {
+      if (stat !== null) unrestored.push(snapshot.path);
+      continue;
+    }
+    if (stat === null) {
+      unrestored.push(snapshot.path);
+      continue;
+    }
+    if (snapshot.wasDirectory) {
+      if (stat.kind !== 'directory') unrestored.push(snapshot.path);
+      continue;
+    }
+    if (stat.kind !== 'file') {
+      unrestored.push(snapshot.path);
+      continue;
+    }
+    if (digestBytes(await fs.readFile(snapshot.path)) !== snapshot.digest) {
+      unrestored.push(snapshot.path);
+    }
+  }
+  return unrestored;
+}
+
+export async function executeTransaction(request: TransactionRequest): Promise<TransactionResult> {
+  const startedAt = request.now();
+  const entries: TransactionJournalEntry[] = [];
+  const applied: ActionOutcome[] = [];
+  const diagnostics: Diagnostic[] = [];
+
+  const journal: TransactionJournal = {
+    schemaVersion: JOURNAL_SCHEMA_VERSION,
+    transactionId: request.transactionId,
+    planId: request.planId,
+    projectId: request.projectId,
+    projectRoot: request.projectRoot,
+    startedAt,
+    finishedAt: null,
+    outcome: 'in-progress',
+    entries,
+    ownership: [],
+    pinned: false,
+    diagnostics,
+  };
+
+  // Written before the first action, so a process that dies mid-apply leaves the
+  // record a later rollback needs.
+  await request.journal.write(journal);
+
+  const context: ActionContext = { fs: request.fs, snapshots: request.snapshots };
+
+  const finish = async (
+    outcome: TransactionOutcomeKind,
+    exitCode: TransactionExitCode,
+  ): Promise<TransactionResult> => {
+    journal.outcome = outcome;
+    journal.finishedAt = request.now();
+    journal.ownership =
+      outcome === 'committed' ? applied.flatMap((entry) => [...entry.ownership]) : [];
+    await request.journal.write(journal);
+    return { journal, exitCode, diagnostics };
+  };
+
+  /** Reverses what ran, then checks that the reversal actually took. */
+  const rollback = async (cause: Diagnostic[]): Promise<TransactionResult> => {
+    diagnostics.push(...cause);
+    // The store's own record, not the action outcomes: an action that captured a
+    // snapshot and then threw while writing returns no outcome at all.
+    const snapshots = request.snapshots.captured;
+
+    let restoreError: string | null = null;
+    try {
+      await request.snapshots.restoreAll(snapshots);
+    } catch (error) {
+      restoreError = error instanceof Error ? error.message : String(error);
+    }
+
+    const unrestored = await verifyRestoration(request.fs, snapshots);
+
+    if (restoreError === null && unrestored.length === 0) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'transaction-rolled-back',
+          message: `Nothing was left behind: ${String(snapshots.length)} snapshot${snapshots.length === 1 ? '' : 's'} were restored and verified`,
+        }),
+      );
+      return finish('rolled-back', TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    }
+
+    // RFC 0006: exit 7 "always names the exact affected paths and the transaction ID
+    // on stderr, and it always leaves a failure receipt in the state directory". The
+    // journal is that receipt.
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'rollback-incomplete',
+        message: `Transaction ${request.transactionId} failed and its rollback did not fully restore ${unrestored.length > 0 ? unrestored.join(', ') : 'the affected files'}${restoreError === null ? '' : `: ${restoreError}`}`,
+        path: unrestored[0] ?? null,
+        remediation: `Inspect the listed paths and the backups under the transaction id ${request.transactionId} before running any other command`,
+      }),
+    );
+    return finish('dirty', TRANSACTION_EXIT_CODES.applyFailedDirty);
+  };
+
+  for (const action of request.actions) {
+    let result: ActionOutcome;
+    try {
+      result = await applyAction(action, context);
+    } catch (error) {
+      // An I/O failure mid-write. Without this the exception would escape and the
+      // transaction would never roll back — the one moment rollback exists for.
+      result = {
+        actionId: action.id,
+        kind: action.kind,
+        status: 'failed',
+        snapshots: [],
+        ownership: [],
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'action-failed',
+            message: `The action ${action.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+            path: action.affectedPaths[0] ?? null,
+            remediation: 'Check the path is writable, then run the command again',
+          }),
+        ],
+      };
+    }
+    const entry: TransactionJournalEntry = {
+      actionId: result.actionId,
+      kind: result.kind,
+      status: result.status,
+      snapshots: result.snapshots,
+      ownership: result.ownership,
+      diagnostics: result.diagnostics,
+    };
+    entries.push(entry);
+    applied.push(result);
+    // Persisted per action rather than once at the end: the snapshots recorded here are
+    // what a rollback after a crash has to work from.
+    await request.journal.write(journal);
+
+    if (!terminal(result.status)) continue;
+
+    const mutated = applied.some((outcome) => outcome.status === 'applied');
+    if (result.status === 'precondition-drift' && !mutated) {
+      // Nothing was touched, so the honest report is the cause rather than a mutation
+      // outcome. Once anything *has* been written, the operationally important fact is
+      // that the machine was changed and put back, so the code below reports that.
+      diagnostics.push(...result.diagnostics);
+      return finish('rolled-back', TRANSACTION_EXIT_CODES.preconditionDrift);
+    }
+    return rollback([...result.diagnostics]);
+  }
+
+  const postconditions = (await request.verifyPostconditions?.(applied)) ?? [];
+  const failures = postconditions.filter((entry) => entry.severity === 'error');
+  if (failures.length > 0) return rollback([...postconditions]);
+  diagnostics.push(...postconditions);
+
+  return finish('committed', TRANSACTION_EXIT_CODES.ok);
+}
+
+/** Everything the transaction now owns, for the receipt RFC 0002 §Verification writes. */
+export function committedOwnership(journal: TransactionJournal): OwnedArtifact[] {
+  return journal.outcome === 'committed' ? [...journal.ownership] : [];
+}

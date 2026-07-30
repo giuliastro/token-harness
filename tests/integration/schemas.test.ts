@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
+  jsonValueDigest,
   ownedFileDigest,
   parseOptimizationEvent,
   parsePlannedAction,
@@ -166,6 +167,27 @@ describe('schema fixtures', () => {
     assert.equal(parsed.value.commentPrefix, '<!--');
     assert.equal(parsed.value.commentSuffix, '-->');
     assert.equal(parsed.value.createIfMissing, true);
+  });
+
+  it('a merge-json action declares every pointer its operations touch', () => {
+    const value = assertRoundTrips('planned-action.merge-json.json');
+    const parsed = parsePlannedAction(value);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok || parsed.value.kind !== 'merge-json') return;
+    const operation = parsed.value.operations[0];
+    assert.equal(operation?.kind, 'append');
+    assert.ok(parsed.value.ownedPointers.includes(operation?.pointer ?? ''));
+    // The precondition digest is over the canonical form, so it is stable under a
+    // reformatter that reorders keys.
+    assert.equal(operation?.expectedValueDigest, jsonValueDigest(operation?.value ?? null));
+  });
+
+  it('a merge-json action that edits outside its declared claim is refused', () => {
+    const value = assertRoundTrips('planned-action.merge-json.json') as Record<string, unknown>;
+    const parsed = parsePlannedAction({ ...value, ownedPointers: ['hooks.PostToolUse'] });
+    assert.equal(parsed.ok, false);
+    if (parsed.ok) return;
+    assert.equal(parsed.diagnostics[0]?.code, 'action-claims-undeclared-pointer');
   });
 
   it('a remove-owned-change action states the claim it will check before removing', () => {

@@ -1,0 +1,8 @@
+{
+    "theme": "dark",
+    "hooks": {
+        "PreToolUse": [
+            { "matcher": "Read", "command": "user-first" }
+        ]
+    }
+}

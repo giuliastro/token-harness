@@ -14,6 +14,7 @@ export * from './domain/diagnostics.js';
 export * from './domain/digest.js';
 export * from './domain/evidence.js';
 export * from './domain/ids.js';
+export * from './domain/json.js';
 export * from './domain/manifest.js';
 export * from './domain/ownership.js';
 export * from './domain/plan.js';
@@ -34,5 +35,8 @@ export * from './metrics/store.js';
 
 export * from './state/actions.js';
 export * from './state/filesystem.js';
+export * from './state/journal.js';
+export * from './state/json-merge.js';
 export * from './state/marker-block.js';
 export * from './state/snapshots.js';
+export * from './state/transaction.js';
