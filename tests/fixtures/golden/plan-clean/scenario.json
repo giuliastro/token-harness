@@ -4,7 +4,7 @@
   "source": "RFC 0006 §Golden path",
   "command": "plan",
   "rendered": true,
-  "note": "The action payloads were added in PLAN §15 issue 6, because RFC 0006 §Plan persistence makes apply --plan execute the artifact a reviewer approved, which requires the bytes to be in the plan. The marker-block action carries a `//` fence because the RFC transcript patches a marker block into settings.json; strict JSON has no comment syntax, and the action family for a JSON file is merge-json. The transcript is normative so the kind is preserved here, and the discrepancy is reported against RFC 0006 rather than corrected silently.",
+  "note": "Action 1 was `patch-marker-block` until the RFC 0006 transcript was amended: strict JSON has no comment syntax, so a marker fence in settings.json produces a document the harness cannot parse, and RFC 0004 §Ownership lists fences and JSON entries as separate mechanisms. It is now `merge-json` appending one element to `hooks.PreToolUse`, which is the live shape the Phase 2.5 spike observed and which leaves the user's other hook entries and their order intact. The payloads themselves were added in PLAN §15 issue 6, because RFC 0006 §Plan persistence makes `apply --plan` execute the artifact a reviewer approved, which requires the bytes to be in the plan.",
   "roots": {
     "home": "C:\\Users\\dev",
     "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
