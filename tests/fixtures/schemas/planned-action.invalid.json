@@ -1,0 +1,18 @@
+{
+  "kind": "write-owned-file",
+  "id": "",
+  "riskClass": "harmless",
+  "requiresNetwork": false,
+  "requiresElevation": false,
+  "affectedPaths": [
+    "/home/dev/.config/token-harness/config.yaml"
+  ],
+  "affectedProcesses": [],
+  "preconditions": [],
+  "postconditions": [],
+  "rollbackData": "file-snapshot",
+  "explanation": "an action with no content, no digest, and an invented risk class",
+  "path": "/home/dev/.config/token-harness/config.yaml",
+  "mode": null,
+  "expectedDigest": "deadbeef"
+}

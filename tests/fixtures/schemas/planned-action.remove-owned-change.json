@@ -1,0 +1,28 @@
+{
+  "kind": "remove-owned-change",
+  "id": "u1",
+  "riskClass": "destructive",
+  "requiresNetwork": false,
+  "requiresElevation": false,
+  "affectedPaths": [
+    "/home/dev/project/AGENTS.md"
+  ],
+  "affectedProcesses": [],
+  "preconditions": [
+    "the owned block still matches the digest in the receipt"
+  ],
+  "postconditions": [
+    "the block is gone and the rest of the file is unchanged"
+  ],
+  "rollbackData": "file-snapshot",
+  "explanation": "remove the rtk instruction block",
+  "path": "/home/dev/project/AGENTS.md",
+  "reverses": "a1",
+  "target": {
+    "kind": "owned-marker-block",
+    "path": "/home/dev/project/AGENTS.md",
+    "markerBegin": "token-harness:begin",
+    "markerEnd": "token-harness:end",
+    "bodyDigest": "sha256:e50347faa71fe7080373a7c4d8cf2501ab9f91568de28a2c43ccd86017b3dcc4"
+  }
+}

@@ -17,7 +17,9 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
+  ownedFileDigest,
   parseOptimizationEvent,
+  parsePlannedAction,
   parseProviderManifest,
   type CompatibilityRule,
   type HarnessManifest,
@@ -25,7 +27,7 @@ import {
   type VerificationReceipt,
 } from '@token-harness/core';
 
-import { FIXTURES_ROOT } from '../src/index.js';
+import { FIXTURES_ROOT, listGoldenScenarios, loadGolden } from '../src/index.js';
 
 const SCHEMAS = `${FIXTURES_ROOT}schemas/`;
 
@@ -138,6 +140,87 @@ describe('schema fixtures', () => {
     assert.ok(value.fileIdentity.length > 0);
     assert.equal(typeof value.byteOffset, 'number');
     assert.ok(value.lastLineDigest !== undefined);
+  });
+
+  /**
+   * A plan crosses a process boundary — RFC 0006 §Plan persistence stores it under
+   * its ID and `apply --plan <id>` reads it back — so an action's payload is a public
+   * schema and gets the same protection as a manifest.
+   */
+  it('a write-owned-file action carries the bytes it will write', () => {
+    const value = assertRoundTrips('planned-action.write-owned-file.json');
+    const parsed = parsePlannedAction(value);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok || parsed.value.kind !== 'write-owned-file') return;
+    assert.equal(parsed.value.content, '{\n  "schemaVersion": 1\n}\n');
+    // The recorded precondition is the digest of that exact content, so a plan
+    // computed as an update cannot be applied to a file somebody else changed.
+    assert.equal(parsed.value.expectedDigest, ownedFileDigest(parsed.value.content));
+  });
+
+  it('a patch-marker-block action carries its fence, its comment syntax, and its body', () => {
+    const value = assertRoundTrips('planned-action.patch-marker-block.json');
+    const parsed = parsePlannedAction(value);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok || parsed.value.kind !== 'patch-marker-block') return;
+    assert.equal(parsed.value.commentPrefix, '<!--');
+    assert.equal(parsed.value.commentSuffix, '-->');
+    assert.equal(parsed.value.createIfMissing, true);
+  });
+
+  it('a remove-owned-change action states the claim it will check before removing', () => {
+    const value = assertRoundTrips('planned-action.remove-owned-change.json');
+    const parsed = parsePlannedAction(value);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok || parsed.value.kind !== 'remove-owned-change') return;
+    assert.equal(parsed.value.target.kind, 'owned-marker-block');
+    assert.equal(parsed.value.riskClass, 'destructive');
+  });
+
+  it('an action missing its payload fails with actionable diagnostics', () => {
+    const value = assertRoundTrips('planned-action.invalid.json');
+    const parsed = parsePlannedAction(value);
+    assert.equal(parsed.ok, false);
+    if (parsed.ok) return;
+    const messages = parsed.diagnostics.map((entry) => entry.message).join('\n');
+    assert.match(messages, /`id` must be a non-empty string/);
+    assert.match(messages, /`riskClass` must be/);
+    assert.match(messages, /`content` must be a string/);
+    assert.match(messages, /`expectedDigest` must be null or a sha256 digest/);
+    for (const entry of parsed.diagnostics) {
+      assert.ok(entry.remediation !== null, `${entry.code} has no remediation`);
+      assert.equal(entry.severity, 'error');
+    }
+  });
+
+  it('an unknown action kind is refused rather than skipped', () => {
+    const parsed = parsePlannedAction({ kind: 'reticulate-splines' });
+    assert.equal(parsed.ok, false);
+    if (parsed.ok) return;
+    assert.equal(parsed.diagnostics[0]?.code, 'action-kind-unknown');
+  });
+
+  /**
+   * The golden plan fixtures are inputs to the renderer, and nothing else type-checks
+   * them: `LoadedGolden.result.data` is `unknown` by design. Without this, an action
+   * payload could go stale in a committed fixture and every test would still pass.
+   */
+  it('every action in every golden plan fixture is a valid action', () => {
+    let checked = 0;
+    for (const name of listGoldenScenarios()) {
+      const { result } = loadGolden(name);
+      const data = result.data as { actions?: unknown } | null;
+      if (data === null || !Array.isArray(data.actions)) continue;
+      for (const action of data.actions) {
+        const parsed = parsePlannedAction(action);
+        assert.ok(
+          parsed.ok,
+          `${name}: ${parsed.ok ? '' : parsed.diagnostics.map((d) => d.message).join('; ')}`,
+        );
+        checked += 1;
+      }
+    }
+    assert.ok(checked > 0, 'no golden fixture contained an action to check');
   });
 
   it('compatibility rule', () => {

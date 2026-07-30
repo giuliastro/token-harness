@@ -153,6 +153,26 @@ describe('module boundaries', () => {
   });
 
   /**
+   * The list above forbids the operating system by name, which left every other Node
+   * built-in silently allowed. PLAN §15 issue 6 needed exactly one of them —
+   * `node:crypto`, for the digests RFC 0004 §Ownership and RFC 0006 §Plan persistence
+   * both require — so the permission is stated positively instead of resting on a
+   * gap. Hashing is arithmetic; the rule is about the machine.
+   */
+  it('core imports no Node built-in except node:crypto', () => {
+    for (const file of SOURCES.filter((f) => inPackage(f, 'packages/core/'))) {
+      for (const specifier of file.imports) {
+        if (!specifier.startsWith('node:')) continue;
+        assert.equal(
+          specifier,
+          'node:crypto',
+          `${file.path} imports ${specifier}; core reaches the platform through a port, not directly`,
+        );
+      }
+    }
+  });
+
+  /**
    * The Phase 2 decision, enforced rather than described.
    *
    * RFC 0001 §Repository shape lists neither `platform` nor `process` under `core`,

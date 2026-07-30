@@ -1,0 +1,27 @@
+{
+  "kind": "patch-marker-block",
+  "id": "a1",
+  "riskClass": "reversible",
+  "requiresNetwork": false,
+  "requiresElevation": false,
+  "affectedPaths": [
+    "/home/dev/project/AGENTS.md"
+  ],
+  "affectedProcesses": [],
+  "preconditions": [
+    "AGENTS.md contains at most one token-harness block"
+  ],
+  "postconditions": [
+    "the owned marker block is present and matches its digest"
+  ],
+  "rollbackData": "file-snapshot",
+  "explanation": "document the rtk rewrite for the agent",
+  "path": "/home/dev/project/AGENTS.md",
+  "markerBegin": "token-harness:begin",
+  "markerEnd": "token-harness:end",
+  "commentPrefix": "<!--",
+  "commentSuffix": "-->",
+  "body": "rtk hook pre\n",
+  "expectedBodyDigest": "sha256:e50347faa71fe7080373a7c4d8cf2501ab9f91568de28a2c43ccd86017b3dcc4",
+  "createIfMissing": true
+}
