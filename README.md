@@ -79,13 +79,26 @@ compatibility and attribution tests prove they compose safely.
 
 ## Status
 
-Phase 0 is complete. Phase 1 — the workspace, the domain contracts, and the CLI
-shell — is implemented, as are Phase 2.1 and 2.2: platform facts, state-path
-resolution with the RFC 0004 permission property, and the safe process runner.
-They live in a fourth workspace package, `packages/platform`, extracted per
-RFC 0001 §Repository shape now that the executor and the adapters need it.
+Version `0.0.1`. Per the release gates below, `0.0.x` means **internal architecture
+and fixtures, with no stability promise** — the number is a description of the
+contents, not a modest way of saying "nearly done".
 
-What works today:
+Complete:
+
+| Phase | What landed |
+| --- | --- |
+| 0 | The seven accepted RFCs in `docs/rfcs/` |
+| 1 | Workspace and CI, domain contracts, CLI shell with the RFC 0006 golden transcripts |
+| 2.1 | Platform facts, path resolution, executable resolution, the state-permission property |
+| 2.2 | The safe process runner, and a fake runner with expectation matching |
+| 2.3 | File ownership, snapshots including recorded absence, marker-block and JSON-merge actions, the transaction journal and verified rollback |
+| 2.5 | In progress — the live-verification spike, logged in `docs/spikes/` |
+
+The platform and process layers live in a fourth workspace package,
+`packages/platform`, extracted per RFC 0001 §Repository shape once the executor and
+the adapters needed it.
+
+What the command surface does today:
 
 ```text
 token-harness --help
@@ -95,55 +108,81 @@ token-harness plan   [--json]
 token-harness status [--json]
 ```
 
-The exit-code table, the `--json` envelope, and the stream discipline from
-RFC 0006 are implemented in full. The harness and provider registries are empty:
-detection, planning, and mutation land in Phases 2 through 6, and until then
-`doctor` truthfully reports an environment it cannot yet inspect. `apply`,
-`verify`, `metrics`, `update`, `rollback`, and `uninstall` are rejected as
-unavailable rather than as unknown.
+The exit-code table, the `--json` envelope, and the stream discipline from RFC 0006
+are implemented in full. `apply`, `verify`, `metrics`, `update`, `rollback`, and
+`uninstall` are rejected as *unavailable* rather than as unknown, so a script can
+tell "not built yet" from "you typed it wrong".
 
-### Not installable yet, and not yet useful
+## Installing 0.0.1
 
-Two separate limitations, both deliberate.
-
-**Not on npm.** There is no `npm install -g token-harness` and no
-`npx token-harness`. The package is marked private, because publishing it today
-would produce a tarball nobody could install: it depends on private workspace
-packages through the `workspace:` protocol, which npm rejects.
-Distribution — publishing, provenance, SBOM, signing, `npx` — is Phase 8.3, and
-PLAN §17.2 keeps packaging beyond npm an open decision. `apps/cli/test/packaging.test.ts`
-fails the moment `private` is removed while the workspace dependencies remain,
-so that question cannot be skipped when the time comes.
-
-**Nothing to detect.** Even built and run locally, `doctor` finds no harnesses
-and no providers, because no adapter exists yet. What the shell does today is
-the contract, not the product: exit codes, the envelope, stream discipline, and
-the rendering pinned by the RFC 0006 golden transcripts. The first release that
-does something for a user is `0.1.0`, after Phases 2 through 7.
-
-To run it from a clone:
+The package is a single self-contained ESM artifact with **no dependencies at all**.
+It is not on npm yet — publishing is PLAN §8.3, together with provenance, SBOM, and
+signing — but it installs from a tarball you build yourself, and CI proves that on
+Windows, macOS, and Linux on every commit:
 
 ```bash
-pnpm install && pnpm build
+pnpm install && pnpm build && pnpm package
+npm install -g ./dist/package
+token-harness doctor
+```
+
+`pnpm package` stages `dist/package/`: the bundle, a generated manifest, the README,
+and the licence. `pnpm smoke:install` packs it, installs the tarball into a scratch
+directory with no workspace above it, and runs the result — which is what catches a
+manifest that names the wrong `bin` or carries a dependency npm cannot resolve.
+
+To run it without installing:
+
+```bash
 node dist/bundle/token-harness.mjs doctor
 ```
 
-`dist/bundle/token-harness.mjs` is a self-contained ESM artifact and needs no
-`node_modules` beside it.
+### What it will and will not tell you
+
+It reports the truth about your machine. `doctor` detects the operating system,
+distinguishes native Windows from WSL, resolves the state directory per RFC 0001, and
+refuses to run rather than fall back to a world-writable location if it cannot.
+
+It finds **no harnesses and no providers**, because no adapter exists yet — those are
+Phases 3 to 6. So `doctor` prints a truthful report of an environment it cannot yet
+inspect, and that is the whole of it. What is worth reviewing at `0.0.1` is the
+contract, not the product: the exit codes, the envelope, the stream discipline, the
+ownership and rollback guarantees, and the platform behaviour on Windows.
+
+The first release that does something useful for a user is `0.1.0`, and the gate for
+that number is listed below.
 
 ## Development
 
 ```bash
 pnpm install
 pnpm typecheck
+pnpm lint
 pnpm test
 pnpm build
 pnpm smoke
+pnpm package
+pnpm smoke:install
 ```
 
-`pnpm build` produces a self-contained ESM artifact at
-`dist/bundle/token-harness.mjs`; `pnpm smoke` runs it from a temporary directory
-outside the repository, so a missing inline shows up as a resolution failure.
+`pnpm build` produces the self-contained artifact at `dist/bundle/token-harness.mjs`;
+`pnpm smoke` runs it from a temporary directory outside the repository, so anything
+that failed to inline shows up as a resolution failure rather than as a passing test.
+CI runs all of it on `windows-latest`, `macos-latest`, and `ubuntu-latest`, in that
+order and without fail-fast, because the failures this project exists to prevent are
+mostly Windows-specific and finding them after two green jobs is how they become
+workarounds instead of design.
+
+## Release gates
+
+| Version | Gate |
+| --- | --- |
+| `0.0.x` | Internal architecture and fixtures. No stability promise. **← here** |
+| `0.1.0` | RTK and HarnessTrim, three harnesses, transactional install, verification with declared tiers, metrics, brownfield adoption |
+| `0.2.0` | A third provider, goal-based profiles, the A/B benchmark matrix |
+| `1.0.0` | Stable provider and harness contracts, two release cycles with no configuration-loss defects, published benchmark results |
+
+`PLAN.md` §16 is the authority; this table is a summary of it.
 
 `pnpm golden` regenerates the derived halves of the golden fixtures. It never
 touches the five human transcripts transcribed from RFC 0006 — see

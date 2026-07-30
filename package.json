@@ -1,6 +1,6 @@
 {
   "name": "token-harness-workspace",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
@@ -19,7 +19,9 @@
     "typecheck": "tsc -b",
     "test": "tsc -b && node --test --test-reporter=spec \"packages/*/dist/test/**/*.test.js\" \"apps/*/dist/test/**/*.test.js\" \"tests/dist/integration/**/*.test.js\"",
     "build": "tsc -b && node scripts/bundle.mjs",
+    "package": "node scripts/package.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:install": "node scripts/smoke-install.mjs",
     "golden": "node tests/tools/scenarios.mjs && node tests/tools/regenerate-golden.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
