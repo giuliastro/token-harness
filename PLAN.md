@@ -758,6 +758,12 @@ Suggested first implementation issues:
     reducing plugin is a generated wrapper with no externally observable receipt. The
     comment-preserving JSONC reader that §17 listed as an open decision now exists, which is what
     makes `opencode.jsonc` readable at all — strict `JSON.parse` rejects the real file.
+18. Add the HarnessTrim provider (§11). **Done** — detected, adopted, reconciled against RTK's
+    ownership, and measured, with no installation, exactly as §11 divides the roles. This closes the
+    last of PLAN §2's nine criteria, so the version is `0.1.0`. Two facts the machine supplied and
+    the adapter records rather than papering over: HarnessTrim exposes no version command in any
+    spelling, so `version` is null with evidence instead of a guess; and its telemetry is opt-in, so
+    the importer's ordinary answer is `unavailable`.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 

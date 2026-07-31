@@ -11,11 +11,31 @@ import type { VerifyReport } from '@token-harness/core';
 
 import { column, document, pluralize, type RenderContext } from './layout.js';
 
+/**
+ * The width RFC 0006's transcript uses, and a floor rather than a fixed size.
+ *
+ * `pass` and `info` fit; `not-exercised` — which RFC 0007 added after that transcript was written —
+ * is thirteen characters and pushed the summary column out of line for its row alone.
+ *
+ * Widening it unconditionally would change the spacing of a normative transcript to accommodate a
+ * status the transcript does not contain. So the width is computed from the statuses actually
+ * present: a report of `pass` and `info` renders byte-identically to RFC 0006, and a report that
+ * contains a longer status aligns all of its own rows.
+ */
 const CHECK_STATUS_WIDTH = 6;
 const CHECK_ID_WIDTH = 27;
 
+function statusWidth(report: VerifyReport): number {
+  const longest = Math.max(
+    0,
+    ...report.results.flatMap((result) => result.checks.map((check) => check.status.length)),
+  );
+  return Math.max(CHECK_STATUS_WIDTH, longest + 2);
+}
+
 export function renderVerifyReport(report: VerifyReport, _context: RenderContext): string {
   const lines: string[] = [];
+  const width = statusWidth(report);
 
   // Two headers, because there are two honest situations. With a receipt this verifies what an
   // apply did; without one it verifies what is on the machine — which RFC 0004 §Brownfield
@@ -37,7 +57,7 @@ export function renderVerifyReport(report: VerifyReport, _context: RenderContext
     lines.push(header.join(' — '));
     for (const check of result.checks) {
       lines.push(
-        `  ${column(check.status, CHECK_STATUS_WIDTH)}${column(check.id, CHECK_ID_WIDTH)}${check.summary}`,
+        `  ${column(check.status, width)}${column(check.id, CHECK_ID_WIDTH)}${check.summary}`,
       );
     }
   }
