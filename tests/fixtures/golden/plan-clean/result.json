@@ -3,6 +3,7 @@
   "exitCode": 0,
   "data": {
     "planId": "7f3a91c2",
+    "pipelineId": "b41e",
     "profile": "safe",
     "harness": "claude",
     "projectRoot": "C:\\work\\demo",
@@ -67,21 +68,34 @@
         "riskClass": "reversible",
         "requiresNetwork": false,
         "requiresElevation": false,
-        "affectedPaths": ["C:\\Users\\dev\\.claude\\settings.json"],
+        "affectedPaths": [
+          "C:\\Users\\dev\\.claude\\settings.json"
+        ],
         "affectedProcesses": [],
-        "preconditions": ["settings.json parses as JSON and carries no comments"],
-        "postconditions": ["the owned hook entry is present and matches its digest"],
+        "preconditions": [
+          "settings.json parses as JSON and carries no comments"
+        ],
+        "postconditions": [
+          "the owned hook entry is present and matches its digest"
+        ],
         "rollbackData": "file-snapshot",
         "explanation": "configure rtk hook",
         "path": "C:\\Users\\dev\\.claude\\settings.json",
-        "ownedPointers": ["hooks.PreToolUse"],
+        "ownedPointers": [
+          "hooks.PreToolUse"
+        ],
         "operations": [
           {
             "kind": "append",
             "pointer": "hooks.PreToolUse",
             "value": {
               "matcher": "Bash",
-              "hooks": [{ "type": "command", "command": "rtk hook claude" }]
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "rtk hook claude"
+                }
+              ]
             },
             "expectedValueDigest": null
           }
@@ -98,8 +112,12 @@
           "C:\\Users\\dev\\AppData\\Local\\TokenHarness\\receipts\\7f3a91c2.json"
         ],
         "affectedProcesses": [],
-        "preconditions": ["the state root exists and its permissions were asserted"],
-        "postconditions": ["the receipt records the applied pipeline and both versions"],
+        "preconditions": [
+          "the state root exists and its permissions were asserted"
+        ],
+        "postconditions": [
+          "the receipt records the applied pipeline and both versions"
+        ],
         "rollbackData": "file-snapshot",
         "explanation": "",
         "path": "C:\\Users\\dev\\AppData\\Local\\TokenHarness\\receipts\\7f3a91c2.json",
@@ -111,7 +129,9 @@
     "conflicts": [],
     "network": [],
     "elevation": [],
-    "backups": { "files": 1 },
+    "backups": {
+      "files": 1
+    },
     "persisted": true
   },
   "diagnostics": []

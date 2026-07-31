@@ -718,6 +718,13 @@ Suggested first implementation issues:
     beside the code: RTK inflates some payloads and floors its own `saved_tokens` at zero, so
     `rtk gain` cannot report it; and RTK's `exec_time_ms` is command duration, not added
     overhead, so `latencyMs` stays null rather than claiming a measurement.
+13. Implement the static capability resolver (§9). **Done** — ownership, the rule table,
+    fail-closed overlap, the pipeline ID, both profiles, and post-apply conflict detection
+    wired into `status`. `CapabilityDeclaration` gained `surfaces`, because RFC 0003 resolves
+    over a four-part scope while a declaration named only two of the four. One RFC gap is left
+    open rather than guessed: `metrics.observe` is observational and does not sit at an
+    interception point, so RFC 0003 §Scope and the `metrics.observe` row of the MVP ownership
+    table do not compose. Recorded in §17.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
@@ -754,6 +761,19 @@ These are intentionally deferred to measured spikes or to a triggering need:
 2. Bundler and executable packaging beyond npm.
 3. Whether `core` and `adapters` need to be split further, or `cli` merged in.
 4. Whether a SQLite driver is ever needed, per the RFC 0005 triggers.
+5. **How an observational capability is scoped.** RFC 0003 §Scope resolves ownership over
+   `<harness>/<tool-family>/<interception-point>/<capability>`, and its MVP ownership table
+   assigns `metrics.observe` to Token Harness itself. The two do not compose: observation does
+   not happen at an interception point, and enumerating the four-part scope for it produces one
+   row per tool family per point — four on Claude alone — where RFC 0006's plan transcript shows
+   a single `metrics.observe   token-harness` line with no surface.
+
+   The resolver therefore does not assign `metrics.observe` today, and no reserved surface token
+   was invented for it. Three candidate resolutions, none chosen: scope an observational
+   capability to the harness only; give the scope an explicit `observational` surface segment;
+   or keep observation out of the ownership model entirely and let the importer registry be its
+   own authority. The choice affects RFC 0003 §Scope, so it belongs in an amendment rather than
+   in code.
 
 Resolved since the first draft of this plan:
 

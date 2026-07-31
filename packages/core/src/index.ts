@@ -29,6 +29,10 @@ export * from './envelope/envelope.js';
 export * from './envelope/exit-codes.js';
 export * from './envelope/parse.js';
 
+export * from './planner/drift.js';
+export * from './planner/resolver.js';
+export * from './planner/rules.js';
+
 export * from './metrics/attribution.js';
 export * from './metrics/events.js';
 export * from './metrics/local-database.js';
