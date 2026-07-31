@@ -3,7 +3,6 @@ Plan 7f3a91c2 — profile safe — harness claude — project <project>
 Capability ownership
   shell.command.rewrite      rtk
   shell.output.reduce        rtk
-  metrics.observe            token-harness
 
 Excluded
   harnesstrim   shell.output.reduce   contested; rtk owns it under profile safe

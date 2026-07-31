@@ -17,6 +17,7 @@
 import {
   diagnostic,
   isHarnessId,
+  isPlanId,
   isProviderId,
   type Diagnostic,
   type HarnessId,
@@ -24,7 +25,7 @@ import {
 } from '@token-harness/core';
 
 /** Commands the Phase 1 shell implements. */
-export const AVAILABLE_COMMANDS = ['doctor', 'metrics', 'plan', 'status'] as const;
+export const AVAILABLE_COMMANDS = ['apply', 'doctor', 'metrics', 'plan', 'status'] as const;
 
 export type AvailableCommand = (typeof AVAILABLE_COMMANDS)[number];
 
@@ -47,6 +48,10 @@ export interface CommandOptions {
    */
   since: string | null;
   until: string | null;
+  /** `--plan <id>`; validated for shape here and for existence by the command. */
+  plan: string | null;
+  /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
+  yes: boolean;
 }
 
 export type Invocation =
@@ -56,10 +61,23 @@ export type Invocation =
   | { kind: 'usage-error'; json: boolean; diagnostics: Diagnostic[] };
 
 /** RFC 0006 §Global flags, restricted to the read-only commands of Phase 1. */
-const VALUE_FLAGS = new Set(['--harness', '--provider', '--project', '--since', '--until']);
-const BOOLEAN_FLAGS = new Set(['--json']);
-/** Declared by RFC 0006 for mutating commands, which this build does not have. */
-const MUTATING_ONLY_FLAGS = new Set(['--yes', '--plan']);
+const VALUE_FLAGS = new Set([
+  '--harness',
+  '--provider',
+  '--project',
+  '--since',
+  '--until',
+  '--plan',
+]);
+
+/**
+ * Flags that carry no value.
+ *
+ * `--json` is also read by the pre-scan above, because RFC 0006 requires a usage error to emit
+ * an envelope when `--json` parsed; it is listed here so the main loop does not reject it as
+ * unknown.
+ */
+const BOOLEAN_FLAGS = new Set(['--json', '--yes']);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
   return argv.some((token) => token === '--json' || token.startsWith('--json='));
@@ -105,6 +123,8 @@ export function parseArgv(argv: readonly string[]): Invocation {
     project: null,
     since: null,
     until: null,
+    plan: null,
+    yes: false,
   };
   let command: string | null = null;
 
@@ -141,20 +161,10 @@ export function parseArgv(argv: readonly string[]): Invocation {
             remediation: `Pass \`${name}\` on its own`,
           }),
         );
+        continue;
       }
-      continue;
-    }
-
-    if (MUTATING_ONLY_FLAGS.has(name)) {
-      diagnostics.push(
-        diagnostic({
-          severity: 'error',
-          code: 'flag-not-applicable',
-          message: `The flag \`${name}\` applies to mutating commands, which this build does not carry yet`,
-          remediation: 'Use `doctor`, `plan`, or `status`',
-        }),
-      );
-      if (inlineValue === null && VALUE_FLAGS.has(name)) index += 1;
+      // RFC 0006: "require either an interactive confirmation or `--yes`". This is the second.
+      if (name === '--yes') options.yes = true;
       continue;
     }
 
@@ -237,6 +247,23 @@ export function parseArgv(argv: readonly string[]): Invocation {
         break;
       case '--until':
         options.until = value;
+        break;
+      case '--plan':
+        if (!isPlanId(value)) {
+          // Checked here rather than on the filesystem: a value that cannot be a plan id is a
+          // usage error, and reporting it as "no such plan" would send the user looking for a
+          // file that was never going to exist.
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-argument',
+              message: `Plan id ${JSON.stringify(value)} is not eight hexadecimal characters`,
+              remediation: 'Use the id `token-harness plan` printed',
+            }),
+          );
+        } else {
+          options.plan = value;
+        }
         break;
       default:
         break;

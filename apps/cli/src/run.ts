@@ -23,6 +23,7 @@ import {
 } from '@token-harness/core';
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
+import { runApply } from './commands/apply.js';
 import { runDoctor } from './commands/doctor.js';
 import { runMetrics } from './commands/metrics.js';
 import { runPlan } from './commands/plan.js';
@@ -42,6 +43,7 @@ export type CommandTable = Readonly<
 >;
 
 export const DEFAULT_COMMANDS: CommandTable = {
+  apply: runApply,
   doctor: runDoctor,
   metrics: runMetrics,
   plan: runPlan,
@@ -299,6 +301,8 @@ export async function run(options: RunOptions): Promise<number> {
     provider: invocation.options.provider,
     since: invocation.options.since,
     until: invocation.options.until,
+    planId: invocation.options.plan,
+    confirmed: invocation.options.yes,
     metrics: options.metrics ?? null,
   };
 

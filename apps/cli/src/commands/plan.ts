@@ -25,9 +25,12 @@ import {
   commandResult,
   diagnostic,
   isProfileId,
+  buildStoredPlan,
+  derivePlanId,
   planRequiresElevation,
   planRequiresNetwork,
   resolveOwnership,
+  storedPlanFileName,
   type CommandResult,
   type Diagnostic,
   type HarnessConfigSummary,
@@ -35,8 +38,11 @@ import {
   type PlanReport,
   type PlannedAction,
   type ProfileId,
+  type RecordedVersions,
   type ResolverProvider,
 } from '@token-harness/core';
+
+import { PLANS_DIRECTORY } from './apply.js';
 
 import type { CommandContext } from './context.js';
 
@@ -56,7 +62,21 @@ const DEFAULT_PROFILE: ProfileId = 'safe';
  */
 const ASSIGNABLE_PROVIDERS: readonly string[] = ['rtk'];
 
-export async function runPlan(context: CommandContext): Promise<CommandResult<PlanReport>> {
+/**
+ * What `plan` computes, shared with `apply`.
+ *
+ * Extracted rather than duplicated because RFC 0006's staleness rules compare a stored plan
+ * against *the current resolution* — recorded ownership and versions against live ones. A second
+ * implementation of "what would we do now" is a second answer, and the one thing a revalidation
+ * must not do is disagree with the planner it is revalidating against.
+ */
+export interface ComputedPlan {
+  report: PlanReport;
+  versions: RecordedVersions;
+  diagnostics: Diagnostic[];
+}
+
+export async function computePlan(context: CommandContext): Promise<ComputedPlan> {
   const diagnostics: Diagnostic[] = [];
 
   const providerAdapters = listProviderAdapters().filter(
@@ -77,6 +97,7 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
    */
   const present: HarnessManifest[] = [];
   const harnessConfigs: HarnessConfigSummary[] = [];
+  const versions: RecordedVersions = { providers: {}, harnesses: {} };
   const detectionContext =
     context.adapters === null
       ? null
@@ -92,6 +113,10 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     for (const adapter of harnessAdapters) {
       const detection = await adapter.detect(detectionContext);
       if (detection.state === 'absent') continue;
+      // Recorded even when null. RFC 0004 wants "the exact provider versions … apply will use",
+      // and "the harness was here but reported no version" is itself a fact a later
+      // revalidation must be able to compare against.
+      versions.harnesses[adapter.manifest.id] = detection.version;
       present.push(adapter.manifest);
       // Inspected here as well as detected, because a plan that cannot see the live hook list
       // cannot tell "install this" from "this is already installed" — and RFC 0004 §Brownfield
@@ -134,6 +159,8 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     for (const adapter of providerAdapters) {
       const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
       if (owned.length === 0) continue;
+      const detection = await adapter.detect(providerContext);
+      versions.providers[adapter.manifest.id] = detection.version;
       const providerPlan = await adapter.plan(providerContext, {
         ownership: owned,
         harnesses: present,
@@ -144,10 +171,19 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
   }
 
   const report: PlanReport = {
-    // RFC 0006 §Plan persistence makes the ID "a digest over the plan's normalized content",
-    // and a plan is not content until it has actions. Null for now, rather than a digest over
-    // an empty action list that would be identical on every machine.
-    planId: null,
+    // RFC 0006 §Plan persistence: "a digest over the plan's normalized content, so identical
+    // inputs produce identical IDs and a changed environment produces a different one". Null
+    // when there is nothing to do — an id for an empty plan would be the same on every machine
+    // and would name an artifact nobody needs to apply.
+    planId:
+      actions.length === 0
+        ? null
+        : derivePlanId({
+            profile,
+            harness: context.harness,
+            ownership: resolution.ownership,
+            actions,
+          }),
     pipelineId: resolution.pipelineId,
     profile,
     harness: context.harness,
@@ -228,9 +264,65 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     );
   }
 
-  // RFC 0006 §Exit codes: 4 is "planning succeeded but a hard conflict prevents apply".
-  const exitCode =
-    resolution.conflicts.length > 0 ? EXIT_CODES['blocked-by-conflict'] : EXIT_CODES.ok;
+  return { report, versions, diagnostics };
+}
 
-  return commandResult<PlanReport>({ command: 'plan', exitCode, data: report, diagnostics });
+/**
+ * Persists the plan — RFC 0006 §Plan persistence: "`plan` writes the serialized plan to the
+ * state directory under its ID and prints the ID."
+ *
+ * A write from a command RFC 0004 calls read-only, and specified as such for the same reason the
+ * attribution salt is: what `plan` may not touch is a harness configuration or the project. Its
+ * own state directory is where the artifact a reviewer approves has to live, or `apply --plan`
+ * has nothing to load.
+ */
+async function persist(context: CommandContext, computed: ComputedPlan): Promise<boolean> {
+  if (context.adapters === null || context.stateRoot === null) return false;
+  if (computed.report.planId === null) return false;
+
+  const stored = buildStoredPlan({
+    report: computed.report,
+    versions: computed.versions,
+    createdAt: context.now(),
+  });
+  const path = context.adapters.fs.join(
+    context.stateRoot,
+    PLANS_DIRECTORY,
+    storedPlanFileName(stored.planId),
+  );
+  try {
+    await context.adapters.fs.writeFile(
+      path,
+      new TextEncoder().encode(`${JSON.stringify(stored, null, 2)}
+`),
+      '0600',
+    );
+    return true;
+  } catch {
+    // A plan that could not be stored is still a valid plan to read. Reporting `persisted: false`
+    // is what stops the renderer printing an `apply --plan <id>` hint for an artifact that is
+    // not there.
+    return false;
+  }
+}
+
+export async function runPlan(context: CommandContext): Promise<CommandResult<PlanReport>> {
+  const computed = await computePlan(context);
+  const persisted = await persist(context, computed);
+  const report: PlanReport = { ...computed.report, persisted };
+
+  // RFC 0006 §Exit codes: 4 is "planning succeeded but a hard conflict prevents apply".
+  const exitCode = report.conflicts.length > 0 ? EXIT_CODES['blocked-by-conflict'] : EXIT_CODES.ok;
+
+  return commandResult<PlanReport>({
+    command: 'plan',
+    exitCode,
+    data: report,
+    diagnostics: computed.diagnostics,
+  });
+}
+
+/** The versions a plan was computed against, for `apply`'s revalidation. */
+export function recordedVersions(computed: ComputedPlan): RecordedVersions {
+  return computed.versions;
 }

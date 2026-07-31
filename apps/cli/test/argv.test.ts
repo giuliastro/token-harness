@@ -71,13 +71,30 @@ describe('argv', () => {
     assert.equal(parsed.diagnostics[0]?.code, 'invalid-argument');
   });
 
-  it('rejects a mutating-only flag with its own code', () => {
-    for (const flag of ['--yes', '--plan']) {
-      const parsed = parseArgv(['doctor', flag, 'x']);
-      assert.equal(parsed.kind, 'usage-error');
-      if (parsed.kind !== 'usage-error') continue;
-      assert.equal(parsed.diagnostics[0]?.code, 'flag-not-applicable');
-    }
+  it('accepts --yes and --plan now that a mutating command exists', () => {
+    // These were rejected as `flag-not-applicable` while `apply` was absent. It is here, so the
+    // flags are real: `--yes` is the confirmation RFC 0006 requires, and `--plan` selects a
+    // stored plan.
+    const parsed = parseArgv(['apply', '--yes', '--plan', 'deadbeef']);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.options.yes, true);
+    assert.equal(parsed.options.plan, 'deadbeef');
+  });
+
+  it('rejects a --plan value that cannot be a plan id', () => {
+    const parsed = parseArgv(['apply', '--plan', 'not-an-id']);
+    assert.equal(parsed.kind, 'usage-error');
+    if (parsed.kind !== 'usage-error') return;
+    // A usage error rather than a later "no such plan": the value could never have named a file.
+    assert.equal(parsed.diagnostics[0]?.code, 'invalid-argument');
+  });
+
+  it('rejects a value attached to --yes', () => {
+    const parsed = parseArgv(['apply', '--yes=please']);
+    assert.equal(parsed.kind, 'usage-error');
+    if (parsed.kind !== 'usage-error') return;
+    assert.equal(parsed.diagnostics[0]?.code, 'flag-takes-no-value');
   });
 
   it('rejects a second positional argument', () => {

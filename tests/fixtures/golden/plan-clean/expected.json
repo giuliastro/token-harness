@@ -33,17 +33,6 @@
         "owner": "rtk",
         "mode": "exclusive",
         "order": 0
-      },
-      {
-        "scope": {
-          "harness": "claude",
-          "toolFamily": "*",
-          "interceptionPoint": "*",
-          "capability": "metrics.observe"
-        },
-        "owner": "token-harness",
-        "mode": "observational",
-        "order": 0
       }
     ],
     "exclusions": [

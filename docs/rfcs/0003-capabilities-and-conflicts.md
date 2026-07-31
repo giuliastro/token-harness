@@ -86,6 +86,32 @@ Ownership is resolved over:
 <harness>/<tool-family>/<interception-point>/<capability>
 ```
 
+### Observational capabilities are outside this model
+
+Amended during Phase 4. The address above names an interception point, and an observational
+capability does not have one: observation happens by reading a provider's own records after the
+fact, not by sitting in a hook. Enumerating the four-part scope for `metrics.observe` produces one
+row per tool family per interception point — four on Claude Code alone — each asserting ownership
+of a surface where nothing is intercepted.
+
+The deeper reason is that there is nothing to arbitrate. This model exists to guarantee that at
+most one provider transforms a given payload; an observer transforms nothing, so two observers are
+not in conflict, and §Composition modes already says so: "Multiple observers are allowed, but
+deduplication keys prevent duplicate accounting." The property that keeps a figure from being
+counted twice is the deduplication key, defined in RFC 0005 §Deduplicating a stream without event
+IDs — not an ownership assignment. Putting `metrics.observe` in the ownership model would appear
+to provide a safety property that is in fact provided elsewhere, which is worse than leaving it
+out.
+
+The resolver therefore assigns no observational capability, and the `metrics.observe` row of
+§MVP ownership is an intent about who imports rather than an assignment the resolver makes. What
+Token Harness observes is reported where it is actually knowable: the importer modes in `status`
+and the per-provider rows in `metrics`.
+
+`CompositionMode` keeps its `observational` member. A capability still declares itself
+observational, and that declaration is what excludes it here — which is why the member is
+load-bearing rather than vestigial.
+
 This allows HarnessTrim to reduce a large generic MCP result while RTK owns shell
 command output in the same session.
 

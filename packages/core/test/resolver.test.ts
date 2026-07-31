@@ -268,7 +268,7 @@ describe('fail-closed on undeclared overlap', () => {
     );
   });
 
-  it('lets multiple observers coexist without a rule', () => {
+  it('does not arbitrate observers at all', () => {
     const observers = [
       provider(RTK, [declaration({ capability: 'metrics.observe', mode: 'observational' })]),
       provider(HARNESSTRIM, [
@@ -277,10 +277,33 @@ describe('fail-closed on undeclared overlap', () => {
     ];
     const result = resolveOwnership({ ...BASE, profile: 'safe', providers: observers });
 
-    // RFC 0003: "Multiple observers are allowed, but deduplication keys prevent duplicate
-    // accounting" — and the keys are RFC 0005's business, not the resolver's.
-    assert.equal(result.ownership.length, 2);
+    // RFC 0003 §Observational capabilities are outside this model. Two observers are not in
+    // conflict — an observer transforms no payload — and the address the resolver works over
+    // names an interception point that observation does not have. Assigning them would imply a
+    // safety property that actually comes from RFC 0005's deduplication keys.
+    assert.deepEqual(result.ownership, []);
     assert.deepEqual(result.conflicts, []);
+    // And no exclusion: nothing was excluded, because nothing was ever a candidate.
+    assert.deepEqual(result.exclusions, []);
+  });
+
+  it('still resolves a transforming capability declared beside an observational one', () => {
+    const result = resolveOwnership({
+      ...BASE,
+      profile: 'safe',
+      providers: [
+        provider(RTK, [
+          declaration({ capability: 'metrics.observe', mode: 'observational' }),
+          declaration({ capability: 'shell.output.reduce' }),
+        ]),
+      ],
+    });
+    // The exclusion is per declaration, not per provider: a provider that observes and also
+    // transforms still owns what it transforms.
+    assert.deepEqual(
+      result.ownership.map((entry) => entry.scope.capability),
+      ['shell.output.reduce'],
+    );
   });
 });
 
