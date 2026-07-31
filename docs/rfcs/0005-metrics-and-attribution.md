@@ -192,14 +192,107 @@ deferred decision rather than an assumption baked into every importer and report
 
 ### RTK
 
-Preferred source: machine-readable analytics export such as:
+Source: RTK's own command history database, `<user data directory>/rtk/history.db`, table
+`commands`. One row per intercepted command, with a monotonic `INTEGER PRIMARY KEY`.
 
-```text
-rtk gain --all --format json
-```
+This section originally named `rtk gain --all --format json` as the metrics source. That was
+wrong, and the correction is recorded here rather than only in the adapter, because the
+reason generalises: **an aggregate is not a stream of events, and no cursor can make it
+one.**
 
-The adapter validates upstream schema versions and maps command families without
-retaining command arguments.
+What was observed against RTK 0.42.0:
+
+- the finest machine-readable grain the CLI offers is a *daily aggregate*. `--history`
+  silently ignores `--format json`, returning only `summary`, and returns zero bytes for
+  `--format csv`; in text mode it aggregates by command family. There is no per-operation
+  output in any format;
+- the aggregate mutates in place. Two invocations one minute apart reported
+  `daily[2026-07-31] = 11 commands / 165 saved` and then `13 / 170`. The dedup model in
+  §Deduplicating a stream without event IDs assumes an append-only file in which a past line
+  never changes. Against a mutable aggregate, discarding what is already held freezes the day
+  at its first observed value and understates savings permanently; not discarding
+  double-counts;
+- `ImportCursor`'s members are all shaped for a file, and a CLI invocation has no path, no
+  byte offset, and no last line.
+
+The database resolves all three: rows are immutable, the identifier is native so dedup needs
+no synthesis, and the cursor is a high-water mark.
+
+It also carries a figure the aggregate cannot express. On the machine this was written
+against, **2,149 of 2,847 intercepted commands — 75.5% — saved zero tokens**: RTK proxied the
+command and passed the output through unchanged. The aggregate reports 9.5% average savings
+and cannot say that three quarters of interceptions moved nothing. `outcome.changed` exists
+so coverage and bypass metrics stay correct, and only the per-operation source can set it.
+
+Mapping to the normalized event:
+
+| Normalized field | Source |
+| --- | --- |
+| `measurement.class` | `exact-local` — §Exact local names this case: "RTK command output before and after filtering" |
+| `measurement.beforeTokens` / `afterTokens` | `input_tokens` / `output_tokens` |
+| `measurement.beforeChars` / `afterChars` | `null` — never derived from the token counts |
+| `measurement.tokenizer` | `rtk`, recorded so a reader can judge a figure counted by RTK's tokenizer rather than the model provider's |
+| `context.projectId` | `project_path`, normalized and salted per §Privacy |
+| `context.harnessId` | `unknown` — a row carries no harness, and reading one off today's configuration would attribute months of history to today's wiring |
+| `context.capability` | `shell.output.reduce`: the command ran either way, and what shrank was its output |
+| `outcome.changed` | `output_tokens < input_tokens` |
+| `outcome.latencyMs` | `exec_time_ms` |
+| `source.nativeEventId` | `id` — native, not synthesized |
+
+`original_cmd` and `rtk_cmd` hold raw command text and are **never selected**. §Privacy
+forbids retaining it, and a `SELECT *` would satisfy every other property of this importer
+while leaking both columns.
+
+Cross-check on the machine above: the sum of `saved_tokens` over the imported rows is 91,600
+over 2,847 events, which is exactly what `rtk gain` reports as `total_saved` for
+`total_commands`. The per-operation import and the tool's own aggregate agree.
+
+#### The cursor for a source with native identifiers
+
+`ImportCursor` gains `highWaterMark`. For a source whose records carry their own monotonic
+identifier it is authoritative, and `byteOffset` and `lastLineDigest` are not used — filling
+them with placeholders would make the cursor a record of nothing.
+
+`fileIdentity` carries the *generation* instead of a device or inode: for RTK it is the lowest
+surviving `id` and the row count. §Deduplicating a stream without event IDs wanted the digest
+to confirm "the file was appended to rather than rewritten"; `rtk gain --reset` empties the
+table, and a repopulated one starts again from a low `id`. When the generation changes the
+import restarts from zero, which is safe because the event identity is the native row id.
+
+Without that check a stored mark higher than the new table's maximum would suppress every row
+forever, and the importer would report a healthy no-op on each run.
+
+#### Fidelity modes
+
+| Mode | Condition | Consequence |
+| --- | --- | --- |
+| `native` | the history database is readable | per-operation `exact-local` events, native dedup |
+| `unavailable` | no reader, no database, or no SQLite driver | no events, and `status` says so |
+
+There is no `legacy` mode for this provider. The only other source is the daily aggregate, and
+there is no honest event to make from it. Reporting nothing is correct; inventing per-operation
+figures from a sum is the failure the measurement classes exist to prevent.
+
+The CLI analytics keep the job they already had: the dated passive receipt of RFC 0007
+§Active and passive canaries. They are not turned into events.
+
+#### Reading the database without breaking stream discipline
+
+RFC 0001 §Storage and §0.1.0 backend both reject `node:sqlite`, and the objection stands:
+importing it emits `ExperimentalWarning` on stderr, and RFC 0006 permits nothing on stderr in
+`--json` mode. The recorded reasoning was that silencing it "means either `--no-warnings`
+process-wide or mutating the process warning listeners — both worse than not needing it".
+
+There is a third mechanism, and it is the one used here: read the database in a short-lived
+child process, re-entering the same artifact with an internal argv marker, with
+`--no-warnings` scoped to that child alone. The parent's streams are untouched. The driver
+must load in the child and nowhere else, which is enforced as an architecture rule rather than
+left to intent, and the child's import is dynamic so a bundler cannot hoist it into the
+parent.
+
+This does **not** reopen `node:sqlite` as the storage backend for Token Harness's own metrics.
+That would be an in-process import in the CLI itself, where the warning lands on the user's
+stderr and there is no child boundary to contain it. §When a driver is chosen is unchanged.
 
 ### HarnessTrim
 

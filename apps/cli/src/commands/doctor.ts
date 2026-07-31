@@ -85,7 +85,13 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
               (adapter) => context.provider === null || adapter.manifest.id === context.provider,
             )
             .map((adapter) =>
-              adapter.detect({ ...detectionContext, harnessConfigs, now: context.now }),
+              adapter.detect({
+                ...detectionContext,
+                harnessConfigs,
+                now: context.now,
+                localDatabase: context.adapters?.localDatabase ?? null,
+                projectIdFor: context.adapters?.projectIdFor ?? (() => 'p_unattributed'),
+              }),
             ),
         );
 

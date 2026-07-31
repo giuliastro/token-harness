@@ -9,6 +9,7 @@
 import type {
   FileSystemPort,
   HarnessId,
+  LocalDatabasePort,
   PlatformFacts,
   PlatformPaths,
   ProcessRunner,
@@ -42,4 +43,18 @@ export interface AdapterAccess {
   fs: FileSystemPort;
   runner: ProcessRunner;
   paths: PlatformPaths;
+  /**
+   * A reader for a provider's own local database, or null when this host has none —
+   * RFC 0005 §Importers. Null is an ordinary state and makes an importer report
+   * `mode: 'unavailable'` rather than fail.
+   */
+  localDatabase: LocalDatabasePort | null;
+  /**
+   * RFC 0005 §Privacy: "`projectId` is a local stable hash with a machine-local salt."
+   *
+   * Supplied by the host because the salt lives in the state directory. Returns
+   * `p_unattributed` when no salt could be established: an event with no project is honest,
+   * and one attributed under a salt that will change next run is not.
+   */
+  projectIdFor(absolutePath: string): string;
 }

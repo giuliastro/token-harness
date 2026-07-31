@@ -17,6 +17,7 @@ import { describe, it } from 'node:test';
 import type {
   FileSystemPort,
   HarnessConfigSummary,
+  LocalDatabasePort,
   PlatformFacts,
   ProcessOutcome,
   ProcessRequest,
@@ -130,7 +131,11 @@ const SOMEONE_ELSE: HarnessConfigSummary = {
 };
 
 function context(
-  options: RunnerOptions & { configs?: HarnessConfigSummary[]; now?: string },
+  options: RunnerOptions & {
+    configs?: HarnessConfigSummary[];
+    now?: string;
+    localDatabase?: LocalDatabasePort | null;
+  },
 ): ProviderContext {
   return {
     fs: NO_FILESYSTEM,
@@ -146,6 +151,10 @@ function context(
     projectRoot: 'C:\\work\\demo',
     harnessConfigs: options.configs ?? [],
     now: () => options.now ?? '2026-07-30T12:00:00.000Z',
+    localDatabase: options.localDatabase ?? null,
+    // Fixed rather than derived: these tests assert the mapping, and a real salted digest
+    // would make every expectation a copy of the implementation.
+    projectIdFor: (path) => `p_${path.length.toString(16)}`,
   };
 }
 

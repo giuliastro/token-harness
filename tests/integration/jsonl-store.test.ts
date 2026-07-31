@@ -232,6 +232,7 @@ describe('cursors', () => {
     fileIdentity: 'volume-1:file-42',
     byteOffset: 4096,
     lastLineDigest: 'sha256:deadbeef',
+    highWaterMark: null,
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 

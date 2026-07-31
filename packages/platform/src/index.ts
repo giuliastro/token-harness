@@ -48,6 +48,10 @@
 
 export * from './fs/node-filesystem.js';
 
+export * from './metrics/attribution-salt.js';
+export * from './metrics/sqlite-child.js';
+export * from './metrics/sqlite-reader.js';
+
 export * from './platform/detect.js';
 export * from './platform/executable.js';
 export * from './platform/package-managers.js';
