@@ -117,3 +117,21 @@ describe('OpenCode adapter', () => {
     );
   });
 });
+
+describe('the tested version range', () => {
+  it('is the version that was actually observed', () => {
+    /**
+     * This read `1.0.0`–`1.0.0`, a round number nobody ran. The OpenCode on the machine this was
+     * reviewed against is `1.18.9`, so every real user got `unknown-newer` — which `doctor` counts
+     * as a problem — and every real machine exited 3.
+     *
+     * RFC 0006 §Exit codes: "A supported configuration must be able to exit 0. A declared
+     * limitation is not a problem, and reporting it as one is the fastest way to teach users to
+     * ignore the exit code."
+     */
+    assert.deepEqual(opencodeAdapter.manifest.testedVersions, {
+      minimum: '1.18.9',
+      maximum: '1.18.9',
+    });
+  });
+});

@@ -34,7 +34,20 @@ const MANIFEST: HarnessManifest = {
   id: OPENCODE,
   displayName: 'OpenCode',
   homepage: 'https://opencode.ai',
-  testedVersions: { minimum: '1.0.0', maximum: '1.0.0' },
+  /**
+   * The version actually observed, not a round number.
+   *
+   * This read `1.0.0`–`1.0.0`, and the OpenCode on the machine this was reviewed against is
+   * `1.18.9` — so every real user got `unknown-newer`, which `doctor` counts as a problem, and
+   * every real machine exited 3. RFC 0006 §Exit codes forbids exactly that: "A supported
+   * configuration must be able to exit 0. A declared limitation is not a problem, and reporting
+   * it as one is the fastest way to teach users to ignore the exit code."
+   *
+   * A single point rather than a range, matching the Codex adapter: one version was observed, so
+   * one version is claimed. An older 1.x reports `unknown-older`, which is a warning and not a
+   * problem, and a newer one reports `unknown-newer` — which is then a true statement.
+   */
+  testedVersions: { minimum: '1.18.9', maximum: '1.18.9' },
   // RFC 0007: a managed provider can emit a receipt, but an adopted generated wrapper
   // has no externally observable receipt. The harness adapter alone therefore declares
   // the achievable baseline, not a promise about a provider it does not own.

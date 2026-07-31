@@ -59,8 +59,58 @@ function withoutComments(text: string): string {
   return result;
 }
 
+/**
+ * Removes trailing commas, without touching the inside of a string.
+ *
+ * The obvious version is `text.replace(/,(\s*[}\]])/g, '$1')`, and it is wrong: a regex over the
+ * whole document cannot see string boundaries, so `{"note": "wait for it, }"}` loses the comma
+ * *inside* the value and parses as `"wait for it }"`. Silent, and in a module whose entire purpose
+ * is not to alter a user's file — the parsed value is what `inspect` reports as a configured
+ * command, so a corrupted string becomes a misreported one.
+ *
+ * Comments are already blanked by `withoutComments` before this runs, so only strings need
+ * skipping here.
+ */
 function withoutTrailingCommas(text: string): string {
-  return text.replace(/,(\s*[}\]])/g, '$1');
+  let result = '';
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index] as string;
+
+    if (char === '"') {
+      // Copy the string verbatim, escapes included. An unterminated string is copied to the end
+      // and left for `JSON.parse` to reject, which is the honest outcome for a malformed document.
+      let cursor = index + 1;
+      let escaped = false;
+      while (cursor < text.length) {
+        const inner = text[cursor] as string;
+        if (escaped) escaped = false;
+        else if (inner === '\\') escaped = true;
+        else if (inner === '"') break;
+        cursor += 1;
+      }
+      result += text.slice(index, Math.min(cursor + 1, text.length));
+      index = cursor + 1;
+      continue;
+    }
+
+    if (char === ',') {
+      // Look past whitespace for a closing bracket. Whitespace only: comments are already spaces.
+      let cursor = index + 1;
+      while (cursor < text.length && /\s/.test(text[cursor] as string)) cursor += 1;
+      const next = text[cursor];
+      if (next === '}' || next === ']') {
+        // Drop the comma and keep the whitespace, so offsets and line numbers stay usable.
+        result += text.slice(index + 1, cursor);
+        index = cursor;
+        continue;
+      }
+    }
+
+    result += char;
+    index += 1;
+  }
+  return result;
 }
 
 export function parseJsoncDocumentText(text: string): JsoncDocumentParse {

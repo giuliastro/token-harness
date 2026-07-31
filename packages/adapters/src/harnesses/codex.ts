@@ -20,6 +20,7 @@ import {
   type VersionVerdict,
 } from '@token-harness/core';
 
+import { matcherCoversFamily } from './claude.js';
 import {
   familiesOnThisPlatform,
   resolveConfigPath,
@@ -40,7 +41,22 @@ const MANIFEST: HarnessManifest = {
   testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
   verificationTier: 'config-only',
   versionCommand: { executable: 'codex', args: ['--version'] },
-  interceptionPoints: [{ scopeId: 'post-tool-use', eventName: 'PostToolUse' }],
+  /**
+   * Both events, not only the one this machine happened to have configured.
+   *
+   * The spike found `hooks.json`, `PreToolUse`, `PostToolUse` and `hook_trust` as strings in
+   * `codex.exe` 0.146.0, and the live file carried a `PostToolUse` entry. Declaring only the
+   * latter made a `PreToolUse` hook invisible: `inspect` would not report it, so conflict
+   * detection could not name it as a competing entry on an owned surface, and no provider that
+   * intercepts before execution could ever be assigned here.
+   *
+   * Neither point is evidenced as *firing* — `requiresEnablement` below is what says so — but
+   * enumerating a surface the harness has is a different claim from proving it runs.
+   */
+  interceptionPoints: [
+    { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
+    { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+  ],
   configFiles: [
     { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
     { path: '.codex/hooks.json', scope: 'user', parser: 'json', primary: false },
@@ -58,22 +74,45 @@ function isRecord(value: JsonValue | undefined): value is Record<string, JsonVal
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readHooks(document: JsonValue): { matchers: string[]; commands: string[] } {
-  if (!isRecord(document) || !isRecord(document['hooks'])) return { matchers: [], commands: [] };
-  const entries = document['hooks']['PostToolUse'];
-  if (!Array.isArray(entries)) return { matchers: [], commands: [] };
+/** Every declared interception point that actually carries entries, with what it carries. */
+function readHooks(document: JsonValue): {
+  points: string[];
+  matchers: string[];
+  commands: string[];
+} {
+  if (!isRecord(document) || !isRecord(document['hooks']))
+    return { points: [], matchers: [], commands: [] };
+  const hooks = document['hooks'];
+  const points: string[] = [];
   const matchers: string[] = [];
   const commands: string[] = [];
-  for (const entry of entries) {
-    if (!isRecord(entry)) continue;
-    if (typeof entry['matcher'] === 'string') matchers.push(entry['matcher']);
-    if (Array.isArray(entry['hooks'])) {
-      for (const hook of entry['hooks']) {
-        if (isRecord(hook) && typeof hook['command'] === 'string') commands.push(hook['command']);
+
+  // Driven by the manifest rather than by a literal event name, so adding an interception point
+  // above is the whole change; a second list here would be a second place to forget.
+  for (const point of MANIFEST.interceptionPoints) {
+    const entries = hooks[point.eventName];
+    if (!Array.isArray(entries)) continue;
+    let carries = false;
+    for (const entry of entries) {
+      if (!isRecord(entry)) continue;
+      if (typeof entry['matcher'] === 'string') matchers.push(entry['matcher']);
+      if (Array.isArray(entry['hooks'])) {
+        for (const hook of entry['hooks']) {
+          if (isRecord(hook) && typeof hook['command'] === 'string') {
+            commands.push(hook['command']);
+            carries = true;
+          }
+        }
       }
     }
+    if (carries) points.push(point.scopeId);
   }
-  return { matchers: [...new Set(matchers)], commands: [...new Set(commands)] };
+
+  return {
+    points,
+    matchers: [...new Set(matchers)],
+    commands: [...new Set(commands)],
+  };
 }
 
 async function resolveConfig(
@@ -113,7 +152,7 @@ async function resolveConfig(
       path,
       exists: true,
       parsed: true,
-      configuredPoints: hooks.commands.length > 0 ? ['post-tool-use'] : [],
+      configuredPoints: hooks.points,
       matchers: hooks.matchers,
       commands: hooks.commands,
     };
@@ -205,7 +244,11 @@ async function detect(context: HarnessContext): Promise<HarnessDetection> {
         remediation: 'Check the release notes for hook-schema changes before applying a plan',
       }),
     );
-  const configured = hooks?.configuredPoints.length !== 0;
+  // `hooks?.configuredPoints.length !== 0` read true when `hooks` was undefined, because
+  // `undefined !== 0`. `find` always matches today so it never fired, but it would the moment the
+  // manifest stopped declaring `hooks.json` — and it would report an unconfigured harness as
+  // configured, which is the direction that misleads.
+  const configured = (hooks?.configuredPoints.length ?? 0) > 0;
   const primary =
     configs.find((config) => config.declaration.primary && config.exists) ?? present[0] ?? null;
   return {
@@ -248,6 +291,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
     MANIFEST.configFiles.map((file) => resolveConfig(file, context)),
   );
   const hook = configs.find((config) => config.declaration.path.endsWith('hooks.json'));
+  const matchers = configs.flatMap((config) => config.matchers);
   const diagnostics: Diagnostic[] = hook?.configuredPoints.length
     ? [
         diagnostic({
@@ -264,7 +308,25 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
     harnessId: CODEX,
     configs,
     activeToolFamilies: familiesOnThisPlatform(MANIFEST, context.facts),
-    uncoveredToolFamilies: [],
+    /**
+     * Computed, not asserted.
+     *
+     * This was `[]`, which claims every shell-executing tool family is covered rather than
+     * checking. The Claude adapter computes it, and computing it is how the Phase 2.5 spike found
+     * that a `Bash` matcher left PowerShell bypassed. Codex declares one family today, so the
+     * answer is usually the same — but a matcher that covers nothing would have gone unreported.
+     *
+     * `matcherCoversFamily` handles Codex's regex spelling: the live matcher is `^Bash$`, not
+     * `Bash`, and a literal comparison would call the covered family uncovered.
+     */
+    uncoveredToolFamilies: familiesOnThisPlatform(MANIFEST, context.facts)
+      .filter((family) => family.executesShellCommands)
+      .filter(
+        (family) =>
+          matchers.length > 0 &&
+          !matchers.some((matcher) => matcherCoversFamily(matcher, family.id)),
+      )
+      .map((family) => family.id),
     enabled: null,
     summaries: configs
       .filter((config) => config.configuredPoints.length > 0)
@@ -284,7 +346,7 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   const detection = await detect(context);
   const inspection = await inspect(context);
   const hook = inspection.configs.find((config) => config.declaration.path.endsWith('hooks.json'));
-  const configured = hook?.configuredPoints.length !== 0;
+  const configured = (hook?.configuredPoints.length ?? 0) > 0;
   const readable = hook !== undefined && hook.exists && hook.parsed;
   const checks: VerificationCheck[] = [
     {
@@ -314,7 +376,11 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
     {
       id: 'hook-registered',
       status: configured ? 'pass' : 'not-exercised',
-      summary: configured ? 'PostToolUse entry is declared' : 'No PostToolUse entry is declared',
+      // Named from what was found rather than hardcoded, now that both events are read: saying
+      // "PostToolUse" about a PreToolUse entry would be a report about the wrong surface.
+      summary: configured
+        ? `${(hook?.configuredPoints ?? []).join(', ')} entry is declared`
+        : 'No hook entry is declared',
       achievedTier: configured ? 'config-only' : null,
       evidence: [],
       remediation: configured ? null : 'Configure or adopt a Codex hook',

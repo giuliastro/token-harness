@@ -752,6 +752,12 @@ Suggested first implementation issues:
     verifying anyway; and `uninstall` establishes ownership from a committed journal rather than
     from a digest match, after it offered to delete a hand-written hook whose bytes were identical
     to the one Token Harness writes.
+17. Add the Codex and OpenCode harness adapters (§8). **Done** — all three MVP harnesses are now
+    detected, which closes PLAN §2 criterion 1. Both register at `config-only`, the tier each can
+    actually reach: Codex keeps hook enablement in state no adapter can read, and OpenCode's
+    reducing plugin is a generated wrapper with no externally observable receipt. The
+    comment-preserving JSONC reader that §17 listed as an open decision now exists, which is what
+    makes `opencode.jsonc` readable at all — strict `JSON.parse` rejects the real file.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
