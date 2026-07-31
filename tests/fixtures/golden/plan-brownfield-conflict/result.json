@@ -3,6 +3,7 @@
   "exitCode": 4,
   "data": {
     "planId": null,
+    "pipelineId": "b41e",
     "profile": "safe",
     "harness": "claude",
     "projectRoot": "C:\\work\\demo",
@@ -14,7 +15,10 @@
       {
         "code": "exclusive-scope-contested",
         "scope": "claude/bash/post-tool-use/shell.output.reduce",
-        "claimants": ["rtk", "harnesstrim"],
+        "claimants": [
+          "rtk",
+          "harnesstrim"
+        ],
         "detail": [
           "claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and harnesstrim",
           "and no compatibility rule covers that pair."
@@ -24,7 +28,9 @@
     ],
     "network": [],
     "elevation": [],
-    "backups": { "files": 0 },
+    "backups": {
+      "files": 0
+    },
     "persisted": false
   },
   "diagnostics": [

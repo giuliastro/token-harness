@@ -87,12 +87,48 @@ export function parseCapabilityScope(value: string): CapabilityScope | null {
   };
 }
 
+/**
+ * Where inside a harness a declaration applies.
+ *
+ * RFC 0003 resolves ownership over a four-part scope, but a declaration named only a
+ * capability and a list of harnesses — two of the four. The missing two are not a detail:
+ * RFC 0003 §The table is an intent turns on exactly them, recording that HarnessTrim's
+ * Claude adapter matches `Bash` and nothing else while its OpenCode plugin reduces every
+ * tool result. A resolver that could not tell those apart would have to treat "reduces
+ * Bash output" and "reduces all output" as the same claim, and the RFC's central finding
+ * would be inexpressible.
+ *
+ * So this fills the gap between the four-part scope and the two-part declaration. It is
+ * additive to RFC 0002 §Manifest in the same sense as the other member types there, whose
+ * comment already notes they are "defined here from the properties the RFC states
+ * elsewhere".
+ */
+export interface CapabilitySurface {
+  /** A `HarnessToolFamily.id`, or `'*'` for every family the harness exposes. */
+  toolFamily: string;
+  /** A `HarnessInterceptionPoint.scopeId`. */
+  interceptionPoint: string;
+}
+
+/** `'*'` matches whatever the harness exposes, so a wildcard claim covers new families too. */
+export const EVERY_TOOL_FAMILY = '*';
+
+export function surfaceCoversToolFamily(surface: CapabilitySurface, toolFamily: string): boolean {
+  return surface.toolFamily === EVERY_TOOL_FAMILY || surface.toolFamily === toolFamily;
+}
+
 /** RFC 0002 §Manifest — one entry of `capabilities`. */
 export interface CapabilityDeclaration {
   capability: CapabilityId;
   mode: CompositionMode;
   /** Harnesses on which the provider actually implements it, per RFC 0003 §Rule. */
   harnesses: HarnessId[];
+  /**
+   * The surfaces within those harnesses. Empty means the provider claims none, which is a
+   * declaration that resolves to no ownership rather than to every scope — RFC 0003 §Rule
+   * makes an unevidenced assignment "a planning error, not a configuration to attempt".
+   */
+  surfaces: CapabilitySurface[];
   /**
    * RFC 0003 §Rule: an assignment "requires a demonstrated capability ...
    * evidenced in the provider's own source at a recorded version".

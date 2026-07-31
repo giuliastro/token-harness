@@ -6,6 +6,7 @@
   "exitCode": 0,
   "data": {
     "planId": "7f3a91c2",
+    "pipelineId": "b41e",
     "profile": "safe",
     "harness": "claude",
     "projectRoot": "C:\\work\\demo",

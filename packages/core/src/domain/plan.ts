@@ -55,6 +55,18 @@ export interface PlanReport {
   projectRoot: string;
   /** RFC 0006 §Plans are scoped to a project. */
   projectId: string | null;
+  /**
+   * The pipeline this plan would create — RFC 0003 §Scope of the resolver at 0.1.0, item 4:
+   * derived from the ordered owner list "because metrics attribution depends on it".
+   *
+   * Data only. RFC 0006's plan transcript shows no pipeline line, and rule 3 forbids the
+   * reverse case — a field in human output missing from `data` — not this one. It is here so
+   * `plan --json` can say which pipeline an apply would produce, before there is a receipt to
+   * read it from.
+   *
+   * Null when nothing was resolved: a pipeline with no owners is not a pipeline.
+   */
+  pipelineId: string | null;
   ownership: ResolvedCapability[];
   exclusions: CapabilityExclusion[];
   actions: PlannedAction[];

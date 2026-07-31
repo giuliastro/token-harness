@@ -133,6 +133,19 @@ export interface ProviderAdapter {
   /** RFC 0002 §Detection: read-only, evidence-based, never inferred from configuration alone. */
   detect(context: ProviderContext): Promise<ProviderDetection>;
   /**
+   * Whether a hook command string invokes *this* provider.
+   *
+   * Synchronous and pure, because it is asked once per command per scope during conflict
+   * detection, and because there is nothing to read: the answer is in the string.
+   *
+   * It lives on the adapter rather than in the resolver for the reason RFC 0003
+   * §Continuous conflict detection needs "the competing command" at all — recognising a tool
+   * is the tool's adapter's job. A table of patterns held by the conflict detector would be a
+   * second implementation of every provider's identity, free to drift from the one `detect`
+   * already uses.
+   */
+  identifiesCommand(command: string): boolean;
+  /**
    * RFC 0007: at the declared tier, passive by default. An active canary costs a model
    * call and is never run by a read-only command.
    */

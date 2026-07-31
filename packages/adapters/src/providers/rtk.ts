@@ -86,6 +86,12 @@ const MANIFEST: ProviderManifest = {
       capability: 'shell.command.rewrite',
       mode: 'exclusive',
       harnesses: [CLAUDE],
+      // The surface the Phase 2.5 spike actually watched: a `PreToolUse` hook matching
+      // `Bash`. `PowerShell` is deliberately absent — the spike ran the identical command
+      // through it and RTK's counter did not move, which is the coverage gap `doctor`
+      // reports as `tool-family-not-covered`. Claiming it here would make the resolver
+      // hand RTK a scope it demonstrably does not serve.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       // RFC 0003 §Rule wants the evidence recorded at a version. The reference is the
       // hook the Phase 2.5 spike read, not a line of RTK's source: what was demonstrated
       // is that the harness routes commands through it, which is the claim being made.
@@ -98,6 +104,9 @@ const MANIFEST: ProviderManifest = {
       capability: 'shell.output.reduce',
       mode: 'exclusive',
       harnesses: [CLAUDE],
+      // Same surface: RTK rewrites the command at `PreToolUse` and the rewritten command is
+      // what filters the output, so both capabilities are served from one interception point.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
         sourceReference: 'docs/spikes/2.5-live-verification-log.md',
         upstreamVersion: '0.42.0',
@@ -887,4 +896,20 @@ async function collectMetrics(
 
 const SOURCE_LABEL = 'rtk history.db (commands)';
 
-export const rtkAdapter: ProviderAdapter = { manifest: MANIFEST, detect, verify, collectMetrics };
+/**
+ * Recognises RTK's own invocation.
+ *
+ * The same pattern `harnessesWiredToRtk` uses, exposed so the conflict detector can ask
+ * without knowing what an RTK command looks like.
+ */
+function identifiesCommand(command: string): boolean {
+  return HOOK_COMMAND_PATTERN.test(command);
+}
+
+export const rtkAdapter: ProviderAdapter = {
+  manifest: MANIFEST,
+  detect,
+  verify,
+  collectMetrics,
+  identifiesCommand,
+};
