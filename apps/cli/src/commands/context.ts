@@ -34,6 +34,8 @@ export interface CommandContext {
    * command reaching for the developer's home. AGENTS.md forbids the second.
    */
   adapters: AdapterAccess | null;
+  /** ISO 8601 instant. Injected so a report is deterministic in tests. */
+  now(): string;
 }
 
 export interface AdapterAccess {

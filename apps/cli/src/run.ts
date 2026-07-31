@@ -71,6 +71,8 @@ export interface RunOptions {
    * filesystem; `doctor` then inspects nothing rather than reading the real machine.
    */
   adapters?: AdapterAccess | null;
+  /** ISO 8601 instant. Defaults to the real clock; injected by tests. */
+  now?: () => string;
   env?: Readonly<Record<string, string | undefined>>;
   stdoutIsTty?: boolean;
   toolVersion?: string;
@@ -283,6 +285,7 @@ export async function run(options: RunOptions): Promise<number> {
 
   const context: CommandContext = {
     adapters: options.adapters ?? null,
+    now: options.now ?? (() => new Date().toISOString()),
     platform: options.platform,
     projectRoot: invocation.options.project ?? options.cwd,
     home: options.home,

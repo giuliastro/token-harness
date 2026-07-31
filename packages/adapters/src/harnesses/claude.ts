@@ -98,6 +98,8 @@ const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 interface HookEntry {
   matcher: string | null;
   count: number;
+  /** The `command` strings on this entry, verbatim. */
+  commands: string[];
 }
 
 function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
@@ -127,9 +129,15 @@ function readHooks(document: JsonValue): Map<string, HookEntry[]> {
       if (!isRecord(item)) continue;
       const matcher = item['matcher'];
       const inner = item['hooks'];
+      const commands = Array.isArray(inner)
+        ? inner
+            .map((hook) => (isRecord(hook) ? hook['command'] : undefined))
+            .filter((command): command is string => typeof command === 'string')
+        : [];
       entries.push({
         matcher: typeof matcher === 'string' ? matcher : null,
         count: Array.isArray(inner) ? inner.length : 0,
+        commands,
       });
     }
     if (entries.length > 0) found.set(point.scopeId, entries);
@@ -151,6 +159,7 @@ async function resolveConfig(
       parsed: false,
       configuredPoints: [],
       matchers: [],
+      commands: [],
     };
   }
 
@@ -161,7 +170,15 @@ async function resolveConfig(
     document = null;
   }
   if (document === null) {
-    return { declaration, path, exists: true, parsed: false, configuredPoints: [], matchers: [] };
+    return {
+      declaration,
+      path,
+      exists: true,
+      parsed: false,
+      configuredPoints: [],
+      matchers: [],
+      commands: [],
+    };
   }
 
   const hooks = readHooks(document);
@@ -177,6 +194,7 @@ async function resolveConfig(
     parsed: true,
     configuredPoints: [...hooks.keys()],
     matchers: [...new Set(matchers)],
+    commands: [...new Set([...hooks.values()].flat().flatMap((entry) => entry.commands))],
   };
 }
 
@@ -394,6 +412,16 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
     // The manifest declares no enablement state for this harness: a hook present in
     // settings.json runs. Codex is the one that needs the other answer.
     enabled: MANIFEST.requiresEnablement ? null : null,
+    summaries: configs
+      .filter((config) => config.configuredPoints.length > 0)
+      .map((config) => ({
+        harnessId: CLAUDE,
+        configPath: config.path,
+        scope: config.declaration.scope,
+        interceptionPoints: config.configuredPoints,
+        matchers: config.matchers,
+        commands: config.commands,
+      })),
     diagnostics,
   };
 }

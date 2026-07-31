@@ -61,17 +61,33 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
    *
    * Inspection is read-only, so this keeps `doctor` within RFC 0004 §Command behavior.
    */
-  const inspectionDiagnostics =
+  const inspections =
     detectionContext === null
       ? []
-      : (await Promise.all(adapters.map((adapter) => adapter.inspect(detectionContext)))).flatMap(
-          (inspection) => inspection.diagnostics,
+      : await Promise.all(adapters.map((adapter) => adapter.inspect(detectionContext)));
+  const inspectionDiagnostics = inspections.flatMap((inspection) => inspection.diagnostics);
+
+  /**
+   * The seam between the two adapter families, assembled here.
+   *
+   * `tests/integration/architecture.test.ts` forbids the harness and provider registries
+   * from importing each other, so neither can reach the other's findings. This command
+   * can, and it is the only place that should: the harness adapters report what is
+   * configured, and a provider recognises itself in that report.
+   */
+  const harnessConfigs = inspections.flatMap((inspection) => inspection.summaries);
+  const providers =
+    detectionContext === null
+      ? []
+      : await Promise.all(
+          listProviderAdapters()
+            .filter(
+              (adapter) => context.provider === null || adapter.manifest.id === context.provider,
+            )
+            .map((adapter) =>
+              adapter.detect({ ...detectionContext, harnessConfigs, now: context.now }),
+            ),
         );
-  const providers = await Promise.all(
-    listProviderAdapters()
-      .filter((adapter) => context.provider === null || adapter.manifest.id === context.provider)
-      .map((adapter) => adapter.detect({ projectRoot: context.projectRoot })),
-  );
 
   // RFC 0006 §Exit codes: exit 3 means "a broken integration, an unowned edit on
   // an exclusive surface, a version outside a tested range, or a verification

@@ -1,28 +1,20 @@
 /**
- * Provider adapter registry.
+ * Provider adapter registry — PLAN §10.
  *
- * Empty at Phase 1 by design. RTK is Phase 5 and HarnessTrim is Phase 6; both
- * follow the RFC 0007 spike, per PLAN §15.
+ * The contract lives in `contract.ts`; this file is only the list, so an adapter can
+ * import the contract without importing the list it appears in.
  */
 
-import type { ProviderDetection, ProviderId, ProviderManifest } from '@token-harness/core';
+import type { ProviderId } from '@token-harness/core';
 
-/**
- * RFC 0002 §Adapter lifecycle declares five methods. Only `detect` is exposed
- * here: `inspect`, `plan`, `verify`, and `collectMetrics` need the planning,
- * process, and metrics contexts that Phase 2 introduces, and an interface that
- * names them before those types exist would be a placeholder, not a contract.
- */
-export interface ProviderAdapter {
-  readonly manifest: ProviderManifest;
-  detect(context: ProviderDetectionContext): Promise<ProviderDetection>;
-}
+import { rtkAdapter } from './rtk.js';
+import type { ProviderAdapter } from './contract.js';
 
-export interface ProviderDetectionContext {
-  readonly projectRoot: string;
-}
+export * from './contract.js';
+export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 
-const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [];
+/** HarnessTrim is Phase 6 and is deliberately not here yet. */
+const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [rtkAdapter];
 
 export function listProviderAdapters(): readonly ProviderAdapter[] {
   return PROVIDER_ADAPTERS;
