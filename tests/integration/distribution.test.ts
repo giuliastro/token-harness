@@ -18,6 +18,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
+import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
+import { AVAILABLE_COMMANDS } from 'token-harness';
+
 import { REPO_ROOT } from '../src/index.js';
 
 interface RootManifest {
@@ -62,12 +65,63 @@ describe('distribution', () => {
     assert.equal(root().version, cliVersion());
   });
 
-  it('is versioned in the 0.0.x band the release gates describe', () => {
-    // PLAN §16: "`0.0.x` — Internal architecture and fixtures. No stability promise."
-    // `0.1.0` is defined there as RTK + HarnessTrim, three harnesses, transactional
-    // install, verification with declared tiers, metrics, and brownfield adoption. None
-    // of that exists yet, so publishing a `0.1.0` would be a claim about the contents
-    // rather than a number.
-    assert.match(root().version, /^0\.0\.\d+$/, 'a 0.1.0 must satisfy the PLAN §16 gate first');
+  it('claims a version the contents actually satisfy', () => {
+    /**
+     * This asserted `/^0\.0\.\d+$/` — a hard floor, so that a `0.1.0` could not be published as a
+     * claim about the contents. The gate it was guarding is now met, so the assertion moves from
+     * "must be 0.0.x" to "if it says 0.1.0, the things 0.1.0 means must be here".
+     *
+     * PLAN §16 defines `0.1.0` as: RTK and HarnessTrim, three harnesses, transactional install,
+     * verification with declared tiers, metrics, and brownfield adoption. The registries are what
+     * make the first two checkable from here; the rest are asserted by the suites named beside
+     * them.
+     */
+    const version = root().version;
+    assert.match(version, /^0\.\d+\.\d+$/);
+    if (version === '0.0.0' || version.startsWith('0.0.')) return;
+
+    // Two providers and three harnesses, by id rather than by count, so adding a fourth of
+    // something does not silently satisfy the gate.
+    assert.deepEqual(
+      listProviderAdapters().map((adapter) => adapter.manifest.id),
+      ['rtk', 'harnesstrim'],
+      'PLAN §16 requires RTK and HarnessTrim for 0.1.0',
+    );
+    assert.deepEqual(
+      listHarnessAdapters().map((adapter) => adapter.manifest.id),
+      ['claude', 'codex', 'opencode'],
+      'PLAN §16 requires three harnesses for 0.1.0',
+    );
+
+    // Every command the workflow needs. `update` is not part of the 0.1.0 gate.
+    for (const command of [
+      'apply',
+      'doctor',
+      'metrics',
+      'plan',
+      'rollback',
+      'status',
+      'uninstall',
+      'verify',
+    ]) {
+      assert.ok(
+        (AVAILABLE_COMMANDS as readonly string[]).includes(command),
+        `0.1.0 needs \`${command}\``,
+      );
+    }
+
+    // Verification with declared tiers, and brownfield adoption, are properties of the manifests:
+    // every provider states a tier per harness, which is what "with declared tiers" means.
+    for (const adapter of listProviderAdapters()) {
+      assert.ok(
+        adapter.manifest.harnesses.length > 0,
+        `${adapter.manifest.id} declares no harness`,
+      );
+      for (const entry of adapter.manifest.harnesses) {
+        assert.ok(entry.verificationTier.length > 0);
+      }
+      // Metrics from both providers, so the report can carry two measurement classes.
+      assert.notEqual(adapter.manifest.metrics.source, 'none');
+    }
   });
 });

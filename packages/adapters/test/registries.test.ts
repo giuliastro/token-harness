@@ -23,11 +23,11 @@ describe('adapter registries', () => {
   });
 
   it('carries the provider adapters this build ships, and no others', () => {
-    // HarnessTrim is Phase 6. PLAN §15 keeps one provider lifecycle stage per PR when
-    // large, and this one is RTK's detection and verification only.
+    // RTK first: RFC 0003's compatibility rule gives it `shell.output.reduce` when both claim the
+    // scope, and the resolver reads a rule's provider order to pick the owner.
     assert.deepEqual(
       listProviderAdapters().map((adapter) => adapter.manifest.id),
-      ['rtk'],
+      ['rtk', 'harnesstrim'],
     );
   });
 
@@ -39,7 +39,8 @@ describe('adapter registries', () => {
     // no adapter, which is what keeps this assertion about what ships rather than what exists.
     assert.equal(findHarnessAdapter('hermes' as HarnessId), null);
     assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);
-    assert.equal(findProviderAdapter('harnesstrim' as ProviderId), null);
+    assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);
+    assert.equal(findProviderAdapter('dejavu' as ProviderId), null);
   });
 
   it('declares a complete contract for every registered provider', () => {
@@ -57,6 +58,16 @@ describe('adapter registries', () => {
       assert.notEqual(manifest.metrics.source, 'none');
       assert.equal(typeof adapter.detect, 'function');
       assert.equal(typeof adapter.verify, 'function');
+      // Every lifecycle method the contract declares, for every registered provider — so a second
+      // provider cannot ship with a method the first one has and it lacks.
+      assert.equal(typeof adapter.plan, 'function');
+      assert.equal(typeof adapter.collectMetrics, 'function');
+      assert.equal(typeof adapter.identifiesCommand, 'function');
+      // RFC 0003 §Rule keeps the harness dimension, so a capability has to say where it applies.
+      for (const capability of manifest.capabilities) {
+        assert.ok(capability.harnesses.length > 0, `${capability.capability} names no harness`);
+        assert.ok(capability.surfaces.length > 0, `${capability.capability} names no surface`);
+      }
     }
   });
 
