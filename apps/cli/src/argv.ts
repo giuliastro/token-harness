@@ -24,7 +24,7 @@ import {
 } from '@token-harness/core';
 
 /** Commands the Phase 1 shell implements. */
-export const AVAILABLE_COMMANDS = ['doctor', 'plan', 'status'] as const;
+export const AVAILABLE_COMMANDS = ['doctor', 'metrics', 'plan', 'status'] as const;
 
 export type AvailableCommand = (typeof AVAILABLE_COMMANDS)[number];
 
@@ -33,19 +33,20 @@ export type AvailableCommand = (typeof AVAILABLE_COMMANDS)[number];
  * build does not carry yet. They are rejected as usage errors with their own
  * diagnostic code, so `token-harness apply` never reads as a typo.
  */
-export const PLANNED_COMMANDS = [
-  'apply',
-  'verify',
-  'metrics',
-  'update',
-  'rollback',
-  'uninstall',
-] as const;
+export const PLANNED_COMMANDS = ['apply', 'verify', 'update', 'rollback', 'uninstall'] as const;
 
 export interface CommandOptions {
   harness: HarnessId | null;
   provider: ProviderId | null;
   project: string | null;
+  /**
+   * The reporting window, unvalidated — RFC 0006 §Golden path spells it `--since 7d`.
+   *
+   * Parsing happens in `resolveMetricsWindow`, not here, because the window needs a clock and
+   * this module deliberately has none. What this layer checks is that a value was given.
+   */
+  since: string | null;
+  until: string | null;
 }
 
 export type Invocation =
@@ -55,7 +56,7 @@ export type Invocation =
   | { kind: 'usage-error'; json: boolean; diagnostics: Diagnostic[] };
 
 /** RFC 0006 §Global flags, restricted to the read-only commands of Phase 1. */
-const VALUE_FLAGS = new Set(['--harness', '--provider', '--project']);
+const VALUE_FLAGS = new Set(['--harness', '--provider', '--project', '--since', '--until']);
 const BOOLEAN_FLAGS = new Set(['--json']);
 /** Declared by RFC 0006 for mutating commands, which this build does not have. */
 const MUTATING_ONLY_FLAGS = new Set(['--yes', '--plan']);
@@ -98,7 +99,13 @@ export function parseArgv(argv: readonly string[]): Invocation {
   }
 
   const diagnostics: Diagnostic[] = [];
-  const options: CommandOptions = { harness: null, provider: null, project: null };
+  const options: CommandOptions = {
+    harness: null,
+    provider: null,
+    project: null,
+    since: null,
+    until: null,
+  };
   let command: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -224,6 +231,12 @@ export function parseArgv(argv: readonly string[]): Invocation {
         break;
       case '--project':
         options.project = value;
+        break;
+      case '--since':
+        options.since = value;
+        break;
+      case '--until':
+        options.until = value;
         break;
       default:
         break;

@@ -18,11 +18,13 @@ import {
   type CommandResult,
   type Diagnostic,
   type ExitCode,
+  type MetricsStore,
   type PlatformFacts,
 } from '@token-harness/core';
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runDoctor } from './commands/doctor.js';
+import { runMetrics } from './commands/metrics.js';
 import { runPlan } from './commands/plan.js';
 import { runStatus } from './commands/status.js';
 import type { AdapterAccess, CommandContext } from './commands/context.js';
@@ -41,6 +43,7 @@ export type CommandTable = Readonly<
 
 export const DEFAULT_COMMANDS: CommandTable = {
   doctor: runDoctor,
+  metrics: runMetrics,
   plan: runPlan,
   status: runStatus,
 };
@@ -73,6 +76,8 @@ export interface RunOptions {
   adapters?: AdapterAccess | null;
   /** ISO 8601 instant. Defaults to the real clock; injected by tests. */
   now?: () => string;
+  /** The metrics store. Omitted by tests that assert the CLI contract without one. */
+  metrics?: MetricsStore | null;
   env?: Readonly<Record<string, string | undefined>>;
   stdoutIsTty?: boolean;
   toolVersion?: string;
@@ -292,6 +297,9 @@ export async function run(options: RunOptions): Promise<number> {
     stateRoot: options.stateRoot ?? null,
     harness: invocation.options.harness,
     provider: invocation.options.provider,
+    since: invocation.options.since,
+    until: invocation.options.until,
+    metrics: options.metrics ?? null,
   };
 
   const table = options.commands ?? DEFAULT_COMMANDS;

@@ -46,7 +46,9 @@
         "unit": "tokens",
         "class": "exact-local",
         "operations": 4118,
-        "harnesses": ["claude"],
+        "harnesses": [
+          "claude"
+        ],
         "managedByTokenHarness": true,
         "adapterMode": null
       },
@@ -56,7 +58,9 @@
         "unit": "chars",
         "class": "estimated-local",
         "operations": 1440,
-        "harnesses": ["opencode"],
+        "harnesses": [
+          "opencode"
+        ],
         "managedByTokenHarness": false,
         "adapterMode": "active"
       }
@@ -64,7 +68,8 @@
     "coveragePercent": 91,
     "bypassed": 402,
     "errors": 0,
-    "addedMedianLatencyMs": 11
+    "addedMedianLatencyMs": 11,
+    "inflatedOperations": 0
   },
   "diagnostics": []
 }

@@ -34,6 +34,7 @@ export * from './metrics/events.js';
 export * from './metrics/local-database.js';
 export * from './metrics/report.js';
 export * from './metrics/store.js';
+export * from './metrics/window.js';
 
 export * from './state/actions.js';
 export * from './state/filesystem.js';

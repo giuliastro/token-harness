@@ -96,10 +96,36 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
   }
   lines.push('');
 
+  // Both figures can be genuinely absent, and neither has a safe zero. `Coverage 0%` would
+  // report that nothing was optimized where the truth is that nothing happened, and
+  // `latency 0ms` would claim the overhead was measured and found negligible — a stronger
+  // claim than "not measured", and one no source available here supports.
+  const coverage =
+    report.coveragePercent === null
+      ? 'Coverage not applicable — no operations in this window.'
+      : `Coverage ${String(report.coveragePercent)}%.`;
+  const latency =
+    report.addedMedianLatencyMs === null
+      ? 'Added median latency not measured.'
+      : `Added median latency ${String(report.addedMedianLatencyMs)}ms.`;
+
   lines.push(
-    `Coverage ${report.coveragePercent}%. Bypassed ${formatCount(report.bypassed)}. ` +
-      `Errors ${formatCount(report.errors)}. Added median latency ${report.addedMedianLatencyMs}ms.`,
+    `${coverage} Bypassed ${formatCount(report.bypassed)}. ` +
+      `Errors ${formatCount(report.errors)}. ${latency}`,
   );
+
+  // Only when it happened, so the RFC 0006 transcript — whose fixture has none — is unchanged.
+  //
+  // A provider row's figure is the *net* effect, so an inflation is already subtracted from
+  // it. That is arithmetically complete and rhetorically incomplete: "saved 38,850" reads
+  // very differently once you know some operations pushed the other way, and a reader cannot
+  // infer it from a net number.
+  if (report.inflatedOperations > 0) {
+    lines.push(
+      `${formatCount(report.inflatedOperations)} operations made the payload larger; ` +
+        `the figures above are net of that.`,
+    );
+  }
 
   return document(lines);
 }

@@ -15,11 +15,11 @@ Usage
 
 Commands
   doctor      Report detected harnesses and providers
+  metrics     Import provider records and report savings by measurement class
   plan        Compute a dry-run plan; nothing is changed
   status      Report applied pipelines, drift, and importer modes
   apply       Not in this build
   verify      Not in this build
-  metrics     Not in this build
   update      Not in this build
   rollback    Not in this build
   uninstall   Not in this build
@@ -29,6 +29,8 @@ Flags
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
   --project <dir>      Operate on that project instead of the current directory
+  --since <window>     Report from this point: a duration like 7d, or a date
+  --until <window>     Report up to this point; defaults to now
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
@@ -45,6 +47,24 @@ Read-only. Exits 0 when nothing is broken, and 3 when an integration is broken,
 an exclusive scope carries an unowned entry, a version is outside its tested
 range, or a verification fell below its declared tier. An empty environment is a
 state, not a problem.`,
+  metrics: `token-harness metrics — report savings by measurement class
+
+Usage
+  token-harness metrics [--json] [--since <window>] [--until <window>]
+                        [--provider <id>] [--project <dir>]
+
+Imports each provider's own records into the Token Harness state directory, then
+reports the window. Providers' records are opened read-only, so measuring cannot
+alter what it measures; nothing outside the state directory is written.
+
+--since and --until take a duration (7d, 12h, 2w) or a date (2026-07-22). A date
+bound is midnight UTC, so a report is reproducible regardless of the reader's
+timezone. The default window is 7d.
+
+Figures are never merged across measurement classes or units: tokens are not
+added to characters, and an estimate is not added to an exact figure. A
+counterfactual reduction is reported on its own line and never as a saving.
+Exits 0 whatever the figures say — an empty report is a fact, not a failure.`,
   plan: `token-harness plan — compute a dry-run plan
 
 Usage

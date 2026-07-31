@@ -5,11 +5,11 @@ Usage
 
 Commands
   doctor      Report detected harnesses and providers
+  metrics     Import provider records and report savings by measurement class
   plan        Compute a dry-run plan; nothing is changed
   status      Report applied pipelines, drift, and importer modes
   apply       Not in this build
   verify      Not in this build
-  metrics     Not in this build
   update      Not in this build
   rollback    Not in this build
   uninstall   Not in this build
@@ -19,6 +19,8 @@ Flags
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
   --project <dir>      Operate on that project instead of the current directory
+  --since <window>     Report from this point: a duration like 7d, or a date
+  --until <window>     Report up to this point; defaults to now
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 

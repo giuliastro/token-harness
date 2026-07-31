@@ -46,6 +46,7 @@ const noisyCommands = {
       }),
     ),
   plan: () => Promise.reject(new Error('unused')),
+  metrics: () => Promise.reject(new Error('unused')),
   status: () => Promise.reject(new Error('unused')),
 };
 
