@@ -233,7 +233,6 @@ Plan 7f3a91c2 — profile safe — harness claude — project <project>
 Capability ownership
   shell.command.rewrite      rtk
   shell.output.reduce        rtk
-  metrics.observe            token-harness
 
 Excluded
   harnesstrim   shell.output.reduce   contested; rtk owns it under profile safe
@@ -273,6 +272,14 @@ digest of its value, which is what keeps the user's other hook entries and their
 intact. RFC 0007 §Per-harness findings records it. This is the shape a golden file exists
 to freeze, and freezing the wrong one would have made the first correct harness adapter
 fail its own transcript.
+
+A third draft carried a `metrics.observe   token-harness` line under Capability ownership. It
+is removed, and RFC 0003 §Observational capabilities are outside this model records why: the
+ownership address names an interception point, observation has none, and there is nothing to
+arbitrate because an observer transforms no payload. The line would have implied that a safety
+property came from an ownership assignment when it comes from RFC 0005's deduplication keys.
+What Token Harness observes appears in `status` as an importer mode and in `metrics` as a
+provider row — both places where it is actually knowable.
 
 ### Scenario: brownfield — HarnessTrim already wired to Claude by hand
 

@@ -31,6 +31,18 @@ export interface CommandContext {
   since: string | null;
   until: string | null;
   /**
+   * `--plan <id>`, or null to recompute — RFC 0006 §Plan persistence's two forms of `apply`.
+   */
+  planId: string | null;
+  /**
+   * Whether the user granted the confirmation RFC 0006 requires of a mutating command.
+   *
+   * Named for the decision rather than the flag, because the flag is only one way to reach it:
+   * `--yes` today, an interactive answer later. A command asks whether it was confirmed, not
+   * whether an option was present.
+   */
+  confirmed: boolean;
+  /**
    * The metrics store, or null when this host has none.
    *
    * Separate from `adapters` because it is not a port an adapter reaches for: an importer is

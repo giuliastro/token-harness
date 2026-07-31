@@ -4,11 +4,11 @@ Usage
   token-harness <command> [flags]
 
 Commands
+  apply       Execute a plan inside a reversible transaction
   doctor      Report detected harnesses and providers
   metrics     Import provider records and report savings by measurement class
   plan        Compute a dry-run plan; nothing is changed
   status      Report applied pipelines, drift, and importer modes
-  apply       Not in this build
   verify      Not in this build
   update      Not in this build
   rollback    Not in this build
@@ -21,6 +21,8 @@ Flags
   --project <dir>      Operate on that project instead of the current directory
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
+  --plan <id>          Apply a previously computed plan by id
+  --yes                Grant the confirmation a mutating command requires
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 

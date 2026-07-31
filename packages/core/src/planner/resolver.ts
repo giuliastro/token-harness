@@ -165,7 +165,7 @@ function declarationCoversScope(
  * Resolves ownership.
  *
  * The shape of the loop matters for acceptance: one pass per scope, and within a scope the
- * only ways out are exactly one owner, an ordered chain, several observers, or a conflict.
+ * only ways out are exactly one owner, an ordered chain, or a conflict.
  * There is no branch that assigns two exclusive owners, which is what makes the property
  * test in `tests/` a check on the code rather than on a convention.
  */
@@ -204,6 +204,12 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
           );
           if (declaration === undefined) continue;
           if (!declarationCoversScope(declaration, scope)) continue;
+
+          // RFC 0003 §Observational capabilities are outside this model. An observer transforms
+          // no payload, so there is nothing for ownership to arbitrate, and the address above
+          // names an interception point that observation does not have. Silently: no exclusion
+          // is recorded, because nothing was excluded — the capability was never a candidate.
+          if (declaration.mode === 'observational') continue;
 
           // Gate one: RFC 0003 §Rule. Unevidenced is not a weaker claim, it is none.
           if (declaration.evidence === null) {
@@ -301,20 +307,13 @@ interface ContestedInput {
 /**
  * More than one provider claims the scope.
  *
- * Observational claims compose — RFC 0003: "Multiple observers are allowed, but
- * deduplication keys prevent duplicate accounting", and the keys are RFC 0005's business,
- * not this function's. Everything else needs a rule, and no rule means conflict.
+ * Every claim that reaches here is exclusive or chainable: observational declarations were
+ * dropped before becoming candidates, per RFC 0003 §Observational capabilities are outside this
+ * model. So a contested scope needs a rule, and no rule means conflict.
  */
 function resolveContested(context: ContestedInput): void {
   const { scope, claims, capability, input, ownership, exclusions, conflicts } = context;
   const claimants = claims.map((claim) => claim.provider);
-
-  if (claims.every((claim) => claim.mode === 'observational')) {
-    for (const [index, claim] of claims.entries()) {
-      ownership.push({ scope, owner: claim.provider, mode: 'observational', order: index });
-    }
-    return;
-  }
 
   const rule = findCompatibilityRule(input.rules, {
     providers: claimants,

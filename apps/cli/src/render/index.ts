@@ -11,6 +11,7 @@
  */
 
 import type {
+  ApplyReport,
   CommandResult,
   Diagnostic,
   DoctorReport,
@@ -20,6 +21,7 @@ import type {
   VerifyReport,
 } from '@token-harness/core';
 
+import { renderApplyReport } from './apply.js';
 import { renderDoctorReport } from './doctor.js';
 import { renderMetricsReport } from './metrics.js';
 import { renderPlanReport } from './plan.js';
@@ -58,6 +60,8 @@ export function renderHuman(
   });
 
   switch (result.command) {
+    case 'apply':
+      return plain(renderApplyReport(data as ApplyReport, context));
     case 'doctor':
       return plain(renderDoctorReport(data as DoctorReport, context));
     case 'plan':
@@ -74,6 +78,7 @@ export function renderHuman(
 }
 
 export {
+  renderApplyReport,
   renderDoctorReport,
   renderMetricsReport,
   renderPlanReport,

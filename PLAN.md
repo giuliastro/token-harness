@@ -731,6 +731,11 @@ Suggested first implementation issues:
     and RFC 0002 §What this cannot detect requires a reviewed write set recorded in the
     manifest with the upstream version, which has not been done. Writing the single hook entry
     ourselves is the reviewable alternative and keeps rollback a snapshot restore.
+15. Implement plan persistence and `apply` (§12). **Done** — the transaction layer built in
+    Phase 2.3 is reachable at last. Two defects surfaced only by running it: a succeeding
+    action's diagnostics reached the journal and never the user, so Token Harness reformatted a
+    file and said nothing; and `apply` returned a report on error-status exits while the envelope
+    nulls `data`, so the human and JSON renderings disagreed.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
@@ -767,22 +772,14 @@ These are intentionally deferred to measured spikes or to a triggering need:
 2. Bundler and executable packaging beyond npm.
 3. Whether `core` and `adapters` need to be split further, or `cli` merged in.
 4. Whether a SQLite driver is ever needed, per the RFC 0005 triggers.
-5. **How an observational capability is scoped.** RFC 0003 §Scope resolves ownership over
-   `<harness>/<tool-family>/<interception-point>/<capability>`, and its MVP ownership table
-   assigns `metrics.observe` to Token Harness itself. The two do not compose: observation does
-   not happen at an interception point, and enumerating the four-part scope for it produces one
-   row per tool family per point — four on Claude alone — where RFC 0006's plan transcript shows
-   a single `metrics.observe   token-harness` line with no surface.
-
-   The resolver therefore does not assign `metrics.observe` today, and no reserved surface token
-   was invented for it. Three candidate resolutions, none chosen: scope an observational
-   capability to the harness only; give the scope an explicit `observational` surface segment;
-   or keep observation out of the ownership model entirely and let the importer registry be its
-   own authority. The choice affects RFC 0003 §Scope, so it belongs in an amendment rather than
-   in code.
 
 Resolved since the first draft of this plan:
 
+- **How an observational capability is scoped** — it is not. RFC 0003 §Observational
+  capabilities are outside this model: the ownership address names an interception point,
+  observation has none, and an observer transforms no payload so there is nothing to arbitrate.
+  Double counting is prevented by RFC 0005's deduplication keys, not by an assignment. RFC 0006's
+  plan transcript lost its `metrics.observe` line.
 - CLI exit codes and JSON envelope — RFC 0006.
 - Storage backend for `0.1.0` — JSONL, RFC 0001 and RFC 0005.
 - Package granularity — three packages, RFC 0001.

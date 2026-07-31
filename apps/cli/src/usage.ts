@@ -14,11 +14,11 @@ Usage
   token-harness <command> [flags]
 
 Commands
+  apply       Execute a plan inside a reversible transaction
   doctor      Report detected harnesses and providers
   metrics     Import provider records and report savings by measurement class
   plan        Compute a dry-run plan; nothing is changed
   status      Report applied pipelines, drift, and importer modes
-  apply       Not in this build
   verify      Not in this build
   update      Not in this build
   rollback    Not in this build
@@ -31,6 +31,8 @@ Flags
   --project <dir>      Operate on that project instead of the current directory
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
+  --plan <id>          Apply a previously computed plan by id
+  --yes                Grant the confirmation a mutating command requires
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
@@ -38,6 +40,27 @@ Mutating commands are dry-run by default and there is no flag that skips
 planning. Exit codes and the JSON envelope are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  apply: `token-harness apply — execute a plan inside a reversible transaction
+
+Usage
+  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]
+                      [--provider <id>] [--project <dir>]
+
+Dry-run by default: without --yes the plan is computed and displayed and exit 8
+is returned, because nothing may change without an explicit decision.
+
+With --plan <id> the stored plan is loaded and revalidated instead of recomputed,
+so the artifact that was reviewed is the artifact that runs. It is rejected when
+the project, the recorded provider or harness versions, the resolved ownership, or
+a precondition digest no longer match — exit 5, before any action executes.
+
+Every file is snapshotted before it is written, including files that did not exist,
+so a rollback can restore their absence. Exit 6 means a step failed and the
+rollback was verified. Exit 7 means the rollback did not fully restore the files;
+it names them and the transaction id, and it leaves a journal in the state
+directory. Exit 4 means a hard capability conflict prevents applying at all.
+
+Token Harness only ever removes what it recorded as its own.`,
   doctor: `token-harness doctor — report detected harnesses and providers
 
 Usage

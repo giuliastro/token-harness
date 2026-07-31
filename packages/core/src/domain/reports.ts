@@ -59,3 +59,38 @@ export interface StatusReport {
   importers: ImporterStatus[];
   problemCount: number;
 }
+
+/**
+ * What `apply` did — RFC 0004 §Transaction lifecycle and RFC 0006 §Exit codes.
+ *
+ * Every field answers a question a user has after a mutation, and the ones that look
+ * redundant are not. `transactionId` is required on exit 7 by RFC 0006 — "it always names the
+ * exact affected paths and the transaction ID on stderr" — and `unrestored` is what
+ * distinguishes exit 6 from exit 7: a rollback that was verified from one that was attempted.
+ */
+export interface ApplyReport {
+  /** The plan that was executed. Null when nothing was applied. */
+  planId: string | null;
+  transactionId: string | null;
+  /** True when the plan was loaded from the state directory rather than recomputed. */
+  fromStoredPlan: boolean;
+  /** How the transaction ended, in the journal's own vocabulary. */
+  outcome:
+    | 'nothing-to-do'
+    | 'confirmation-required'
+    | 'rejected'
+    | 'committed'
+    | 'rolled-back'
+    | 'dirty';
+  /** One line per action, in execution order. */
+  results: {
+    actionId: string;
+    kind: string;
+    status: string;
+    path: string | null;
+  }[];
+  /** Paths a rollback failed to restore. Non-empty only on exit 7. */
+  unrestored: string[];
+  /** The receipt written to the state directory, when one was. */
+  receiptId: string | null;
+}

@@ -77,6 +77,15 @@ export interface TransactionResult {
   exitCode: TransactionExitCode;
   /** Everything worth showing the user, in the order it was produced. */
   diagnostics: Diagnostic[];
+  /**
+   * Paths a rollback failed to restore. Non-empty only on exit 7.
+   *
+   * Returned structurally as well as in the diagnostic, because RFC 0006 rule 3 makes human and
+   * JSON output "two renderings of the same result object" — a path named on stderr and absent
+   * from `data` is a defect, and a caller should not have to read a message to find out which
+   * files were left behind.
+   */
+  unrestored: string[];
 }
 
 function terminal(status: ActionOutcome['status']): boolean {
@@ -149,13 +158,14 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
   const finish = async (
     outcome: TransactionOutcomeKind,
     exitCode: TransactionExitCode,
+    unrestored: readonly string[] = [],
   ): Promise<TransactionResult> => {
     journal.outcome = outcome;
     journal.finishedAt = request.now();
     journal.ownership =
       outcome === 'committed' ? applied.flatMap((entry) => [...entry.ownership]) : [];
     await request.journal.write(journal);
-    return { journal, exitCode, diagnostics };
+    return { journal, exitCode, diagnostics, unrestored: [...unrestored] };
   };
 
   /** Reverses what ran, then checks that the reversal actually took. */
@@ -197,7 +207,9 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
         remediation: `Inspect the listed paths and the backups under the transaction id ${request.transactionId} before running any other command`,
       }),
     );
-    return finish('dirty', TRANSACTION_EXIT_CODES.applyFailedDirty);
+    // The paths travel with the result as well as in the diagnostic above; see
+    // `TransactionResult.unrestored`.
+    return finish('dirty', TRANSACTION_EXIT_CODES.applyFailedDirty, unrestored);
   };
 
   for (const action of request.actions) {
@@ -238,7 +250,24 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
     // what a rollback after a crash has to work from.
     await request.journal.write(journal);
 
-    if (!terminal(result.status)) continue;
+    if (!terminal(result.status)) {
+      /**
+       * A succeeding action can still have something to say, and until this line it was said
+       * only to the journal.
+       *
+       * The case that found it: applying an owned hook entry to a hand-formatted
+       * `settings.json` reformats the whole document, and `merge-json` reports that as
+       * `json-formatting-not-preserved`. The warning reached the journal and never the user —
+       * so Token Harness reformatted a file and told nobody. A change the user did not ask for
+       * has to be visible, which is the entire premise of RFC 0004's ownership model.
+       *
+       * Only the non-terminal branch: a terminal status routes its diagnostics through
+       * `rollback` or the drift return below, and pushing them here as well would report the
+       * same failure twice.
+       */
+      diagnostics.push(...result.diagnostics);
+      continue;
+    }
 
     const mutated = applied.some((outcome) => outcome.status === 'applied');
     if (result.status === 'precondition-drift' && !mutated) {
