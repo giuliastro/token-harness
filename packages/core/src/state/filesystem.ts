@@ -44,6 +44,16 @@ export interface FileSystemPort {
   readFile(path: string): Promise<Uint8Array>;
   /** Creates parent directories as needed. `mode` is ignored where it means nothing. */
   writeFile(path: string, content: Uint8Array, mode?: string | null): Promise<void>;
+  /**
+   * Appends in one operation, creating the file and its parents as needed.
+   *
+   * Separate from `writeFile` because the atomicity is the point, not a detail. RFC 0005
+   * §Storage tolerates concurrent writers "only coarsely", and what makes that true at all
+   * is that a whole record reaches the file in a single append rather than as a
+   * read-modify-write another process can interleave with. A caller that emulated this with
+   * `readFile` and `writeFile` would lose exactly that property.
+   */
+  appendFile(path: string, content: Uint8Array): Promise<void>;
   createDirectory(path: string): Promise<void>;
   /** Succeeds when the path is already gone: removal is idempotent. */
   remove(path: string): Promise<void>;

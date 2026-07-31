@@ -36,6 +36,7 @@ export * from './metrics/store.js';
 export * from './state/actions.js';
 export * from './state/filesystem.js';
 export * from './state/journal.js';
+export * from './state/jsonl-store.js';
 export * from './state/json-merge.js';
 export * from './state/marker-block.js';
 export * from './state/snapshots.js';

@@ -73,6 +73,7 @@ const NO_FILESYSTEM: FileSystemPort = {
   stat: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
   readFile: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
   writeFile: () => Promise.reject(new Error('the rtk adapter must not write')),
+  appendFile: () => Promise.reject(new Error('the rtk adapter must not write')),
   createDirectory: () => Promise.reject(new Error('the rtk adapter must not write')),
   remove: () => Promise.reject(new Error('the rtk adapter must not write')),
   readDirectory: () => Promise.resolve([]),

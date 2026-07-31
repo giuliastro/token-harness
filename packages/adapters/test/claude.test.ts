@@ -51,6 +51,7 @@ function memoryFileSystem(files: Readonly<Record<string, string>>): FileSystemPo
       ),
     readFile: (path) => Promise.resolve(encoder.encode(files[path] ?? '')),
     writeFile: () => Promise.reject(new Error('the detection path must not write')),
+    appendFile: () => Promise.reject(new Error('the detection path must not write')),
     createDirectory: () => Promise.reject(new Error('the detection path must not write')),
     remove: () => Promise.reject(new Error('the detection path must not write')),
     readDirectory: () => Promise.resolve([]),
