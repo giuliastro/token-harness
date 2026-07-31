@@ -34,7 +34,7 @@ repository is a gate.
 - automatic background updates;
 - provider marketplace with remote arbitrary manifests;
 - bundling RTK or HarnessTrim binaries inside Token Harness;
-- Context Mode, Headroom, Dejavu, Repowise, Caveman, or Lazy MCP installation;
+- installation of any expansion candidate in `docs/provider-landscape.md`;
 - a GUI;
 - goal-based profile resolution and the `balanced` profile;
 - a SQLite storage backend;
@@ -667,14 +667,17 @@ research
   -> default-profile consideration
 ```
 
-Proposed order:
+The researched intake queue, evidence, licenses, and admission gates live in
+`docs/provider-landscape.md`. Proposed order:
 
-1. Dejavu;
-2. Headroom;
-3. Context Mode;
-4. Repowise;
-5. Caveman;
-6. Lazy MCP.
+1. Dejavu for repeated-output deltas;
+2. Lazy MCP for on-demand MCP schemas;
+3. Repowise for bounded repository retrieval;
+4. LiteLLM as the gateway and telemetry seam for routing;
+5. one routing-policy owner, evaluated between RouteLLM and vLLM Semantic Router;
+6. one broad context owner, evaluated between Headroom and Context Mode;
+7. LLMLingua behind a provider that supplies the missing harness lifecycle;
+8. Caveman as an opt-in output policy.
 
 The first additional provider is also what unblocks the deferred resolver work: goal-based
 profiles are designed against two provider pairs rather than one.
@@ -683,6 +686,12 @@ Headroom and Context Mode remain alternatives until a specific composition study
 otherwise. Caveman remains opt-in until its instruction overhead is included in the
 break-even calculation. Dejavu remains non-default until RTK ordering and native
 Windows support are resolved.
+
+LiteLLM is a gateway substrate, not by itself evidence of intelligent routing or token
+savings. RouteLLM and vLLM Semantic Router remain alternative owners of a model request.
+Before either can be admitted, a new RFC must define the model-routing capability and a
+cost/quality attribution class: routing a request to a cheaper model is never folded into
+RFC 0005's exact or estimated token-saving totals.
 
 ## 15. Issue/PR slicing
 

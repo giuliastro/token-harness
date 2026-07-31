@@ -7,14 +7,28 @@ agents. It detects the active coding harness, installs compatible optimization
 providers, prevents conflicting integrations, verifies that the resulting pipeline
 works, and reports savings through one normalized metrics model.
 
-Token Harness is not another compressor. It coordinates specialized projects such
-as:
+Token Harness is not another compressor. It coordinates specialized projects at
+different layers of the agent pipeline. This is the current integration landscape;
+"candidate" means researched, not supported or installed by this release.
 
-- [RTK](https://github.com/rtk-ai/rtk) for command rewriting and shell-output reduction;
-- [HarnessTrim](https://github.com/giuliastro/HarnessTrim) for deterministic reducers,
-  harness adapters, skills, pipes, and MCP integration;
-- additional providers for repeated-output deduplication, MCP sandboxing, repository
-  retrieval, conversation compression, and output discipline.
+| System | Layer and added value | Token Harness state |
+| --- | --- | --- |
+| [RTK](https://github.com/rtk-ai/rtk) | Command rewriting and shell-output reduction | **Integrated today** for Claude Code |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP integration | **MVP provider in progress**: detection, adoption, conflict reconciliation, and metrics |
+| [Dejavu](https://github.com/Salnika/dejavu) | Emits only the delta when a command produces repeated output | Priority candidate; requires an RTK ordering fixture and native-Windows work |
+| [Lazy MCP](https://github.com/voicetreelab/lazy-mcp) | Loads MCP tool schemas only when the agent needs them | Priority, largely orthogonal candidate |
+| [repowise](https://github.com/repowise-dev/repowise) | Retrieves task-shaped repository context instead of repeated grep/read loops | Priority candidate; response bounds and attribution must be verified |
+| [LiteLLM](https://github.com/BerriAI/litellm) | Self-hosted model gateway, fallbacks, load balancing, budgets, and usage telemetry | Routing foundation candidate; it does not by itself prove token savings |
+| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Routes easier requests to a cheaper model through an OpenAI-compatible endpoint | Learned-routing candidate; needs coding-agent quality benchmarks |
+| [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Routes by task, complexity, tools, and deployment locality for self-hosted inference | Alternative routing candidate for local inference fleets |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | Compresses tool, MCP, file, and RAG payloads and can lower effort on routine turns | Broad-context candidate; alternative to Context Mode, with overlap tests required |
+| [Context Mode](https://github.com/mksglu/context-mode) | Keeps raw tool/MCP results outside context and restores compact session memory | Broad-context candidate; alternative to Headroom, source-available under ELv2 |
+| [LLMLingua](https://github.com/microsoft/LLMLingua) | Model-based prompt compression engine for long context | Engine candidate, not yet a direct harness adapter |
+| [Caveman](https://github.com/JuliusBrussee/caveman) | Steers shorter visible model replies | Opt-in candidate; output savings only, with quality and prompt-overhead checks |
+
+The evidence, licenses, conflicts, and recommended admission order are recorded in the
+[provider landscape](docs/provider-landscape.md). Routing savings are reported as cost or
+quality trade-offs, never silently added to exact token savings.
 
 Upstream tools remain independent. Token Harness installs supported releases through
 their official distribution channels and never silently vendors or forks them.
@@ -228,4 +242,3 @@ matrix set not to fail fast.
 - [Metrics and attribution](docs/rfcs/0005-metrics-and-attribution.md)
 - [CLI contract](docs/rfcs/0006-cli-contract.md)
 - [Live verification](docs/rfcs/0007-live-verification.md)
-
