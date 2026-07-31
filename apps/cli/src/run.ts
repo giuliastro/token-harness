@@ -27,7 +27,9 @@ import { runApply } from './commands/apply.js';
 import { runDoctor } from './commands/doctor.js';
 import { runMetrics } from './commands/metrics.js';
 import { runPlan } from './commands/plan.js';
+import { runRollback, runUninstall } from './commands/rollback.js';
 import { runStatus } from './commands/status.js';
+import { runVerify } from './commands/verify.js';
 import type { AdapterAccess, CommandContext } from './commands/context.js';
 import { renderHuman, shouldDecorate, type RenderContext } from './render/index.js';
 import { usageText } from './usage.js';
@@ -47,7 +49,10 @@ export const DEFAULT_COMMANDS: CommandTable = {
   doctor: runDoctor,
   metrics: runMetrics,
   plan: runPlan,
+  rollback: runRollback,
   status: runStatus,
+  uninstall: runUninstall,
+  verify: runVerify,
 };
 
 export interface RunOptions {

@@ -66,6 +66,9 @@ describe('exit codes', () => {
         plan: () => Promise.reject(new Error('unused')),
         metrics: () => Promise.reject(new Error('unused')),
         apply: () => Promise.reject(new Error('unused')),
+        verify: () => Promise.reject(new Error('unused')),
+        rollback: () => Promise.reject(new Error('unused')),
+        uninstall: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -88,9 +91,9 @@ describe('exit codes', () => {
   });
 
   it('2 — a declared but unimplemented command is not reported as a typo', async () => {
-    // `apply` used to be the example here. It is implemented now, so the case moved to a command
-    // RFC 0001 declares and this build still does not carry.
-    const result = await captureRun({ ...BASE, argv: ['rollback'] });
+    // `apply` used to be the example here, then `rollback`. Both are implemented now, so the case
+    // is `update` — the last command RFC 0001 declares and this build does not carry.
+    const result = await captureRun({ ...BASE, argv: ['update'] });
     assert.equal(result.exitCode, EXIT_CODES['usage-error']);
     assert.match(result.stderr, /command-not-available/);
   });
@@ -119,6 +122,9 @@ describe('exit codes', () => {
         plan: () => Promise.reject(new Error('unused')),
         metrics: () => Promise.reject(new Error('unused')),
         apply: () => Promise.reject(new Error('unused')),
+        verify: () => Promise.reject(new Error('unused')),
+        rollback: () => Promise.reject(new Error('unused')),
+        uninstall: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -143,6 +149,9 @@ describe('exit codes', () => {
         status: () => Promise.reject(new Error('unused')),
         metrics: () => Promise.reject(new Error('unused')),
         apply: () => Promise.reject(new Error('unused')),
+        verify: () => Promise.reject(new Error('unused')),
+        rollback: () => Promise.reject(new Error('unused')),
+        uninstall: () => Promise.reject(new Error('unused')),
       },
     });
     assert.equal(result.exitCode, EXIT_CODES['blocked-by-conflict']);

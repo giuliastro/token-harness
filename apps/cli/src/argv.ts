@@ -25,7 +25,16 @@ import {
 } from '@token-harness/core';
 
 /** Commands the Phase 1 shell implements. */
-export const AVAILABLE_COMMANDS = ['apply', 'doctor', 'metrics', 'plan', 'status'] as const;
+export const AVAILABLE_COMMANDS = [
+  'apply',
+  'doctor',
+  'metrics',
+  'plan',
+  'rollback',
+  'status',
+  'uninstall',
+  'verify',
+] as const;
 
 export type AvailableCommand = (typeof AVAILABLE_COMMANDS)[number];
 

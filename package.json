@@ -1,6 +1,6 @@
 {
   "name": "token-harness-workspace",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",

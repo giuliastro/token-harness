@@ -74,6 +74,10 @@ export interface ComputedPlan {
   report: PlanReport;
   versions: RecordedVersions;
   diagnostics: Diagnostic[];
+  /** The harnesses detected as present, for a caller that needs to plan against them. */
+  present: HarnessManifest[];
+  /** What the harness adapters found on disk, for a brownfield-aware provider plan. */
+  harnessConfigs: HarnessConfigSummary[];
 }
 
 export async function computePlan(context: CommandContext): Promise<ComputedPlan> {
@@ -264,7 +268,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
-  return { report, versions, diagnostics };
+  return { report, versions, diagnostics, present, harnessConfigs };
 }
 
 /**

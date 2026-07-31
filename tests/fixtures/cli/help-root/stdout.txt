@@ -9,10 +9,10 @@ Commands
   metrics     Import provider records and report savings by measurement class
   plan        Compute a dry-run plan; nothing is changed
   status      Report applied pipelines, drift, and importer modes
-  verify      Not in this build
+  verify      Check that an integration actually intercepts, at its declared tier
+  rollback    Restore the files a transaction changed, as they were before it
+  uninstall   Remove what Token Harness owns, leaving everything else
   update      Not in this build
-  rollback    Not in this build
-  uninstall   Not in this build
 
 Flags
   --json               Emit one machine-readable envelope on stdout

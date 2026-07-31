@@ -56,69 +56,114 @@ their official distribution channels and never silently vendors or forks them.
 
 ```text
 token-harness doctor
-token-harness plan --harness codex
-token-harness apply
-token-harness status
+token-harness plan
+token-harness apply --yes
 token-harness verify
-token-harness metrics
-token-harness rollback
+token-harness metrics --since 7d
+token-harness status
+token-harness rollback --yes
 ```
 
 Existing installations are adopted, not replaced. If RTK or HarnessTrim is already
 configured by hand, Token Harness detects it, plans around it, and leaves it in place on
 uninstall.
 
-The first useful release supports Codex, Claude Code, and OpenCode. RTK is managed
-end to end: detected, installed, configured, verified, measured. HarnessTrim is detected,
-adopted, reconciled against RTK's ownership, and measured — but not installed, because at
-its current release no configuration exists that would let both tools reduce output without
-contesting the same surface. Token Harness reports that contest instead of hiding it.
+The first useful release will support Codex, Claude Code, and OpenCode. Today Claude Code
+and RTK work end to end — see Status below for exactly which of the nine criteria are met.
+HarnessTrim will be detected, adopted, reconciled against RTK's ownership, and measured, but
+not installed: at its current release no configuration exists that would let both tools
+reduce output without contesting the same surface, and Token Harness reports that contest
+instead of hiding it.
 
 Additional tools, and joint reduction by two providers, are introduced only after
 compatibility and attribution tests prove they compose safely.
 
 ## Status
 
-Version `0.0.1`. Per the release gates below, `0.0.x` means **internal architecture
-and fixtures, with no stability promise** — the number is a description of the
-contents, not a modest way of saying "nearly done".
+Version `0.0.5`. Per the release gates below, `0.0.x` means **no stability promise** — and
+that is still the honest band, because `0.1.0` requires three harnesses and two providers
+and this build has one of each. What it does have is the whole lifecycle working for that
+one pair, end to end, on a real machine.
 
-Complete:
+### What works today
 
-| Phase | What landed |
-| --- | --- |
-| 0 | The seven accepted RFCs in `docs/rfcs/` |
-| 1 | Workspace and CI, domain contracts, CLI shell with the RFC 0006 golden transcripts |
-| 2.1 | Platform facts, path resolution, executable resolution, the state-permission property |
-| 2.2 | The safe process runner, and a fake runner with expectation matching |
-| 2.3 | File ownership, snapshots including recorded absence, marker-block and JSON-merge actions, the transaction journal and verified rollback |
-| 2.5 | In progress — the live-verification spike, logged in `docs/spikes/` |
-
-The platform and process layers live in a fourth workspace package,
-`packages/platform`, extracted per RFC 0001 §Repository shape once the executor and
-the adapters needed it.
-
-What the command surface does today:
+For **Claude Code + RTK**, every command in the loop:
 
 ```text
-token-harness --help
-token-harness --version
-token-harness doctor [--json]
-token-harness plan   [--json]
-token-harness status [--json]
+token-harness doctor                  what is here, and what is broken
+token-harness plan                    what would change; nothing is written
+token-harness apply --yes             write it, inside a reversible transaction
+token-harness verify                  is it actually intercepting, at which tier
+token-harness metrics --since 7d      what it saved, by measurement class
+token-harness status                  drift, and competing hooks on owned surfaces
+token-harness uninstall --yes         remove only what Token Harness owns
+token-harness rollback --yes          restore the files a transaction changed
 ```
 
-The exit-code table, the `--json` envelope, and the stream discipline from RFC 0006
-are implemented in full. `apply`, `verify`, `metrics`, `update`, `rollback`, and
-`uninstall` are rejected as *unavailable* rather than as unknown, so a script can
-tell "not built yet" from "you typed it wrong".
+On the machine this was developed against, `metrics` reports **91,600 tokens saved over
+2,847 intercepted commands**, which is exactly what `rtk gain` reports independently, and
+`verify` reaches tier `canary` from RTK's own dated records.
 
-## Installing 0.0.1
+Two findings from that measurement are in the code rather than in a changelog, because both
+change how a number should be read:
 
-The package is a single self-contained ESM artifact with **no dependencies at all**.
-It is not on npm yet — publishing is PLAN §8.3, together with provenance, SBOM, and
-signing — but it installs from a tarball you build yourself, and CI proves that on
-Windows, macOS, and Linux on every commit:
+- **75% of RTK's interceptions save nothing.** 2,149 of 2,847 commands were proxied and
+  passed through unchanged. `rtk gain` reports a 9.5% average and structurally cannot say
+  this; only per-operation events can.
+- **RTK sometimes makes output larger** — 240 rows, 1,957 tokens — and floors its own
+  `saved_tokens` at zero per command, so its total is a sum of clamped values. Token Harness
+  reports the net effect and names the inflation on its own line.
+
+### Against the definition of the first useful release
+
+PLAN §2 lists nine criteria for `0.1.0`. Measured honestly:
+
+| # | Criterion | State |
+| --- | --- | --- |
+| 1 | `doctor` detects Codex, Claude Code, or OpenCode | Claude Code only |
+| 2 | RTK and HarnessTrim: available, installed, configured, broken | RTK only |
+| 3 | Dry-run plan for a compatible setup | RTK only |
+| 4 | Apply that plan transactionally | **done** |
+| 5 | Verify the integration, with the tier stated | **done** |
+| 6 | Inspect normalized savings | RTK only |
+| 7 | Uninstall or roll back without damage | **done** |
+| 8 | Adopt an existing hand-configured installation | **done** for RTK |
+| 9 | Windows, macOS, Linux | **done** — CI on all three, every commit |
+
+So: the machinery is finished and the coverage is not. What `0.1.0` needs is breadth —
+adapters for Codex and OpenCode, and the HarnessTrim provider — not new mechanisms.
+
+### What is deliberately not automated
+
+`apply` can plan an RTK installation but cannot execute one: `package-manager-install` is
+not implemented, so on a machine without RTK the transaction fails on that action and rolls
+back cleanly with your files untouched. Install RTK yourself and Token Harness will adopt
+it, which is the path RFC 0004 §Brownfield adoption treats as normal anyway.
+
+`update` is rejected as *unavailable* rather than as unknown, so a script can tell "not
+built yet" from "you typed it wrong".
+
+### Guarantees worth knowing before you run `apply`
+
+- **Dry-run by default.** Without `--yes`, mutating commands display the plan and exit 8.
+- **One appended entry, not a rewritten list.** Your other hooks keep their content and
+  their order; a test asserts your entry is still first afterwards.
+- **Every file is snapshotted first**, including files that did not exist, so a rollback can
+  restore their absence. The restoration is verified by reading the files back — which is
+  what separates exit 6 (rolled back) from exit 7 (did not fully restore).
+- **Token Harness removes only what it recorded as its own,** and refuses when the entry no
+  longer matches what it wrote. An edit of yours blocks the deletion.
+- **A change you did not ask for is reported.** Editing a hand-formatted JSON file reformats
+  it, and that warning reaches you rather than only the journal.
+- **A competing hook on an owned surface is reported, never removed.** `status` names the
+  file, the surface, and the competing command, and exits 3.
+
+### Installing 0.0.5
+
+The package is a single self-contained ESM artifact with **no dependencies at all**. It is
+not on npm — publishing is PLAN §8.3, together with provenance, SBOM, and signing — but it
+installs from a tarball you build yourself, and CI proves that on Windows, macOS, and Linux
+on every commit:
 
 ```bash
 pnpm install && pnpm build && pnpm package
@@ -126,31 +171,15 @@ npm install -g ./dist/package
 token-harness doctor
 ```
 
-`pnpm package` stages `dist/package/`: the bundle, a generated manifest, the README,
-and the licence. `pnpm smoke:install` packs it, installs the tarball into a scratch
-directory with no workspace above it, and runs the result — which is what catches a
-manifest that names the wrong `bin` or carries a dependency npm cannot resolve.
-
 To run it without installing:
 
 ```bash
 node dist/bundle/token-harness.mjs doctor
 ```
 
-### What it will and will not tell you
-
-It reports the truth about your machine. `doctor` detects the operating system,
-distinguishes native Windows from WSL, resolves the state directory per RFC 0001, and
-refuses to run rather than fall back to a world-writable location if it cannot.
-
-It finds **no harnesses and no providers**, because no adapter exists yet — those are
-Phases 3 to 6. So `doctor` prints a truthful report of an environment it cannot yet
-inspect, and that is the whole of it. What is worth reviewing at `0.0.1` is the
-contract, not the product: the exit codes, the envelope, the stream discipline, the
-ownership and rollback guarantees, and the platform behaviour on Windows.
-
-The first release that does something useful for a user is `0.1.0`, and the gate for
-that number is listed below.
+Try it against a scratch directory first if you want to watch it work without touching your
+own configuration — `--project <dir>` retargets the project-scoped half, and the state
+directory is separate from anything a harness reads.
 
 ## Development
 
@@ -177,7 +206,7 @@ workarounds instead of design.
 
 | Version | Gate |
 | --- | --- |
-| `0.0.x` | Internal architecture and fixtures. No stability promise. **← here** |
+| `0.0.x` | Internal architecture and fixtures. No stability promise. **← here (`0.0.5`)** |
 | `0.1.0` | RTK and HarnessTrim, three harnesses, transactional install, verification with declared tiers, metrics, brownfield adoption |
 | `0.2.0` | A third provider, goal-based profiles, the A/B benchmark matrix |
 | `1.0.0` | Stable provider and harness contracts, two release cycles with no configuration-loss defects, published benchmark results |
@@ -198,4 +227,5 @@ matrix set not to fail fast.
 - [Safety and installation model](docs/rfcs/0004-safety-and-installation.md)
 - [Metrics and attribution](docs/rfcs/0005-metrics-and-attribution.md)
 - [CLI contract](docs/rfcs/0006-cli-contract.md)
+- [Live verification](docs/rfcs/0007-live-verification.md)
 
