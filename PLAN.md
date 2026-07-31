@@ -725,6 +725,12 @@ Suggested first implementation issues:
     open rather than guessed: `metrics.observe` is observational and does not sit at an
     interception point, so RFC 0003 §Scope and the `metrics.observe` row of the MVP ownership
     table do not compose. Recorded in §17.
+14. Implement RTK's installation and configuration plan (§10). **Done** — `plan()` on the
+    provider contract, real actions in the plan report, and the brownfield case planning
+    nothing. `rtk init` is deliberately not called: invoking it would be a delegated install,
+    and RFC 0002 §What this cannot detect requires a reviewed write set recorded in the
+    manifest with the upstream version, which has not been done. Writing the single hook entry
+    ourselves is the reviewable alternative and keeps rollback a snapshot restore.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
