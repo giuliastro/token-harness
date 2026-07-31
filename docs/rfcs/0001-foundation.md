@@ -193,6 +193,18 @@ decision, even when the conclusion happens to survive.
 `better-sqlite3` remains costly for a different and still-valid reason: per-platform
 prebuilt native binaries fight a self-contained ESM bundle.
 
+A later amendment, recorded because it narrows the claim above rather than overturning it: the
+stderr objection assumed the only ways to silence the warning were `--no-warnings`
+process-wide or mutating the process warning listeners. There is a third — read in a
+short-lived child process, re-entering the same artifact, with `--no-warnings` scoped to that
+child alone — and RFC 0005 §Importers §RTK uses it to read a *provider's* database, whose
+records exist only there.
+
+That does not change this decision. Using the driver as Token Harness's own storage backend
+means an in-process import in the CLI, where the warning reaches the user's stderr and no child
+boundary exists to contain it. The two cases differ in exactly the property the objection was
+about, so the objection survives where it was raised and is answered where it was not.
+
 Because RFC 0005 already mandates a storage interface, this decision is reversible. A
 driver is chosen, and RFC 0008 written, only when one of the triggers in RFC 0005 is
 observed.

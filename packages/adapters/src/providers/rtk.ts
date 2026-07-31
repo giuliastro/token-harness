@@ -38,11 +38,18 @@ import {
   evidence,
   harnessId,
   MANIFEST_SCHEMA_VERSION,
+  numberAt,
+  OPTIMIZATION_EVENT_SCHEMA_VERSION,
   providerId,
+  stringAt,
   type Diagnostic,
   type Evidence,
   type HarnessId,
+  type ImportCursor,
   type JsonValue,
+  type LocalDatabaseRow,
+  type MetricsStore,
+  type OptimizationEvent,
   type ProviderDetection,
   type ProviderManifest,
   type ProviderState,
@@ -51,6 +58,7 @@ import {
 } from '@token-harness/core';
 
 import type {
+  MetricsImport,
   PassiveReceipt,
   ProviderAdapter,
   ProviderContext,
@@ -130,10 +138,15 @@ const MANIFEST: ProviderManifest = {
     },
   ],
   metrics: {
-    // PLAN §10: "do not parse human `rtk gain` output when JSON is available." It is.
-    source: 'cli-json',
+    // Amended with RFC 0005 §Importers §RTK. The CLI's JSON is an aggregate and cannot
+    // carry a per-operation event; the history database can, and `local-database` was
+    // already a member of this union. The CLI analytics keep their other job — the passive
+    // verification receipt in `verify` below.
+    source: 'local-database',
     mode: 'native',
-    locations: [],
+    // Resolved from the platform data directory rather than stated absolutely, because the
+    // location differs per platform; `rtkDatabasePath` is the single derivation.
+    locations: ['<user data directory>/rtk/history.db'],
   },
   delegatedInstallReview: null,
 };
@@ -494,4 +507,357 @@ function receiptAgeInDays(date: string, context: ProviderContext): number | null
   return Math.floor((now - observed) / 86_400_000);
 }
 
-export const rtkAdapter: ProviderAdapter = { manifest: MANIFEST, detect, verify };
+/**
+ * ## Metrics: the per-operation source, and why it is not the one RFC 0005 named
+ *
+ * RFC 0005 §Importers §RTK originally named `rtk gain --all --format json` as the metrics
+ * source. On a real machine it cannot produce an `OptimizationEvent`, and the reasons are
+ * recorded in the RFC amendment rather than only here:
+ *
+ * - the finest machine-readable grain the CLI offers is a *daily aggregate*. `--history`
+ *   silently ignores `--format json` (returning only `summary`) and returns zero bytes for
+ *   `--format csv`; in text mode it aggregates by command family. There is no per-operation
+ *   output in any format;
+ * - that aggregate mutates. Two invocations one minute apart reported
+ *   `daily[2026-07-31] = 11 commands / 165 saved` and then `13 / 170`. RFC 0005's dedup
+ *   model — restart from zero and "discard what it already has" — was written for an
+ *   append-only file where a past line never changes. Against a mutable aggregate,
+ *   discarding freezes the day at its first observed value and understates savings for
+ *   good; not discarding double-counts;
+ * - `ImportCursor`'s file-shaped members have no meaning for a CLI invocation.
+ *
+ * `%LOCALAPPDATA%\rtk\history.db` holds one immutable row per intercepted command, with a
+ * monotonic `id`. That makes dedup native rather than synthesized, and it makes one figure
+ * expressible that the aggregate cannot: on the machine this was written against, 2,132 of
+ * 2,828 intercepted commands saved *zero* tokens. The daily aggregate reports 9.5% average
+ * savings and cannot say that three quarters of interceptions moved nothing. RFC 0005 wants
+ * `outcome.changed` precisely so coverage and bypass metrics stay correct, and only the
+ * per-operation source can set it.
+ *
+ * The CLI analytics keep the job they already had: the passive verification receipt above.
+ * They are not turned into events.
+ *
+ * ### What is deliberately not read
+ *
+ * The `commands` table has `original_cmd` and `rtk_cmd` columns holding raw command text.
+ * RFC 0005 §Privacy: "Raw command text, raw tool output, source code, file paths, prompts,
+ * and credentials are not part of the normalized event." The statement below names its
+ * columns explicitly and neither appears; a `SELECT *` here would be a privacy regression
+ * that no type would catch.
+ */
+
+/** RTK's own token counts, per row. Columns chosen so raw command text is never selected. */
+const HISTORY_QUERY =
+  'SELECT id, timestamp, input_tokens, output_tokens, saved_tokens, exec_time_ms, project_path ' +
+  'FROM commands WHERE id > ? ORDER BY id LIMIT ?';
+
+/** The lowest surviving row identifier, used as the generation marker. See `cursorGeneration`. */
+const GENERATION_QUERY = 'SELECT MIN(id) AS low, MAX(id) AS high, COUNT(*) AS total FROM commands';
+
+/**
+ * Rows per import.
+ *
+ * A bound rather than a stream because the child returns one JSON document, and an
+ * unbounded first import on a long-lived installation would build a large one in memory on
+ * both sides. Successive imports advance the cursor, so a backlog drains over a few runs
+ * rather than being lost.
+ */
+const IMPORT_BATCH_SIZE = 5_000;
+
+/**
+ * Where RTK keeps its history database.
+ *
+ * Derived from Token Harness's own data directory rather than hardcoded, because both tools
+ * follow the same platform convention: the parent of `paths.data` is the per-user data root
+ * (`%LOCALAPPDATA%`, `~/Library/Application Support`, `~/.local/share`), and RTK's directory
+ * is a sibling of ours inside it.
+ *
+ * Only the Windows location has been confirmed against an installed RTK. The other two are
+ * the convention's prediction, which is why a miss is reported as `not-found` — an ordinary
+ * absence — rather than as a defect.
+ */
+export function rtkDatabasePath(context: ProviderContext): string {
+  const dataRoot = context.fs.dirname(context.paths.data);
+  return context.fs.join(dataRoot, 'rtk', 'history.db');
+}
+
+/**
+ * The cursor's `fileIdentity` for this source.
+ *
+ * RFC 0005 wanted the digest to confirm "the file was appended to rather than rewritten".
+ * The analogue for this table is its lowest surviving identifier: `rtk gain --reset` empties
+ * it, and a re-populated table starts again from a low `id`. If that marker changes, rows
+ * this cursor claims to have imported are not the rows now in the table, and the import
+ * restarts.
+ */
+function cursorGeneration(low: number | null, total: number | null): string {
+  return `rtk-history:low=${String(low ?? 0)}:count=${String(total ?? 0)}`;
+}
+
+/**
+ * One row becomes one event.
+ *
+ * `input_tokens` is the raw command output and `output_tokens` is what RTK let through, so
+ * the pair is the before/after of a single observed operation — which is what RFC 0005
+ * §Exact local requires, and its own example is "RTK command output before and after
+ * filtering". `tokenizer: 'rtk'` records that the counts come from RTK's tokenizer rather
+ * than the model provider's, so a reader can judge the figure instead of trusting it.
+ */
+function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationEvent | null {
+  const id = numberAt(row, 'id');
+  const timestamp = stringAt(row, 'timestamp');
+  const before = numberAt(row, 'input_tokens');
+  const after = numberAt(row, 'output_tokens');
+  if (id === null || timestamp === null || before === null || after === null) return null;
+
+  // RTK stamps a nanosecond-precision offset timestamp; the event schema is ISO 8601.
+  const instant = new Date(timestamp);
+  if (Number.isNaN(instant.getTime())) return null;
+
+  const projectPath = stringAt(row, 'project_path');
+  const latency = numberAt(row, 'exec_time_ms');
+
+  return {
+    schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
+    // Native, not synthesized: RFC 0005 prefers the upstream identifier when there is one,
+    // and this one is a primary key.
+    eventId: `rtk-history-${String(id)}`,
+    timestamp: instant.toISOString(),
+    provider: { id: RTK, version: null },
+    context: {
+      // An empty `project_path` means RTK recorded no directory; attributing the event to
+      // the directory `metrics` happens to run in would invent an attribution.
+      projectId:
+        projectPath === null || projectPath === ''
+          ? 'p_unattributed'
+          : context.projectIdFor(projectPath),
+      // RTK proxies commands for whichever harness invoked it and does not record which.
+      // The hook that wires it is per harness, but a *row* carries no harness, and reading
+      // one off the current configuration would attribute months of history to today's
+      // wiring.
+      harnessId: 'unknown',
+      sessionId: null,
+      operationId: `rtk-history-${String(id)}`,
+      pipelineId: null,
+      pipelineOrder: null,
+      toolFamily: null,
+      // What the token delta measures: the command ran either way, and what shrank was its
+      // output.
+      capability: 'shell.output.reduce',
+    },
+    measurement: {
+      class: 'exact-local',
+      beforeChars: null,
+      afterChars: null,
+      beforeTokens: before,
+      afterTokens: after,
+      tokenizer: 'rtk',
+      confidenceLow: null,
+      confidenceHigh: null,
+    },
+    outcome: {
+      // The distinction the aggregate cannot make. Three quarters of the rows on the
+      // machine this was written against have `after >= before`: RTK proxied the command
+      // and passed the output through unchanged.
+      changed: after < before,
+      bypassReason: after < before ? null : 'no-reduction-applied',
+      originalReference: null,
+      latencyMs: latency,
+      errorCode: null,
+    },
+    source: { nativeEventId: String(id), importedAt: context.now() },
+  };
+}
+
+/**
+ * RFC 0005 §Importers §RTK, as amended.
+ *
+ * Two fidelity modes, and the degraded one reports nothing rather than estimating:
+ *
+ * | Mode | Condition | Consequence |
+ * | --- | --- | --- |
+ * | `native` | the history database is readable | per-operation `exact-local` events, native dedup |
+ * | `unavailable` | no reader, no database, or no driver | no events, and `status` says so |
+ *
+ * There is no `legacy` mode for this provider. The only other source is the daily
+ * aggregate, and RFC 0005 has no honest event for it.
+ */
+async function collectMetrics(
+  context: ProviderContext,
+  store: MetricsStore,
+): Promise<MetricsImport> {
+  const diagnostics: Diagnostic[] = [];
+  const path = rtkDatabasePath(context);
+
+  const unavailable = (detail: string, remediation: string | null): MetricsImport => {
+    diagnostics.push(
+      diagnostic({
+        // Not a warning. RFC 0005: running in a degraded mode "is a supported steady state,
+        // not a warning". What would be a defect is presenting a degraded figure as exact.
+        severity: 'info',
+        code: 'provider-metrics-unavailable',
+        message: detail,
+        path,
+        remediation,
+      }),
+    );
+    return {
+      providerId: RTK,
+      mode: 'unavailable',
+      source: null,
+      imported: 0,
+      skipped: 0,
+      cursor: null,
+      diagnostics,
+    };
+  };
+
+  if (context.localDatabase === null) {
+    return unavailable(
+      'this host supplied no local-database reader, so RTK metrics were not imported',
+      null,
+    );
+  }
+
+  const generation = await context.localDatabase.query({
+    path,
+    sql: GENERATION_QUERY,
+    parameters: [],
+  });
+  if (generation.failure !== null) {
+    const message =
+      generation.failure === 'not-found'
+        ? 'RTK has recorded no command history on this machine yet'
+        : `RTK's command history could not be read (${generation.failure})`;
+    return unavailable(
+      message,
+      generation.failure === 'driver-unavailable'
+        ? 'Run Token Harness on a Node build that provides node:sqlite'
+        : null,
+    );
+  }
+
+  const first = generation.rows[0];
+  const low = first === undefined ? null : numberAt(first, 'low');
+  const high = first === undefined ? null : numberAt(first, 'high');
+  const total = first === undefined ? null : numberAt(first, 'total');
+  const identity = cursorGeneration(low, total);
+
+  const stored = await store.readCursor(RTK, path);
+  let from = 0;
+  if (stored !== null && stored.highWaterMark !== null) {
+    const previous = Number(stored.highWaterMark);
+    // A generation change means the table was reset, so the stored mark refers to rows that
+    // no longer exist. Restarting from zero is correct and safe: the event identity is the
+    // native row id, so anything already stored keeps its identity.
+    if (stored.fileIdentity === identity && Number.isFinite(previous)) {
+      from = previous;
+    } else if (stored.fileIdentity !== identity) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'provider-metrics-source-reset',
+          message:
+            "RTK's command history was reset since the last import, so it is being read from the start",
+          path,
+          remediation: null,
+        }),
+      );
+    }
+  }
+
+  // Nothing new. Reported as a successful native import of zero rather than as an absence:
+  // the source is there and readable, and `status` should not show it as unavailable.
+  if (high !== null && from >= high) {
+    return {
+      providerId: RTK,
+      mode: 'native',
+      source: SOURCE_LABEL,
+      imported: 0,
+      skipped: 0,
+      cursor: stored,
+      diagnostics,
+    };
+  }
+
+  const batch = await context.localDatabase.query({
+    path,
+    sql: HISTORY_QUERY,
+    parameters: [from, IMPORT_BATCH_SIZE],
+  });
+  if (batch.failure !== null) {
+    return unavailable(`RTK's command history could not be read (${batch.failure})`, null);
+  }
+
+  const events: OptimizationEvent[] = [];
+  let skipped = 0;
+  let highest = from;
+  for (const row of batch.rows) {
+    const id = numberAt(row, 'id');
+    if (id !== null && id > highest) highest = id;
+    const event = toEvent(row, context);
+    if (event === null) {
+      skipped += 1;
+      continue;
+    }
+    events.push(event);
+  }
+
+  if (skipped > 0) {
+    diagnostics.push(
+      diagnostic({
+        // A warning, unlike the degraded mode above: a row this build cannot read means the
+        // upstream schema moved, and a savings total quietly missing rows is the failure
+        // RFC 0005 exists to prevent.
+        severity: 'warning',
+        code: 'provider-metrics-rows-skipped',
+        message: `${String(skipped)} of ${String(batch.rows.length)} RTK history rows were not in a shape this build understands`,
+        path,
+        remediation: 'Check whether RTK changed its history schema',
+      }),
+    );
+  }
+
+  // The append happens before the cursor moves. The other order would advance past records
+  // that were never stored if the write failed, and nothing afterwards could tell.
+  await store.appendEvents(events);
+
+  const cursor: ImportCursor = {
+    providerId: RTK,
+    sourceId: path,
+    absolutePath: path,
+    fileIdentity: identity,
+    // Meaningless for this source; the RFC 0005 amendment says which member is authoritative.
+    byteOffset: 0,
+    lastLineDigest: null,
+    highWaterMark: String(highest),
+    updatedAt: context.now(),
+  };
+  await store.writeCursor(cursor);
+
+  if (batch.rows.length === IMPORT_BATCH_SIZE) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'provider-metrics-partial-import',
+        message: `RTK history is being imported in batches of ${String(IMPORT_BATCH_SIZE)}; run the import again to continue`,
+        path,
+        remediation: null,
+      }),
+    );
+  }
+
+  return {
+    providerId: RTK,
+    mode: 'native',
+    source: SOURCE_LABEL,
+    imported: events.length,
+    skipped,
+    cursor,
+    diagnostics,
+  };
+}
+
+const SOURCE_LABEL = 'rtk history.db (commands)';
+
+export const rtkAdapter: ProviderAdapter = { manifest: MANIFEST, detect, verify, collectMetrics };

@@ -261,6 +261,38 @@ describe('module boundaries', () => {
   });
 
   /**
+   * The SQLite driver must load in a child process and nowhere else.
+   *
+   * RFC 0001 and RFC 0005 rejected `node:sqlite` because importing it emits
+   * `ExperimentalWarning` on stderr, and RFC 0006 permits nothing on stderr in
+   * `--json` mode. Reading a provider's database in a child spawned with
+   * `--no-warnings` answers that objection — but only while the driver stays out of
+   * the parent. An import added anywhere else would reintroduce the warning on the
+   * user's terminal, and it would do so silently, in whichever command happened to
+   * load the module first.
+   *
+   * The rule is stated positively, like the `node:crypto` permission above, because
+   * the value here is the *single* location and not the absence of a bad one.
+   */
+  it('only the database reader child imports node:sqlite', () => {
+    const READER = 'packages/platform/src/metrics/sqlite-child.ts';
+    // `file.imports` only carries static `import … from` specifiers, and the reader's import
+    // is deliberately dynamic — a static one would be hoisted into the parent by the
+    // bundler, which is the failure this whole arrangement exists to avoid. Matching both
+    // forms is what keeps the rule from passing because it found nothing to check.
+    const dynamic = /\bimport\s*\(\s*['"]node:sqlite['"]\s*\)/;
+    const importsDriver = (file: (typeof SOURCES)[number]): boolean =>
+      file.imports.includes('node:sqlite') || dynamic.test(file.text);
+
+    const importers = SOURCES.filter(importsDriver).map((file) => file.path);
+    assert.deepEqual(
+      importers,
+      [READER],
+      'the SQLite driver belongs to the reader child, which runs with --no-warnings, and to nothing else',
+    );
+  });
+
+  /**
    * AGENTS.md and PLAN §2.1 acceptance: "no test reads or writes the developer's
    * actual home."
    *

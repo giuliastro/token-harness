@@ -5,7 +5,7 @@
  * process, and metrics contexts that Phase 2 introduces, and an interface that names
  * them before those types exist would be a placeholder, not a contract."
  *
- * Two of the three now exist, so two more methods do. `plan` and `collectMetrics` are
+ * Two of the three now exist, so two more methods do. `plan` and `collectMetrics` were
  * still absent, and for different reasons rather than the same excuse:
  *
  * - `plan` needs the Phase 4 capability resolver to know which scopes this provider is
@@ -14,12 +14,19 @@
  * - `collectMetrics` needs somewhere to put the events. RFC 0005 §Storage puts them
  *   behind `MetricsStore`, and `JsonlStore` — PLAN §2.4, issue 8 — has not been written.
  *   An importer with no store is a function that reads a file and drops it.
+ *
+ * `JsonlStore` now exists, so `collectMetrics` does. `plan` still does not, and the reason
+ * above is unchanged.
  */
 
 import type {
   Diagnostic,
   FileSystemPort,
   HarnessConfigSummary,
+  ImportCursor,
+  LocalDatabasePort,
+  MetricsDeclaration,
+  MetricsStore,
   PlatformFacts,
   PlatformPaths,
   ProcessRunner,
@@ -52,6 +59,22 @@ export interface ProviderContext {
    * that a receipt is a week stale without waiting a week.
    */
   now(): string;
+  /**
+   * A provider's own local database, when the host can read one.
+   *
+   * Null is an ordinary state, not a degraded one: a runtime without a SQLite driver, or a
+   * caller that supplied no reader. RFC 0005 §Importer degradation policy makes the
+   * consequence `mode: 'unavailable'` — an importer that reports nothing rather than one
+   * that estimates.
+   */
+  readonly localDatabase: LocalDatabasePort | null;
+  /**
+   * The RFC 0005 §Privacy identifier for a project directory: "a local stable hash with a
+   * machine-local salt". Injected because the salt lives in the state directory, and an
+   * adapter that derived its own would produce a different identifier per provider for the
+   * same project — which would fragment every report grouped by project.
+   */
+  projectIdFor(absolutePath: string): string;
 }
 
 /**
@@ -82,6 +105,29 @@ export interface ProviderVerification {
   diagnostics: Diagnostic[];
 }
 
+/**
+ * What an import did — RFC 0005 §Importer degradation policy: "An importer states which
+ * fidelity mode it is running in, and the mode appears in `status` output."
+ *
+ * `imported` and `skipped` are separate counts because they answer different questions. A
+ * run that imported nothing because there was nothing new is healthy; a run that skipped
+ * two hundred records because the upstream schema moved is not, and a single number cannot
+ * distinguish them.
+ */
+export interface MetricsImport {
+  providerId: ProviderId;
+  mode: MetricsDeclaration['mode'];
+  /** Where the records came from, for the evidence trail. Null when nothing was read. */
+  source: string | null;
+  /** Events appended to the store. */
+  imported: number;
+  /** Records read and deliberately not turned into events, with a reason in `diagnostics`. */
+  skipped: number;
+  /** The cursor as it now stands, or null when the source has none to remember. */
+  cursor: ImportCursor | null;
+  diagnostics: Diagnostic[];
+}
+
 export interface ProviderAdapter {
   readonly manifest: ProviderManifest;
   /** RFC 0002 §Detection: read-only, evidence-based, never inferred from configuration alone. */
@@ -91,4 +137,13 @@ export interface ProviderAdapter {
    * call and is never run by a read-only command.
    */
   verify(context: ProviderContext): Promise<ProviderVerification>;
+  /**
+   * RFC 0005 §Importers: reads the provider's own records and appends normalized events.
+   *
+   * Takes the store rather than returning events, because the cursor and the append have to
+   * move together. An importer that returned events for someone else to write could have
+   * its cursor advanced by a caller that then failed to append, and the records between the
+   * two would be lost with nothing reporting it.
+   */
+  collectMetrics(context: ProviderContext, store: MetricsStore): Promise<MetricsImport>;
 }

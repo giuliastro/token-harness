@@ -697,7 +697,7 @@ Keep changes reviewable:
 - live tests manually dispatched and isolated;
 - documentation updated in the PR that changes a public contract.
 
-Suggested first ten implementation issues:
+Suggested first implementation issues:
 
 1. Bootstrap pnpm/TypeScript workspace and CI, Windows first in the matrix.
 2. Implement domain schemas, the RFC 0006 envelope types, and JSON fixtures.
@@ -707,9 +707,12 @@ Suggested first ten implementation issues:
 6. Implement file ownership, snapshots including recorded absence, and marker-block
    action.
 7. Implement JSON merge action and transaction rollback.
-8. Implement `JsonlStore` against the `MetricsStore` interface.
-9. Run the live-verification spike and write RFC 0007.
-10. Implement harness registry and Codex detection.
+8. Implement `JsonlStore` against the `MetricsStore` interface. **Done** (#13).
+9. Run the live-verification spike and write RFC 0007. **Done** — RFC 0007 is Proposed.
+10. Implement harness registry and Codex detection. Claude Code was built first, and why is
+    recorded in RFC 0007.
+11. Implement `collectMetrics` on the RTK adapter. **Done** — RFC 0005 §Importers §RTK was
+    amended, because the source the RFC named cannot produce a per-operation event.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
