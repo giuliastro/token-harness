@@ -8,10 +8,12 @@
 import type { HarnessId } from '@token-harness/core';
 
 import { claudeAdapter } from './claude.js';
+import { codexAdapter } from './codex.js';
 import type { HarnessAdapter } from './contract.js';
 
 export * from './contract.js';
 export { claudeAdapter } from './claude.js';
+export { codexAdapter } from './codex.js';
 export { matcherCoversFamily } from './claude.js';
 
 /**
@@ -20,7 +22,7 @@ export { matcherCoversFamily } from './claude.js';
  * the user's configuration, and writing an adapter against an undeclared verification
  * surface is what PLAN §4 puts the spike before the adapters to avoid.
  */
-const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [claudeAdapter];
+const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [claudeAdapter, codexAdapter];
 
 export function listHarnessAdapters(): readonly HarnessAdapter[] {
   return HARNESS_ADAPTERS;
