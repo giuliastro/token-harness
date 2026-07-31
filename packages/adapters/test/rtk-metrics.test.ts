@@ -221,7 +221,9 @@ describe('a native import', () => {
     assert.equal(event.measurement.beforeChars, null);
     assert.equal(event.outcome.changed, true);
     assert.equal(event.outcome.bypassReason, null);
-    assert.equal(event.outcome.latencyMs, 25);
+    // Null on purpose: RTK's `exec_time_ms` is how long the command took, not what RTK
+    // added, and the report renders this field as "Added median latency".
+    assert.equal(event.outcome.latencyMs, null);
   });
 
   it('records a non-reducing row as an unchanged bypass, not a saving', async () => {
@@ -292,7 +294,7 @@ describe('the cursor', () => {
       providerId: 'rtk',
       sourceId: DB,
       absolutePath: DB,
-      fileIdentity: 'rtk-history:low=2827:count=2',
+      fileIdentity: 'rtk-history:low=2827',
       byteOffset: 0,
       lastLineDigest: null,
       highWaterMark: '2827',
@@ -310,7 +312,7 @@ describe('the cursor', () => {
       providerId: 'rtk',
       sourceId: DB,
       absolutePath: DB,
-      fileIdentity: 'rtk-history:low=2827:count=2',
+      fileIdentity: 'rtk-history:low=2827',
       byteOffset: 0,
       lastLineDigest: null,
       highWaterMark: '2829',
@@ -331,7 +333,7 @@ describe('the cursor', () => {
       sourceId: DB,
       absolutePath: DB,
       // `rtk gain --reset` empties the table; a repopulated one starts again from a low id.
-      fileIdentity: 'rtk-history:low=2:count=2828',
+      fileIdentity: 'rtk-history:low=2',
       byteOffset: 0,
       lastLineDigest: null,
       highWaterMark: '9999',
@@ -342,6 +344,49 @@ describe('the cursor', () => {
 
     // Without the generation check the stored mark of 9999 would suppress every row
     // forever, and the importer would report a healthy no-op each time.
+    assert.equal(result.imported, 2);
+    assert.equal(result.diagnostics[0]?.code, 'provider-metrics-source-reset');
+  });
+
+  it('does not mistake a growing table for a reset', async () => {
+    // The regression that matters most in this file. My first generation marker included the
+    // row count, which changes on every intercepted command — so every run looked like a
+    // reset, restarted from zero, and re-imported the whole table. On the second `metrics`
+    // run against a real machine every figure in the report had doubled.
+    //
+    // Here the cursor was written when the table held one row; it now holds two.
+    const existing: ImportCursor = {
+      providerId: 'rtk',
+      sourceId: DB,
+      absolutePath: DB,
+      fileIdentity: 'rtk-history:low=2827',
+      byteOffset: 0,
+      lastLineDigest: null,
+      highWaterMark: '2827',
+      updatedAt: '2026-07-31T08:00:00.000Z',
+    };
+    const result = await rtkAdapter.collectMetrics(context(), store(existing));
+
+    assert.equal(result.imported, 1);
+    assert.deepEqual(result.diagnostics, []);
+  });
+
+  it('detects a reset that reproduced the same lowest identifier', async () => {
+    const existing: ImportCursor = {
+      providerId: 'rtk',
+      sourceId: DB,
+      absolutePath: DB,
+      // Same generation marker, but the table's maximum has gone backwards past the stored
+      // mark: the rows this cursor claims are gone. Without this check the mark would
+      // suppress every row forever and the importer would report a healthy no-op each run.
+      fileIdentity: 'rtk-history:low=2827',
+      byteOffset: 0,
+      lastLineDigest: null,
+      highWaterMark: '99999',
+      updatedAt: '2026-07-31T08:00:00.000Z',
+    };
+    const result = await rtkAdapter.collectMetrics(context(), store(existing));
+
     assert.equal(result.imported, 2);
     assert.equal(result.diagnostics[0]?.code, 'provider-metrics-source-reset');
   });

@@ -1,0 +1,291 @@
+/**
+ * `token-harness metrics` end to end — RFC 0006 §Golden path and §Streams.
+ *
+ * Driven through `run`, so the argument parsing, the exit code, the envelope, and the stream
+ * discipline are all the real ones. The store is a real `JsonlStore` over a real filesystem
+ * in a temporary directory; the *provider* is faked, because the point here is the command
+ * rather than RTK's database, and `packages/adapters/test/rtk-metrics.test.ts` covers that.
+ */
+
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import process from 'node:process';
+import { after, before, describe, it } from 'node:test';
+
+import {
+  JsonlStore,
+  type CliEnvelope,
+  type MetricsReport,
+  type OptimizationEvent,
+  type PlatformFacts,
+} from '@token-harness/core';
+import { NodeFileSystem } from '@token-harness/platform';
+import { run, type RunOptions } from 'token-harness';
+
+const FACTS: PlatformFacts = {
+  os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
+  osDisplayName: 'test',
+  arch: 'x64',
+  nodeVersion: process.versions.node,
+  isWsl: false,
+};
+
+const NOW = '2026-07-31T12:00:00.000Z';
+
+let sandbox = '';
+let counter = 0;
+
+before(() => {
+  sandbox = mkdtempSync(join(tmpdir(), 'th-metrics-'));
+});
+
+after(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
+
+function event(overrides: {
+  id: string;
+  timestamp: string;
+  beforeTokens?: number;
+  afterTokens?: number;
+  changed?: boolean;
+}): OptimizationEvent {
+  const beforeTokens = overrides.beforeTokens ?? 100;
+  const afterTokens = overrides.afterTokens ?? 40;
+  return {
+    schemaVersion: 1,
+    eventId: overrides.id,
+    timestamp: overrides.timestamp,
+    provider: { id: 'rtk', version: '0.42.0' },
+    context: {
+      projectId: 'p_1',
+      harnessId: 'claude',
+      sessionId: null,
+      operationId: overrides.id,
+      pipelineId: null,
+      pipelineOrder: null,
+      toolFamily: null,
+      capability: 'shell.output.reduce',
+    },
+    measurement: {
+      class: 'exact-local',
+      beforeChars: null,
+      afterChars: null,
+      beforeTokens,
+      afterTokens,
+      tokenizer: 'rtk',
+      confidenceLow: null,
+      confidenceHigh: null,
+    },
+    outcome: {
+      changed: overrides.changed ?? afterTokens !== beforeTokens,
+      bypassReason: null,
+      originalReference: null,
+      latencyMs: null,
+      errorCode: null,
+    },
+    source: { nativeEventId: null, importedAt: NOW },
+  };
+}
+
+interface Captured {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+async function runMetrics(
+  argv: readonly string[],
+  seed: readonly OptimizationEvent[],
+): Promise<Captured> {
+  counter += 1;
+  const stateRoot = join(sandbox, `state-${String(counter)}`);
+  const fs = new NodeFileSystem(FACTS);
+  const store = new JsonlStore({ fs, stateRoot, now: () => NOW });
+  if (seed.length > 0) await store.appendEvents([...seed]);
+
+  let stdout = '';
+  let stderr = '';
+  const options: RunOptions = {
+    argv,
+    streams: {
+      out: (text) => {
+        stdout += text;
+      },
+      err: (text) => {
+        stderr += text;
+      },
+    },
+    platform: FACTS,
+    cwd: sandbox,
+    home: sandbox,
+    stateRoot,
+    // No adapters, so no importer runs and the report covers exactly the seeded events.
+    // That separation is deliberate: an importer that also ran would make every assertion
+    // here depend on a provider being installed.
+    adapters: null,
+    metrics: store,
+    now: () => NOW,
+  };
+  const exitCode = await run(options);
+  return { exitCode, stdout, stderr };
+}
+
+describe('the window', () => {
+  const events = [
+    event({ id: 'old', timestamp: '2026-07-01T10:00:00.000Z' }),
+    event({ id: 'recent', timestamp: '2026-07-30T10:00:00.000Z' }),
+  ];
+
+  it('defaults to seven days', async () => {
+    const result = await runMetrics(['metrics', '--json'], events);
+    const report = (JSON.parse(result.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.ok(report);
+
+    assert.equal(report.windowStart, '2026-07-24');
+    assert.equal(report.windowEnd, '2026-07-31');
+    // Only the recent one: 60 saved, not 120.
+    assert.equal(report.classes[0]?.saved, 60);
+  });
+
+  it('widens with --since', async () => {
+    const result = await runMetrics(['metrics', '--since', '60d', '--json'], events);
+    const report = (JSON.parse(result.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.ok(report);
+    assert.equal(report.classes[0]?.saved, 120);
+  });
+
+  it('accepts an absolute range', async () => {
+    const result = await runMetrics(
+      ['metrics', '--since', '2026-06-30', '--until', '2026-07-02', '--json'],
+      events,
+    );
+    const report = (JSON.parse(result.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.ok(report);
+    assert.equal(report.classes[0]?.saved, 60);
+    assert.equal(report.windowEnd, '2026-07-02');
+  });
+
+  const badWindows = ['banana', '7', '7y', '2026-02-31'];
+  for (const value of badWindows) {
+    it(`rejects --since ${value} as a usage error`, async () => {
+      const result = await runMetrics(['metrics', '--since', value, '--json'], events);
+      // RFC 0006 §Exit codes 2: a bad flag value is a usage error, not a failed report.
+      assert.equal(result.exitCode, 2);
+      const envelope = JSON.parse(result.stdout) as CliEnvelope<null>;
+      assert.equal(envelope.data, null);
+      assert.equal(envelope.diagnostics[0]?.code, 'invalid-argument');
+    });
+  }
+});
+
+describe('the envelope', () => {
+  it('is one JSON document on stdout with nothing on stderr', async () => {
+    const result = await runMetrics(
+      ['metrics', '--json'],
+      [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
+    );
+
+    assert.equal(result.stderr, '');
+    assert.doesNotThrow(() => JSON.parse(result.stdout));
+    assert.equal(result.exitCode, 0);
+  });
+
+  it('exits 0 on an empty window, because an empty report is a fact', async () => {
+    const result = await runMetrics(['metrics', '--json'], []);
+    const report = (JSON.parse(result.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.ok(report);
+
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(report.providers, []);
+    // Not 0%: nothing happened, which is a different statement from nothing being optimized.
+    assert.equal(report.coveragePercent, null);
+  });
+});
+
+describe('the human rendering', () => {
+  it('keeps each class on its own line and never prints a combined total', async () => {
+    const result = await runMetrics(
+      ['metrics'],
+      [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
+    );
+
+    assert.match(result.stdout, /^Savings — 2026-07-24 to 2026-07-31$/m);
+    assert.match(result.stdout, /^Exact local .* saved 60$/m);
+    assert.match(result.stdout, /^Estimated local .* none recorded$/m);
+    assert.match(result.stdout, /^End-to-end billed .* no A\/B run$/m);
+  });
+
+  it('reports an unmeasured latency as unmeasured', async () => {
+    const result = await runMetrics(
+      ['metrics'],
+      [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
+    );
+    // `0ms` would claim the overhead was measured and found negligible.
+    assert.match(result.stdout, /Added median latency not measured\./);
+  });
+
+  it('names inflated operations instead of leaving them inside a net figure', async () => {
+    const result = await runMetrics(
+      ['metrics'],
+      [
+        event({ id: 'shrank', timestamp: '2026-07-30T10:00:00.000Z' }),
+        event({
+          id: 'grew',
+          timestamp: '2026-07-30T11:00:00.000Z',
+          beforeTokens: 100,
+          afterTokens: 150,
+        }),
+      ],
+    );
+
+    assert.match(result.stdout, /1 operations made the payload larger/);
+    // Net of the inflation, and the provider row agrees with the class line.
+    assert.match(result.stdout, /^Exact local .* saved 10$/m);
+    assert.match(result.stdout, /rtk\s+saved 10 tokens/);
+  });
+
+  it('says nothing about inflation when there was none', async () => {
+    const result = await runMetrics(
+      ['metrics'],
+      [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
+    );
+    assert.doesNotMatch(result.stdout, /made the payload larger/);
+  });
+
+  it('reports a store-less host as covering no events rather than failing', async () => {
+    let stdout = '';
+    const exitCode = await run({
+      argv: ['metrics'],
+      streams: { out: (text) => (stdout += text), err: () => undefined },
+      platform: FACTS,
+      cwd: sandbox,
+      home: sandbox,
+      adapters: null,
+      metrics: null,
+      now: () => NOW,
+    });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout, /Savings — 2026-07-24 to 2026-07-31/);
+  });
+});
+
+describe('help', () => {
+  it('lists metrics as a command rather than as not in this build', async () => {
+    let stdout = '';
+    await run({
+      argv: ['--help'],
+      streams: { out: (text) => (stdout += text), err: () => undefined },
+      platform: FACTS,
+      cwd: sandbox,
+      home: sandbox,
+      now: () => NOW,
+    });
+
+    assert.match(stdout, /^ {2}metrics {5}Import provider records/m);
+    assert.doesNotMatch(stdout, /metrics {4}Not in this build/);
+  });
+});

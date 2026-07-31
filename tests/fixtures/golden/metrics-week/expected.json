@@ -71,7 +71,8 @@
     "coveragePercent": 91,
     "bypassed": 402,
     "errors": 0,
-    "addedMedianLatencyMs": 11
+    "addedMedianLatencyMs": 11,
+    "inflatedOperations": 0
   },
   "diagnostics": []
 }

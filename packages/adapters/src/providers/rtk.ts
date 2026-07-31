@@ -552,7 +552,7 @@ const HISTORY_QUERY =
   'FROM commands WHERE id > ? ORDER BY id LIMIT ?';
 
 /** The lowest surviving row identifier, used as the generation marker. See `cursorGeneration`. */
-const GENERATION_QUERY = 'SELECT MIN(id) AS low, MAX(id) AS high, COUNT(*) AS total FROM commands';
+const GENERATION_QUERY = 'SELECT MIN(id) AS low, MAX(id) AS high FROM commands';
 
 /**
  * Rows per import.
@@ -589,9 +589,18 @@ export function rtkDatabasePath(context: ProviderContext): string {
  * it, and a re-populated table starts again from a low `id`. If that marker changes, rows
  * this cursor claims to have imported are not the rows now in the table, and the import
  * restarts.
+ *
+ * It is deliberately *only* `MIN(id)`. My first version included the row count, which
+ * changes on every intercepted command — so every run looked like a reset, restarted from
+ * zero, and re-imported the whole table. The report doubled its figures on the second run,
+ * which is how I found it. A generation marker has to be invariant under the thing it is
+ * meant to tolerate.
+ *
+ * A reset that happens to leave the same `MIN(id)` is still caught, by the separate check
+ * that the table's maximum has not gone backwards past the stored mark.
  */
-function cursorGeneration(low: number | null, total: number | null): string {
-  return `rtk-history:low=${String(low ?? 0)}:count=${String(total ?? 0)}`;
+function cursorGeneration(low: number | null): string {
+  return `rtk-history:low=${String(low ?? 0)}`;
 }
 
 /**
@@ -615,7 +624,6 @@ function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationE
   if (Number.isNaN(instant.getTime())) return null;
 
   const projectPath = stringAt(row, 'project_path');
-  const latency = numberAt(row, 'exec_time_ms');
 
   return {
     schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
@@ -656,13 +664,30 @@ function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationE
       confidenceHigh: null,
     },
     outcome: {
-      // The distinction the aggregate cannot make. Three quarters of the rows on the
-      // machine this was written against have `after >= before`: RTK proxied the command
-      // and passed the output through unchanged.
-      changed: after < before,
-      bypassReason: after < before ? null : 'no-reduction-applied',
+      // RFC 0005 asks whether "the payload the model saw was actually modified", which is
+      // not the same question as whether it got smaller.
+      //
+      // On the machine this was written against, 240 rows have `output_tokens` *greater*
+      // than `input_tokens` — 1,957 tokens of inflation in total. RTK modified those
+      // payloads; it just made them bigger. Recording them as unchanged would file a real
+      // modification as a bypass and hide the inflation from every report.
+      //
+      // Equal counts are treated as pass-through. RTK does not record whether the text
+      // changed, and an identical token count is the strongest evidence available that it
+      // did not.
+      changed: after !== before,
+      bypassReason: after === before ? 'no-reduction-applied' : null,
       originalReference: null,
-      latencyMs: latency,
+      // Deliberately null, and `exec_time_ms` is deliberately not used for it.
+      //
+      // `latencyMs` is the overhead the optimization added — RFC 0006 renders it as "Added
+      // median latency". RTK's column is how long the *command* took: `rtk gain` reports the
+      // same total as "Total exec time … avg 3.4s", which is the runtime of `git status` and
+      // friends, not anything RTK spent. Filing it here would make the report claim RTK adds
+      // three and a half seconds to every command it touches.
+      //
+      // RTK does not record its own overhead, so there is nothing honest to put here.
+      latencyMs: null,
       errorCode: null,
     },
     source: { nativeEventId: String(id), importedAt: context.now() },
@@ -740,8 +765,7 @@ async function collectMetrics(
   const first = generation.rows[0];
   const low = first === undefined ? null : numberAt(first, 'low');
   const high = first === undefined ? null : numberAt(first, 'high');
-  const total = first === undefined ? null : numberAt(first, 'total');
-  const identity = cursorGeneration(low, total);
+  const identity = cursorGeneration(low);
 
   const stored = await store.readCursor(RTK, path);
   let from = 0;
@@ -750,9 +774,12 @@ async function collectMetrics(
     // A generation change means the table was reset, so the stored mark refers to rows that
     // no longer exist. Restarting from zero is correct and safe: the event identity is the
     // native row id, so anything already stored keeps its identity.
-    if (stored.fileIdentity === identity && Number.isFinite(previous)) {
+    // `high < previous` catches a reset that happened to reproduce the same `MIN(id)`: rows
+    // this cursor claims are gone, so the mark refers to nothing.
+    const sameGeneration = stored.fileIdentity === identity && (high === null || high >= previous);
+    if (sameGeneration && Number.isFinite(previous)) {
       from = previous;
-    } else if (stored.fileIdentity !== identity) {
+    } else if (!sameGeneration) {
       diagnostics.push(
         diagnostic({
           severity: 'info',

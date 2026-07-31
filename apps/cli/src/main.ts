@@ -14,7 +14,7 @@
 
 import process from 'node:process';
 
-import { deriveProjectId } from '@token-harness/core';
+import { JsonlStore, deriveProjectId } from '@token-harness/core';
 import {
   ChildLocalDatabase,
   NodeFileSystem,
@@ -114,6 +114,26 @@ export async function main(argv: readonly string[]): Promise<void> {
                     resolution.environment.facts.os === 'windows',
                   ),
           }
+        : null,
+    /**
+     * The metrics store.
+     *
+     * A skipped line goes to stderr as a plain warning rather than into the envelope: the
+     * store is read while a report is being assembled, long after the command decided what
+     * its diagnostics were. Silence is the one thing it must not be — RFC 0005 exists so a
+     * lost record is visible.
+     */
+    metrics:
+      resolution.ok && fs !== null
+        ? new JsonlStore({
+            fs,
+            stateRoot: resolution.environment.paths.state,
+            now: () => new Date().toISOString(),
+            onSkippedLine: (skipped) => {
+              const at = `${skipped.path}:${String(skipped.lineNumber)}`;
+              process.stderr.write(`warning  metrics-record-skipped: ${skipped.reason} at ${at}\n`);
+            },
+          })
         : null,
     env: process.env,
     stdoutIsTty: process.stdout.isTTY === true,

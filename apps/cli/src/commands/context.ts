@@ -10,6 +10,7 @@ import type {
   FileSystemPort,
   HarnessId,
   LocalDatabasePort,
+  MetricsStore,
   PlatformFacts,
   PlatformPaths,
   ProcessRunner,
@@ -26,6 +27,17 @@ export interface CommandContext {
   stateRoot: string | null;
   harness: HarnessId | null;
   provider: ProviderId | null;
+  /** The `--since` value as given, or null. Parsed by the command that needs a window. */
+  since: string | null;
+  until: string | null;
+  /**
+   * The metrics store, or null when this host has none.
+   *
+   * Separate from `adapters` because it is not a port an adapter reaches for: an importer is
+   * *handed* the store so that its cursor and its appends move together. RFC 0005 §Storage
+   * keeps the backend invisible on both sides of this field.
+   */
+  metrics: MetricsStore | null;
   /**
    * What an adapter is allowed to reach — the ports from `core`, never the
    * implementations from `@token-harness/platform`.

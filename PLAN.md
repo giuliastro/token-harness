@@ -713,6 +713,11 @@ Suggested first implementation issues:
     recorded in RFC 0007.
 11. Implement `collectMetrics` on the RTK adapter. **Done** — RFC 0005 §Importers §RTK was
     amended, because the source the RFC named cannot produce a per-operation event.
+12. Implement the `metrics` command over the store. **Done** — it imports, queries, and
+    aggregates, keeping the measurement classes apart structurally. Two findings recorded
+    beside the code: RTK inflates some payloads and floors its own `saved_tokens` at zero, so
+    `rtk gain` cannot report it; and RTK's `exec_time_ms` is command duration, not added
+    overhead, so `latencyMs` stays null rather than claiming a measurement.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 

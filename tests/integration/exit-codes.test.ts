@@ -64,6 +64,7 @@ describe('exit codes', () => {
       commands: {
         doctor: () => Promise.reject(new Error('boom')),
         plan: () => Promise.reject(new Error('unused')),
+        metrics: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -113,6 +114,7 @@ describe('exit codes', () => {
             }),
           ),
         plan: () => Promise.reject(new Error('unused')),
+        metrics: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -135,6 +137,7 @@ describe('exit codes', () => {
             }),
           ),
         status: () => Promise.reject(new Error('unused')),
+        metrics: () => Promise.reject(new Error('unused')),
       },
     });
     assert.equal(result.exitCode, EXIT_CODES['blocked-by-conflict']);
