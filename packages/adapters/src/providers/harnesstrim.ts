@@ -19,17 +19,22 @@
  *
  * ## Two things this machine taught the adapter
  *
- * **There is no version command.** Not `--version`, not `-v`, not `version` — the first two are
- * rejected as unknown options and the third as an unknown command. So `detect` reports
- * `version: null` with evidence saying why, rather than inventing one. The installed
- * `package.json` reachable from the pnpm shim says `harnesstrim-monorepo` `0.0.1`, which is the
- * monorepo's version and not the CLI's; reporting it would be a precise-looking wrong answer, and
- * RFC 0005 documents behaviour for `0.0.5`.
+ * **A version command may or may not exist, so it is asked rather than assumed.** When this adapter
+ * was first written the installed CLI rejected `--version`, `-v` and `version` alike, and the
+ * adapter hardcoded that conclusion: it probed `--help` and reported `version: null` with evidence
+ * saying no version command existed. Upstream then shipped one — `harnesstrim --version` now prints
+ * `0.0.5` — and a fact frozen at the time of writing became a false statement about a tool that
+ * could answer.
  *
- * A null version has a consequence worth stating: `classifyVersion` cannot run, so the verdict is
- * null and `doctor` reports no version problem. That is correct — an unreadable version is not an
- * out-of-range version — and it is why `testedVersions` below documents what the *adapter* was
- * written against rather than what was detected.
+ * So `probeExecutable` asks `--version` first and falls back to `--help` only to establish that the
+ * binary runs at all. That is the shape a detector should have had from the start: a claim
+ * re-derived on every run rather than one baked in.
+ *
+ * When no version can be read, `version` stays null and so does the verdict. `classifyVersion`
+ * cannot run, and that is correct — an unreadable version is not an out-of-range one, and treating
+ * it as one would exit 3 on every machine running an older build. What is never done is reading the
+ * `package.json` reachable from the pnpm shim: it says `harnesstrim-monorepo` `0.0.1`, the
+ * monorepo's version and not the CLI's, and a precise-looking wrong answer is worse than none.
  *
  * **Telemetry is opt-in and usually absent.** `--metrics <path>` is what records a `TrimEvent`, and
  * on this machine the Codex hook is configured with it and no metrics file has ever appeared —
@@ -41,6 +46,7 @@
 import {
   MANIFEST_SCHEMA_VERSION,
   OPTIMIZATION_EVENT_SCHEMA_VERSION,
+  classifyVersion,
   diagnostic,
   digestText,
   evidence,
@@ -169,8 +175,12 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReview: null,
 };
 
-/** What the adapter was written against. Not what was detected — see the module comment. */
+/**
+ * The upstream release this adapter's mapping was written against, per RFC 0005 §Importers
+ * §HarnessTrim — and now also the range a detected version is judged against.
+ */
 const TESTED_UPSTREAM = '0.0.5';
+const TESTED_VERSIONS = { minimum: TESTED_UPSTREAM, maximum: TESTED_UPSTREAM };
 
 function identifiesCommand(command: string): boolean {
   return HOOK_COMMAND_PATTERN.test(command);
@@ -187,46 +197,98 @@ export function harnessesWiredToHarnessTrim(
   return [...wired];
 }
 
+const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
+
 /**
- * Whether the executable can be run at all.
+ * Runs the tool and reports what it says about itself.
  *
- * `--help` rather than a version flag, because there is no version flag. It is the cheapest
- * invocation that proves the binary exists and starts, which is the whole claim being made.
+ * `--version` first, because a build that has it should be believed. A build that does not rejects
+ * it as an unknown option and exits non-zero, so `--help` follows — which separates "is here and
+ * cannot tell me its version" from "is not here at all", two states RFC 0002 §Detection keeps apart.
  */
-async function probeExecutable(
-  context: ProviderContext,
-): Promise<{ installed: boolean; path: string | null; evidence: Evidence[] }> {
-  const outcome = await context.runner.run({
+async function probeExecutable(context: ProviderContext): Promise<{
+  installed: boolean;
+  version: string | null;
+  path: string | null;
+  evidence: Evidence[];
+}> {
+  const asked = await context.runner.run({
+    executable: 'harnesstrim',
+    args: ['--version'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+
+  // Could not be started at all, which is a different finding from an unknown flag.
+  if (asked.failure !== null) {
+    return {
+      installed: false,
+      version: null,
+      path: null,
+      evidence: [
+        evidence({
+          kind: 'absence',
+          source: 'harnesstrim',
+          detail: `not runnable: ${asked.failure.reason}`,
+        }),
+      ],
+    };
+  }
+
+  if (asked.exitCode === 0) {
+    const version = VERSION_PATTERN.exec(asked.stdout)?.[1] ?? null;
+    return {
+      installed: true,
+      version,
+      path: asked.executablePath,
+      evidence: [
+        evidence({
+          kind: 'version-output',
+          source: 'harnesstrim --version',
+          path: asked.executablePath,
+          detail: version === null ? 'reported no recognisable version' : `reported ${version}`,
+        }),
+      ],
+    };
+  }
+
+  /**
+   * Non-zero from `--version` is how the older build rejects an unknown option, so this asks a
+   * question it is certain to understand. It is still installed, and saying so with the reason is
+   * better than reporting it absent because one flag was not recognised.
+   */
+  const help = await context.runner.run({
     executable: 'harnesstrim',
     args: ['--help'],
     cwd: context.projectRoot,
     timeoutMs: 20_000,
   });
 
-  if (outcome.failure !== null) {
+  if (help.failure !== null || help.exitCode !== 0) {
     return {
       installed: false,
+      version: null,
       path: null,
       evidence: [
         evidence({
           kind: 'absence',
           source: 'harnesstrim',
-          detail: `not runnable: ${outcome.failure.reason}`,
+          detail: 'neither --version nor --help succeeded',
         }),
       ],
     };
   }
 
   return {
-    installed: outcome.exitCode === 0,
-    path: outcome.executablePath,
+    installed: true,
+    version: null,
+    path: help.executablePath,
     evidence: [
       evidence({
         kind: 'version-output',
         source: 'harnesstrim --help',
-        path: outcome.executablePath,
-        // Said plainly rather than left as a null nobody can interpret.
-        detail: 'runs, but exposes no version command, so no version can be recorded',
+        path: help.executablePath,
+        detail: 'runs, but this build rejects --version, so no version could be recorded',
       }),
     ],
   };
@@ -283,15 +345,14 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
 
   return {
     providerId: HARNESSTRIM,
-    // Null on purpose. See the module comment: there is no version command, and the reachable
-    // package.json reports the monorepo rather than the CLI.
-    version: null,
+    version: probe.version,
     state,
     executable: probe.path,
     installationChannel: null,
-    // No version means no verdict. An unreadable version is not an out-of-range one, and reporting
-    // it as one would make `doctor` exit 3 on every machine that has HarnessTrim installed.
-    versionVerdict: null,
+    // A verdict only when there is a version to judge. Null otherwise: an unreadable version is not
+    // an out-of-range one, and treating it as one would exit 3 on every machine running a build that
+    // cannot answer.
+    versionVerdict: probe.version === null ? null : classifyVersion(probe.version, TESTED_VERSIONS),
     configuredHarnesses: configured,
     unmanagedHarnessesConfigured: configured.filter(
       (harness) => !MANIFEST.harnesses.some((entry) => entry.harness === harness),
@@ -444,9 +505,11 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   checks.push({
     id: 'executable-resolves',
     status: probe.installed ? 'pass' : 'fail',
-    summary: probe.installed
-      ? 'harnesstrim runs (no version command to report)'
-      : 'harnesstrim could not be run',
+    summary: !probe.installed
+      ? 'harnesstrim could not be run'
+      : probe.version === null
+        ? 'harnesstrim runs, but this build cannot report a version'
+        : `harnesstrim ${probe.version}`,
     achievedTier: probe.installed ? 'presence' : null,
     evidence: probe.evidence,
     remediation: probe.installed ? null : 'Install HarnessTrim, or add it to PATH',

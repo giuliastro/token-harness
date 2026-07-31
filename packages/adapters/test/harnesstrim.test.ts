@@ -59,6 +59,8 @@ interface Options {
   files?: Record<string, string>;
   runnable?: boolean;
   configs?: HarnessConfigSummary[];
+  /** What `--version` prints. Null makes the build reject the flag, as older ones do. */
+  version?: string | null;
 }
 
 function context(options: Options = {}): ProviderContext {
@@ -84,15 +86,26 @@ function context(options: Options = {}): ProviderContext {
       readDirectory: () => Promise.resolve([]),
     },
     runner: {
-      run: (request: ProcessRequest): Promise<ProcessOutcome> =>
-        Promise.resolve({
+      run: (request: ProcessRequest): Promise<ProcessOutcome> => {
+        const asksVersion = request.args.includes('--version');
+        // `version: null` models the older build, which rejects the unknown option with a non-zero
+        // exit — a different thing from not being installed, and the distinction the probe exists
+        // to draw.
+        const declared = options.version === undefined ? '0.0.5' : options.version;
+        const rejects = asksVersion && declared === null;
+        return Promise.resolve({
           displayCommand: `${request.executable} ${request.args.join(' ')}`,
           interpreter: 'direct',
           executablePath: options.runnable === false ? null : `${HOME}\\pnpm\\harnesstrim.CMD`,
-          exitCode: options.runnable === false ? null : 0,
+          exitCode: options.runnable === false ? null : rejects ? 1 : 0,
           signal: null,
-          stdout: options.runnable === false ? '' : 'harnesstrim — one token policy',
-          stderr: '',
+          stdout:
+            options.runnable === false
+              ? ''
+              : asksVersion
+                ? (declared ?? '')
+                : 'harnesstrim — one token policy',
+          stderr: rejects ? "Unknown option '--version'" : '',
           stdoutTruncated: false,
           stderrTruncated: false,
           durationMs: 1,
@@ -101,7 +114,8 @@ function context(options: Options = {}): ProviderContext {
             options.runnable === false
               ? { reason: 'executable-not-found', message: 'missing' }
               : null,
-        }),
+        });
+      },
     },
     facts: FACTS,
     paths: {
@@ -158,21 +172,32 @@ function store(existing: ImportCursor | null = null): FakeStore {
 }
 
 describe('detection', () => {
-  it('reports no version, because there is no version command', async () => {
+  it('reports the version when the build has the command', async () => {
+    // Upstream shipped `--version` after this adapter first assumed it did not exist. Asking is the
+    // only way a detector stays true across releases.
     const detection = await harnesstrimAdapter.detect(context());
+    assert.equal(detection.version, '0.0.5');
+    assert.equal(detection.versionVerdict, 'in-range');
+    assert.match(detection.evidence.map((entry) => entry.detail).join(' '), /reported 0\.0\.5/);
+  });
+
+  it('reports no version, and stays installed, when the build rejects the flag', async () => {
+    const detection = await harnesstrimAdapter.detect(context({ version: null }));
     /**
-     * Not an oversight. `--version`, `-v` and `version` are all rejected by the CLI, and the
-     * `package.json` reachable from the pnpm shim reports `harnesstrim-monorepo` `0.0.1` — the
-     * monorepo, not the CLI. A precise-looking wrong version is worse than none.
+     * The state the adapter used to hardcode. A non-zero exit from an unknown option is not absence:
+     * `--help` still succeeds, so the tool is installed and simply cannot say which version it is.
      */
     assert.equal(detection.version, null);
-    // And no verdict, so `doctor` reports no version problem: an unreadable version is not an
-    // out-of-range one.
+    assert.equal(detection.state, 'installed');
+    // No verdict, so `doctor` reports no version problem — an unreadable version is not an
+    // out-of-range one, and treating it as one would exit 3 on every older build.
     assert.equal(detection.versionVerdict, null);
-    assert.match(
-      detection.evidence.map((entry) => entry.detail).join(' '),
-      /exposes no version command/,
-    );
+    assert.match(detection.evidence.map((entry) => entry.detail).join(' '), /rejects --version/);
+  });
+
+  it('judges a version outside the tested range', async () => {
+    const detection = await harnesstrimAdapter.detect(context({ version: '9.9.9' }));
+    assert.equal(detection.versionVerdict, 'unknown-newer');
   });
 
   it('is installed when runnable and wired to nothing', async () => {
