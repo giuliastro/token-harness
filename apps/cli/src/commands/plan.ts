@@ -5,11 +5,13 @@
  * over the harnesses actually present and the providers actually detected, so `ownership`,
  * `exclusions`, and `conflicts` are real.
  *
- * What is still absent is `actions`. Ownership answers *who* owns a scope; an action is *what
- * to write*, and that needs the installation planning of Phase 6 — RFC 0002 §Adapter lifecycle
- * keeps `plan` on the adapter for that reason. A plan that invented actions from ownership
- * would be guessing at file edits, which RFC 0004 exists to prevent. So this reports what was
- * resolved and says plainly that nothing will be written yet.
+ * Actions come from the provider adapters, one `plan` call each, given the scopes the resolver
+ * assigned them. The direction matters: RFC 0003 centralises ownership, so an adapter is *told*
+ * what it owns and answers only "what would I write". An adapter that chose its own scopes would
+ * be making the resolver's decision a second time, where no rule table applies.
+ *
+ * Nothing here writes. RFC 0004 keeps `plan` read-only, and the actions are data — RFC 0002
+ * §Planning: "a provider plan contains no executable closures and can be serialized as JSON".
  *
  * RFC 0006 §Plan persistence requires a stored plan to be addressable by ID. Persisting it
  * belongs with `apply`, so `persisted` stays false and no `apply --plan <id>` hint is printed
@@ -23,11 +25,15 @@ import {
   commandResult,
   diagnostic,
   isProfileId,
+  planRequiresElevation,
+  planRequiresNetwork,
   resolveOwnership,
   type CommandResult,
   type Diagnostic,
+  type HarnessConfigSummary,
   type HarnessManifest,
   type PlanReport,
+  type PlannedAction,
   type ProfileId,
   type ResolverProvider,
 } from '@token-harness/core';
@@ -70,18 +76,28 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
    * is detected, and a plan over nothing is the honest result.
    */
   const present: HarnessManifest[] = [];
-  if (context.adapters !== null) {
-    const detectionContext = {
-      fs: context.adapters.fs,
-      runner: context.adapters.runner,
-      facts: context.platform,
-      paths: context.adapters.paths,
-      projectRoot: context.projectRoot,
-    };
+  const harnessConfigs: HarnessConfigSummary[] = [];
+  const detectionContext =
+    context.adapters === null
+      ? null
+      : {
+          fs: context.adapters.fs,
+          runner: context.adapters.runner,
+          facts: context.platform,
+          paths: context.adapters.paths,
+          projectRoot: context.projectRoot,
+        };
+
+  if (detectionContext !== null) {
     for (const adapter of harnessAdapters) {
       const detection = await adapter.detect(detectionContext);
       if (detection.state === 'absent') continue;
       present.push(adapter.manifest);
+      // Inspected here as well as detected, because a plan that cannot see the live hook list
+      // cannot tell "install this" from "this is already installed" — and RFC 0004 §Brownfield
+      // adoption makes the second the common case.
+      const inspection = await adapter.inspect(detectionContext);
+      harnessConfigs.push(...inspection.summaries);
     }
   }
 
@@ -99,6 +115,34 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     harness: context.harness,
   });
 
+  /**
+   * One `plan` call per provider that owns something.
+   *
+   * A provider with no resolved scope is not asked. Asking it anyway would invite a plan for a
+   * scope the resolver declined to give it, which is the one thing centralising ownership was
+   * meant to prevent.
+   */
+  const actions: PlannedAction[] = [];
+  if (detectionContext !== null && context.adapters !== null) {
+    const providerContext = {
+      ...detectionContext,
+      harnessConfigs,
+      now: context.now,
+      localDatabase: context.adapters.localDatabase,
+      projectIdFor: context.adapters.projectIdFor,
+    };
+    for (const adapter of providerAdapters) {
+      const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
+      if (owned.length === 0) continue;
+      const providerPlan = await adapter.plan(providerContext, {
+        ownership: owned,
+        harnesses: present,
+        desiredState: 'configured',
+      });
+      actions.push(...providerPlan.actions);
+    }
+  }
+
   const report: PlanReport = {
     // RFC 0006 §Plan persistence makes the ID "a digest over the plan's normalized content",
     // and a plan is not content until it has actions. Null for now, rather than a digest over
@@ -111,11 +155,18 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     projectId: context.adapters?.projectIdFor(context.projectRoot) ?? null,
     ownership: resolution.ownership,
     exclusions: resolution.exclusions,
-    actions: [],
+    actions,
     conflicts: resolution.conflicts,
-    network: [],
-    elevation: [],
-    backups: { files: 0 },
+    // Derived from the actions rather than declared, so the summary line cannot disagree with
+    // what the plan would do. RFC 0006's transcript prints all three.
+    network: planRequiresNetwork(actions) ? ['provider installation channel'] : [],
+    elevation: planRequiresElevation(actions) ? ['provider installation channel'] : [],
+    // One snapshot per distinct existing file an action touches. Counted from `affectedPaths`
+    // for the same reason: a stated number that the actions do not imply is a number nobody
+    // can check.
+    backups: {
+      files: new Set(actions.flatMap((action) => action.affectedPaths)).size,
+    },
     persisted: false,
   };
 
@@ -151,14 +202,17 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     );
   }
 
-  if (resolution.ownership.length > 0) {
+  if (resolution.ownership.length > 0 && actions.length === 0) {
+    // RFC 0004 §Brownfield adoption, and the ordinary outcome on a machine already set up: the
+    // desired state is the current state, so the honest plan is empty. Saying nothing here
+    // would leave a reader wondering whether the plan failed.
     diagnostics.push(
       diagnostic({
         severity: 'info',
-        code: 'plan-has-no-actions',
+        code: 'already-in-desired-state',
         message:
-          'Ownership is resolved, but writing it is not in this build, so this plan changes nothing',
-        remediation: 'Run `token-harness doctor` to see what is already configured',
+          'Every scope Token Harness would own is already configured, so this plan has nothing to change',
+        remediation: null,
       }),
     );
   }

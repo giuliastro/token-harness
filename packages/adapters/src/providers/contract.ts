@@ -15,14 +15,16 @@
  *   behind `MetricsStore`, and `JsonlStore` — PLAN §2.4, issue 8 — has not been written.
  *   An importer with no store is a function that reads a file and drops it.
  *
- * `JsonlStore` now exists, so `collectMetrics` does. `plan` still does not, and the reason
- * above is unchanged.
+ * `JsonlStore` now exists, so `collectMetrics` does. And the Phase 4 resolver exists, so `plan`
+ * does too: RFC 0003 centralises the ownership decision, so an adapter is now *told* which
+ * scopes it owns rather than deciding alone. That direction is the whole reason `plan` waited.
  */
 
 import type {
   Diagnostic,
   FileSystemPort,
   HarnessConfigSummary,
+  HarnessManifest,
   ImportCursor,
   LocalDatabasePort,
   MetricsDeclaration,
@@ -33,6 +35,8 @@ import type {
   ProviderDetection,
   ProviderId,
   ProviderManifest,
+  ProviderPlan,
+  ResolvedCapability,
   VerificationCheck,
   VerificationTier,
 } from '@token-harness/core';
@@ -128,6 +132,28 @@ export interface MetricsImport {
   diagnostics: Diagnostic[];
 }
 
+/**
+ * What the planner asks a provider for.
+ *
+ * `ownership` is the input that makes this a request rather than a negotiation: the resolver
+ * has already decided, and the adapter's job is to produce the actions that bring that about.
+ * An adapter that received the whole environment and picked its own scopes would be making
+ * RFC 0003's decision a second time, in a place where no rule table applies.
+ */
+export interface ProviderPlanRequest {
+  /** The scopes this provider owns, from `resolveOwnership`. Never empty for a real request. */
+  readonly ownership: readonly ResolvedCapability[];
+  /** Manifests of the harnesses those scopes belong to, for their configuration files. */
+  readonly harnesses: readonly HarnessManifest[];
+  /**
+   * `configured` installs and wires; `absent` is the uninstall plan. One method for both,
+   * because RFC 0004 requires removal to be as reviewable as installation — a separate
+   * uninstall path is a second implementation of ownership, free to disagree about what is
+   * owned.
+   */
+  readonly desiredState: ProviderPlan['desiredState'];
+}
+
 export interface ProviderAdapter {
   readonly manifest: ProviderManifest;
   /** RFC 0002 §Detection: read-only, evidence-based, never inferred from configuration alone. */
@@ -159,4 +185,13 @@ export interface ProviderAdapter {
    * two would be lost with nothing reporting it.
    */
   collectMetrics(context: ProviderContext, store: MetricsStore): Promise<MetricsImport>;
+  /**
+   * RFC 0002 §Planning: the actions that would bring the requested state about.
+   *
+   * Read-only, and returns data with "no executable closures" so the plan a reviewer approves
+   * is serializable and replayable. An adapter that already finds the desired state satisfied
+   * returns no actions — which is what makes RFC 0004 §Brownfield adoption work: an existing
+   * user-managed installation is tolerated rather than overwritten.
+   */
+  plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan>;
 }

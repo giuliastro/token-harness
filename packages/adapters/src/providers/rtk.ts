@@ -52,6 +52,7 @@ import {
   type OptimizationEvent,
   type ProviderDetection,
   type ProviderManifest,
+  type ProviderPlan,
   type ProviderState,
   type VerificationCheck,
   type VersionVerdict,
@@ -62,8 +63,10 @@ import type {
   PassiveReceipt,
   ProviderAdapter,
   ProviderContext,
+  ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
+import { buildRtkPlan } from './rtk-plan.js';
 
 const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
@@ -906,10 +909,29 @@ function identifiesCommand(command: string): boolean {
   return HOOK_COMMAND_PATTERN.test(command);
 }
 
+/**
+ * RFC 0002 §Planning, PLAN §10.
+ *
+ * The whole body is in `rtk-plan.ts`; what lives here is the one thing the plan needs from
+ * this module and cannot get anywhere else — whether `rtk` can actually be run. `detect` is
+ * the authority on that, so the plan asks it rather than re-deriving it.
+ */
+async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
+  const version = await readVersion(context);
+  return buildRtkPlan({
+    context,
+    request,
+    installed: version.version !== null,
+    identifiesCommand,
+    installationChannels: MANIFEST.installationChannels,
+  });
+}
+
 export const rtkAdapter: ProviderAdapter = {
   manifest: MANIFEST,
   detect,
   verify,
   collectMetrics,
   identifiesCommand,
+  plan,
 };
