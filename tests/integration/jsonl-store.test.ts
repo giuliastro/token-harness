@@ -326,7 +326,10 @@ describe('a torn file', () => {
     const h = harness();
     await h.store.appendEvents([event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })]);
     const path = join(h.stateRoot, 'metrics', 'events-2026-07.jsonl');
-    const future = { ...event({ id: 'future', timestamp: '2026-07-30T12:00:00.000Z' }), schemaVersion: 99 };
+    const future = {
+      ...event({ id: 'future', timestamp: '2026-07-30T12:00:00.000Z' }),
+      schemaVersion: 99,
+    };
     writeFileSync(path, `${readFileSync(path, 'utf8')}${JSON.stringify(future)}\n`);
 
     const read = await collectEvents(h.store, {});
@@ -350,74 +353,72 @@ describe('a torn file', () => {
 
 /** PLAN §2.4: "concurrent append from two processes does not corrupt a record". */
 describe('two processes appending at once', () => {
-  it(
-    'produces a file in which every record still parses',
-    { timeout: 120_000 },
-    async () => {
-      const h = harness();
-      const partition = join(h.stateRoot, 'metrics', 'events-2026-07.jsonl');
-      mkdirSync(join(h.stateRoot, 'metrics'), { recursive: true });
+  it('produces a file in which every record still parses', { timeout: 120_000 }, async () => {
+    const h = harness();
+    const partition = join(h.stateRoot, 'metrics', 'events-2026-07.jsonl');
+    mkdirSync(join(h.stateRoot, 'metrics'), { recursive: true });
 
-      // Two real processes, not two promises: the guarantee is about O_APPEND, and a single
-      // process cannot exercise it. Each writes 400 records through the same store code.
-      // Resolved through the package names rather than a relative path: the compiled test
-      // does not sit where its source does, and a `../..` that happened to work would be
-      // counting directories in the build layout.
-      const script = join(sandbox, 'append.mjs');
-      writeFileSync(
-        script,
-        [
-          `import { JsonlStore } from ${JSON.stringify(import.meta.resolve('@token-harness/core'))};`,
-          `import { NodeFileSystem } from ${JSON.stringify(import.meta.resolve('@token-harness/platform'))};`,
-          `const [stateRoot, tag] = process.argv.slice(2);`,
-          `const store = new JsonlStore({ fs: new NodeFileSystem(${JSON.stringify(FACTS)}), stateRoot, now: () => ${JSON.stringify(CLOCK)} });`,
-          `const template = ${JSON.stringify(event({ id: 'template', timestamp: '2026-07-30T10:00:00.000Z' }))};`,
-          `for (let i = 0; i < 400; i += 1) {`,
-          `  await store.appendEvents([{ ...template, eventId: tag + '-' + i }]);`,
-          `}`,
-        ].join('\n'),
-      );
+    // Two real processes, not two promises: the guarantee is about O_APPEND, and a single
+    // process cannot exercise it. Each writes 400 records through the same store code.
+    // Resolved through the package names rather than a relative path: the compiled test
+    // does not sit where its source does, and a `../..` that happened to work would be
+    // counting directories in the build layout.
+    const script = join(sandbox, 'append.mjs');
+    writeFileSync(
+      script,
+      [
+        `import { JsonlStore } from ${JSON.stringify(import.meta.resolve('@token-harness/core'))};`,
+        `import { NodeFileSystem } from ${JSON.stringify(import.meta.resolve('@token-harness/platform'))};`,
+        `const [stateRoot, tag] = process.argv.slice(2);`,
+        `const store = new JsonlStore({ fs: new NodeFileSystem(${JSON.stringify(FACTS)}), stateRoot, now: () => ${JSON.stringify(CLOCK)} });`,
+        `const template = ${JSON.stringify(event({ id: 'template', timestamp: '2026-07-30T10:00:00.000Z' }))};`,
+        `for (let i = 0; i < 400; i += 1) {`,
+        `  await store.appendEvents([{ ...template, eventId: tag + '-' + i }]);`,
+        `}`,
+      ].join('\n'),
+    );
 
-      // Both are spawned before either is awaited. `spawnSync` would run them one after the
-      // other, and a test in which the writers never overlap cannot observe interleaving —
-      // it would pass against a store that had no atomicity at all.
-      const running = ['alpha', 'beta'].map(async (tag) => {
-        const child = spawn(process.execPath, [script, h.stateRoot, tag], { stdio: 'pipe' });
-        let stderr = '';
-        child.stderr.setEncoding('utf8');
-        child.stderr.on('data', (chunk: string) => {
-          stderr += chunk;
-        });
-        const status = await once(child, 'exit');
-        return { code: status[0] as number | null, stderr };
+    // Both are spawned before either is awaited. `spawnSync` would run them one after the
+    // other, and a test in which the writers never overlap cannot observe interleaving —
+    // it would pass against a store that had no atomicity at all.
+    const running = ['alpha', 'beta'].map(async (tag) => {
+      const child = spawn(process.execPath, [script, h.stateRoot, tag], { stdio: 'pipe' });
+      let stderr = '';
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk: string) => {
+        stderr += chunk;
       });
+      const status = await once(child, 'exit');
+      return { code: status[0] as number | null, stderr };
+    });
 
-      for (const child of await Promise.all(running)) {
-        assert.equal(child.code, 0, child.stderr);
-      }
+    for (const child of await Promise.all(running)) {
+      assert.equal(child.code, 0, child.stderr);
+    }
 
-      const lines = readFileSync(partition, 'utf8').split('\n').filter((line) => line !== '');
-      // This count, and not the parse loop below, is the assertion with power here.
-      //
-      // I checked by running the same two children against the read-modify-write a caller
-      // would have written if `appendFile` did not exist: it kept 27 of 800 records and
-      // produced *zero* unparseable lines. Last-writer-wins truncation loses whole records
-      // and leaves a perfectly well-formed file behind, so PLAN §2.4's "does not corrupt a
-      // record" is satisfied trivially by a writer that simply drops them. Counting is what
-      // catches that.
-      assert.equal(lines.length, 800);
-      for (const [index, line] of lines.entries()) {
-        // The parse loop covers the other failure: a write torn *within* a record, which is
-        // what O_APPEND rules out.
-        assert.doesNotThrow(() => JSON.parse(line), `line ${String(index + 1)} was corrupted`);
-      }
+    const lines = readFileSync(partition, 'utf8')
+      .split('\n')
+      .filter((line) => line !== '');
+    // This count, and not the parse loop below, is the assertion with power here.
+    //
+    // I checked by running the same two children against the read-modify-write a caller
+    // would have written if `appendFile` did not exist: it kept 27 of 800 records and
+    // produced *zero* unparseable lines. Last-writer-wins truncation loses whole records
+    // and leaves a perfectly well-formed file behind, so PLAN §2.4's "does not corrupt a
+    // record" is satisfied trivially by a writer that simply drops them. Counting is what
+    // catches that.
+    assert.equal(lines.length, 800);
+    for (const [index, line] of lines.entries()) {
+      // The parse loop covers the other failure: a write torn *within* a record, which is
+      // what O_APPEND rules out.
+      assert.doesNotThrow(() => JSON.parse(line), `line ${String(index + 1)} was corrupted`);
+    }
 
-      const read = await collectEvents(h.store, {});
-      assert.equal(read.length, 800);
-      assert.equal(new Set(read.map((entry) => entry.eventId)).size, 800);
-      assert.deepEqual(h.skipped, []);
-    },
-  );
+    const read = await collectEvents(h.store, {});
+    assert.equal(read.length, 800);
+    assert.equal(new Set(read.map((entry) => entry.eventId)).size, 800);
+    assert.deepEqual(h.skipped, []);
+  });
 });
 
 describe('receipts', () => {
