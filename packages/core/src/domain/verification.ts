@@ -72,8 +72,21 @@ export interface VerificationReceipt {
 }
 
 export interface VerifyReport {
-  receiptId: string;
-  appliedAt: string;
+  /**
+   * The receipt this verification is against, or null when nothing was applied here.
+   *
+   * Nullable, and that was an amendment. RFC 0006's normative transcript opens with
+   * `Receipt … — applied …`, which assumes an apply happened. But PLAN §2 asks for both
+   * "verify the actual harness integration" and "adopt an existing hand-configured RTK or
+   * HarnessTrim installation" — and on an adopted machine there is no receipt, because Token
+   * Harness applied nothing. A `verify` that required one would refuse to run in exactly the
+   * situation RFC 0004 §Brownfield adoption calls the normal one.
+   *
+   * RFC 0006 §Verifying without a receipt records the second header line.
+   */
+  receiptId: string | null;
+  /** ISO 8601 instant of the apply this verifies, or null when there was none. */
+  appliedAt: string | null;
   results: VerificationResult[];
   /** The closing line: healthy at the declared tier for every provider, or not. */
   healthyAtDeclaredTier: boolean;

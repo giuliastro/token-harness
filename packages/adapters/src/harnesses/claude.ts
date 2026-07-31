@@ -496,7 +496,12 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   checks.push({
     id: 'canary-intercepted',
     status: 'not-exercised',
-    summary: 'no provider receipt has been observed for this harness',
+    // Worded for what this adapter can and cannot see, because the alternative reads as a
+    // contradiction. RFC 0007 puts Claude Code in the `provider-telemetry` receipt family: the
+    // harness emits no event stream of its own, so *this* adapter can never witness interception,
+    // while a provider's own records can and do. Printed beside `rtk … 290 commands intercepted`,
+    // "no receipt has been observed" looked like a disagreement about the same fact.
+    summary: 'this harness emits no event stream, so only a provider can witness interception',
     achievedTier: null,
     evidence: [],
     remediation: null,

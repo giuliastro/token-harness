@@ -292,3 +292,162 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
 export function committedOwnership(journal: TransactionJournal): OwnedArtifact[] {
   return journal.outcome === 'committed' ? [...journal.ownership] : [];
 }
+
+/**
+ * Reverses a committed transaction — RFC 0004 §Transaction lifecycle, PLAN §2 criterion 7:
+ * "uninstall or roll back without damaging unrelated configuration".
+ *
+ * Distinct from the rollback inside `executeTransaction`, and deliberately so. That one reverses
+ * a transaction that is still running, from snapshots it is holding in memory. This one reverses
+ * one that already finished, from the journal — which is the only record that survives the
+ * process, and the reason the journal is written before the work and after every action.
+ *
+ * ## What it will and will not undo
+ *
+ * Only a `committed` transaction. A `rolled-back` one is already undone, and reversing it again
+ * would restore snapshots on top of files that no longer correspond to them. A `dirty` one is
+ * refused outright: its state is by definition not what the journal describes, so restoring more
+ * bytes over it is the one action guaranteed to make a bad situation less recoverable.
+ *
+ * ## Why it does not consult ownership
+ *
+ * A snapshot is a record of what the file *was*, so restoring it puts back exactly the user's
+ * bytes — including any edit they made to a part of the file Token Harness never owned, because
+ * that edit is inside the snapshot too. That is the one case worth stating plainly: rollback is
+ * time travel for the whole file, not a surgical removal of our entry. `remove-owned-change` is
+ * the surgical form, and it is what `uninstall` plans.
+ */
+export interface RollbackRequest {
+  transactionId: string;
+  fs: FileSystemPort;
+  snapshots: SnapshotStore;
+  journal: JournalStore;
+  now(): string;
+}
+
+export type RollbackRefusal =
+  | 'transaction-not-found'
+  | 'transaction-not-committed'
+  | 'transaction-dirty';
+
+export interface RollbackResult {
+  journal: TransactionJournal | null;
+  exitCode: TransactionExitCode;
+  refusal: RollbackRefusal | null;
+  /** Paths the restoration did not put back. Non-empty only on exit 7. */
+  unrestored: string[];
+  diagnostics: Diagnostic[];
+}
+
+export async function rollbackTransaction(request: RollbackRequest): Promise<RollbackResult> {
+  const journal = await request.journal.read(request.transactionId);
+
+  if (journal === null) {
+    return {
+      journal: null,
+      exitCode: TRANSACTION_EXIT_CODES.preconditionDrift,
+      refusal: 'transaction-not-found',
+      unrestored: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'transaction-not-found',
+          message: `No journal for transaction ${request.transactionId}`,
+          remediation: 'Run `token-harness status` to see which transactions are recorded',
+        }),
+      ],
+    };
+  }
+
+  if (journal.outcome === 'dirty') {
+    return {
+      journal,
+      exitCode: TRANSACTION_EXIT_CODES.applyFailedDirty,
+      refusal: 'transaction-dirty',
+      unrestored: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'transaction-dirty',
+          message: `Transaction ${request.transactionId} was left dirty, so its journal no longer describes the files on disk`,
+          remediation: `Inspect the backups under ${request.transactionId} by hand; automatic restoration would write bytes over a state nobody recorded`,
+        }),
+      ],
+    };
+  }
+
+  if (journal.outcome !== 'committed') {
+    return {
+      journal,
+      exitCode: TRANSACTION_EXIT_CODES.preconditionDrift,
+      refusal: 'transaction-not-committed',
+      unrestored: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'transaction-not-committed',
+          message: `Transaction ${request.transactionId} ended as ${journal.outcome}, so there is nothing committed to reverse`,
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  const snapshots = journal.entries.flatMap((entry) => entry.snapshots);
+  const diagnostics: Diagnostic[] = [];
+
+  let restoreError: string | null = null;
+  try {
+    await request.snapshots.restoreAll(snapshots);
+  } catch (error) {
+    restoreError = error instanceof Error ? error.message : String(error);
+  }
+
+  // Read back rather than trusting that the writes threw nothing. This is the same check that
+  // makes exit 7 reachable during an apply, and it is what separates "restored" from "attempted".
+  const unrestored = await verifyRestoration(request.fs, snapshots);
+
+  if (restoreError === null && unrestored.length === 0) {
+    journal.outcome = 'rolled-back';
+    journal.ownership = [];
+    journal.finishedAt = request.now();
+    await request.journal.write(journal);
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'transaction-rolled-back',
+        message: `Transaction ${request.transactionId} was reversed: ${String(snapshots.length)} ${snapshots.length === 1 ? 'file was' : 'files were'} restored and verified`,
+      }),
+    );
+    return {
+      journal,
+      exitCode: TRANSACTION_EXIT_CODES.ok,
+      refusal: null,
+      unrestored: [],
+      diagnostics,
+    };
+  }
+
+  // Left dirty, and recorded as such: the journal is the failure receipt RFC 0006 requires exit 7
+  // to leave behind, and marking it stops a second rollback from writing over the mess.
+  journal.outcome = 'dirty';
+  journal.finishedAt = request.now();
+  journal.pinned = true;
+  await request.journal.write(journal);
+  diagnostics.push(
+    diagnostic({
+      severity: 'error',
+      code: 'rollback-incomplete',
+      message: `Transaction ${request.transactionId} could not be fully reversed${unrestored.length > 0 ? `: ${unrestored.join(', ')}` : ''}${restoreError === null ? '' : ` (${restoreError})`}`,
+      path: unrestored[0] ?? null,
+      remediation: `Inspect the listed paths and the backups under transaction ${request.transactionId} before running any other command`,
+    }),
+  );
+  return {
+    journal,
+    exitCode: TRANSACTION_EXIT_CODES.applyFailedDirty,
+    refusal: null,
+    unrestored,
+    diagnostics,
+  };
+}

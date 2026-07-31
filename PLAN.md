@@ -736,6 +736,13 @@ Suggested first implementation issues:
     action's diagnostics reached the journal and never the user, so Token Harness reformatted a
     file and said nothing; and `apply` returned a report on error-status exits while the envelope
     nulls `data`, so the human and JSON renderings disagreed.
+16. Implement `verify`, `rollback`, and `uninstall` (§12). **Done** — the lifecycle closes. PLAN
+    §2 criteria 4, 5, 7, 8 and 9 are met; 1, 2, 3 and 6 hold for Claude Code and RTK and need
+    breadth rather than new mechanism. Two amendments came out of it: `VerifyReport`'s receipt is
+    nullable, because an adopted installation has none and criteria 5 and 8 together require
+    verifying anyway; and `uninstall` establishes ownership from a committed journal rather than
+    from a digest match, after it offered to delete a hand-written hook whose bytes were identical
+    to the one Token Harness writes.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 

@@ -61,7 +61,11 @@ export function renderHuman(
 
   switch (result.command) {
     case 'apply':
-      return plain(renderApplyReport(data as ApplyReport, context));
+    case 'rollback':
+    case 'uninstall':
+      // One renderer for three commands: all three report a transaction outcome, and RFC 0006
+      // rule 3 makes the rendering a function of the result object rather than of the verb.
+      return plain(renderApplyReport(data as ApplyReport, context, result.command));
     case 'doctor':
       return plain(renderDoctorReport(data as DoctorReport, context));
     case 'plan':

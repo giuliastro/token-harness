@@ -109,7 +109,9 @@ describe('argv', () => {
     assert.equal(typo.kind, 'usage-error');
     if (typo.kind === 'usage-error') assert.equal(typo.diagnostics[0]?.code, 'unknown-command');
 
-    const planned = parseArgv(['uninstall']);
+    // `update` is the last command RFC 0001 declares that this build does not carry; `uninstall`
+    // used to stand here and is implemented now.
+    const planned = parseArgv(['update']);
     assert.equal(planned.kind, 'usage-error');
     if (planned.kind === 'usage-error') {
       assert.equal(planned.diagnostics[0]?.code, 'command-not-available');

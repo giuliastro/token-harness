@@ -17,19 +17,55 @@ import { column, document, type RenderContext } from './layout.js';
 const STATUS_WIDTH = 22;
 const KIND_WIDTH = 22;
 
-const OUTCOME_LINES: Readonly<Record<ApplyReport['outcome'], string>> = {
-  'nothing-to-do': 'Nothing to change. The machine already matches the plan.',
-  'confirmation-required': 'Nothing was changed. Re-run with `--yes` to apply this plan.',
-  rejected: 'Nothing was changed.',
-  committed: 'Applied and committed.',
-  'rolled-back': 'A step failed. Everything was rolled back and the restoration was verified.',
-  dirty: 'A step failed and the rollback did not fully restore these files.',
+/**
+ * The closing line, per command.
+ *
+ * `rolled-back` needs two wordings and that is why this is keyed by command rather than by outcome
+ * alone. After an `apply` it means a step failed and the machine was put back; after a `rollback`
+ * it means the command did exactly what was asked. One sentence for both told a user their
+ * deliberate rollback had failed.
+ */
+const OUTCOME_LINES: Readonly<Record<string, Readonly<Record<ApplyReport['outcome'], string>>>> = {
+  apply: {
+    'nothing-to-do': 'Nothing to change. The machine already matches the plan.',
+    'confirmation-required': 'Nothing was changed. Re-run with `--yes` to apply this plan.',
+    rejected: 'Nothing was changed.',
+    committed: 'Applied and committed.',
+    'rolled-back': 'A step failed. Everything was rolled back and the restoration was verified.',
+    dirty: 'A step failed and the rollback did not fully restore these files.',
+  },
+  rollback: {
+    'nothing-to-do': 'Nothing to reverse. No committed transaction is recorded.',
+    'confirmation-required': 'Nothing was changed. Re-run with `--yes` to reverse it.',
+    rejected: 'Nothing was changed.',
+    committed: 'Reversed and verified.',
+    'rolled-back': 'Reversed. Every file was restored and the restoration was verified.',
+    dirty: 'The reversal did not fully restore these files.',
+  },
+  uninstall: {
+    'nothing-to-do': 'Nothing to remove. Token Harness owns nothing here.',
+    'confirmation-required': 'Nothing was changed. Re-run with `--yes` to remove them.',
+    rejected: 'Nothing was changed.',
+    committed: 'Removed what Token Harness owned. Everything else is untouched.',
+    'rolled-back': 'A step failed. Everything was rolled back and the restoration was verified.',
+    dirty: 'A step failed and the rollback did not fully restore these files.',
+  },
 };
 
-export function renderApplyReport(report: ApplyReport, _context: RenderContext): string {
+const HEADERS: Readonly<Record<string, string>> = {
+  apply: 'Apply',
+  rollback: 'Rollback',
+  uninstall: 'Uninstall',
+};
+
+export function renderApplyReport(
+  report: ApplyReport,
+  _context: RenderContext,
+  command = 'apply',
+): string {
   const lines: string[] = [];
 
-  const header = ['Apply'];
+  const header = [HEADERS[command] ?? 'Apply'];
   header.push(report.planId === null ? 'no plan' : `plan ${report.planId}`);
   if (report.fromStoredPlan) header.push('stored');
   if (report.transactionId !== null) header.push(`transaction ${report.transactionId}`);
@@ -53,7 +89,7 @@ export function renderApplyReport(report: ApplyReport, _context: RenderContext):
     lines.push('');
   }
 
-  lines.push(OUTCOME_LINES[report.outcome]);
+  lines.push((OUTCOME_LINES[command] ?? OUTCOME_LINES['apply'])?.[report.outcome] ?? '');
 
   return document(lines);
 }

@@ -17,7 +17,15 @@ const CHECK_ID_WIDTH = 27;
 export function renderVerifyReport(report: VerifyReport, _context: RenderContext): string {
   const lines: string[] = [];
 
-  lines.push(`Receipt ${report.receiptId} — applied ${report.appliedAt}`);
+  // Two headers, because there are two honest situations. With a receipt this verifies what an
+  // apply did; without one it verifies what is on the machine — which RFC 0004 §Brownfield
+  // adoption makes the ordinary case, and which a `verify` that demanded a receipt could not
+  // report at all.
+  lines.push(
+    report.receiptId === null || report.appliedAt === null
+      ? 'No receipt — verifying the live configuration'
+      : `Receipt ${report.receiptId} — applied ${report.appliedAt}`,
+  );
   lines.push('');
 
   for (const result of report.results) {
