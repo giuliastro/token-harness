@@ -12,7 +12,7 @@
  *   guessing.
  */
 
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { posix, win32 } from 'node:path';
 
 import type { FileStat, FileSystemPort, PlatformFacts } from '@token-harness/core';
@@ -74,6 +74,13 @@ export class NodeFileSystem implements FileSystemPort {
     await mkdir(this.dirname(path), { recursive: true });
     const parsed = mode == null || this.nativeWindows ? null : Number.parseInt(mode, 8);
     await writeFile(path, content, parsed === null || Number.isNaN(parsed) ? {} : { mode: parsed });
+  }
+
+  async appendFile(path: string, content: Uint8Array): Promise<void> {
+    await mkdir(this.dirname(path), { recursive: true });
+    // `flag: 'a'` opens with O_APPEND, so the seek and the write are one operation and two
+    // processes appending complete lines cannot interleave within a line.
+    await appendFile(path, content, { flag: 'a' });
   }
 
   async createDirectory(path: string): Promise<void> {

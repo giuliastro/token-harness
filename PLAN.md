@@ -276,6 +276,17 @@ Acceptance:
 - a truncated or partially written final line is skipped, not fatal;
 - nothing outside the store knows the backend.
 
+Done. `packages/core/src/state/jsonl-store.ts`, exercised by
+`tests/integration/jsonl-store.test.ts` against a real filesystem in a temporary directory.
+Two notes the acceptance list did not anticipate:
+
+- The store lives under `state/` rather than beside its interface in `metrics/`. The core
+  layer rule ranks `metrics` below `state`, so the interface cannot come to depend on a
+  backend.
+- "Does not corrupt a record" is satisfiable by a writer that silently *drops* records: a
+  read-modify-write emulation of the append kept 27 of 800 records and produced zero
+  malformed lines. The test therefore counts records as well as parsing them.
+
 ### 2.5 Live-verification spike
 
 This is the load-bearing spike of the project. RFC 0002 §Verification tiers requires
