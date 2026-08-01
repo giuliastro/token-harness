@@ -553,7 +553,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     status: receipt === null ? 'not-exercised' : 'pass',
     summary:
       receipt === null
-        ? 'no telemetry file exists, so no interception has been recorded'
+        ? 'no telemetry file yet, so nothing has been observed'
         : `${String(receipt.operations)} reductions recorded, most recently ${receipt.observedAt}`,
     // A recorded reduction is the provider witnessing its own interception, which is what `canary`
     // means in RFC 0007's tier table.

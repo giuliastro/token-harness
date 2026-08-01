@@ -2,93 +2,131 @@
 
 > Set up and measure token-saving tools for coding agents.
 
-## Install
+## What this is
+
+Tools like [RTK](https://github.com/rtk-ai/rtk) and
+[HarnessTrim](https://github.com/giuliastro/HarnessTrim) cut the tokens your coding agent burns.
+Token Harness is not one of them. It is the thing that **hooks them into your agent**, stops two of
+them fighting over the same output, checks the result actually runs, and reports what was saved.
+
+## 1. Install Token Harness
 
 ```bash
 npm install -g token-harness
 ```
 
-That installs **Token Harness itself**, and nothing else. It does not change your coding agents and
-does not install any token-saving tool. Those are the next step, and they only happen when you ask.
+This installs **only Token Harness**. It does not touch your coding agents and does not install RTK
+or HarnessTrim. Nothing on your machine changes until step 3, and only if you ask.
 
-To skip installing entirely, put `npx` in front of any command below.
-
-## Use it
-
-Four commands, in this order. Only step 3 writes anything.
-
-### 1. See what you have
+## 2. Look at what you have
 
 ```bash
 token-harness doctor
 ```
 
 ```text
-HARNESSES      STATE       CONFIG FILE
-  claude       hooks       ~/.claude/settings.json
-  codex        no hooks    ~/.codex/config.toml
-  opencode     not found
+Token Harness 0.1.0 — Windows 11 Pro (x64), Node 24.13.1
 
-PROVIDERS      VERSION   WIRED TO      SET UP BY
-  rtk          0.42.0    claude        you
-  harnesstrim  —         not installed —
+  HARNESSES     - STATE        - CONFIG FILE
+  claude        - no hooks     - ~/.claude/settings.json
+  codex         - no hooks     -
+  opencode      - no hooks     -
+
+  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
+  rtk           - 0.42.0     - nothing yet    - —
+  harnesstrim   - 0.0.6      - nothing yet    - —
 
 NEXT
-  token-harness plan  see what would change — writes nothing
+  token-harness plan - see what would change — writes nothing
 ```
 
-| Column | Meaning |
-| --- | --- |
-| `HARNESSES` | Your coding agents. `hooks` = something is hooked into it. `no hooks` = installed, nothing hooked in. `not found` = not on this machine. |
-| `PROVIDERS` | The tools that save tokens. `WIRED TO` is which agents they are hooked into. |
-| `SET UP BY` | `you` if you configured it yourself, `this tool` if Token Harness did. It never removes what it did not write. |
+Read it as: the agents are installed but nothing is hooked into them, and the two savers are
+installed but wired to nothing. `SET UP BY` is `you` for anything you configured yourself and
+`this tool` for anything Token Harness did — it never removes what it did not write.
 
-Every run ends with a `NEXT` block naming the command to type. Follow that if you read nothing else.
+Every command ends with **NEXT**, naming the command to run. If you read nothing else, follow that.
 
-### 2. See what would change
+## 3. See what it would do, then let it
 
 ```bash
 token-harness plan
 ```
 
-Lists every file it would touch, every action, and any conflict between two tools wanting the same
-output. Writes nothing. Read it before step 3.
+```text
+Plan c4341235 — profile safe — harness all
 
-### 3. Make the change
+Capability ownership
+  shell.command.rewrite      rtk
+  shell.output.reduce        rtk
+
+Actions
+  1. merge json   ~/.claude/settings.json   Register rtk on Claude Code's hook
+
+Network: none. Elevation: none. Backups: 1 file.
+
+Dry run. Nothing was changed. Run `token-harness apply --plan c4341235`.
+```
+
+That is the whole change it wants to make: one entry added to one file. Nothing is written yet.
 
 ```bash
 token-harness apply --yes
 ```
 
-The only command here that writes. Without `--yes` it prints the plan and stops. Every file is backed
-up first, so `token-harness rollback --yes` puts them back.
+```text
+Apply — plan c4341235 — transaction 84d851e74bb7
 
-### 4. Check it works, and what it saved
+Actions
+  1. merge-json             - applied                - ~/.claude/settings.json
+
+Applied and committed.
+```
+
+**This is the only command that writes.** Without `--yes` it prints the plan and stops. Your other
+hooks keep their content and their order, the file is backed up first, and
+`token-harness rollback --yes` puts it back exactly as it was.
+
+## 4. Check it works, and what it saves
 
 ```bash
 token-harness verify
+```
+
+```text
+rtk on claude — set up by this tool, tier canary
+  executable   - pass             - rtk 0.42.0
+  hook         - pass             - wired to claude
+  canary       - pass             - 830 commands intercepted on 2026-08-01
+```
+
+`pass` on the last line means the hook has actually run, not merely that it is configured. Once
+there is traffic:
+
+```bash
 token-harness metrics --since 7d
 ```
 
-`verify` answers whether the hooks actually run — configured and never used is a distinct answer, not
-a pass. `metrics` reports what was saved and how it was measured.
+## Undoing it
 
-## Questions you will have at this point
+```bash
+token-harness rollback --yes     # restore the files the last change touched
+token-harness uninstall --yes    # remove only what Token Harness set up
+```
+
+## Common questions
 
 **I already configured RTK by hand. Will this break it?** No. `doctor` shows it as `SET UP BY you`,
-`plan` adopts it instead of reinstalling, and `uninstall` leaves it alone.
+`plan` adopts it instead of reinstalling it, and `uninstall` leaves it alone.
 
-**Do I need RTK or HarnessTrim installed first?** No. If neither is present, `plan` includes
-installing one through its normal channel and tells you which, before you approve anything.
+**Do I need RTK installed first?** No. If it is missing, `plan` includes installing it through its
+normal channel and names the channel before you approve anything.
 
-**What if I just want to look?** `doctor`, `plan`, `status`, `verify` and `metrics` never write. You
-can stop after any of them.
+**What if I only want to look?** `doctor`, `plan`, `status`, `verify` and `metrics` never write.
 
-**Something said "newer than tested".** A note, not an error. Nothing is blocked; Token Harness just
-stays conservative about a version it has not been tested against.
+**Something said "newer than any tested version".** A note, not an error. Nothing is blocked; Token
+Harness stays conservative about a version it has not been tested against.
 
-**How do I undo it?** `token-harness rollback --yes` restores the files from before the last change.
-`token-harness uninstall --yes` removes only what Token Harness itself set up.
+## What it coordinates
 
 ## What it coordinates
 

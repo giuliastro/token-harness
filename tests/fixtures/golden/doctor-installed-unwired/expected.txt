@@ -1,13 +1,13 @@
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
 
-HARNESSES      STATE       CONFIG FILE
-  claude       no hooks    ~/.claude/settings.json
-  codex        no hooks    ~/.codex/config.toml
-  opencode     not found
+  HARNESSES     - STATE        - CONFIG FILE
+  claude        - no hooks     - ~/.claude/settings.json
+  codex         - no hooks     - ~/.codex/config.toml
+  opencode      - not found    -
 
-PROVIDERS      VERSION   WIRED TO      SET UP BY
-  rtk          1.4.2     nothing yet   —
-  harnesstrim  0.0.5     nothing yet   —
+  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
+  rtk           - 1.4.2      - nothing yet    - —
+  harnesstrim   - 0.0.5      - nothing yet    - —
 
 NEXT
-  token-harness plan  see what would change — writes nothing
+  token-harness plan - see what would change — writes nothing

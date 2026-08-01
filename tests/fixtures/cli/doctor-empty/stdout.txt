@@ -1,10 +1,10 @@
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
 
-HARNESSES      STATE       CONFIG FILE
+  HARNESSES     - STATE        - CONFIG FILE
   none registered
 
-PROVIDERS      VERSION   WIRED TO      SET UP BY
+  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
   none registered
 
 NEXT
-  token-harness plan  see what would change — writes nothing
+  token-harness plan - see what would change — writes nothing

@@ -44,7 +44,7 @@ Flags
   --json               Emit one machine-readable envelope on stdout
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
-  --project <dir>      Operate on that project instead of the current directory
+  --project <dir>      Use that project instead of the current directory
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
   --plan <id>          Apply a previously computed plan by id
@@ -52,8 +52,8 @@ Flags
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
-Only apply, update, rollback and uninstall change anything, and none of them do
-without --yes. Exit codes and the JSON envelope are specified in RFC 0006.`;
+Only apply, update, rollback and uninstall change anything, and none of
+them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
   apply: `token-harness apply — execute a plan inside a reversible transaction

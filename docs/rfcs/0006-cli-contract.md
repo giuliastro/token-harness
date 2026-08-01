@@ -80,6 +80,7 @@ interface Diagnostic {
   severity: "error" | "warning" | "info";
   code: string;                 // stable kebab-case identifier
   message: string;              // one sentence, no trailing period-free fragments
+  subject: string | null;       // the harness or provider it is about; null when neither
   path: string | null;          // absolute path when the diagnostic is file-scoped
   remediation: string | null;   // an action the user can take
 }
@@ -95,6 +96,22 @@ Rules:
    visible in human output but absent from `data` is a defect.
 4. Diagnostic codes are stable identifiers, not translated strings. Messages may be
    reworded; codes may not.
+
+   `subject` was added for the human rendering, which shows one line per diagnostic: without it a
+   reader facing several warnings could not tell which harness each was about, and deriving it by
+   splitting the message on a colon worked for some messages and produced nonsense for the rest.
+   It is null where a diagnostic is about the run rather than about one thing, and the human
+   rendering then falls back to the code — which keeps `unknown-command` greppable on stderr, as
+   this rule requires.
+
+5. Human output shows `error` and `warning` diagnostics, one line each, truncated to fit a terminal.
+   `info` is omitted from human output and present in `--json`. Ten unactionable `info` lines in one
+   real run made the two that mattered unfindable.
+
+6. No rendered line exceeds 78 characters. A terminal wraps at its own width, mid-word and without
+   indent, so a line over budget destroys the shape of whatever table it belonged to. Enforced by
+   `tests/integration/line-width.test.ts`, including against values longer than any fixture
+   contains.
 5. Usage errors (exit 2) also emit a valid envelope when `--json` was parsed
    successfully. An unparseable command line writes plain text to stderr.
 
@@ -209,17 +226,17 @@ with the RFCs, and reachable from the fixture it declares.
 $ token-harness doctor
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
 
-HARNESSES      STATE       CONFIG FILE
-  claude       no hooks    ~/.claude/settings.json
-  codex        no hooks    ~/.codex/config.toml
-  opencode     not found
+  HARNESSES     - STATE        - CONFIG FILE
+  claude        - no hooks     - ~/.claude/settings.json
+  codex         - no hooks     - ~/.codex/config.toml
+  opencode      - not found    -
 
-PROVIDERS      VERSION   WIRED TO      SET UP BY
-  rtk          1.4.2     nothing yet   —
-  harnesstrim  0.0.5     nothing yet   —
+  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
+  rtk           - 1.4.2      - nothing yet    - —
+  harnesstrim   - 0.0.5      - nothing yet    - —
 
 NEXT
-  token-harness plan  see what would change — writes nothing
+  token-harness plan - see what would change — writes nothing
 ```
 
 Exit code 0. An installed-but-unwired provider is a state, not a problem, so nothing here
@@ -265,21 +282,21 @@ by someone explaining the output rather than fixing it.
 
 ```text
 $ token-harness plan --harness claude
-Plan 7f3a91c2 — profile safe — harness claude — project <project>
+Plan 7f3a91c2 — profile safe — harness claude — project C:/work/demo
 
 Capability ownership
   shell.command.rewrite      rtk
   shell.output.reduce        rtk
 
 Excluded
-  harnesstrim   shell.output.reduce   contested; rtk owns it under profile safe
-                                      harnesstrim 0.0.5 reduces Bash only on claude
-                                      and exposes no surface selector, so it cannot
-                                      be narrowed to a free scope
+  harnesstrim   shell.output.reduce   claude
+                                      its installer cannot produce this in
+                                      isolation, so it is measured but not
+                                      given the scope
 
 Actions
   1. merge json           ~/.claude/settings.json     configure rtk hook
-  2. write owned file     <state>/receipts/7f3a91c2.json
+  2. write owned file     ~/AppData/Local/TokenHarness/receipts/7f3a91c2.json
 
 Network: none. Elevation: none. Backups: 1 file.
 
@@ -325,9 +342,11 @@ $ token-harness plan --harness claude
 Plan aborted — 1 hard conflict.
 
   conflict  exclusive-scope-contested
-    claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and harnesstrim
+    claude/bash/post-tool-use/shell.output.reduce is claimed by rtk and
+    harnesstrim
     and no compatibility rule covers that pair.
-    Fix: choose an owner with `--provider`, or set the surface in token-harness.yaml.
+    Fix: choose an owner with `--provider`, or set the surface in
+    token-harness.yaml.
 
 No plan was produced.
 ```
@@ -340,18 +359,22 @@ Exit code 4.
 $ token-harness verify
 Receipt 7f3a91c2 — applied 2026-07-29T10:12:04Z
 
-rtk — claude — declared tier: canary
-  pass  executable-resolves        rtk 1.4.2 at ~/.local/bin/rtk
-  pass  hook-registered            PreToolUse entry present and owned
-  pass  canary-intercepted         sentinel command was rewritten
-harnesstrim — opencode — adopted, not managed — declared tier: config-only
-  pass  executable-resolves        harnesstrim 0.0.5
-  pass  adapter-config-readable    .opencode/plugin/harnesstrim.ts, mode active
-  pass  no-contested-scope         rtk is not configured for opencode
-  info  tier-limit                 no observable receipt for a generated plugin wrapper
-  info  not-managed                installed by the user; Token Harness will not modify it
+rtk on claude — set up by this tool, tier canary
+  executable   - pass             - rtk 1.4.2 at ~/.local/bin/rtk
+  hook         - pass             - PreToolUse entry present and owned
+  canary       - pass             - sentinel command was rewritten
 
-Pipeline healthy at the declared tier for every provider.
+harnesstrim on opencode — set up by you, tier config-only
+  executable   - pass             - harnesstrim 0.0.5
+  adapter-con… - pass             - .opencode/plugin/harnesstrim.ts, mode
+                                    active
+  no-conteste… - pass             - rtk is not configured for opencode
+  tier-limit   - info             - no observable receipt for a generated
+                                    plugin wrapper
+  not-managed  - info             - installed by the user; Token Harness will
+                                    not modify it
+
+Healthy at the declared tier for every provider.
 ```
 
 Exit code 0.
@@ -404,9 +427,10 @@ Counterfactual                                        none recorded
 End-to-end billed                                     no A/B run
 
 By provider (marginal)
-  rtk            saved 873,478 tokens   exact-local      4,118 operations   claude
-  harnesstrim    saved 313,786 chars    estimated-local  1,440 operations   opencode
-                 adopted, not managed — adapter mode active
+  rtk           - saved 873,478 tokens  - exact-local     - 4,118 operations
+               on claude
+  harnesstrim   - saved 313,786 chars   - estimated-local - 1,440 operations
+               on opencode — set up by you — mode active
 
 Coverage 91%. Bypassed 402. Errors 0. Added median latency 11ms.
 ```

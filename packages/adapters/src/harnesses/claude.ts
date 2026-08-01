@@ -396,6 +396,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
       diagnostic({
         severity: 'warning',
         code: 'tool-family-not-covered',
+        subject: CLAUDE,
         /**
          * Says whose gap it is, and that the tool is working.
          *
@@ -404,10 +405,11 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
          * tool families and not others, Claude Code routes shell commands through more than one on
          * Windows, and the commands going through the uncovered ones never reach the provider at all.
          */
-        message: `The hooks in this file cover some of Claude Code's tools but not ${uncoveredToolFamilies.join(', ')} — commands Claude Code routes through ${uncoveredToolFamilies.length === 1 ? 'that one' : 'those'} never reach the provider, so they are not optimized and do not appear in savings figures`,
+        // Short enough to survive the one-line human rendering without being cut.
+        message: `${uncoveredToolFamilies.join(', ')} has no hook, so those commands are not optimized`,
         path: configs.find((config) => config.configuredPoints.length > 0)?.path ?? null,
-        remediation:
-          'Nothing is broken and nothing is required. Widen the matcher to cover it, or leave it and read coverage figures knowing the gap is there',
+        // Short on purpose: a remediation nobody finishes reading is not one.
+        remediation: 'Optional. Widen the matcher, or accept the gap',
       }),
     );
   }

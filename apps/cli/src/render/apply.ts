@@ -12,7 +12,7 @@
 
 import type { ApplyReport } from '@token-harness/core';
 
-import { column, document, type RenderContext } from './layout.js';
+import { displayPath, document, row, type RenderContext } from './layout.js';
 
 const STATUS_WIDTH = 22;
 const KIND_WIDTH = 22;
@@ -60,7 +60,7 @@ const HEADERS: Readonly<Record<string, string>> = {
 
 export function renderApplyReport(
   report: ApplyReport,
-  _context: RenderContext,
+  context: RenderContext,
   command = 'apply',
 ): string {
   const lines: string[] = [];
@@ -76,8 +76,13 @@ export function renderApplyReport(
     lines.push('Actions');
     for (const [index, result] of report.results.entries()) {
       lines.push(
-        `  ${String(index + 1)}. ${column(result.kind, KIND_WIDTH)}` +
-          `${column(result.status, STATUS_WIDTH)}${result.path ?? ''}`,
+        `  ${String(index + 1)}. ${row([
+          [result.kind, KIND_WIDTH],
+          [result.status, STATUS_WIDTH],
+          // Abbreviated: an absolute Windows path under a long account name ran past 140
+          // characters, and `~/` is both shorter and what every other command shows.
+          [result.path === null ? '' : displayPath(result.path, context.home), 0],
+        ])}`,
       );
     }
     lines.push('');
@@ -85,7 +90,7 @@ export function renderApplyReport(
 
   if (report.unrestored.length > 0) {
     lines.push('Not restored');
-    for (const path of report.unrestored) lines.push(`  ${path}`);
+    for (const path of report.unrestored) lines.push(`  ${displayPath(path, context.home)}`);
     lines.push('');
   }
 

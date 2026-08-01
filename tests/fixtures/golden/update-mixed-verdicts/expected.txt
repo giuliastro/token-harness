@@ -1,9 +1,9 @@
-rtk                  current        0.42.0 is the newest winget offers
-harnesstrim          pinned         held at 0.0.6 by a pin
-example-unreadable   unknown        winget answered without a version this build can read
-example-unasked      unavailable    homebrew could not be asked
-example-absent       not-installed  not installed, so there is nothing to update
-example-unsupported  no-channel     no installation channel on this platform
+rtk                  - current         - 0.42.0 is the newest winget offers
+harnesstrim          - pinned          - held at 0.0.6 by a pin
+example-unreadable   - unknown         - winget answered without a version th…
+example-unasked      - unavailable     - homebrew could not be asked
+example-absent       - not-installed   - not installed, so there is nothing t…
+example-unsupported  - no-channel      - no installation channel on this plat…
 
 Network: pnpm package index, winget package index
 

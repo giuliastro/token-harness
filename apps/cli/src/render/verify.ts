@@ -9,71 +9,75 @@
 
 import type { VerifyReport } from '@token-harness/core';
 
-import { column, document, pluralize, type RenderContext } from './layout.js';
+import { document, pluralize, row, truncate, wrap, type RenderContext } from './layout.js';
 
 /**
- * The width RFC 0006's transcript uses, and a floor rather than a fixed size.
+ * A fixed status column, wide enough for `not-exercised` — the longest status RFC 0007 defines.
  *
- * `pass` and `info` fit; `not-exercised` — which RFC 0007 added after that transcript was written —
- * is thirteen characters and pushed the summary column out of line for its row alone.
- *
- * Widening it unconditionally would change the spacing of a normative transcript to accommodate a
- * status the transcript does not contain. So the width is computed from the statuses actually
- * present: a report of `pass` and `info` renders byte-identically to RFC 0006, and a report that
- * contains a longer status aligns all of its own rows.
+ * This used to be computed from the statuses actually present, so a report of `pass` and `info`
+ * would render byte-identically to a transcript that predated `not-exercised`. That is no longer
+ * worth preserving: the transcript itself changed when this layout did, and a column whose width
+ * depends on the data is a column that moves between two runs of the same command.
  */
-const CHECK_STATUS_WIDTH = 6;
-const CHECK_ID_WIDTH = 27;
+const STATUS_WIDTH = 16;
+/** The check column. Ids are shortened for display; the full id stays in `--json`. */
+const CHECK_WIDTH = 12;
 
-function statusWidth(report: VerifyReport): number {
-  const longest = Math.max(
-    0,
-    ...report.results.flatMap((result) => result.checks.map((check) => check.status.length)),
-  );
-  return Math.max(CHECK_STATUS_WIDTH, longest + 2);
+/** `executable-resolves` in 78 columns beside a status and a detail does not fit. */
+function shortCheck(id: string): string {
+  // Truncated as well as shortened: `adapter-config-readable` survives the suffix strip at 23
+  // characters and pushed its row to 84, because `column` pads but never cuts.
+  return truncate(id.replace(/-resolves$|-registered$|-intercepted$/, ''), CHECK_WIDTH);
 }
 
 export function renderVerifyReport(report: VerifyReport, _context: RenderContext): string {
   const lines: string[] = [];
-  const width = statusWidth(report);
 
-  // Two headers, because there are two honest situations. With a receipt this verifies what an
-  // apply did; without one it verifies what is on the machine — which RFC 0004 §Brownfield
-  // adoption makes the ordinary case, and which a `verify` that demanded a receipt could not
-  // report at all.
   lines.push(
     report.receiptId === null || report.appliedAt === null
-      ? 'No receipt — verifying the live configuration'
+      ? 'No receipt: verifying what is on the machine now'
       : `Receipt ${report.receiptId} — applied ${report.appliedAt}`,
   );
-  lines.push('');
 
+  /**
+   * One block per provider, with the header as key/value rows rather than a chain of em-dashes.
+   *
+   * The old header was `rtk — claude — adopted, not managed — declared tier: canary`: four facts
+   * joined by a separator, one of them jargon, at 65 characters and growing with every id. And the
+   * check rows put a free-text summary in a third column, which reached 106 characters and wrapped
+   * mid-word in an 80-column terminal.
+   */
   for (const result of report.results) {
-    const header: string[] = [result.providerId, result.harnessId];
-    // RFC 0004 §Brownfield adoption: an adopted installation is verified and
-    // measured, never modified, and the header says so before any check does.
-    if (!result.managedByTokenHarness) header.push('adopted, not managed');
-    header.push(`declared tier: ${result.declaredTier}`);
-    lines.push(header.join(' — '));
+    lines.push('');
+    lines.push(
+      `${result.providerId} on ${result.harnessId} — set up by ` +
+        `${result.managedByTokenHarness ? 'this tool' : 'you'}, tier ${result.declaredTier}`,
+    );
     for (const check of result.checks) {
+      // The wrap indent is the column the detail starts in. Getting this wrong is what made the
+      // first attempt put continuations further right than the text they continued.
+      // Two separators of three characters each sit between the three columns.
+      const indent = 2 + CHECK_WIDTH + 3 + STATUS_WIDTH + 3;
+      const wrapped = wrap(check.summary, indent);
       lines.push(
-        `  ${column(check.status, width)}${column(check.id, CHECK_ID_WIDTH)}${check.summary}`,
+        `  ${row([
+          [shortCheck(check.id), CHECK_WIDTH],
+          [check.status, STATUS_WIDTH],
+          [(wrapped[0] ?? '').trimStart(), 0],
+        ])}`,
       );
+      lines.push(...wrapped.slice(1));
     }
   }
 
   lines.push('');
   if (report.healthyAtDeclaredTier) {
-    lines.push('Pipeline healthy at the declared tier for every provider.');
+    lines.push('Healthy at the declared tier for every provider.');
   } else {
-    // RFC 0006 §Tier-aware verification status: only a result below the
-    // declared tier is a failure. `info` never contributes.
     const failures = report.results
       .flatMap((result) => result.checks)
       .filter((check) => check.status === 'fail').length;
-    lines.push(
-      `${failures} ${pluralize(failures, 'check')} below the declared tier. The pipeline is not proven.`,
-    );
+    lines.push(`${String(failures)} ${pluralize(failures, 'check')} below tier. Not proven.`);
   }
 
   return document(lines);

@@ -36,7 +36,14 @@ import {
   type ProviderDetection,
 } from '@token-harness/core';
 
-import { column, displayPath, document, type RenderContext } from './layout.js';
+import {
+  MAX_WIDTH,
+  displayPath,
+  document,
+  row,
+  truncatePath,
+  type RenderContext,
+} from './layout.js';
 
 const NAME_WIDTH = 15;
 const STATE_WIDTH = 12;
@@ -88,21 +95,37 @@ function notes(report: DoctorReport): string[] {
   const lines: string[] = [];
   for (const harness of report.harnesses) {
     if (harness.state === 'broken') {
-      lines.push(`  ${harness.harnessId}: configuration could not be read`);
+      lines.push(
+        `  ${row([
+          [harness.harnessId, NAME_WIDTH - 2],
+          ['configuration could not be read', 0],
+        ])}`,
+      );
     }
     if (harness.versionVerdict === 'unknown-newer') {
       lines.push(
-        `  ${harness.harnessId} ${harness.version ?? ''}: newer than tested, so treated conservatively`,
+        `  ${row([
+          [harness.harnessId, NAME_WIDTH - 2],
+          [`${harness.version ?? ''} is newer than any tested version`, 0],
+        ])}`,
       );
     }
   }
   for (const provider of report.providers) {
     if (provider.state === 'broken') {
-      lines.push(`  ${provider.providerId}: installed but could not be run`);
+      lines.push(
+        `  ${row([
+          [provider.providerId, NAME_WIDTH - 2],
+          ['installed but could not be run', 0],
+        ])}`,
+      );
     }
     if (provider.versionVerdict === 'unknown-newer') {
       lines.push(
-        `  ${provider.providerId} ${provider.version ?? ''}: newer than tested, so treated conservatively`,
+        `  ${row([
+          [provider.providerId, NAME_WIDTH - 2],
+          [`${provider.version ?? ''} is newer than any tested version`, 0],
+        ])}`,
       );
     }
   }
@@ -117,31 +140,57 @@ export function renderDoctorReport(report: DoctorReport, context: RenderContext)
   );
   lines.push('');
 
-  lines.push(`${column('HARNESSES', NAME_WIDTH)}${column('STATE', STATE_WIDTH)}CONFIG FILE`);
+  lines.push(
+    `  ${row([
+      ['HARNESSES', NAME_WIDTH - 2],
+      ['STATE', STATE_WIDTH],
+      ['CONFIG FILE', 0],
+    ])}`,
+  );
   if (report.harnesses.length === 0) {
     lines.push('  none registered');
   } else {
     for (const harness of report.harnesses) {
       lines.push(
-        `  ${column(harness.harnessId, NAME_WIDTH - 2)}${column(harnessState(harness), STATE_WIDTH)}` +
-          `${harness.configPath === null ? '' : displayPath(harness.configPath, context.home)}`,
+        `  ${row([
+          [harness.harnessId, NAME_WIDTH - 2],
+          [harnessState(harness), STATE_WIDTH],
+          [
+            harness.configPath === null
+              ? ''
+              : // The columns before this one, plus their separators, consume a fixed prefix; the
+                // path gets what is left and is cut from the left so the file name survives.
+                truncatePath(
+                  displayPath(harness.configPath, context.home),
+                  MAX_WIDTH - (2 + NAME_WIDTH - 2 + 3 + STATE_WIDTH + 3),
+                ),
+            0,
+          ],
+        ])}`,
       );
     }
   }
   lines.push('');
 
   lines.push(
-    `${column('PROVIDERS', NAME_WIDTH)}${column('VERSION', VERSION_WIDTH)}${column('WIRED TO', WIRED_WIDTH)}SET UP BY`,
+    `  ${row([
+      ['PROVIDERS', NAME_WIDTH - 2],
+      ['VERSION', VERSION_WIDTH],
+      ['WIRED TO', WIRED_WIDTH],
+      ['SET UP BY', 0],
+    ])}`,
   );
   if (report.providers.length === 0) {
     lines.push('  none registered');
   } else {
     for (const provider of report.providers) {
       lines.push(
-        `  ${column(provider.providerId, NAME_WIDTH - 2)}` +
-          `${column(provider.version ?? '—', VERSION_WIDTH)}` +
-          `${column(wiredTo(provider), WIRED_WIDTH)}` +
-          `${setUpBy(provider)}`,
+        `  ${row([
+          [provider.providerId, NAME_WIDTH - 2],
+          [provider.version ?? '-', VERSION_WIDTH],
+          [wiredTo(provider), WIRED_WIDTH],
+          [setUpBy(provider), 0],
+        ])}`,
       );
     }
   }
@@ -172,9 +221,14 @@ export function renderDoctorReport(report: DoctorReport, context: RenderContext)
           ['token-harness verify', 'check the pipeline actually intercepts'],
           ['token-harness metrics --since 7d', 'see what it saved'],
         ];
-  const commandWidth = Math.max(...suggestions.map(([command]) => command.length)) + 2;
+  const commandWidth = Math.max(...suggestions.map(([command]) => command.length));
   for (const [command, description] of suggestions) {
-    lines.push(`  ${column(command, commandWidth)}${description}`);
+    lines.push(
+      `  ${row([
+        [command, commandWidth],
+        [description, 0],
+      ])}`,
+    );
   }
 
   return document(lines);

@@ -244,7 +244,8 @@ describe('the human rendering', () => {
     assert.match(result.stdout, /1 operations made the payload larger/);
     // Net of the inflation, and the provider row agrees with the class line.
     assert.match(result.stdout, /^Exact local .* saved 10$/m);
-    assert.match(result.stdout, /rtk\s+saved 10 tokens/);
+    // Columns are separated by a visible ` - ` now, not by padding alone.
+    assert.match(result.stdout, /rtk\s+-\s+saved 10 tokens/);
   });
 
   it('says nothing about inflation when there was none', async () => {
