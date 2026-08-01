@@ -28,6 +28,7 @@
  * SDKs RFC 0001 §Repository shape defers.
  */
 
+import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +67,9 @@ const manifest = {
   type: 'module',
   engines: root.engines,
   bin: { 'token-harness': './token-harness.mjs' },
-  files: ['token-harness.mjs', 'README.md', 'LICENSE'],
+  // `sbom.json` ships inside the tarball. An SBOM staged next to the artifact and left out of
+  // `files` is one nobody receives, which is not a supply-chain document but a build side effect.
+  files: ['token-harness.mjs', 'sbom.json', 'README.md', 'LICENSE'],
   repository: {
     type: 'git',
     url: 'git+https://github.com/giuliastro/token-harness.git',
@@ -85,6 +88,81 @@ for (const name of ['README.md', 'LICENSE']) {
   copyFileSync(join(repoRoot, name), join(outDir, name));
 }
 
+/**
+ * The SBOM — PLAN §8.3, "generate provenance/SBOM".
+ *
+ * Emitted here rather than committed, because an SBOM describes a *built artifact*: it carries the
+ * bundle's digest, which changes with every build, and a committed copy would be stale the moment
+ * anyone compiled anything.
+ *
+ * It is short, and that is the finding rather than an omission. Every runtime dependency in this
+ * workspace is a `workspace:*` first-party package, so the bundle contains no third-party code and
+ * the published tarball declares no dependencies at all — nothing to resolve, nothing to go stale.
+ * `tests/integration/distribution.test.ts` asserts that invariant, so this document cannot quietly
+ * understate what shipped: if a third-party dependency is ever added, that test fails before this
+ * script gets a chance to omit it.
+ *
+ * CycloneDX 1.5, because it is the format npm and GitHub tooling both read.
+ */
+const bundleBytes = readFileSync(bundle);
+const bundleDigest = createHash('sha256').update(bundleBytes).digest('hex');
+
+const workspaceComponents = [
+  ['@token-harness/core', join(repoRoot, 'packages', 'core', 'package.json')],
+  ['@token-harness/platform', join(repoRoot, 'packages', 'platform', 'package.json')],
+  ['@token-harness/adapters', join(repoRoot, 'packages', 'adapters', 'package.json')],
+].map(([name, path]) => ({
+  type: 'library',
+  'bom-ref': name,
+  name,
+  version: readJson(path).version,
+  scope: 'required',
+  licenses: [{ license: { id: root.license } }],
+  // Inlined into the bundle rather than resolved at install time, which is why the published
+  // manifest lists no dependencies while these are genuinely part of the artifact.
+  description: 'first-party workspace package, inlined into the published bundle',
+}));
+
+const sbom = {
+  bomFormat: 'CycloneDX',
+  specVersion: '1.5',
+  version: 1,
+  metadata: {
+    component: {
+      type: 'application',
+      'bom-ref': manifest.name,
+      name: manifest.name,
+      version: manifest.version,
+      description: manifest.description,
+      licenses: [{ license: { id: root.license } }],
+      hashes: [{ alg: 'SHA-256', content: bundleDigest }],
+    },
+    // No `timestamp`: it would change the document on every build for no informational gain, and a
+    // digest already identifies what was built.
+    tools: [{ name: 'scripts/package.mjs' }],
+  },
+  components: workspaceComponents,
+  // Empty and meant to be. A third-party dependency would appear here, and the distribution test
+  // fails if one is ever introduced without this document growing to match.
+  dependencies: [
+    {
+      ref: manifest.name,
+      dependsOn: workspaceComponents.map((component) => component['bom-ref']),
+    },
+  ],
+};
+
+writeFileSync(
+  join(outDir, 'sbom.json'),
+  `${JSON.stringify(sbom, null, 2)}
+`,
+  'utf8',
+);
+
 console.log(`staged ${manifest.name}@${manifest.version} in ${outDir}`);
 console.log(`  bin          ${manifest.bin['token-harness']}`);
 console.log(`  dependencies none`);
+console.log(`  sha256       ${bundleDigest}`);
+console.log(
+  `  sbom         sbom.json (${String(workspaceComponents.length)} first-party components, 0 third-party)`,
+);

@@ -168,11 +168,25 @@ try {
   const help = run(['--help']);
   check('--help exits 0 and prints usage', help.status === 0 && help.stdout.includes('Usage'));
 
+  /**
+   * The installed artifact runs and reports; it is not asked to find an empty machine.
+   *
+   * This check read `doctor.status === 0` under the name "on a machine with nothing installed" — and
+   * it never created that condition. It runs against the real home, so it passed on clean CI runners
+   * and failed on any developer machine with a harness configured and a coverage gap, which exits 3.
+   * A gate that only works where nobody looks at it is worse than no gate: the red is a false one and
+   * it teaches people to ignore the output.
+   *
+   * What this step is for is proving the *tarball* works, so it accepts either code `doctor` may
+   * legitimately produce — 0 for a clean report, 3 for problems found — and rejects anything else,
+   * which is what a crash or an unsupported environment would give.
+   */
   const doctor = run(['doctor']);
   check(
-    'doctor exits 0 on a machine with nothing installed',
-    doctor.status === 0,
-    doctor.stderr.trim(),
+    'doctor runs and reports, exiting 0 or 3',
+    doctor.status === 0 || doctor.status === 3,
+    `exit ${String(doctor.status)}
+${doctor.stderr.trim()}`,
   );
   check(
     'doctor reports the real platform',
