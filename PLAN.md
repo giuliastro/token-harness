@@ -622,16 +622,30 @@ Per RFC 0005 §Release gating, `0.1.0` must prove that Token Harness does not li
 savings and does not damage configuration. It does not have to prove how large the
 savings are.
 
-Required:
+Required, and where each is discharged — `tests/integration/release-gates.test.ts` unless
+noted:
 
-- 100% must-keep signal recall in deterministic fixtures;
+- 100% must-keep signal recall in deterministic fixtures — **not held here, and not by
+  omission.** Recall is a property of a *reducer*: given output containing signal that must
+  survive, does the reducer keep it. Token Harness reduces nothing; it installs, verifies and
+  measures the tools that do, and so has no recall to have. The gate belongs to RTK and
+  HarnessTrim, whose own suites can hold it, and a fixture written here to claim it would be
+  the exact dishonesty the gate list exists to prevent;
 - no exact-savings claim without both payloads observed;
-- every reported figure labelled with its measurement class;
-- rollback restores fixtures byte-for-byte, including after a delegated install;
-- brownfield adoption succeeds on all four fixture scenarios;
-- added median planning overhead is negligible;
-- provider hot-path overhead remains attributable to the provider, not the control CLI;
-- every harness has a declared verification tier.
+- every reported figure labelled with its measurement class — including the negative form: a
+  character-only source never becomes a token figure, and a counterfactual never reaches a
+  realized total;
+- rollback restores fixtures byte-for-byte, including after a delegated install — two claims,
+  the second being that the surviving package is *reported* rather than passed over in a
+  transaction that says "rolled back";
+- brownfield adoption succeeds on all four fixture scenarios — RFC 0004's four, each checked
+  against the five required behaviours that apply to it;
+- added median planning overhead is negligible — measured, with the ceiling stated as a number
+  and the reason for its generosity recorded next to it;
+- provider hot-path overhead remains attributable to the provider, not the control CLI —
+  structural: Token Harness is not in the hot path, and the assertion is over the hook commands
+  a plan actually writes;
+- every harness has a declared verification tier — and every provider, per harness.
 
 Deferred to `0.2.0` and `1.0.0`:
 
@@ -771,6 +785,14 @@ Suggested first implementation issues:
     reversible by rollback, which the outcome states rather than leaving a "rolled back" report to
     imply otherwise. Verified against the machine: RTK's winget id is `rtk-ai.rtk`, and the manifest
     said `rtk`, which would have matched nothing.
+20. Discharge the `0.1.0` quality gates (§8.2). **Done** — and worth saying that item 18 declared
+    `0.1.0` against §2's nine *capability* criteria without checking §8.2's eight quality gates,
+    which are the list RFC 0005 §Release gating actually gates a release on. Seven are now held by
+    `tests/integration/release-gates.test.ts`; the eighth is assigned rather than assumed, per §8.2.
+    Two of the assertions were kept only after being shown to have power: a single-claimant control
+    proves the overlap scenario's exit 3 comes from the *second* claimant and not from any unowned
+    entry, and the hot-path claim reads the hook commands a plan really writes instead of trusting a
+    manifest to declare them.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
@@ -819,6 +841,9 @@ These are intentionally deferred to measured spikes or to a triggering need:
 
 Resolved since the first draft of this plan:
 
+- **Which repository owns the must-keep recall gate** — not this one. §8.2 records why: the gate
+  measures a reducer, and Token Harness is not one. It stays on the `0.1.0` list because it is
+  still required of the *system*; it is discharged by the providers.
 - **How an observational capability is scoped** — it is not. RFC 0003 §Observational
   capabilities are outside this model: the ownership address names an interception point,
   observation has none, and an observer transforms no payload so there is nothing to arbitrate.
