@@ -1,0 +1,95 @@
+{
+  "command": "update",
+  "exitCode": 0,
+  "data": {
+    "providers": [
+      {
+        "providerId": "rtk",
+        "installed": "0.42.0",
+        "available": "0.42.0",
+        "channel": "winget",
+        "verdict": "current",
+        "pin": null
+      },
+      {
+        "providerId": "harnesstrim",
+        "installed": "0.0.6",
+        "available": null,
+        "channel": "pnpm",
+        "verdict": "pinned",
+        "pin": "0.0.6"
+      },
+      {
+        "providerId": "example-unreadable",
+        "installed": "1.4.0",
+        "available": null,
+        "channel": "winget",
+        "verdict": "unknown",
+        "pin": null
+      },
+      {
+        "providerId": "example-unasked",
+        "installed": "2.0.0",
+        "available": null,
+        "channel": "homebrew",
+        "verdict": "unavailable",
+        "pin": null
+      },
+      {
+        "providerId": "example-absent",
+        "installed": null,
+        "available": null,
+        "channel": "cargo",
+        "verdict": "not-installed",
+        "pin": null
+      },
+      {
+        "providerId": "example-unsupported",
+        "installed": "0.9.0",
+        "available": null,
+        "channel": null,
+        "verdict": "no-channel",
+        "pin": null
+      }
+    ],
+    "network": [
+      "pnpm package index",
+      "winget package index"
+    ],
+    "execution": {
+      "planId": null,
+      "transactionId": null,
+      "fromStoredPlan": false,
+      "outcome": "nothing-to-do",
+      "results": [],
+      "unrestored": [],
+      "receiptId": null
+    }
+  },
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "provider-pinned",
+      "message": "harnesstrim is pinned at 0.0.6, so no update was planned for it",
+      "remediation": "Remove it from the pin file to allow updates"
+    },
+    {
+      "severity": "warning",
+      "code": "version-query-unreadable",
+      "message": "winget answered, but its output did not name a version in the form this build reads",
+      "remediation": "Run it yourself to see what it printed: winget show --id example --exact --versions"
+    },
+    {
+      "severity": "warning",
+      "code": "version-query-unsupported",
+      "message": "This build cannot ask homebrew what version of example-unasked is available",
+      "remediation": "Check for a newer example-unasked yourself"
+    },
+    {
+      "severity": "info",
+      "code": "nothing-to-update",
+      "message": "No provider has a newer version available through its channel",
+      "remediation": null
+    }
+  ]
+}

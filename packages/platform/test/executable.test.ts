@@ -8,6 +8,9 @@
  */
 
 import assert from 'node:assert/strict';
+import { lstatSync, mkdtempSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import type { PlatformFacts } from '@token-harness/core';
@@ -15,6 +18,7 @@ import type { PlatformFacts } from '@token-harness/core';
 import {
   DEFAULT_PATHEXT,
   WINDOWS_SYSTEM_UTILITIES,
+  nodeExecutableProbe,
   resolveExecutable,
   type ExecutableProbe,
 } from '../src/index.js';
@@ -435,5 +439,57 @@ describe('POSIX resolution', () => {
       probe: fakeProbe({ '/usr/bin/rtk': { magic: ELF } }),
     });
     assert.equal(resolved, null);
+  });
+});
+
+/**
+ * The real probe, against a real filesystem — the one thing the fixture map above cannot cover.
+ *
+ * `nodeExecutableProbe` is where a Windows App Execution Alias was being lost.
+ * `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe` is a reparse point that `CreateProcess`
+ * executes and `stat` cannot open: measured on the machine this was fixed on, `statSync` raises
+ * `EACCES` while `lstatSync` reports `isFile=false, isSymlink=true, size=99`. The probe caught the
+ * `stat` failure and answered `absent`, so the resolver rejected `winget` and every winget install
+ * and query failed with `executable-not-found` — a path that had never actually been run, because
+ * the install argv was verified by reading `--help` and the resolution in front of it was not.
+ *
+ * A dangling symlink reproduces exactly that pair of answers without needing the Store, and it does
+ * so on all three platforms.
+ */
+describe('the real probe and an entry stat cannot follow', () => {
+  it('reports a dangling symlink as a file rather than as absent', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'th-probe-'));
+    const link = join(root, 'winget.exe');
+    try {
+      try {
+        symlinkSync(join(root, 'nothing-here.exe'), link, 'file');
+      } catch {
+        // Creating a symlink on Windows needs Developer Mode or elevation. Skipped rather than
+        // weakened: the property is verified on the other two platforms in CI, and on Windows it
+        // was verified against the actual alias.
+        t.skip('this platform does not permit creating a symlink unprivileged');
+        return;
+      }
+
+      // The premise, asserted rather than assumed — without it this test could pass against an
+      // entry `stat` handles fine, and would be checking nothing.
+      assert.throws(() => statSync(link));
+      assert.equal(lstatSync(link).isSymbolicLink(), true);
+
+      assert.equal(nodeExecutableProbe().entryKind(link), 'file');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('still reports a path that is genuinely not there as absent', () => {
+    // The control: the fallback must not turn every missing path into a file.
+    const root = mkdtempSync(join(tmpdir(), 'th-probe-'));
+    try {
+      assert.equal(nodeExecutableProbe().entryKind(join(root, 'absent.exe')), 'absent');
+      assert.equal(nodeExecutableProbe().entryKind(root), 'directory');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

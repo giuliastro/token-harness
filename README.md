@@ -154,11 +154,25 @@ token-harness metrics --since 7d      what it saved, by measurement class
 token-harness status                  drift, and competing hooks on owned surfaces
 token-harness uninstall --yes         remove only what Token Harness owns
 token-harness rollback --yes          restore the files a transaction changed
+token-harness update                  what a newer version would be, per channel
 ```
 
-`update` is the one command RFC 0001 declares that this build does not carry. It is rejected
-as *unavailable* rather than as unknown, so a script can tell "not built yet" from "you typed
-it wrong".
+That is all nine commands RFC 0001 declares. `update` was the last one missing.
+
+It asks each provider's own installation channel what version it offers and compares that with
+what is installed — the installed side comes from the provider, the available side from the
+channel, because `winget` knows what exists for `rtk-ai.rtk` and RTK's adapter does not. Reaching
+the channel is a network read and it happens on a dry run too, since a target version cannot be
+named without asking, so the destinations are reported.
+
+It updates and nothing else. A provider that is not installed is left alone, a channel offering
+something older is not acted on, and a channel that cannot be read produces *unknown* rather than
+the far more comfortable *up to date*. A pinned provider is skipped and its pin is named; a pin
+written inside a repository is reported and not honored, because a repository may not choose which
+version of a tool you run.
+
+And the honest limit, printed rather than implied: an updated package is not restored by a
+rollback. Rollback restores files, and a package is not a file.
 
 ### Guarantees worth knowing before you run `apply`
 

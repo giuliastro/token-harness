@@ -87,11 +87,32 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
     assignable: ASSIGNABLE_PROVIDERS.includes(adapter.manifest.id),
   }));
 
+  /**
+   * `status` probes provider versions because the resolution it already performs now depends on
+   * them — RFC 0004 §Amended: a compatibility rule speaks only for the versions it records.
+   *
+   * It would have been cheaper to pass nothing and let the rules stand. That is exactly the
+   * loophole `observedVersions` is required for: a read-only command reporting ownership computed
+   * from a rule of unknown validity would be reporting a conclusion it cannot support.
+   */
+  const observedVersions: Record<string, string | null> = {};
+  for (const adapter of providerAdapters) {
+    const detection = await adapter.detect({
+      ...detectionContext,
+      harnessConfigs: configs,
+      now: context.now,
+      localDatabase: context.adapters.localDatabase,
+      projectIdFor: context.adapters.projectIdFor,
+    });
+    observedVersions[adapter.manifest.id] = detection.version;
+  }
+
   const resolution = resolveOwnership({
     profile: 'safe',
     harnesses: present,
     providers,
     rules: [...COMPATIBILITY_RULES],
+    observedVersions,
     harness: context.harness,
   });
 

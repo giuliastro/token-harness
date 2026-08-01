@@ -12,7 +12,7 @@ Commands
   verify      Check that an integration actually intercepts, at its declared tier
   rollback    Restore the files a transaction changed, as they were before it
   uninstall   Remove what Token Harness owns, leaving everything else
-  update      Not in this build
+  update      Update the installed providers to what their channel offers
 
 Flags
   --json               Emit one machine-readable envelope on stdout

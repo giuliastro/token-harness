@@ -62,6 +62,24 @@ export interface InstallationChannel {
   digestAvailable: boolean;
 }
 
+/**
+ * The channel to use on this platform: those that support it, in the priority the manifest
+ * declares, first one wins. Null when the provider offers none here.
+ *
+ * Lifted out of the RTK plan builder rather than written twice. `update` needs the same choice for
+ * a different purpose — asking a channel what version it has — and two implementations of "which
+ * channel" could disagree about which one a plan installs from and which one it queried.
+ */
+export function preferredInstallationChannel<
+  T extends { priority: number; platforms: readonly string[] },
+>(channels: readonly T[], os: OperatingSystem): T | null {
+  return (
+    [...channels]
+      .filter((channel) => channel.platforms.includes(os))
+      .sort((left, right) => left.priority - right.priority)[0] ?? null
+  );
+}
+
 /** RFC 0005 §Importers and §Importer degradation policy. */
 export interface MetricsDeclaration {
   /** `none` is an explicit, supported declaration, not a gap. */

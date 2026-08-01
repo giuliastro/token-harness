@@ -22,7 +22,7 @@ Commands
   verify      Check that an integration actually intercepts, at its declared tier
   rollback    Restore the files a transaction changed, as they were before it
   uninstall   Remove what Token Harness owns, leaving everything else
-  update      Not in this build
+  update      Update the installed providers to what their channel offers
 
 Flags
   --json               Emit one machine-readable envelope on stdout
@@ -103,6 +103,29 @@ overwritten by it.
 
 Providers installed on this machine are not uninstalled. Token Harness removes
 the configuration it wrote, never a tool you installed yourself.`,
+  update: `token-harness update — update the providers already installed
+
+Usage
+  token-harness update [--json] [--yes] [--provider <id>] [--project <dir>]
+
+Asks each provider's installation channel what version it offers and compares it
+with what is installed. Dry-run by default: without --yes the comparison is shown
+and exit 8 is returned. The version the run would install is the exact version the
+dry run reported, not whatever is newest when it executes.
+
+Reaching the channel is a network read, and it happens on a dry run too, because a
+target version cannot be named without asking. The destinations are reported.
+
+Updates only. A provider that is not installed is left alone — installing one is
+plan's business, and an update that silently installed would be an install nobody
+reviewed as one. A channel offering something older is not acted on either.
+
+A pinned provider is skipped and its pin is named. That is not a problem and does
+not change the exit code. A pin written inside a project is reported and not
+honored: a repository may not choose which version of a tool you run.
+
+An updated package is not restored by a rollback. Rollback restores files, and a
+package is not a file, so the report says so rather than implying otherwise.`,
   verify: `token-harness verify — check that an integration actually intercepts
 
 Usage

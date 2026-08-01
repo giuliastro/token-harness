@@ -794,6 +794,36 @@ Suggested first implementation issues:
     entry, and the hot-path claim reads the hook commands a plan really writes instead of trusting a
     manifest to declare them.
 
+21. Implement `update` (§12, RFC 0001 §CLI contract). **Done** — the last of the nine commands
+    RFC 0001 declares, so `PLANNED_COMMANDS` is now empty. Implementing it forced RFC 0004
+    §Amended: three of §Provider update policy's six bullets named a mechanism they did not
+    specify, a fourth turned out already satisfied by the journal → plan → `versions` chain, and
+    the first implied a check nothing performed.
+
+    Four findings the machine supplied rather than the documents:
+
+    - **`winget` was unresolvable, so no winget install had ever run.** `winget.exe` under
+      `%LOCALAPPDATA%\Microsoft\WindowsApps` is an App Execution Alias: `statSync` raises
+      `EACCES` and `lstatSync` reports a symlink. The probe read the `stat` failure as *absent*,
+      so the primary install channel on the primary development platform failed with
+      `executable-not-found` — the install argv had been verified by reading `--help`, and the
+      resolution in front of it never exercised until `update` asked a channel a question.
+    - **`winget show` labels the version in the user's language** — `Versione:` here — so the
+      parser is anchored on the untranslated dashes separator, and the fixture is the real
+      Italian output.
+    - **A compatibility rule's `testedVersions` was never read.** The shipped rule records
+      `harnesstrim 0.0.5` and `0.0.6` is installed. Not a live incident — under `safe` HarnessTrim
+      is not assignable, so nothing consults the rule — which is worth stating plainly rather
+      than dressing up: the data went stale on its own with no code able to notice.
+    - **The first `update` collapsed three query outcomes into one verdict** and then printed
+      "the channel did not report a version" about a channel that was never invoked. Split into
+      `unknown` and `unavailable`.
+
+    Deliberately narrowed, with the reason recorded in the RFC rather than in a comment: pins are
+    global only, because honoring a project pin needs the repository-trust mechanism §Repository
+    trust assumes and this build has none, and a project pin read without it would let any cloned
+    repository choose which version of a tool the user runs.
+
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
 ## 16. Release gates
@@ -841,6 +871,11 @@ These are intentionally deferred to measured spikes or to a triggering need:
 
 Resolved since the first draft of this plan:
 
+- **What `update` does, and what a pin is** — RFC 0004 §Amended. Pins are global at `0.1.0` and a
+  project pin is reported and refused; version discovery belongs to the installation channel, not
+  to the provider contract; a compatibility result covers only the versions it records, and below
+  `1.0.0` that means exact equality, because "major" is a test that cannot fire for a `0.x`
+  provider.
 - **Which repository owns the must-keep recall gate** — not this one. §8.2 records why: the gate
   measures a reducer, and Token Harness is not one. It stays on the `0.1.0` list because it is
   still required of the *system*; it is discharged by the providers.

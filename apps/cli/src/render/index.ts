@@ -18,6 +18,7 @@ import type {
   MetricsReport,
   PlanReport,
   StatusReport,
+  UpdateReport,
   VerifyReport,
 } from '@token-harness/core';
 
@@ -26,6 +27,7 @@ import { renderDoctorReport } from './doctor.js';
 import { renderMetricsReport } from './metrics.js';
 import { renderPlanReport } from './plan.js';
 import { renderStatusReport } from './status.js';
+import { renderUpdateReport } from './update.js';
 import { renderVerifyReport } from './verify.js';
 import type { RenderContext } from './layout.js';
 
@@ -76,6 +78,8 @@ export function renderHuman(
       return plain(renderVerifyReport(data as VerifyReport, context));
     case 'metrics':
       return plain(renderMetricsReport(data as MetricsReport, context));
+    case 'update':
+      return plain(renderUpdateReport(data as UpdateReport, context));
     default:
       return { report: '', stderrDiagnostics: result.diagnostics };
   }
@@ -87,6 +91,7 @@ export {
   renderMetricsReport,
   renderPlanReport,
   renderStatusReport,
+  renderUpdateReport,
   renderVerifyReport,
 };
 export * from './layout.js';

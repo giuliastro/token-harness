@@ -231,6 +231,115 @@ Read-only inspection does not execute repository scripts.
 - If an upstream release disappears, Token Harness restores configuration and reports
   that binary rollback could not be completed.
 
+### Amended: three of these bullets name a mechanism they do not specify
+
+The six bullets above are a policy. Implementing `update` — the last command RFC 0001 declares
+— required a contract, and three of the bullets do not supply one. A fourth turned out to be
+already satisfied, and the check the first bullet implies is missing in a way that is live on a
+real machine rather than hypothetical.
+
+#### A pin is global at `0.1.0`, and a project pin waits for repository trust
+
+"A provider may be pinned globally or per project" names no storage, no schema, no precedence
+between the two, and no strength. Specified:
+
+A pin is recorded in the state directory, which is machine-global and whose protection
+§Backup policy already establishes. A pin names a provider and an exact version. It is a
+**refusal**, not a preference: `update` plans nothing for a pinned provider and says which
+version holds it. Refusing is not a problem — an environment the user deliberately froze is a
+state, in the sense RFC 0006 §Exit codes means it — so a pin does not increment
+`problemCount` and does not change the exit code.
+
+**Project pins are deferred, and not for convenience.** §Repository trust holds that
+"project-local provider manifests or filters are untrusted by default. Before they can
+influence installation or execution, the user must trust the repository." A version pin
+influences installation by construction, so honoring a project pin requires the trust
+mechanism that section assumes — and no such mechanism exists in this build. A project pin read
+without it would let any cloned repository decide which version of a tool the user runs, which
+is the outcome §Repository trust exists to prevent. `0.1.0` therefore supports global pins
+only, and reports a project pin it finds as unhonored rather than silently obeying or silently
+ignoring it.
+
+The precedence rule is fixed now, so the deferral does not become a decision made later under
+pressure: **a project pin may only narrow within what a global pin permits, never widen it.**
+Where a global pin holds a provider at a version, a project pin cannot move it to another. A
+repository may ask for less than the machine owner allows and never for more.
+
+#### Version discovery belongs to the channel, not the provider
+
+RFC 0006 makes `update` dry-run by default, so it has to state `0.42.0 → 0.44.0` *before*
+touching anything. Nothing in RFC 0002's provider contract can produce that: `detect` reports
+the version that is installed, which is the wrong side of the arrow.
+
+The available version is therefore obtained from the **installation channel**, not from the
+provider. That is where the knowledge actually lives — `winget` knows what exists for
+`rtk-ai.rtk`; RTK's own adapter has no idea — and it keeps one query per channel rather than
+one per provider, in the same reviewed table as the install argv, for the reason recorded
+there: a plan names *what* to install, and *how to ask* is not something a reviewer should
+re-audit per provider.
+
+Verified against a real machine, and the verification changed the answer. `winget show --id
+<id> --exact` prints the version behind a **localized label** — `Versione:` on the machine this
+was written on, `Version:` on an English one — so parsing that label would have shipped a
+provider that works in one locale. `winget show --id <id> --exact --versions` instead prints a
+table whose header is localized but whose body is bare versions, newest first, after a
+separator line of dashes that is not localized. The stable read is "the first line after the
+separator that parses as a version", and that is what the channel table records.
+
+A query is a network read. It is disclosed the way every other network access is: the plan
+names the destination in its network summary, so a dry run that reached the network says so.
+
+#### The last known working version is already retained
+
+"Token Harness retains the last known working version and configuration receipt" reads like a
+requirement for a new store. It is not: the chain exists. A committed transaction journal names
+its `planId`; the stored plan under that ID carries `versions`, which records the exact provider
+and harness versions the plan was computed against. The most recent committed journal is
+therefore the last known working configuration, and its plan is the last known working version.
+
+No new storage is added. This bullet is discharged by naming the chain, which is worth doing
+explicitly because the alternative — a second record of the same fact — could disagree with it.
+
+#### "Major" is the wrong test, and nothing performs even that one
+
+"Major provider upgrades require a new compatibility result" has two defects.
+
+The first is that no code consults the result. A `CompatibilityRule` carries
+`testedVersions`, and `findCompatibilityRule` matches on providers, harness and capability
+and never looks at it. A rule tested at one version keeps applying at every later one,
+silently.
+
+The stale data is already on disk. On the machine this amendment was written on HarnessTrim is
+`0.0.6`, and the shipped rule declares `harnesstrim: '0.0.5'`.
+
+What that does *not* mean, and the first draft of this amendment claimed: the rule is not being
+applied to the wrong version right now. It is not being applied at all. Under `safe` HarnessTrim
+is not assignable, so it never becomes a competing claim, so no contested scope consults the
+rule — and `custom`, the profile that would, has no CLI surface at `0.1.0`. The check therefore
+guards a path the shipped command set does not reach yet.
+
+That is worth stating plainly rather than dressing up as a live incident, and it does not weaken
+the case. The rule's recorded versions went stale on their own, with no code able to notice; the
+first thing to reach that path would have consulted a result whose validity nobody had checked.
+`doctor` reports the provider itself as `unknown-newer`, correctly — the detection side works.
+The compatibility side had no equivalent.
+
+The second defect is the word *major*. Both shipped providers are `0.x`, where semver assigns
+no compatibility meaning to a minor or patch bump: `0.0.5 → 0.0.6` carries the same risk as
+`1.0.0 → 2.0.0` and would not trigger a bullet that only speaks about major upgrades. A rule
+whose test cannot fire for either provider it governs is not a safeguard.
+
+Amended to: a compatibility result covers the versions it records. An upgrade that would move
+a provider outside them makes every rule naming that provider **stale**, and a stale rule is
+not applied. Because the resolver already fails closed where no rule covers a set — "No rule
+means conservative conflict for overlapping exclusive capabilities" — staleness needs no new
+verdict: withdrawing the rule produces the conservative conflict, which is the outcome a
+compatibility result of unknown validity should produce. Outside the tested versions is
+reported and not guessed at.
+
+Whether a bump is inside the recorded versions is decided by exact equality below `1.0.0` and
+by major equality at or above it, which is what semver itself promises and nothing more.
+
 ## Uninstall levels
 
 ```text

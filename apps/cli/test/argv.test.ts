@@ -109,12 +109,27 @@ describe('argv', () => {
     assert.equal(typo.kind, 'usage-error');
     if (typo.kind === 'usage-error') assert.equal(typo.diagnostics[0]?.code, 'unknown-command');
 
-    // `update` is the last command RFC 0001 declares that this build does not carry; `uninstall`
-    // used to stand here and is implemented now.
-    const planned = parseArgv(['update']);
+    /**
+     * The planned list is supplied here rather than read from the module, because it is now empty:
+     * `update` was the last command RFC 0001 declares that this build did not carry, and before it
+     * `uninstall` stood in this test. Every declared command is implemented.
+     *
+     * The mechanism still matters — it is what keeps the next declared command from reading as a
+     * misspelling — so it is tested against a supplied list rather than deleted along with its last
+     * real subject. `migrate` is a name nothing declares, which is exactly what makes it usable as
+     * a stand-in: the branch under test is the list membership, not the name.
+     */
+    const planned = parseArgv(['migrate'], ['migrate']);
     assert.equal(planned.kind, 'usage-error');
     if (planned.kind === 'usage-error') {
       assert.equal(planned.diagnostics[0]?.code, 'command-not-available');
+    }
+
+    // And the same name off the list is a typo again, so the assertion above is about membership.
+    const unlisted = parseArgv(['migrate'], []);
+    assert.equal(unlisted.kind, 'usage-error');
+    if (unlisted.kind === 'usage-error') {
+      assert.equal(unlisted.diagnostics[0]?.code, 'unknown-command');
     }
   });
 

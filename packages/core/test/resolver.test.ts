@@ -94,7 +94,16 @@ function provider(
   return { id, capabilities, assignable };
 }
 
-const BASE = { harnesses: [CLAUDE_MANIFEST], rules: [] as CompatibilityRule[] };
+/**
+ * `observedVersions` matches what the rules below record, so a test about *ownership* is not
+ * silently also a test about version staleness. The staleness behaviour has its own describe
+ * block, where the versions are the variable under test.
+ */
+const BASE = {
+  harnesses: [CLAUDE_MANIFEST],
+  rules: [] as CompatibilityRule[],
+  observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' } as Record<string, string | null>,
+};
 
 describe('a single claimant', () => {
   it('owns the scope it declared, and only that scope', () => {
@@ -192,6 +201,108 @@ describe('fail-closed on undeclared overlap', () => {
     assert.deepEqual(result.conflicts[0]?.claimants, [RTK, HARNESSTRIM]);
     // And nobody owns it. A conflict that still assigned an owner would be a warning.
     assert.deepEqual(result.ownership, []);
+  });
+
+  /**
+   * RFC 0004 §Amended: "Major" is the wrong test, and nothing performs even that one.
+   *
+   * These are the only tests that reach the staleness path, and that is the point: the shipped
+   * `safe` profile does not reach it, because HarnessTrim is not assignable and `custom` has no CLI
+   * surface. The rule's recorded versions went stale on disk anyway — `harnesstrim 0.0.5` recorded
+   * against `0.0.6` installed — so the first caller to arrive would have consulted a result whose
+   * validity nobody had checked.
+   */
+  describe('a rule outside the versions it records', () => {
+    it('is withdrawn, and the reason names both versions', () => {
+      const result = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [...COMPATIBILITY_RULES],
+        // The live case: the shipped rule records 0.0.5.
+        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.6' },
+      });
+
+      const conflict = result.conflicts[0];
+      assert.equal(conflict?.code, 'compatibility-rule-stale');
+      // Both sides of the comparison, because "stale" without the numbers is not actionable.
+      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.0.5')));
+      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.0.6')));
+      assert.deepEqual(result.ownership, []);
+    });
+
+    it('produces the conservative conflict rather than a fourth outcome', () => {
+      // The withdrawal reuses RFC 0003's fail-closed path: nobody owns a scope whose rule cannot
+      // be trusted, exactly as when no rule names the pair at all.
+      const stale = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [...COMPATIBILITY_RULES],
+        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.6' },
+      });
+      const missing = resolveOwnership({ ...BASE, profile: 'safe', providers: contenders });
+      assert.deepEqual(stale.ownership, missing.ownership);
+      assert.equal(stale.conflicts.length, missing.conflicts.length);
+    });
+
+    it('treats a version it could not establish as not covered', () => {
+      // An unknown version cannot be inside a tested range. Reading it as inside would be the
+      // assumption the check exists to remove.
+      const result = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [...COMPATIBILITY_RULES],
+        observedVersions: { rtk: '0.42.0', harnesstrim: null },
+      });
+      assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
+      assert.ok(result.conflicts[0]?.detail.some((line) => line.includes('unknown')));
+    });
+
+    it('still applies a rule whose recorded versions match', () => {
+      // The control. Without it the three tests above would also pass if the check rejected
+      // everything, and a resolver that never applies a rule is not fail-closed but broken.
+      const result = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [...COMPATIBILITY_RULES],
+        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' },
+      });
+      assert.equal(result.conflicts[0]?.code, 'exclusive-scope-incompatible');
+    });
+
+    it('allows a later patch at or above 1.0.0 but not a later major', () => {
+      const rule: CompatibilityRule = {
+        id: 'stable-pair',
+        providers: [RTK, HARNESSTRIM],
+        harnesses: '*',
+        capabilities: ['shell.output.reduce'],
+        outcome: 'conflict',
+        testedVersions: { rtk: '1.2.0', harnesstrim: '1.0.0' },
+        rationale: 'test',
+        fixtures: ['fixture'],
+      };
+      // Same major: semver promises compatibility, so the rule stands.
+      const within = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [rule],
+        observedVersions: { rtk: '1.9.3', harnesstrim: '1.0.0' },
+      });
+      assert.equal(within.conflicts[0]?.code, 'exclusive-scope-incompatible');
+
+      const beyond = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [rule],
+        observedVersions: { rtk: '2.0.0', harnesstrim: '1.0.0' },
+      });
+      assert.equal(beyond.conflicts[0]?.code, 'compatibility-rule-stale');
+    });
   });
 
   it('offers no force flag in the remediation', () => {
