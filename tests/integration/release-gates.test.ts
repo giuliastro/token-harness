@@ -646,6 +646,32 @@ describe('every harness declares a verification tier', () => {
       }
     }
   });
+
+  it('declares a tier for every harness a capability actually claims', () => {
+    /**
+     * The hole the first version of this gate left open.
+     *
+     * Asserting that each `HarnessSupport` entry carries a tier says nothing about a *capability*
+     * that names a harness with no such entry — and a capability is what the resolver assigns
+     * ownership from. That assignment would then have no declared tier to verify against, which is
+     * the state RFC 0002 §Harness versioning is symmetric exists to forbid.
+     *
+     * Nothing trips it today: RTK's capabilities name only `claude`, matching its single entry, and
+     * HarnessTrim's name the three it declares. Which is exactly when a gap like this is worth
+     * closing — while the check is free and nobody has to be told their manifest is wrong.
+     */
+    for (const adapter of listProviderAdapters()) {
+      const declared = new Set(adapter.manifest.harnesses.map((entry) => entry.harness));
+      for (const capability of adapter.manifest.capabilities) {
+        for (const harness of capability.harnesses) {
+          assert.ok(
+            declared.has(harness),
+            `${adapter.manifest.id} claims ${capability.capability} on ${harness} with no declared tier for it`,
+          );
+        }
+      }
+    }
+  });
 });
 
 /**
