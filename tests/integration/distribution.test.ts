@@ -28,6 +28,16 @@ interface RootManifest {
   scripts: Record<string, string>;
 }
 
+/** Every package.json in the workspace, so nothing is checked by name and then forgotten. */
+const WORKSPACE_MANIFESTS = [
+  ['root', join(REPO_ROOT, 'package.json')],
+  ['@token-harness/core', join(REPO_ROOT, 'packages', 'core', 'package.json')],
+  ['@token-harness/platform', join(REPO_ROOT, 'packages', 'platform', 'package.json')],
+  ['@token-harness/adapters', join(REPO_ROOT, 'packages', 'adapters', 'package.json')],
+  ['token-harness', join(REPO_ROOT, 'apps', 'cli', 'package.json')],
+  ['tests', join(REPO_ROOT, 'tests', 'package.json')],
+] as const;
+
 function root(): RootManifest {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as RootManifest;
 }
@@ -63,6 +73,48 @@ describe('distribution', () => {
     // `TOOL_VERSION`. Together those make `--version` on an installed artifact the same
     // string as the manifest it came from; this asserts the first link.
     assert.equal(root().version, cliVersion());
+  });
+
+  it('ships no third-party runtime code, which is what makes the SBOM short', () => {
+    /**
+     * The invariant `dist/package/sbom.json` asserts, checked here so that document cannot quietly
+     * understate what shipped.
+     *
+     * The published tarball declares no dependencies at all and the bundle inlines the three
+     * workspace packages. That is only honest while every runtime dependency in the workspace is
+     * first-party — add one third-party package anywhere in the graph and it becomes part of the
+     * artifact while the manifest still says `dependencies: none`.
+     *
+     * `devDependencies` are deliberately not checked: esbuild, TypeScript and the linters build the
+     * artifact and are not in it.
+     */
+    for (const [name, path] of WORKSPACE_MANIFESTS) {
+      const manifest = JSON.parse(readFileSync(path, 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      for (const [dependency, range] of Object.entries(manifest.dependencies ?? {})) {
+        assert.ok(
+          range.startsWith('workspace:'),
+          `${name} depends on ${dependency}@${range}, which would be third-party code inside the published bundle`,
+        );
+      }
+    }
+  });
+
+  it('stages an SBOM and publishes it', () => {
+    // An SBOM is generated at package time because it carries the bundle's digest, so it is not
+    // committed and cannot be read here. What is checked is that the step exists and that the
+    // document is inside `files` — one staged beside the tarball and left out of it is a build side
+    // effect, not a supply-chain document.
+    const packaging = readFileSync(join(REPO_ROOT, 'scripts', 'package.mjs'), 'utf8');
+    assert.match(packaging, /sbom\.json/, 'the packaging script emits no SBOM');
+    assert.match(packaging, /bomFormat: 'CycloneDX'/, 'the SBOM is not in a recognised format');
+    assert.match(packaging, /'SHA-256'/, 'the SBOM records no digest for the artifact');
+    assert.match(
+      packaging,
+      /files: \['token-harness\.mjs', 'sbom\.json'/,
+      'the SBOM is staged but not published',
+    );
   });
 
   it('claims a version the contents actually satisfy', () => {

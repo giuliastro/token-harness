@@ -847,6 +847,31 @@ Suggested first implementation issues:
     on every harness a *capability* names — and a capability is what the resolver assigns ownership
     from. Nothing tripped it, which is when such a gap is cheapest to close.
 
+23. Generate the SBOM (§8.3). **Done** — `scripts/package.mjs` emits `dist/package/sbom.json`
+    (CycloneDX 1.5) and the document ships inside the tarball. One staged beside the artifact and
+    left out of `files` is a build side effect, not a supply-chain document.
+
+    Generated at package time rather than committed, because it carries the bundle's SHA-256 and a
+    committed copy would be stale the moment anyone compiled anything.
+
+    It is short, and that is the finding: every runtime dependency in this workspace is a
+    `workspace:*` first-party package, so the published tarball declares no dependencies and the
+    bundle contains no third-party code. `distribution.test.ts` now asserts that invariant, so the
+    SBOM cannot quietly understate what shipped — adding a third-party dependency anywhere in the
+    graph fails that test before the generator gets a chance to omit it. Mutation-checked.
+
+    Fixed in passing, found while verifying the tarball: `smoke:install` checked
+    `doctor.status === 0` under the name "on a machine with nothing installed" and never created that
+    condition. It runs against the real home, so it passed on clean CI runners and failed on any
+    developer machine with a configured harness and a coverage gap, which exits 3. A gate that only
+    works where nobody looks at it is worse than none — the red is false and it teaches people to
+    ignore the output. It now accepts either code `doctor` may legitimately produce and rejects
+    anything else, which is what the step is actually for.
+
+    Still open in §8.3 and deliberately not taken: publishing to npm, and the artifact signing that
+    goes with it. Both are outward-facing and irreversible, and they are the owner's call, not a
+    step to slip into a build.
+
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
 ## 16. Release gates
