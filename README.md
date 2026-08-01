@@ -1,394 +1,536 @@
 # Token Harness
 
-> Set up and measure token-saving tools for coding agents.
+Token Harness has one objective: **reduce the tokens consumed by coding agents without hiding
+useful information or overstating the result**.
 
-## What this is
+Coding sessions repeatedly send test logs, command output, repository context, MCP schemas,
+tool results, and conversation history back to the model. Specialized tools can reduce each of
+those sources, but installing them independently creates a second problem: overlapping hooks,
+double reduction, incompatible configurations, and savings counted more than once.
 
-Tools like [RTK](https://github.com/rtk-ai/rtk) and
-[HarnessTrim](https://github.com/giuliastro/HarnessTrim) cut the tokens your coding agent burns.
-Token Harness is not one of them. It is the thing that **hooks them into your agent**, stops two of
-them fighting over the same output, checks the result actually runs, and reports what was saved.
+Token Harness is the control plane for that optimization stack. It finds the coding agents and
+token-saving tools on the machine, selects a compatible owner for each interception point, shows
+every proposed change before applying it, verifies whether the integration is genuinely being
+used, and reports how many tokens or characters were saved.
 
-## 1. Install Token Harness
+The reduction still happens inside specialized providers such as RTK and HarnessTrim. Token
+Harness makes those providers safe to combine, observable, reversible, and comparable.
 
-```bash
-npm install -g token-harness
+## Optimization ecosystem
+
+The long-term goal is to coordinate token savings across the whole coding-agent pipeline. Only
+tools marked **active** are integrated in this release; every other row is a candidate and is
+neither installed nor configured by Token Harness.
+
+| Tool | Optimization layer | Token Harness status |
+| --- | --- | --- |
+| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and command-output reduction | **Active — integrated** |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP reduction | **Active — integrated** |
+| [Dejavu](https://github.com/Salnika/dejavu) | Emit only the delta when command output repeats | Not active — candidate |
+| [Lazy MCP](https://github.com/voicetreelab/lazy-mcp) | Load MCP tool schemas only when needed | Not active — candidate |
+| [repowise](https://github.com/repowise-dev/repowise) | Retrieve task-specific repository context | Not active — candidate |
+| [LiteLLM](https://github.com/BerriAI/litellm) | Model routing, fallbacks, budgets, and usage telemetry | Not active — candidate |
+| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Route simpler requests to less expensive models | Not active — candidate |
+| [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Route by task, complexity, tools, and deployment locality | Not active — candidate |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | Compress tool, MCP, file, and RAG payloads | Not active — candidate |
+| [Context Mode](https://github.com/mksglu/context-mode) | Keep raw tool results outside model context | Not active — candidate |
+| [LLMLingua](https://github.com/microsoft/LLMLingua) | Compress long prompts and context | Not active — candidate |
+| [Caveman](https://github.com/JuliusBrussee/caveman) | Reduce visible model-output verbosity | Not active — candidate |
+
+Candidate status means only that the project has identified a useful optimization layer. A tool
+becomes active only after its installation, conflicts, rollback behavior, verification, and
+metrics attribution have been implemented and tested. Token Harness never installs a candidate
+merely because it is present on the machine.
+
+## Quick start
+
+Install the CLI:
+
+```sh
+npm install --global token-harness
+token-harness --version
 ```
 
-This installs **only Token Harness**. It does not touch your coding agents and does not install RTK
-or HarnessTrim. Nothing on your machine changes until step 3, and only if you ask.
+Then run the complete workflow from the project in which you use your coding agent:
 
-## 2. Look at what you have
-
-```bash
+```sh
+# 1. Inspect the machine. This does not change agent configuration.
 token-harness doctor
-```
 
-```text
-Token Harness 0.1.0 — Windows 11 Pro (x64), Node 24.13.1
-
-  HARNESSES     - STATE        - CONFIG FILE
-  claude        - no hooks     - ~/.claude/settings.json
-  codex         - no hooks     -
-  opencode      - no hooks     -
-
-  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
-  rtk           - 0.42.0     - nothing yet    - —
-  harnesstrim   - 0.0.6      - nothing yet    - —
-
-NEXT
-  token-harness plan - see what would change — writes nothing
-```
-
-Read it as: the agents are installed but nothing is hooked into them, and the two savers are
-installed but wired to nothing. `SET UP BY` is `you` for anything you configured yourself and
-`this tool` for anything Token Harness did — it never removes what it did not write.
-
-Every command ends with **NEXT**, naming the command to run. If you read nothing else, follow that.
-
-## 3. See what it would do, then let it
-
-```bash
+# 2. Preview every proposed change.
 token-harness plan
-```
 
-```text
-Plan c4341235 — profile safe — harness all
-
-Capability ownership
-  shell.command.rewrite      rtk
-  shell.output.reduce        rtk
-
-Actions
-  1. merge json   ~/.claude/settings.json   Register rtk on Claude Code's hook
-
-Network: none. Elevation: none. Backups: 1 file.
-
-Dry run. Nothing was changed. Run `token-harness apply --plan c4341235`.
-```
-
-That is the whole change it wants to make: one entry added to one file. Nothing is written yet.
-
-```bash
+# 3. Apply the reviewed plan. This is the first configuration-changing step.
 token-harness apply --yes
-```
 
-```text
-Apply — plan c4341235 — transaction 84d851e74bb7
+# 4. Restart the coding agent, then run a normal shell command through it.
 
-Actions
-  1. merge-json             - applied                - ~/.claude/settings.json
-
-Applied and committed.
-```
-
-**This is the only command that writes.** Without `--yes` it prints the plan and stops. Your other
-hooks keep their content and their order, the file is backed up first, and
-`token-harness rollback --yes` puts it back exactly as it was.
-
-## 4. Check it works, and what it saves
-
-```bash
+# 5. Check configuration, real interception evidence, and savings.
+token-harness status
 token-harness verify
-```
-
-```text
-rtk on claude — set up by this tool, tier canary
-  executable   - pass             - rtk 0.42.0
-  hook         - pass             - wired to claude
-  canary       - pass             - 830 commands intercepted on 2026-08-01
-```
-
-`pass` on the last line means the hook has actually run, not merely that it is configured. Once
-there is traffic:
-
-```bash
 token-harness metrics --since 7d
 ```
 
-## Undoing it
+`doctor` ends with a `NEXT` section. If you are unsure what to do, run the command shown
+there.
 
-```bash
-token-harness rollback --yes     # restore the files the last change touched
-token-harness uninstall --yes    # remove only what Token Harness set up
+To try the read-only diagnosis without installing Token Harness globally:
+
+```sh
+npx token-harness doctor
 ```
 
-## Common questions
+`npx` may download Token Harness into npm's cache, but it does not install or configure RTK,
+HarnessTrim, or a coding agent.
 
-**I already configured RTK by hand. Will this break it?** No. `doctor` shows it as `SET UP BY you`,
-`plan` adopts it instead of reinstalling it, and `uninstall` leaves it alone.
+## How the components fit together
 
-**Do I need RTK installed first?** No. If it is missing, `plan` includes installing it through its
-normal channel and names the channel before you approve anything.
+There are three separate layers. Installing one does not automatically provide the others.
 
-**What if I only want to look?** `doctor`, `plan`, `status`, `verify` and `metrics` never write.
-
-**Something said "newer than any tested version".** A note, not an error. Nothing is blocked; Token
-Harness stays conservative about a version it has not been tested against.
-
-## What it coordinates
-
-## What it coordinates
-
-Token Harness is not another compressor. It coordinates specialized projects at different layers of
-the agent pipeline. This is the current landscape; **"candidate" means researched, not supported and
-not installed by this release.**
-
-| System | Layer and added value | Token Harness state |
+| Layer | Examples | Who installs it? |
 | --- | --- | --- |
-| [RTK](https://github.com/rtk-ai/rtk) | Command rewriting and shell-output reduction | **Shipped**: detected, installed, wired, verified, measured |
-| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP integration | **Shipped**: detected, adopted, reconciled against RTK, measured — never installed, see below |
-| [Dejavu](https://github.com/Salnika/dejavu) | Emits only the delta when a command produces repeated output | Priority candidate; requires an RTK ordering fixture and native-Windows work |
-| [Lazy MCP](https://github.com/voicetreelab/lazy-mcp) | Loads MCP tool schemas only when the agent needs them | Priority, largely orthogonal candidate |
-| [repowise](https://github.com/repowise-dev/repowise) | Retrieves task-shaped repository context instead of repeated grep/read loops | Priority candidate; response bounds and attribution must be verified |
-| [LiteLLM](https://github.com/BerriAI/litellm) | Self-hosted model gateway, fallbacks, load balancing, budgets, and usage telemetry | Routing foundation candidate; it does not by itself prove token savings |
-| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Routes easier requests to a cheaper model through an OpenAI-compatible endpoint | Learned-routing candidate; needs coding-agent quality benchmarks |
-| [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Routes by task, complexity, tools, and deployment locality for self-hosted inference | Alternative routing candidate for local inference fleets |
-| [Headroom](https://github.com/headroomlabs-ai/headroom) | Compresses tool, MCP, file, and RAG payloads and can lower effort on routine turns | Broad-context candidate; alternative to Context Mode, with overlap tests required |
-| [Context Mode](https://github.com/mksglu/context-mode) | Keeps raw tool/MCP results outside context and restores compact session memory | Broad-context candidate; alternative to Headroom, source-available under ELv2 |
-| [LLMLingua](https://github.com/microsoft/LLMLingua) | Model-based prompt compression engine for long context | Engine candidate, not yet a direct harness adapter |
-| [Caveman](https://github.com/JuliusBrussee/caveman) | Steers shorter visible model replies | Opt-in candidate; output savings only, with quality and prompt-overhead checks |
+| Coding agent (harness) | Claude Code, Codex, OpenCode | You, using the agent's official installer |
+| Token Harness | `token-harness` | You, from npm or this repository |
+| Optimization provider | RTK, HarnessTrim | RTK can be installed by Token Harness; HarnessTrim must currently be installed separately |
 
-The evidence, licenses, conflicts, and recommended admission order are recorded in the
-[provider landscape](docs/provider-landscape.md). Routing savings are reported as cost or
-quality trade-offs, never silently added to exact token savings.
+Token Harness does not install Claude Code, Codex, or OpenCode. Install and run at least one of
+them first so that `token-harness doctor` can detect it.
 
-Upstream tools remain independent. Token Harness installs supported releases through
-their official distribution channels and never silently vendors or forks them.
+### Support in version 0.1.0
 
-## Product identity
+| Provider | Claude Code | Codex | OpenCode | Installed by Token Harness? |
+| --- | --- | --- | --- | --- |
+| RTK | Configure, verify, and measure | Not managed | Not managed | **Yes**, for the supported Claude Code path |
+| HarnessTrim | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **No** |
 
-| Surface | Value |
+"Not managed" does not mean the upstream tool cannot support that agent. It means this release
+does not claim ownership of that integration and will not modify it.
+
+The generated compatibility tables, tested version ranges, platform coverage, and known
+limitations are in [docs/matrices.md](docs/matrices.md).
+
+## Installing each component
+
+### 1. Install Token Harness
+
+Recommended, from npm:
+
+```sh
+npm install --global token-harness
+token-harness --help
+```
+
+If the command is not found after installation, find npm's global binary directory with:
+
+```sh
+npm prefix --global
+```
+
+Ensure that directory's executable location is on `PATH`, then open a new terminal.
+
+#### Build and install from source
+
+The repository uses the pnpm version declared in `package.json`.
+
+```sh
+git clone https://github.com/giuliastro/token-harness.git
+cd token-harness
+corepack enable
+pnpm install
+pnpm build
+pnpm package
+npm install --global ./dist/package
+token-harness --version
+```
+
+`pnpm build` creates the self-contained CLI at `dist/bundle/token-harness.mjs`.
+`pnpm package` creates the installable package under `dist/package`.
+If `corepack` is unavailable, install the pinned package manager with
+`npm install --global pnpm@10.33.4` instead.
+
+### 2. Install or adopt RTK
+
+For the supported managed path, you normally do **not** install RTK yourself:
+
+```sh
+token-harness plan --harness claude --provider rtk
+```
+
+If RTK is absent, the plan contains two actions:
+
+1. install RTK through the selected package manager;
+2. append one RTK entry to Claude Code's `PreToolUse` hook configuration.
+
+The channel selected by this release is:
+
+| Platform | Channel used by the plan | Required command on `PATH` |
+| --- | --- | --- |
+| Windows | WinGet package `rtk-ai.rtk` | `winget` |
+| macOS | Cargo package `rtk` | `cargo` |
+| Linux and WSL | Cargo package `rtk` | `cargo` |
+
+The Cargo path in this release invokes `cargo install rtk`. That channel is declared but has not
+been exercised by this project, and upstream documents a crates.io name collision. On macOS,
+Linux, and WSL, the safer current route is to install RTK with an upstream-recommended method,
+confirm that `rtk gain` works, and let Token Harness adopt and configure the existing binary.
+
+Review the plan's `Network`, `Elevation`, and `Actions` sections before applying it:
+
+```sh
+token-harness apply --yes --harness claude --provider rtk
+```
+
+If RTK is already installed and configured, Token Harness adopts it instead of reinstalling or
+rewriting it. User-owned configuration remains user-owned.
+
+Important boundaries:
+
+- Token Harness writes the reviewed hook itself; it does not run `rtk init`.
+- A package install is not reversed by file rollback. `rollback` restores configuration files,
+  not installed binaries.
+- `uninstall` removes only integration entries written by Token Harness; it deliberately leaves
+  the RTK executable installed.
+- On native Windows, Claude Code exposes both Bash and PowerShell tool families. The current RTK
+  matcher covers Bash only, so `doctor` can correctly report PowerShell as bypassed.
+
+For manual installation or use outside Token Harness's managed surface, follow the
+[RTK installation guide](https://github.com/rtk-ai/rtk/blob/master/INSTALL.md), then run:
+
+```sh
+rtk --version
+rtk gain
+token-harness doctor --provider rtk
+```
+
+`rtk gain` is an important identity check because another unrelated package also uses the name
+`rtk`.
+
+### 3. Install or adopt HarnessTrim
+
+Token Harness 0.1.0 **never installs HarnessTrim**. Install it with HarnessTrim's own CLI, first
+as a dry run and then with its explicit apply flag. For example:
+
+```sh
+npx harnesstrim doctor
+npx harnesstrim install opencode
+npx harnesstrim install opencode --apply
+```
+
+Replace `opencode` with `codex` or `claude` when appropriate. Consult the
+[HarnessTrim README](https://github.com/giuliastro/HarnessTrim#quick-start) because its adapter
+contents, modes, and telemetry differ by coding agent.
+
+After installing it:
+
+```sh
+token-harness doctor --provider harnesstrim
+token-harness status --provider harnesstrim
+token-harness verify --provider harnesstrim
+token-harness metrics --provider harnesstrim --since 7d
+```
+
+Do not configure RTK and HarnessTrim to reduce the same shell output. In the `safe` profile,
+Token Harness gives that exclusive surface to RTK and treats an existing overlap as a hard
+conflict instead of guessing an execution order. It never deletes the competing entry for you.
+
+HarnessTrim telemetry is opt-in in some adapters. Without a `.harnesstrim/metrics.jsonl` file,
+verification can still inspect configuration, but `metrics` has no HarnessTrim events to import.
+
+## The recommended operating workflow
+
+### Step 1: diagnose
+
+```sh
+token-harness doctor
+```
+
+This answers:
+
+- which supported coding agents are installed;
+- which providers are installed and runnable;
+- which agent configuration files exist;
+- which provider is wired to which agent;
+- whether Token Harness owns the integration or merely adopted it;
+- whether a version, configuration file, or tool-family matcher needs attention.
+
+Common states:
+
+| State | Meaning |
 | --- | --- |
-| Product name | Token Harness |
-| Repository/package slug | `token-harness` |
-| CLI command | `token-harness` |
-| License | Apache-2.0 |
-| Runtime | Node.js 22.13.0+ |
-| Language | TypeScript |
-| Package manager | pnpm |
+| `not found` / `absent` | The executable and usable configuration were not detected |
+| `installed` | The provider runs but is not connected to a supported agent |
+| `configured` | A relevant hook or plugin entry exists |
+| `broken` | Configuration refers to something missing or unreadable |
+| `set up by you` | Token Harness adopted existing configuration and will not remove it |
+| `set up by this tool` | A committed Token Harness transaction owns the exact entry |
 
-## Core principles
+`doctor` is diagnostic. An empty machine is a valid state and exits successfully.
 
-1. **Plan before apply.** Every mutation is represented as a reviewable plan. Dry-run
-   is the default, and no flag skips planning.
-2. **One owner per interception surface.** The planner prevents two providers from
-   rewriting or compressing the same payload unless that exact chain is validated — and
-   it keeps checking after installation, because config files keep changing.
-3. **Upstreams stay upstream.** Providers wrap official installers and APIs instead
-   of copying their implementations.
-4. **Measured, not marketed.** Exact, estimated, and counterfactual savings are
-   reported separately and never summed into one headline number.
-5. **Proven, not assumed.** Verification states its tier: presence, config-only, or an
-   observed canary. A configuration that looks correct is never presented as proof that
-   the harness reaches the provider.
-6. **Reversible by construction.** Configuration edits are marker-owned, backed up,
-   journaled, and removable.
-7. **Local-first.** No account or telemetry is required. Usage data stays local unless
-   the user explicitly enables an upstream service.
-8. **Cross-platform.** Windows, macOS, Linux, and WSL are first-class targets, with
-   unsupported combinations surfaced before installation.
+### Step 2: review the plan
 
-## Why HarnessTrim is adopted but never installed
+```sh
+token-harness plan
+```
 
-`0.1.0` supports Claude Code, Codex, and OpenCode. RTK is managed end to end: detected, installed,
-wired, verified, measured. HarnessTrim is detected, adopted, reconciled against RTK's ownership, and
-measured — but **not installed**, and the reason is a measured property rather than a preference.
+Narrow the operation when useful:
 
-At its current release, no configuration of HarnessTrim exists that would let both tools reduce the
-same command output without contesting the same surface: its Claude and Codex adapters match shell
-commands only, and its OpenCode plugin reduces every tool result. Reducing an already-reduced payload
-loses signal and counts the saving twice. So Token Harness reports the contest instead of hiding it,
-and leaves your HarnessTrim exactly as you configured it.
+```sh
+token-harness plan --harness claude
+token-harness plan --provider rtk
+token-harness plan --project /path/to/project
+```
 
-Additional tools, and joint reduction by two providers, are introduced only after compatibility and
-attribution tests prove they compose safely.
+Read these sections before proceeding:
 
-## Status
+- `Capability ownership`: which provider is allowed to transform each surface;
+- `Excluded`: detected providers intentionally left out;
+- `Actions`: every package operation and file change;
+- `Network`: destinations contacted by later mutation;
+- `Elevation`: whether administrator/root access would be required;
+- `Backups`: how many files will be snapshotted.
 
-**Version `0.1.0`.** PLAN §16 defines that number as: RTK and HarnessTrim, three harnesses,
-transactional install, verification with declared tiers, metrics, and brownfield adoption. All
-of it is here, and a test refuses the version string unless the registries and the command
-surface actually back it.
+`plan` does not modify agent or project configuration. It may persist the serialized plan in
+Token Harness's private state directory so the exact reviewed artifact can be applied later.
 
-### The nine criteria
+If the plan prints an ID, apply that exact plan with:
 
-PLAN §2 lists what makes `0.1.0` useful. Measured, not estimated:
+```sh
+token-harness apply --plan <plan-id> --yes
+```
 
-| # | Criterion | State |
+The stored plan is rejected before any action runs if the project, versions, ownership, or file
+preconditions changed after review.
+
+### Step 3: apply
+
+```sh
+token-harness apply --yes
+```
+
+Without `--yes`, `apply` shows what it would do and exits with code 8. Every affected file is
+snapshotted before mutation, including the prior absence of a newly created file. A failure
+triggers automatic restoration and the result states whether that restoration was verified.
+
+After a successful apply, restart the coding agent so it reloads its hooks or plugins.
+
+### Step 4: create real traffic
+
+Passive verification needs evidence from an operation that actually passed through the provider.
+Open the configured coding agent and ask it to run a normal shell command such as `git status` or
+a test command. Then return to the terminal.
+
+### Step 5: verify configuration and execution
+
+Use both commands; they answer different questions:
+
+```sh
+token-harness status
+token-harness verify
+```
+
+`status` compares the live environment with committed receipts. It finds drift, changed versions,
+and competing entries on exclusive surfaces.
+
+`verify` checks the strongest evidence the integration declares:
+
+| Tier | What it proves |
+| --- | --- |
+| `presence` | The executable resolves and reports a version |
+| `config-only` | The expected configuration entry exists |
+| `canary` | Provider records show a real operation crossed the interception point |
+
+`config-only` is not proof that the hook ran. It is the honest ceiling for integrations whose
+runtime state cannot be observed externally.
+
+`not-exercised` means no attributable operation has been observed yet. It is neither success nor
+failure: run a command through the agent and check again.
+
+### Step 6: inspect savings
+
+```sh
+token-harness metrics
+token-harness metrics --since 24h
+token-harness metrics --since 2026-07-01 --until 2026-08-01
+token-harness metrics --provider rtk --since 7d
+```
+
+The default window is seven days. Durations such as `12h`, `7d`, and `2w`, plus ISO dates, are
+accepted. Date boundaries are midnight UTC.
+
+The report keeps measurement types and units separate:
+
+| Report line | Interpretation |
+| --- | --- |
+| `Exact local` | Before and after token counts were observed for the same operation |
+| `Estimated local` | The payload changed, but the reported unit or tokenizer is an estimate |
+| `Counterfactual` | A dry run measured what could have changed; it is not realized saving |
+| `End-to-end billed` | Comparable billed sessions were measured; otherwise it says `no A/B run` |
+| `Coverage` | Share of relevant operations that were actually changed |
+| `Bypassed` | Operations observed but passed through unchanged or outside coverage |
+
+Token counts are never added to character counts, and estimated or counterfactual values are never
+silently merged into an exact total.
+
+## Undoing changes
+
+Choose the command based on what you want to undo:
+
+```sh
+# Remove only exact integration entries owned by Token Harness.
+token-harness uninstall --yes
+
+# Restore all files from the most recent committed transaction snapshot.
+token-harness rollback --yes
+```
+
+`uninstall` is usually the safer choice after subsequent manual edits: it is surgical and refuses
+to remove an owned entry if its content no longer matches what Token Harness wrote.
+
+`rollback` restores whole files to their pre-transaction bytes. Changes made to those files after
+the transaction are therefore also reverted. It does not restore or remove provider packages.
+
+Neither command removes user-owned RTK or HarnessTrim configuration.
+
+## Command reference
+
+| Command | Purpose | Changes agent/project configuration? |
 | --- | --- | --- |
-| 1 | `doctor` detects Codex, Claude Code, or OpenCode | **done** — all three |
-| 2 | RTK and HarnessTrim: available, installed, configured, broken | **done** |
-| 3 | Dry-run plan for a compatible setup | **done** |
-| 4 | Apply that plan transactionally | **done** |
-| 5 | Verify the integration, with the tier stated | **done** |
-| 6 | Inspect normalized savings | **done** — both providers |
-| 7 | Uninstall or roll back without damage | **done** |
-| 8 | Adopt an existing hand-configured installation | **done** — both providers |
-| 9 | Windows, macOS, Linux | **done** — CI on all three, every commit |
+| `doctor` | Detect agents, providers, ownership, and problems | No |
+| `plan` | Resolve ownership and preview exact actions | No; stores the plan in private state |
+| `apply` | Apply a plan transactionally | Yes, only with `--yes` |
+| `status` | Detect drift and competing hooks | No |
+| `verify` | Check the declared verification tier | No |
+| `metrics` | Import provider records and report savings | No; updates only Token Harness state |
+| `update` | Query channels and update installed providers | Yes, only with `--yes` |
+| `rollback` | Restore files from the latest committed transaction | Yes, only with `--yes` |
+| `uninstall` | Remove owned integration entries | Yes, only with `--yes` |
 
-### What it looks like on a real machine
-
-A snapshot from the development machine on 2026-08-01. The figures move every time RTK runs; the
-relationships between them are the part that matters.
+Every command supports `--help`. Common filters are:
 
 ```text
-$ token-harness doctor
-Token Harness 0.1.0 — Windows 11 Pro (x64), Node 24.13.1
-
-Harnesses
-  claude      configured  ~/.claude/settings.json
-  codex       configured  ~/.codex/config.toml
-  opencode    detected    ~/.config/opencode/opencode.jsonc
-
-Providers
-  rtk           configured    0.42.0  configured for claude (adopted, not managed)
-  harnesstrim   configured    0.0.6   configured for codex (adopted, not managed)
-
-1 problem found. Fix it before running `token-harness plan`.
+--harness claude|codex|opencode
+--provider rtk|harnesstrim
+--project <directory>
+--json
 ```
 
-That one problem is not a broken install. It is that no configured matcher covers Claude Code's
-PowerShell tool family, so commands routed through it bypass the pipeline entirely — measured, not
-inferred. An "all clear" there would have been the more comfortable lie.
+## Automation and JSON output
 
-```text
-$ token-harness verify
-No receipt — verifying the live configuration
+Use `--json` in scripts:
 
-rtk — claude — adopted, not managed — declared tier: canary
-  pass           executable-resolves        rtk 0.42.0
-  pass           hook-registered            wired to claude
-  pass           canary-intercepted         592 commands intercepted on 2026-08-01
-harnesstrim — codex — adopted, not managed — declared tier: config-only
-  pass           executable-resolves        harnesstrim 0.0.6
-  pass           hook-registered            wired to codex
-  not-exercised  canary-intercepted         no telemetry file exists, so no interception has been recorded
+```sh
+token-harness doctor --json
+token-harness verify --json
+token-harness metrics --since 7d --json
 ```
 
-That last line is the point of the whole verification model: the hook is correctly configured, and
-it has never run. RFC 0007 exists because "configured" and "working" are different claims, and
-`not-exercised` is neither a pass nor a failure.
+stdout contains exactly one JSON document with this top-level contract:
 
-### The figures reconcile with the provider's own, and where they differ they say why
-
-```text
-$ token-harness metrics --since 2020-01-01
-Exact local            1,429,689 -> 1,216,007 tokens    saved 213,682
-  rtk            saved 213,682 tokens   exact-local      1,361 operations
-
-Coverage 33%. Bypassed 2,741. Errors 0. Added median latency not measured.
-365 operations made the payload larger; the figures above are net of that.
+```json
+{
+  "schemaVersion": 1,
+  "command": "verify",
+  "toolVersion": "0.1.0",
+  "status": "ok",
+  "exitCode": 0,
+  "data": {},
+  "diagnostics": []
+}
 ```
 
-`rtk gain` independently reports **4,102 commands** and **217.1K tokens saved** over the same
-history. Two of those agree exactly and one does not, and both facts are load-bearing:
+Important exit codes:
 
-- **The operation count matches to the command.** 1,361 intercepted plus 2,741 bypassed is 4,102, and
-  the input and output totals match as well. Nothing is being double-counted or dropped.
-- **The saved figure is lower by about 3,400 tokens, on purpose.** RTK floors its own per-command
-  saving at zero, so its total is a sum of clamped values. Some operations genuinely make the payload
-  *larger*, and Token Harness reports the net effect and prints the inflated count beside it. A
-  higher number was available and would have been wrong.
+| Code | Meaning |
+| ---: | --- |
+| 0 | Completed with nothing actionable |
+| 2 | Invalid command or argument |
+| 3 | A read-only check found an actionable problem |
+| 4 | A capability conflict blocks the plan |
+| 5 | The environment drifted from the stored plan or journal |
+| 6 | Mutation failed and rollback was verified |
+| 7 | Mutation failed and state was not fully restored; inspect the named paths |
+| 8 | The command needs explicit confirmation (`--yes`) |
+| 9 | Unsupported or unverifiable environment |
 
-Coverage of 33% is the honest reading of the same data: two thirds of intercepted commands were
-passed through unchanged. That is what a token-saving tool actually does on a real workload, and it
-is the figure a report designed to flatter would have left out.
+Do not treat every non-zero code as the same failure. In particular, code 8 is the expected result
+of previewing a mutating command without approval.
 
-### The full command surface
+## State, backups, and privacy
 
-```text
-token-harness doctor                  what is here, and what is broken
-token-harness plan                    what would change; nothing is written
-token-harness apply --yes             write it, inside a reversible transaction
-token-harness verify                  is it actually intercepting, at which tier
-token-harness metrics --since 7d      what it saved, by measurement class
-token-harness status                  drift, and competing hooks on owned surfaces
-token-harness uninstall --yes         remove only what Token Harness owns
-token-harness rollback --yes          restore the files a transaction changed
-token-harness update                  what a newer version would be, per channel
+Token Harness stores plans, journals, backups, receipts, import cursors, and normalized metrics
+outside the repository:
+
+| Platform | Default state root |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\TokenHarness` |
+| macOS | `~/Library/Application Support/TokenHarness` |
+| Linux and WSL | `${XDG_STATE_HOME:-~/.local/state}/token-harness` |
+
+Normalized metrics do not contain raw command text, tool output, source code, prompts, credentials,
+or raw file paths. Provider records are read in place; Token Harness imports only normalized event
+data.
+
+## Troubleshooting
+
+### `token-harness` is not found
+
+Confirm Node and the global npm installation:
+
+```sh
+node --version
+npm list --global token-harness
+npm prefix --global
 ```
 
-That is all nine commands RFC 0001 declares. `update` was the last one missing.
+Node must be at least 22.13.0. Add npm's global executable directory to `PATH`, then reopen the
+terminal.
 
-It asks each provider's own installation channel what version it offers and compares that with
-what is installed — the installed side comes from the provider, the available side from the
-channel, because `winget` knows what exists for `rtk-ai.rtk` and RTK's adapter does not. Reaching
-the channel is a network read and it happens on a dry run too, since a target version cannot be
-named without asking, so the destinations are reported.
+### `plan` says there is nothing to do
 
-It updates and nothing else. A provider that is not installed is left alone, a channel offering
-something older is not acted on, and a channel that cannot be read produces *unknown* rather than
-the far more comfortable *up to date*. A pinned provider is skipped and its pin is named; a pin
-written inside a repository is reported and not honored, because a repository may not choose which
-version of a tool you run.
+Run `token-harness doctor`. The usual causes are:
 
-And the honest limit, printed rather than implied: an updated package is not restored by a
-rollback. Rollback restores files, and a package is not a file.
+- no supported coding agent was detected;
+- the requested provider does not claim that coding agent in this release;
+- an existing user-managed integration already satisfies the target state;
+- the safe profile excluded an overlapping provider.
 
-### Guarantees worth knowing before you run `apply`
+RTK is managed only for Claude Code in 0.1.0. A Codex-only or OpenCode-only machine therefore does
+not produce an RTK installation action.
 
-- **Dry-run by default.** Without `--yes`, mutating commands display the plan and exit 8.
-- **One appended entry, not a rewritten list.** Your other hooks keep their content and their
-  order; a test asserts your entry is still first afterwards.
-- **Every file is snapshotted first**, including files that did not exist, so a rollback can
-  restore their absence. The restoration is verified by reading the files back — which is what
-  separates exit 6 (rolled back) from exit 7 (did not fully restore).
-- **Token Harness removes only what a committed journal records as its own.** Not what merely
-  looks like its own: an entry whose bytes match what it would have written is still yours if
-  it did not write it, and `uninstall` says so and declines.
-- **A change you did not ask for is reported.** Editing a hand-formatted JSON file reformats
-  it, and that warning reaches you rather than only the journal.
-- **A competing hook on an owned surface is reported, never removed.** `status` names the file,
-  the surface, and the competing command, and exits 3.
+### The plan is blocked by `exclusive-scope-contested`
 
-### What is honest about the limits
+RTK and HarnessTrim both claim the same reducing surface. Token Harness will not choose an order or
+overwrite either configuration. Remove or disable one integration using the tool that owns it, then
+run `doctor` and `plan` again.
 
-- **HarnessTrim is never installed**, by design rather than omission. RFC 0003 §Resolution at
-  0.1.0 checked its installer at `0.0.5` and found no configuration that lets it and RTK reduce
-  output without contesting the same surface. So it is detected, adopted, reconciled, and
-  measured — and left alone. Under `profile: custom` you may hand it the scope instead of RTK.
-- **An installed package cannot be rolled back.** `apply` can now run a package manager, but a
-  package is not a file and there is no snapshot of one, so a later failure restores your files and
-  leaves the package installed. The report says so rather than letting "rolled back" imply the
-  machine is as it was. Elevation is refused outright, with the exact command to run yourself.
-- **A provider that cannot report its version is still adopted.** Older HarnessTrim builds reject
-  `--version`; Token Harness asks, falls back, and reports the tool as installed with no version
-  rather than as missing. It never reads the reachable `package.json`, which names the monorepo
-  rather than the CLI.
-- **Codex hooks cannot be proven to run.** Enablement and trust are persisted separately from
-  `hooks.json`, in state no adapter can read, so Codex tops out at `config-only` and says why.
-- **Two measurement findings that change how a number reads.** 75% of RTK's interceptions save
-  nothing, and RTK sometimes makes output *larger* while flooring its own counter at zero — so
-  its total is a sum of clamped values. Token Harness reports the net effect and names the
-  inflation separately.
+### `verify` reports `not-exercised`
 
-### What actually gets installed
+Restart the coding agent, ask it to run a shell command through the configured tool family, then
+run `token-harness verify` again. For a `config-only` integration, no stronger external receipt may
+exist; the output states that limitation explicitly.
 
-On npm as [`token-harness`](https://www.npmjs.com/package/token-harness) — one self-contained ESM
-file with **no dependencies at all**. Installing it adds a single package and resolves nothing,
-because the whole workspace is inlined and no third-party code is in the artifact.
+### `metrics` shows no data
 
-`npx token-harness doctor` runs it without installing anything.
+Check all of the following:
 
-The tarball carries a CycloneDX SBOM alongside the bundle. CI packs it, installs it with no
-workspace above it, and runs the result on Windows, macOS, and Linux on every commit — because a
-bundle that runs is not the same as a package that installs.
+- the provider has processed at least one operation in the requested time window;
+- `rtk gain` works for RTK;
+- HarnessTrim telemetry is enabled and `.harnesstrim/metrics.jsonl` exists for the project;
+- `--project` points to the project whose records you expect;
+- `--since` is not excluding older events.
 
-To build and install it from source instead:
+An empty metrics report exits 0 because it is a valid observation, not a command failure.
 
-```bash
-pnpm install && pnpm build && pnpm package
-npm install -g ./dist/package
-```
+### A newer provider or agent version is reported
 
-Every read-only command is safe to run first. `doctor`, `plan`, `status`, `verify` and
-`metrics` never touch a harness configuration, and `--project <dir>` retargets the
-project-scoped half if you want to watch it work against a scratch directory.
+The tested ranges record versions actually exercised by this project. A newer version is reported
+and handled conservatively rather than assumed compatible. Check [docs/matrices.md](docs/matrices.md)
+and the upstream release notes before applying configuration changes.
 
 ## Development
 
-```bash
+```sh
+corepack enable
 pnpm install
 pnpm typecheck
 pnpm lint
@@ -399,45 +541,15 @@ pnpm package
 pnpm smoke:install
 ```
 
-`pnpm build` produces the self-contained artifact at `dist/bundle/token-harness.mjs`;
-`pnpm smoke` runs it from a temporary directory outside the repository, so anything
-that failed to inline shows up as a resolution failure rather than as a passing test.
-CI runs all of it on `windows-latest`, `macos-latest`, and `ubuntu-latest`, in that
-order and without fail-fast, because the failures this project exists to prevent are
-mostly Windows-specific and finding them after two green jobs is how they become
-workarounds instead of design.
+Tests use temporary homes and fake process runners; they do not install third-party tools.
+`pnpm smoke` runs the bundle from outside the workspace, and `pnpm smoke:install` validates the
+packed npm artifact.
 
-## Release gates
+Before changing architecture or public behavior, read [PLAN.md](PLAN.md) and the accepted RFCs in
+[docs/rfcs](docs/rfcs). The CLI and JSON contract is defined by
+[RFC 0006](docs/rfcs/0006-cli-contract.md).
 
-| Version | Gate |
-| --- | --- |
-| `0.0.x` | Internal architecture and fixtures. No stability promise. |
-| `0.1.0` | RTK and HarnessTrim, three harnesses, transactional install, verification with declared tiers, metrics, brownfield adoption **← here** |
-| `0.2.0` | A third provider, goal-based profiles, the A/B benchmark matrix |
-| `1.0.0` | Stable provider and harness contracts, two release cycles with no configuration-loss defects, published benchmark results |
+## License
 
-`PLAN.md` §16 is the authority; this table is a summary of it.
-
-`pnpm golden` regenerates the derived halves of the golden fixtures. It never
-touches the five human transcripts transcribed from RFC 0006 — see
-[tests/fixtures/README.md](tests/fixtures/README.md).
-
-CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
-matrix set not to fail fast.
-
-Releases publish on a `v*` tag, with provenance, and a tag that does not match the staged version is
-refused before the publish rather than discovered by whoever installs it. The workflow authenticates
-with an `NPM_TOKEN` secret — a stopgap, and `.github/workflows/release.yml` says why at the top:
-trusted publishing needs an account-level configuration this account cannot currently perform.
-
-- [Compatibility, verification tiers, and known limitations](docs/matrices.md) — the tables are
-  generated from the manifests and a test fails if they drift; the limitations below them are prose,
-  and a test checks that every limitation the code declares appears there
-- [Development plan](PLAN.md)
-- [Foundation decisions](docs/rfcs/0001-foundation.md)
-- [Provider contract](docs/rfcs/0002-provider-contract.md)
-- [Capability and conflict model](docs/rfcs/0003-capabilities-and-conflicts.md)
-- [Safety and installation model](docs/rfcs/0004-safety-and-installation.md)
-- [Metrics and attribution](docs/rfcs/0005-metrics-and-attribution.md)
-- [CLI contract](docs/rfcs/0006-cli-contract.md)
-- [Live verification](docs/rfcs/0007-live-verification.md)
+Token Harness is licensed under the [Apache License 2.0](LICENSE). RTK and HarnessTrim are
+independent upstream projects distributed under their own licenses.
