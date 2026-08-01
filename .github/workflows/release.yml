@@ -107,8 +107,40 @@ jobs:
       - name: Refuse a tag that does not match the staged version
         run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
 
+      # Two reasons a tag may legitimately not publish, and neither is a failure.
+      #
+      # Without these, tagging is a trap: `v0.1.0` already exists on the registry, and no credential
+      # is configured yet, so a tag pushed to fill in the releases page would leave a red job behind
+      # it. A red job that means "nothing to do" trains people to ignore red jobs.
+      - name: Decide whether there is anything to publish
+        id: gate
+        run: |
+          if [ -z "${NPM_TOKEN}" ]; then
+            echo "no NPM_TOKEN is configured, so this tag cannot publish"
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(node -p "require('./dist/package/package.json').version")
+          name=$(node -p "require('./dist/package/package.json').name")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on the registry; nothing to publish"
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$name@$version is not on the registry yet"
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+        env:
+          # Read to test for emptiness only. Never echoed.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish
+        if: steps.gate.outputs.publish == 'true'
         run: npm publish --provenance
         working-directory: dist/package
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Say what happened when nothing was published
+        if: steps.gate.outputs.publish != 'true'
+        run: |
+          echo "::notice::Gates passed and nothing was published. See the previous step for why."
