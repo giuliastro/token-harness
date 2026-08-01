@@ -208,21 +208,56 @@ with the RFCs, and reachable from the fixture it declares.
 ```text
 $ token-harness doctor
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
+Read-only: this inspected your machine and changed nothing.
 
-Harnesses
+Harnesses — coding agents a provider can plug into (configured = it has hooks)
   claude      detected    ~/.claude/settings.json
   codex       detected    ~/.codex/config.toml
   opencode    absent
 
-Providers
+Providers — the token-saving tools (configured = wired into a harness)
   rtk           installed     1.4.2   not configured for any harness
   harnesstrim   installed     0.0.5   not configured for any managed harness
 
+Token Harness has changed nothing here. Everything above was already on the machine.
 Nothing is broken. Run `token-harness plan` to see what would change.
 ```
 
 Exit code 0. An installed-but-unwired provider is a state, not a problem, so nothing here
 contributes to exit 3.
+
+#### Amended: the transcript was unreadable on a first run
+
+The three added lines, and the exit-3 rendering specified below, come from a real first run
+reported by a user who could not tell what the command had done. Four separate misreadings, each
+one the output's fault:
+
+**The problem count named nothing.** On that machine the single counted problem was HarnessTrim at
+`0.0.6` against a tested range ending `0.0.5`. The table printed `0.0.6` unmarked, and an unrelated
+warning about PowerShell tool coverage appeared immediately below — so the two were read as one
+thing. A count with nothing identifying what it counts is not a finding; it is a number.
+
+**It told the reader to fix something first, which was false.** The old exit-3 line read "*N*
+problems found. Fix them before running `token-harness plan`." Nothing in the exit-3 set blocks
+`plan`: §Versioning in RFC 0002 makes an unknown newer version produce "a warning and default to
+conservative behavior", and a broken integration is reported by `plan` rather than preventing it.
+The instruction sent the reader to fix something unnecessary, often something they cannot change,
+before a command that would have worked.
+
+**`configured` meant two different things two sections apart** — a harness that has hooks written by
+anyone, and a provider wired into a harness. Both tables are now annotated with which sense applies.
+
+**Nothing said whether Token Harness had changed anything.** A provider wired by hand and one wired
+by Token Harness both render as `configured`, and RFC 0004 §Brownfield adoption makes the
+hand-wired case the *common* first run. The silence was read as "it installed something". The
+answer is now stated whenever any provider is present.
+
+Therefore, for exit 3, `doctor` renders a `Worth knowing` section with one line per contributing
+finding, followed by a statement that nothing is blocked. The count is derived from the same fields
+the lines are, so the two cannot disagree.
+
+The density this replaces was not an accident and is worth naming as a lesson: the original
+transcript was written by someone who already knew what every column meant.
 
 ### Scenario: planning against the fixture above
 
