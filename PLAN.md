@@ -872,6 +872,33 @@ Suggested first implementation issues:
     goes with it. Both are outward-facing and irreversible, and they are the owner's call, not a
     step to slip into a build.
 
+24. Add the release workflow (§8.3). **Done** — `.github/workflows/release.yml` publishes on a
+    `v*` tag using npm **trusted publishing**: OIDC, `id-token: write`, and no token in the
+    repository secrets, on a laptop, or in the file. npm signs provenance automatically on that
+    route, so `--provenance` is deliberately absent — passing it would be a sign the workflow had
+    been written against the token-based mechanism instead.
+
+    Two constraints the documentation supplied and the design had to bend to:
+
+    - **Trusted publishing needs npm 11.5.1 and Node 22.14.0 or newer**, which is *above* the
+      RFC 0001 runtime floor `ci.yml` deliberately pins. The release job therefore runs newer and
+      asserts the npm version rather than trusting the runner's bundled one. That weakens nothing:
+      the job publishes an artifact the matrix already tested at the floor. `distribution.test.ts`
+      pins both sides so neither is later "tidied" into matching the other, which would silently
+      drop the oldest supported runtime from the matrix.
+    - **A trusted publisher cannot be configured before the package exists.** npm's own docs say
+      "The package you're configuring must already exist on the npm registry", and the `npm trust`
+      command added in February 2026 says the same. So the very first `0.1.0` has to be published by
+      hand; every release after it is autonomous.
+
+    `scripts/check-release-tag.mjs` refuses a tag that does not match the staged version, before the
+    publish rather than after: a tag is a human gesture and a version is a file, and when they
+    disagree the mismatch is otherwise discovered by whoever installs `v0.2.0` and gets `0.1.0`.
+
+    Still open, and the owner's to do: configure the trusted publisher on npmjs.com — or with
+    `npm trust github token-harness --file release.yml --allow-publish` — and make that one first
+    manual publish. Nothing in this repository can do either, and nothing in it holds a credential.
+
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
 ## 16. Release gates
