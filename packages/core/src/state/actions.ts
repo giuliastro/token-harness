@@ -16,14 +16,21 @@
  * planning, an owned block the user edited, a marker fence somebody removed. The
  * outcome is `precondition-drift`, which the CLI reports as exit 5 — never a write.
  *
- * Five of the thirteen action families are implemented: the four that touch files
- * without a parser (PLAN §15 issue 6) and `merge-json` (issue 7). The rest report
- * `action-not-implemented` rather than silently succeeding, and a test asserts that
- * for every one of them.
+ * Six of the thirteen action families are implemented: the four that touch files without a
+ * parser (PLAN §15 issue 6), `merge-json` (issue 7), and `package-manager-install`. The rest
+ * report `action-not-implemented` rather than silently succeeding, and a test asserts that for
+ * every one of them.
+ *
+ * `package-manager-install` is the one that does not touch a file, and it is the exception in
+ * every way that matters: it takes no snapshot, it owns nothing afterwards, and a rollback cannot
+ * undo it. `install.ts` holds the rules RFC 0004 imposes on it.
  */
 
+import { runPackageManagerInstall } from './install.js';
+import type { ProcessRunner } from '../domain/process.js';
 import type {
   CreateDirectoryAction,
+  PackageManagerInstallAction,
   MergeJsonAction,
   PatchMarkerBlockAction,
   PlannedAction,
@@ -57,6 +64,16 @@ import type { SnapshotStore } from './snapshots.js';
 export interface ActionContext {
   fs: FileSystemPort;
   snapshots: SnapshotStore;
+  /**
+   * Needed only by `package-manager-install`, so it is optional rather than required.
+   *
+   * The file-touching families genuinely have no business spawning anything, and a required
+   * runner would hand every one of them a capability RFC 0004 §Process policy keeps scarce. An
+   * install with no runner reports why instead of silently doing nothing.
+   */
+  runner?: ProcessRunner | null;
+  /** Working directory for an installer. The project root; nothing relative is read from it. */
+  cwd?: string;
 }
 
 export type ActionStatus =
@@ -655,8 +672,9 @@ export async function applyAction(
       return applyRemoveOwnedChange(action, context);
     case 'merge-json':
       return applyMergeJson(action, context);
-    case 'download-artifact':
     case 'package-manager-install':
+      return applyPackageManagerInstall(action, context);
+    case 'download-artifact':
     case 'run-installer-command':
     case 'delegated-provider-install':
     case 'merge-toml':
@@ -667,6 +685,34 @@ export async function applyAction(
   }
 }
 
+/**
+ * Installs a package, and owns nothing afterwards.
+ *
+ * The three departures from every other family here, each required by RFC 0004:
+ *
+ * - **no snapshot.** A package is not a file, so there is nothing to capture and nothing a
+ *   rollback can restore. `install.ts` emits `install-not-reversible` on success so a later
+ *   rollback does not read as "the machine is as it was".
+ * - **no ownership.** Token Harness did not compose the installed files and will not remove them;
+ *   `uninstall` leaves a provider installed for the same reason.
+ * - **`refused`, not `failed`, when elevation is required.** Nothing is broken, and RFC 0004 says
+ *   the user runs that step explicitly. The outcome carries the exact command.
+ */
+async function applyPackageManagerInstall(
+  action: PackageManagerInstallAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const result = await runPackageManagerInstall({
+    action,
+    runner: context.runner ?? null,
+    cwd: context.cwd ?? '',
+  });
+
+  const status: ActionStatus =
+    result.status === 'installed' ? 'applied' : result.status === 'refused' ? 'refused' : 'failed';
+  return outcome(action, status, { diagnostics: result.diagnostics });
+}
+
 /** The families this build can execute, exported so a planner can refuse to plan the rest. */
 export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'create-directory',
@@ -674,6 +720,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'patch-marker-block',
   'merge-json',
   'remove-owned-change',
+  'package-manager-install',
 ];
 
 export function isExecutableActionKind(kind: PlannedActionKind): boolean {

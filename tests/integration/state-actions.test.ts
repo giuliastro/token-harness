@@ -31,9 +31,11 @@ import {
   type JsonValue,
   type MergeJsonAction,
   type PatchMarkerBlockAction,
+  type PackageManagerInstallAction,
   type PlannedAction,
   type PlannedActionBase,
   type PlannedActionKind,
+  type ProcessRunner,
   type PlatformFacts,
   type RemoveOwnedChangeAction,
   type WriteOwnedFileAction,
@@ -877,10 +879,190 @@ describe('remove-owned-change', () => {
   );
 });
 
+/**
+ * `package-manager-install` — RFC 0004 §Network policy and §Process policy.
+ *
+ * The one family whose effect is not a file, which is why it is exempted from three of the five
+ * obligations and why the ones it does discharge look unlike the others. "rollback" here asserts
+ * that it *cannot* be rolled back, because that is the property a user has to know.
+ *
+ * A fake runner throughout. Installing a package to test an installer would leave the machine
+ * changed by a test run — no more acceptable for a package manager than for the developer home
+ * AGENTS.md already protects.
+ */
+describe('installing a package', () => {
+  function installer(options: { exitCode?: number; fails?: boolean } = {}) {
+    const spawned: { executable: string; args: string[] }[] = [];
+    const runner: ProcessRunner = {
+      run: (request) => {
+        spawned.push({ executable: request.executable, args: [...request.args] });
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: options.fails === true ? null : `/usr/bin/${request.executable}`,
+          exitCode: options.fails === true ? null : (options.exitCode ?? 0),
+          signal: null,
+          stdout: '',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure:
+            options.fails === true
+              ? { reason: 'executable-not-found' as const, message: 'missing' }
+              : null,
+        });
+      },
+    };
+    return { spawned, runner };
+  }
+
+  function installAction(
+    overrides: Partial<PackageManagerInstallAction> = {},
+  ): PackageManagerInstallAction {
+    return {
+      ...BASE,
+      id: 'install-1',
+      kind: 'package-manager-install',
+      riskClass: 'delegated',
+      requiresNetwork: true,
+      requiresElevation: false,
+      rollbackData: 'none',
+      packageManager: 'winget',
+      packageName: 'rtk-ai.rtk',
+      version: null,
+      ...overrides,
+    } as PackageManagerInstallAction;
+  }
+
+  it('runs the package manager and reports it applied', async () => {
+    const h = harness();
+    const { spawned, runner } = installer();
+    const outcome = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+
+    assert.equal(outcome.status, 'applied');
+    // Verified against a real machine: `rtk` resolves to `WinGet/Packages/rtk-ai.rtk_.../rtk.exe`,
+    // and every flag below appears in `winget install --help`.
+    assert.equal(spawned[0]?.executable, 'winget');
+    assert.deepEqual(spawned[0]?.args, [
+      'install',
+      '--id',
+      'rtk-ai.rtk',
+      '--exact',
+      '--silent',
+      '--accept-package-agreements',
+      '--accept-source-agreements',
+    ]);
+    claim('package-manager-install', 'apply');
+  });
+
+  it('takes no snapshot and claims no ownership', async () => {
+    const h = harness();
+    const { runner } = installer();
+    const outcome = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+    // A package is not a file. A snapshot would promise a restoration that cannot happen, and
+    // ownership would let `uninstall` try to delete a package Token Harness did not compose.
+    assert.deepEqual(outcome.snapshots, []);
+    assert.deepEqual(outcome.ownership, []);
+  });
+
+  it('says on success that a rollback will not undo it', async () => {
+    const h = harness();
+    const { runner } = installer();
+    const outcome = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+    /**
+     * The rollback obligation, discharged by asserting the opposite of what the other families do.
+     *
+     * RFC 0004 permits rollback only by restoring snapshots, "never by inventing an uninstall
+     * command", and there is no snapshot of a package. A later failure restores the files and
+     * leaves the package — and a report saying "rolled back" without this would let a user believe
+     * the machine is as it was.
+     */
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'install-not-reversible'),
+      true,
+    );
+    claim('package-manager-install', 'rollback');
+  });
+
+  it('produces the same outcome when the package is already installed', async () => {
+    const h = harness();
+    const { runner } = installer();
+    const first = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+    const second = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+    // Idempotency here belongs to the package manager — winget exits 0 for an already-installed
+    // package. What this asserts is that the executor keeps no state of its own between runs.
+    assert.equal(first.status, second.status);
+    claim('package-manager-install', 'idempotency');
+  });
+
+  it('refuses rather than elevating', async () => {
+    const h = harness();
+    const { spawned, runner } = installer();
+    const outcome = await applyAction(installAction({ requiresElevation: true }), {
+      ...h.context,
+      runner,
+      cwd: '/work',
+    });
+
+    // RFC 0004 §Process policy: "Elevation is never automatic." Refused rather than failed, because
+    // nothing is broken — and nothing was spawned.
+    assert.equal(outcome.status, 'refused');
+    assert.deepEqual(spawned, []);
+    assert.equal(outcome.diagnostics[0]?.code, 'install-requires-elevation');
+    // The exact command, so the user can finish it in one paste.
+    assert.match(outcome.diagnostics[0]?.remediation ?? '', /winget install --id rtk-ai\.rtk/);
+  });
+
+  it('refuses a package manager it does not know how to invoke', async () => {
+    const h = harness();
+    const { spawned, runner } = installer();
+    const outcome = await applyAction(installAction({ packageManager: 'brew' }), {
+      ...h.context,
+      runner,
+      cwd: '/work',
+    });
+    // Guessing an unknown manager's argv is how a plan becomes a command nobody reviewed.
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.diagnostics[0]?.code, 'unknown-package-manager');
+    assert.deepEqual(spawned, []);
+  });
+
+  it('warns when the invocation was never observed working', async () => {
+    const h = harness();
+    const { runner } = installer();
+    const outcome = await applyAction(
+      installAction({ packageManager: 'cargo', packageName: 'rtk' }),
+      { ...h.context, runner, cwd: '/work' },
+    );
+    // `cargo install <crate>` is the documented form, and cargo was not installed on the machine
+    // this was checked against — so it says the difference rather than implying it was tested.
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'install-channel-unverified'),
+      true,
+    );
+  });
+
+  it('fails when the installer exits non-zero', async () => {
+    const h = harness();
+    const { runner } = installer({ exitCode: 1 });
+    const outcome = await applyAction(installAction(), { ...h.context, runner, cwd: '/work' });
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.diagnostics[0]?.code, 'install-command-failed');
+  });
+
+  it('fails, rather than throwing, when there is no runner', async () => {
+    const h = harness();
+    const outcome = await applyAction(installAction(), { ...h.context, cwd: '/work' });
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.diagnostics[0]?.code, 'no-process-runner');
+  });
+});
+
 describe('action families this build does not execute', () => {
   const unimplemented: readonly PlannedActionKind[] = [
     'download-artifact',
-    'package-manager-install',
     'run-installer-command',
     'delegated-provider-install',
     'merge-toml',
@@ -906,7 +1088,7 @@ describe('action families this build does not execute', () => {
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       assert.equal(isExecutableActionKind(kind), true, kind);
     }
-    assert.equal(EXECUTABLE_ACTION_KINDS.length, 5);
+    assert.equal(EXECUTABLE_ACTION_KINDS.length, 6);
   });
 });
 
@@ -926,12 +1108,29 @@ describe('RFC 0004 test obligations', () => {
     'user-modification',
   ];
 
+  /**
+   * Obligations that cannot exist for a family, with the reason.
+   *
+   * Every other action family edits a file, and three of the five obligations are shaped by that:
+   * a precondition digest is over file content, a user modification is an edit to a file, and a
+   * Windows path is a path. `package-manager-install` touches no file — it is the one family whose
+   * effect is outside the filesystem, which is also why RFC 0004 says restore-based rollback
+   * "cannot undo side effects outside the filesystem".
+   *
+   * Exempted explicitly rather than claimed by a test that asserts nothing. An exemption with a
+   * reason is reviewable; a hollow test is not.
+   */
+  const inapplicable: Readonly<Partial<Record<PlannedActionKind, readonly Obligation[]>>> = {
+    'package-manager-install': ['precondition-drift', 'user-modification', 'windows-path'],
+  };
+
   for (const kind of EXECUTABLE_ACTION_KINDS) {
     it(`${kind} has every required test`, () => {
       const claimed = covered.get(kind) ?? new Set<Obligation>();
-      const missing = [...required, ...(NATIVE_WINDOWS ? (['windows-path'] as const) : [])].filter(
-        (obligation) => !claimed.has(obligation),
-      );
+      const exempt = new Set(inapplicable[kind] ?? []);
+      const missing = [...required, ...(NATIVE_WINDOWS ? (['windows-path'] as const) : [])]
+        .filter((obligation) => !exempt.has(obligation))
+        .filter((obligation) => !claimed.has(obligation));
       assert.deepEqual(missing, [], `${kind} is missing: ${missing.join(', ')}`);
     });
   }

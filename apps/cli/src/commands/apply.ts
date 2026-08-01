@@ -293,6 +293,8 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     fs,
     snapshots: creation.store,
     journal,
+    // RFC 0004 §Process policy: an installer reaches the machine through the runner or not at all.
+    runner: context.adapters.runner,
     now: context.now,
   });
   diagnostics.push(...transaction.diagnostics);

@@ -43,6 +43,15 @@ export interface HarnessSupport {
 /** RFC 0002 §Installation channels and RFC 0004 §Network policy. */
 export interface InstallationChannel {
   id: string;
+  /**
+   * What this channel calls the package, when that differs from the provider's own id.
+   *
+   * It usually does. RTK's winget id is `rtk-ai.rtk` — verified from the installed binary's path,
+   * `WinGet/Packages/rtk-ai.rtk_.../rtk.exe`, and from `winget search rtk` — while its crate name
+   * is plain `rtk`. One `packageName` on the action could only ever be right for one channel, so
+   * the name belongs to the channel that uses it.
+   */
+  packageId?: string;
   kind: 'github-release' | 'npm' | 'homebrew' | 'cargo' | 'uv' | 'pipx' | 'harness-marketplace';
   /** Ordered per platform; lower sorts first. */
   priority: number;

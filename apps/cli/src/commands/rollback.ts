@@ -401,6 +401,7 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     fs,
     snapshots: built.store,
     journal: built.journal,
+    runner: context.adapters.runner,
     now: context.now,
   });
   diagnostics.push(...transaction.diagnostics);

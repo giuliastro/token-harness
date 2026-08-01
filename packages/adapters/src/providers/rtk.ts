@@ -132,6 +132,10 @@ const MANIFEST: ProviderManifest = {
   installationChannels: [
     {
       id: 'winget',
+      // Verified on a real machine: `rtk` resolves to
+      // `WinGet/Packages/rtk-ai.rtk_Microsoft.Winget.Source_.../rtk.exe`, and `winget search rtk`
+      // returns the id `rtk-ai.rtk`. Installing `--id rtk` would match nothing.
+      packageId: 'rtk-ai.rtk',
       kind: 'github-release',
       priority: 0,
       platforms: ['windows'],
@@ -141,6 +145,10 @@ const MANIFEST: ProviderManifest = {
     },
     {
       id: 'cargo',
+      // The crate name, which is not the winget id. Unverified: cargo is not installed on the
+      // machine this was checked against, and `install.ts` reports that at run time rather than
+      // implying the invocation was observed working.
+      packageId: 'rtk',
       kind: 'cargo',
       priority: 1,
       platforms: ['windows', 'macos', 'linux'],

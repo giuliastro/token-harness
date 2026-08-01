@@ -63,6 +63,7 @@ const SETTINGS = 'C:\\Users\\dev\\.claude\\settings.json';
 const CHANNELS = [
   {
     id: 'winget',
+    packageId: 'rtk-ai.rtk',
     priority: 0,
     platforms: ['windows'],
     requiresNetwork: true,
@@ -71,6 +72,7 @@ const CHANNELS = [
   },
   {
     id: 'cargo',
+    packageId: 'rtk',
     priority: 1,
     platforms: ['windows', 'macos', 'linux'],
     requiresNetwork: true,
@@ -199,11 +201,15 @@ describe('a machine with nothing on it', () => {
   it('picks the channel the manifest prioritises for this platform', () => {
     const windows = plan({ installed: false, os: 'windows' });
     assert.equal((windows.actions[0] as { packageManager?: string }).packageManager, 'winget');
+    // The channel's own id for the package. `rtk` would match nothing on winget: the installed
+    // binary lives under `WinGet/Packages/rtk-ai.rtk_...`.
+    assert.equal((windows.actions[0] as { packageName?: string }).packageName, 'rtk-ai.rtk');
 
     // `winget` does not list linux, so the next channel by priority wins rather than the plan
     // proposing a package manager that is not there.
     const linux = plan({ installed: false, os: 'linux' });
     assert.equal((linux.actions[0] as { packageManager?: string }).packageManager, 'cargo');
+    assert.equal((linux.actions[0] as { packageName?: string }).packageName, 'rtk');
   });
 
   it('says when a channel publishes no digest instead of implying verification', () => {
@@ -225,7 +231,11 @@ describe('a machine with nothing on it', () => {
     // An installed package is removed by uninstalling it, not by restoring a file, and the risk
     // classes exist so a reviewer sees that difference before approving.
     assert.equal(result.actions[0]?.riskClass, 'delegated');
-    assert.equal(result.actions[0]?.rollbackData, 'package-inventory');
+    // `none`, not `package-inventory`: that promised an inventory-based reversal nothing
+    // implements. RFC 0004 permits rollback only by restoring snapshots, "never by inventing an
+    // uninstall command", and a package is not a file — so it survives a rollback, and the
+    // executor says so rather than letting the report imply otherwise.
+    assert.equal(result.actions[0]?.rollbackData, 'none');
   });
 });
 
