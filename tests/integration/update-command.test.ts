@@ -38,9 +38,33 @@ const FACTS: PlatformFacts = {
 
 const SALT = 'a'.repeat(64);
 
-/** The winget table, in the real shape: localized header, dashes, versions newest first. */
-function wingetVersions(...versions: string[]): string {
-  return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', ...versions, ''].join('\r\n');
+/**
+ * The channel RTK actually uses here, and the shape that channel answers in.
+ *
+ * Not a detail, and not something to paper over by forcing Windows facts: RTK declares `winget` at
+ * priority 0 for Windows only and `cargo` at priority 1 everywhere, so the channel under test is
+ * genuinely different per platform. The first version of this file hardcoded winget and passed on
+ * Windows while failing all eight cases on Linux and macOS — the tests were asserting one
+ * platform's channel selection on three platforms.
+ *
+ * Parameterising it means each platform exercises the channel it will really use, including that
+ * channel's own output format, which is more informative than pinning one everywhere.
+ */
+const CHANNEL = FACTS.os === 'windows' ? 'winget' : 'cargo';
+const PACKAGE = FACTS.os === 'windows' ? 'rtk-ai.rtk' : 'rtk';
+const QUERY_VERB = FACTS.os === 'windows' ? 'show' : 'search';
+
+/**
+ * What the channel prints for a given available version.
+ *
+ * winget prints a table with a localized header and a separator of dashes; cargo prints
+ * `name = "version"    # description`. Both are the real documented shapes.
+ */
+function channelAnswer(...versions: string[]): string {
+  if (FACTS.os === 'windows') {
+    return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', ...versions, ''].join('\r\n');
+  }
+  return `${versions.map((version) => `rtk = "${version}"    # a token-saving proxy`).join('\n')}\n`;
 }
 
 let sandbox = '';
@@ -239,16 +263,22 @@ describe('update', () => {
   it('refuses without --yes and names both versions', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.44.0', '0.43.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0', '0.43.0') },
     });
 
     // RFC 0006: mutating commands are dry-run by default and there is no flag that skips planning.
     assert.equal(result.exitCode, EXIT_CODES['confirmation-required']);
     assert.ok(result.codes.includes('confirmation-required'));
-    // The channel was asked, and nothing was installed.
-    assert.ok(result.asked.some((line) => line.startsWith('winget show')));
+    // The channel was asked, by the name *that* channel knows the package as — `rtk-ai.rtk` on
+    // winget and the bare crate name on cargo. Defaulting to the provider id would query nothing.
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} ${QUERY_VERB}`) && line.includes(PACKAGE),
+      ),
+      JSON.stringify(result.asked),
+    );
     assert.equal(
-      result.asked.some((line) => line.startsWith('winget install')),
+      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
       false,
     );
   });
@@ -257,7 +287,7 @@ describe('update', () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
       // Nothing newer, so the run is conclusive and `data` survives — exit 8 nulls it.
-      channelStdout: { winget: wingetVersions('0.42.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
@@ -268,14 +298,14 @@ describe('update', () => {
      * likely to surprise someone. It cannot be avoided — a target version cannot be named without
      * asking — so it is disclosed.
      */
-    assert.deepEqual(result.data?.network, ['winget package index']);
+    assert.deepEqual(result.data?.network, [`${CHANNEL} package index`]);
     assert.equal(row(result.data, 'rtk')?.verdict, 'current');
   });
 
   it('does not act when the channel offers something older', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.44.0' },
-      channelStdout: { winget: wingetVersions('0.42.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
     // The user may have installed something newer deliberately. Going backwards is RFC 0004's
@@ -290,7 +320,7 @@ describe('update', () => {
     });
     const result = await invoke(['update', '--provider', 'rtk'], place, {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.44.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
     });
 
     assert.equal(row(result.data, 'rtk')?.verdict, 'pinned');
@@ -299,7 +329,7 @@ describe('update', () => {
     assert.equal(result.exitCode, EXIT_CODES.ok);
     // And the channel was never asked, because the answer could not change anything.
     assert.equal(
-      result.asked.some((line) => line.startsWith('winget show')),
+      result.asked.some((line) => line.startsWith(`${CHANNEL} ${QUERY_VERB}`)),
       false,
     );
   });
@@ -310,7 +340,7 @@ describe('update', () => {
     });
     const result = await invoke(['update', '--provider', 'rtk'], place, {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.42.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
     // RFC 0004 §Repository trust: a repository may not choose which version the user runs, and no
@@ -322,14 +352,14 @@ describe('update', () => {
 
   it('leaves a provider that is not installed alone', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
-      channelStdout: { winget: wingetVersions('0.44.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
     });
 
     // `update` updates. Installing here would be an install nobody reviewed as one.
     assert.equal(row(result.data, 'rtk')?.verdict, 'not-installed');
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(
-      result.asked.some((line) => line.startsWith('winget install')),
+      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
       false,
     );
   });
@@ -338,7 +368,7 @@ describe('update', () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
       // A shape this build does not read — a future winget, or another locale's layout.
-      channelStdout: { winget: 'Versione: 0.44.0\r\n' },
+      channelStdout: { [CHANNEL]: 'Versione: 0.44.0\r\n' },
     });
 
     assert.equal(row(result.data, 'rtk')?.verdict, 'unknown');
@@ -356,7 +386,7 @@ describe('update', () => {
   it('installs the exact version the dry run showed, when confirmed', async () => {
     const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.44.0', '0.43.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0', '0.43.0') },
     });
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
@@ -369,7 +399,7 @@ describe('update', () => {
      */
     assert.ok(
       result.asked.some(
-        (line) => line.startsWith('winget install') && line.includes('--version 0.44.0'),
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
       ),
       JSON.stringify(result.asked),
     );
@@ -378,7 +408,7 @@ describe('update', () => {
   it('says the installed package will survive a rollback', async () => {
     const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.44.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
     });
 
     // RFC 0004: rollback restores files, and a package is not a file. Reporting a clean transaction
@@ -389,7 +419,7 @@ describe('update', () => {
   it('reports a failed install as a failure rather than as an update', async () => {
     const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      channelStdout: { winget: wingetVersions('0.44.0') },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
       installExitCode: 1,
     });
 
