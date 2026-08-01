@@ -32,7 +32,14 @@ import { runStatus } from './commands/status.js';
 import { runUpdate } from './commands/update.js';
 import { runVerify } from './commands/verify.js';
 import type { AdapterAccess, CommandContext } from './commands/context.js';
-import { renderHuman, shouldDecorate, type RenderContext } from './render/index.js';
+import {
+  MAX_WIDTH,
+  renderHuman,
+  row,
+  shouldDecorate,
+  truncate,
+  type RenderContext,
+} from './render/index.js';
 import { usageText } from './usage.js';
 import { TOOL_VERSION } from './version.js';
 
@@ -97,10 +104,72 @@ export interface RunOptions {
   commands?: CommandTable;
 }
 
-function formatDiagnostic(entry: Diagnostic): string {
-  const lines = [`${entry.severity}  ${entry.code}: ${entry.message}`];
-  if (entry.path !== null) lines.push(`       ${entry.path}`);
-  if (entry.remediation !== null) lines.push(`       Fix: ${entry.remediation}`);
+/**
+ * The key column of a diagnostic block. Every value aligns to it, wrapped text included.
+ *
+ * The old shape was `severity  code: message`, then the path and `Fix:` each indented seven spaces
+ * — a number related to nothing, so continuations looked scattered. A screenshot of one real run
+ * showed ten such blocks in a row, several wrapping mid-word. It was unreadable, and no test
+ * measured a line width anywhere.
+ */
+/** The subject column of a diagnostic line. */
+const SUBJECT_WIDTH = 12;
+
+/**
+ * One line per diagnostic, and no more.
+ *
+ * Chosen by the user over two alternatives, after three attempts at a block layout. Every earlier
+ * shape put the message, the path and a `fix` on separate lines — the path and fix indented seven
+ * spaces, a number related to nothing — and long values wrapped, so one warning occupied four lines
+ * whose left edges did not line up. One real run printed ten of those.
+ *
+ * The message is truncated rather than wrapped, and the path and remediation are dropped entirely.
+ * Nothing is lost: `--json` carries all three fields untruncated, which is where a caller that needs
+ * them should be looking.
+ */
+function diagnosticLine(entry: Diagnostic): string {
+  /**
+   * The subject, or the code when there is no subject.
+   *
+   * Dropping the code entirely was the first attempt, and it cost something real: RFC 0006 rule 4
+   * makes codes "stable identifiers, not translated strings", and a usage error whose stderr no
+   * longer contains `unknown-command` cannot be matched by a script or quoted in a bug report. A
+   * subject is better where one exists — it says which harness a warning is about — and the code is
+   * the honest fallback where none does.
+   */
+  const label = entry.subject ?? entry.code;
+  return truncate(
+    `  ${row([
+      [label, SUBJECT_WIDTH],
+      [entry.message, 0],
+    ])}`,
+    MAX_WIDTH,
+  );
+}
+
+/**
+ * `info` never reaches a human.
+ *
+ * One ordinary run emitted ten of them — "no event stream, so only a provider can witness
+ * interception", "no plugin entry is registered" — none actionable, and indistinguishable from the
+ * two lines that were. They stay in `--json`, where a machine can read them and nobody is being
+ * asked to.
+ */
+function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
+  const errors = diagnostics.filter((entry) => entry.severity === 'error');
+  const warnings = diagnostics.filter((entry) => entry.severity === 'warning');
+  if (errors.length === 0 && warnings.length === 0) return '';
+
+  const lines: string[] = [];
+  for (const [title, group] of [
+    ['ERRORS', errors],
+    ['WARNINGS', warnings],
+  ] as const) {
+    if (group.length === 0) continue;
+    lines.push('');
+    lines.push(title);
+    for (const entry of group) lines.push(diagnosticLine(entry));
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -153,7 +222,8 @@ function emit(
 
   const rendering = renderHuman(result, renderContext);
   if (rendering.report !== '') options.streams.out(rendering.report);
-  for (const entry of rendering.stderrDiagnostics) options.streams.err(formatDiagnostic(entry));
+  const diagnostics = formatDiagnostics(rendering.stderrDiagnostics);
+  if (diagnostics !== '') options.streams.err(diagnostics);
   return result.exitCode;
 }
 

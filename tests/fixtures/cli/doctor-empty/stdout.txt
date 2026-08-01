@@ -1,9 +1,10 @@
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
 
-Harnesses
-  no harness adapters registered
+  HARNESSES     - STATE        - CONFIG FILE
+  none registered
 
-Providers
-  no provider adapters registered
+  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
+  none registered
 
-Nothing is broken. Run `token-harness plan` to see what would change.
+NEXT
+  token-harness plan - see what would change — writes nothing

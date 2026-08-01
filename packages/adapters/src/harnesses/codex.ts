@@ -297,6 +297,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
         diagnostic({
           severity: 'info',
           code: 'hook-enablement-unobservable',
+          subject: CODEX,
           message:
             'Codex declares this hook, but its persisted enablement and trust state cannot be read outside the TUI',
           path: hook.path,

@@ -396,10 +396,20 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
       diagnostic({
         severity: 'warning',
         code: 'tool-family-not-covered',
-        message: `No configured matcher covers the ${uncoveredToolFamilies.join(', ')} tool ${uncoveredToolFamilies.length === 1 ? 'family' : 'families'}, so commands routed through ${uncoveredToolFamilies.length === 1 ? 'it' : 'them'} bypass the pipeline`,
+        subject: CLAUDE,
+        /**
+         * Says whose gap it is, and that the tool is working.
+         *
+         * The first wording — "No configured matcher covers the PowerShell tool family" — read like a
+         * defect in Token Harness on a first run. It is not: the hook in the file below matches some
+         * tool families and not others, Claude Code routes shell commands through more than one on
+         * Windows, and the commands going through the uncovered ones never reach the provider at all.
+         */
+        // Short enough to survive the one-line human rendering without being cut.
+        message: `${uncoveredToolFamilies.join(', ')} has no hook, so those commands are not optimized`,
         path: configs.find((config) => config.configuredPoints.length > 0)?.path ?? null,
-        remediation:
-          'Widen the matcher, or accept the gap and read coverage figures with it in mind',
+        // Short on purpose: a remediation nobody finishes reading is not one.
+        remediation: 'Optional. Widen the matcher, or accept the gap',
       }),
     );
   }

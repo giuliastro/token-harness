@@ -1,18 +1,18 @@
-Plan 7f3a91c2 — profile safe — harness claude — project <project>
+Plan 7f3a91c2 — profile safe — harness claude — project C:/work/demo
 
 Capability ownership
   shell.command.rewrite      rtk
   shell.output.reduce        rtk
 
 Excluded
-  harnesstrim   shell.output.reduce   contested; rtk owns it under profile safe
-                                      harnesstrim 0.0.5 reduces Bash only on claude
-                                      and exposes no surface selector, so it cannot
-                                      be narrowed to a free scope
+  harnesstrim   shell.output.reduce   claude
+                                      its installer cannot produce this in
+                                      isolation, so it is measured but not
+                                      given the scope
 
 Actions
   1. merge json           ~/.claude/settings.json     configure rtk hook
-  2. write owned file     <state>/receipts/7f3a91c2.json
+  2. write owned file     ~/AppData/Local/TokenHarness/receipts/7f3a91c2.json
 
 Network: none. Elevation: none. Backups: 1 file.
 

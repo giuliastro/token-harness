@@ -12,7 +12,7 @@
 
 import type { ProviderUpdateRow, UpdateReport } from '@token-harness/core';
 
-import { column, document, pluralize, type RenderContext } from './layout.js';
+import { MAX_WIDTH, document, pluralize, row, truncate, type RenderContext } from './layout.js';
 
 /**
  * Floors, not fixed sizes — the same treatment `verify` gives its status column, and for a reason
@@ -64,17 +64,32 @@ export function renderUpdateReport(report: UpdateReport, _context: RenderContext
     return document(lines);
   }
 
-  const providerWidth = widthOf(
-    report.providers.map((row) => row.providerId),
-    PROVIDER_WIDTH,
+  /**
+   * Capped, not just floored.
+   *
+   * `widthOf` grew the column to fit the longest id, which is correct until the ids are long: with
+   * placeholder names the detail column started at 37 and the line reached 89 characters. The cap
+   * bounds the prefix so the detail always has room, and the detail is truncated rather than
+   * wrapped — one row, one line.
+   */
+  const providerWidth = Math.min(
+    20,
+    widthOf(
+      report.providers.map((entry) => entry.providerId),
+      PROVIDER_WIDTH,
+    ),
   );
-  const verdictWidth = widthOf(
-    report.providers.map((row) => row.verdict),
-    VERDICT_WIDTH,
-  );
-  for (const row of report.providers) {
+  const detailStart = providerWidth + 3 + VERDICT_WIDTH + 3;
+  for (const entry of report.providers) {
     lines.push(
-      `${column(row.providerId, providerWidth)}${column(row.verdict, verdictWidth)}${detail(row)}`,
+      truncate(
+        row([
+          [entry.providerId, providerWidth],
+          [entry.verdict, VERDICT_WIDTH],
+          [truncate(detail(entry), MAX_WIDTH - detailStart), 0],
+        ]),
+        MAX_WIDTH,
+      ),
     );
   }
 

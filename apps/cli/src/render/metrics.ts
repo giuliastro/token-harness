@@ -16,14 +16,20 @@ import {
   type MetricsReport,
 } from '@token-harness/core';
 
-import { column, document, formatCount, rightAlign, type RenderContext } from './layout.js';
+import { column, document, formatCount, rightAlign, row, type RenderContext } from './layout.js';
 
 const CLASS_LABEL_WIDTH = 23;
 const FIGURE_BLOCK_GUTTER = 4;
-const PROVIDER_ID_WIDTH = 15;
-const PROVIDER_SAVED_WIDTH = 23;
-const PROVIDER_CLASS_WIDTH = 17;
-const PROVIDER_OPERATIONS_WIDTH = 19;
+/**
+ * Sized so four columns plus three separators fit inside `MAX_WIDTH`.
+ *
+ * They were 15 / 23 / 17 / 19, which totalled 74 on their own — fine while columns were separated by
+ * the padding itself, and nine characters too wide once a visible ` - ` went between them. The
+ * separator is not free and the widths had to pay for it.
+ */
+const PROVIDER_ID_WIDTH = 13;
+const PROVIDER_SAVED_WIDTH = 21;
+const PROVIDER_CLASS_WIDTH = 15;
 const PROVIDER_CONTINUATION_INDENT = 2 + PROVIDER_ID_WIDTH;
 
 const CLASS_LABELS: Readonly<Record<MeasurementClass, string>> = {
@@ -79,16 +85,25 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
     lines.push('  no provider reported a measurable saving in this window');
   } else {
     for (const provider of report.providers) {
+      /**
+       * Five columns did not fit, so the harness list moved to the note line below.
+       *
+       * With a real provider and two harnesses this row reached 82 characters, which wrapped. The
+       * harness list is the least load-bearing of the five — it repeats what `doctor` already
+       * showed — so it is the one that moves rather than the saving or the count.
+       */
       lines.push(
-        `  ${column(provider.providerId, PROVIDER_ID_WIDTH)}` +
-          `${column(`saved ${formatCount(provider.saved)} ${provider.unit}`, PROVIDER_SAVED_WIDTH)}` +
-          `${column(provider.class, PROVIDER_CLASS_WIDTH)}` +
-          `${column(`${formatCount(provider.operations)} operations`, PROVIDER_OPERATIONS_WIDTH)}` +
-          `${provider.harnesses.join(', ')}`,
+        `  ${row([
+          [provider.providerId, PROVIDER_ID_WIDTH],
+          [`saved ${formatCount(provider.saved)} ${provider.unit}`, PROVIDER_SAVED_WIDTH],
+          [provider.class, PROVIDER_CLASS_WIDTH],
+          [`${formatCount(provider.operations)} operations`, 0],
+        ])}`,
       );
       const notes: string[] = [];
-      if (!provider.managedByTokenHarness) notes.push('adopted, not managed');
-      if (provider.adapterMode !== null) notes.push(`adapter mode ${provider.adapterMode}`);
+      if (provider.harnesses.length > 0) notes.push(`on ${provider.harnesses.join(', ')}`);
+      if (!provider.managedByTokenHarness) notes.push('set up by you');
+      if (provider.adapterMode !== null) notes.push(`mode ${provider.adapterMode}`);
       if (notes.length > 0) {
         lines.push(`${' '.repeat(PROVIDER_CONTINUATION_INDENT)}${notes.join(' — ')}`);
       }

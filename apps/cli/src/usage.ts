@@ -1,34 +1,50 @@
 /**
  * Usage text.
  *
- * The command list mirrors RFC 0001 §CLI contract. Commands this build does not
- * carry are shown and marked, rather than hidden: a user who reads `--help` and
- * then types `apply` should already know why it fails.
+ * The command list mirrors RFC 0001 §CLI contract.
+ *
+ * Ordered by the sequence a person would actually use, not alphabetically, and preceded by that
+ * sequence spelled out. `--help` was reported as unusable by a first-time user: it listed nine
+ * commands with no indication of which to run first, or which of them would touch their machine.
+ * A reference for someone who already knows the tool is not the same document as an answer to
+ * "what do I do now", and the second one has to come first.
+ *
+ * The write/writes-nothing column is there because that was the other thing nobody could tell.
  */
 
 import type { AvailableCommand } from './argv.js';
 
-const ROOT_USAGE = `token-harness — one control plane for token-efficient coding agents
+const ROOT_USAGE = `token-harness — set up and measure token-saving tools for coding agents
+
+First time here
+  1  token-harness doctor        what is on this machine        writes nothing
+  2  token-harness plan          what would change              writes nothing
+  3  token-harness apply --yes   make those changes             WRITES
+  4  token-harness verify        is it actually intercepting    writes nothing
+  5  token-harness metrics       what it saved                  writes nothing
+
+  Steps 1 and 2 are safe to run right now. Nothing changes until step 3.
 
 Usage
   token-harness <command> [flags]
+  token-harness help <command>
 
-Commands
-  apply       Execute a plan inside a reversible transaction
-  doctor      Report detected harnesses and providers
-  metrics     Import provider records and report savings by measurement class
-  plan        Compute a dry-run plan; nothing is changed
+Commands, in the order you would use them
+  doctor      What is installed, what is wired up, what is worth knowing
+  plan        Compute what would change, file by file. Changes nothing
+  apply       Run that plan inside a transaction that can be rolled back
+  verify      Check the pipeline actually intercepts, at its declared tier
+  metrics     Report what was saved, labelled with how it was measured
   status      Report applied pipelines, drift, and importer modes
-  verify      Check that an integration actually intercepts, at its declared tier
-  rollback    Restore the files a transaction changed, as they were before it
-  uninstall   Remove what Token Harness owns, leaving everything else
-  update      Update the installed providers to what their channel offers
+  update      Update installed providers to what their channel offers
+  rollback    Restore the files a transaction changed, as they were before
+  uninstall   Remove what Token Harness set up, leaving everything else
 
 Flags
   --json               Emit one machine-readable envelope on stdout
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
-  --project <dir>      Operate on that project instead of the current directory
+  --project <dir>      Use that project instead of the current directory
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
   --plan <id>          Apply a previously computed plan by id
@@ -36,8 +52,8 @@ Flags
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
-Mutating commands are dry-run by default and there is no flag that skips
-planning. Exit codes and the JSON envelope are specified in RFC 0006.`;
+Only apply, update, rollback and uninstall change anything, and none of
+them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
   apply: `token-harness apply — execute a plan inside a reversible transaction

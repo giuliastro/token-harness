@@ -84,6 +84,9 @@ describe('CliEnvelope', () => {
       'severity',
       'code',
       'message',
+      // RFC 0006 §JSON envelope, amended: the human rendering is one line per diagnostic and needs
+      // to say which harness or provider each is about.
+      'subject',
       'path',
       'remediation',
     ]);

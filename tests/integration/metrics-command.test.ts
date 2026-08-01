@@ -244,7 +244,8 @@ describe('the human rendering', () => {
     assert.match(result.stdout, /1 operations made the payload larger/);
     // Net of the inflation, and the provider row agrees with the class line.
     assert.match(result.stdout, /^Exact local .* saved 10$/m);
-    assert.match(result.stdout, /rtk\s+saved 10 tokens/);
+    // Columns are separated by a visible ` - ` now, not by padding alone.
+    assert.match(result.stdout, /rtk\s+-\s+saved 10 tokens/);
   });
 
   it('says nothing about inflation when there was none', async () => {
@@ -285,7 +286,15 @@ describe('help', () => {
       now: () => NOW,
     });
 
-    assert.match(stdout, /^ {2}metrics {5}Import provider records/m);
-    assert.doesNotMatch(stdout, /metrics {4}Not in this build/);
+    /**
+     * The intent, not the wording.
+     *
+     * This pinned the exact sentence "Import provider records…", and broke when the help text was
+     * rewritten to lead with what a reader wants first. RFC 0006 rule 4 is explicit that "messages
+     * may be reworded; codes may not" — so what is asserted is that `metrics` appears as a listed
+     * command with a description, and not as one this build does not carry.
+     */
+    assert.match(stdout, /^ {2}metrics {4,}\S/m, 'metrics is not listed as a command');
+    assert.doesNotMatch(stdout, /metrics {2,}Not in this build/);
   });
 });
