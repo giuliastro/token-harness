@@ -182,12 +182,14 @@ it wrong".
   0.1.0 checked its installer at `0.0.5` and found no configuration that lets it and RTK reduce
   output without contesting the same surface. So it is detected, adopted, reconciled, and
   measured — and left alone. Under `profile: custom` you may hand it the scope instead of RTK.
-- **RTK installation is planned but not executed.** `package-manager-install` is not
-  implemented, so on a machine without RTK the transaction fails on that action and rolls back
-  cleanly with your files untouched. Install RTK yourself and Token Harness adopts it.
-- **HarnessTrim reports no version.** Its CLI has no version command in any spelling, and the
-  reachable `package.json` names the monorepo rather than the CLI. A precise-looking wrong
-  version is worse than none.
+- **An installed package cannot be rolled back.** `apply` can now run a package manager, but a
+  package is not a file and there is no snapshot of one, so a later failure restores your files and
+  leaves the package installed. The report says so rather than letting "rolled back" imply the
+  machine is as it was. Elevation is refused outright, with the exact command to run yourself.
+- **A provider that cannot report its version is still adopted.** Older HarnessTrim builds reject
+  `--version`; Token Harness asks, falls back, and reports the tool as installed with no version
+  rather than as missing. It never reads the reachable `package.json`, which names the monorepo
+  rather than the CLI.
 - **Codex hooks cannot be proven to run.** Enablement and trust are persisted separately from
   `hooks.json`, in state no adapter can read, so Codex tops out at `config-only` and says why.
 - **Two measurement findings that change how a number reads.** 75% of RTK's interceptions save

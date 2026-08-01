@@ -241,6 +241,34 @@ be invocable in a way that yields it. Checked against `0.0.5`, no narrowed state
 | Codex | Skills without the reduction guidance | `install codex` always writes `REDUCE_INSTRUCTION_SNIPPET` into `AGENTS.md` |
 | OpenCode | `mode: "dryrun"` | `DEFAULT_OPENCODE_ADAPTER_CONFIG` and all four presets set `mode: "active"`; the value is baked into a generated wrapper, and `resolveConfig` gives it precedence over `HARNESSTRIM_MODE` |
 
+#### Amended: the OpenCode row asks the wrong question
+
+Checked again against the source, the OpenCode row is true about the *installer* and does not
+settle the case. `resolveConfig` reads `options.mode` from the plugin entry in `opencode.json`
+before consulting the environment, and `"dryrun"` is a documented member of `Mode` — "measure and
+log what *would* be reduced, but pass output through unchanged".
+
+So the narrowed state is reachable. What cannot produce it is `harnesstrim install opencode`; what
+can is Token Harness writing the plugin options itself — the same thing it does for RTK's hook, and
+what the comment-preserving JSONC editor exists to make safe.
+
+The distinction matters because the rule this section states is about *delegation*: "an installer
+that cannot be asked for the target state cannot be delegated to for it." That is not a rule that a
+state no installer produces is unreachable. Composing the edit ourselves is the reviewable
+alternative, and RFC 0004 already prefers it — a delegated install is the exception, not the norm.
+
+**This does not change the `0.1.0` outcome, and the reason is worth separating from the mechanism.**
+A `dryrun` HarnessTrim on OpenCode does not resolve the contest with RTK; it *ends* it by measuring
+instead of reducing, and RFC 0005 §A measured reduction is not always a realized one already files
+those events as `counterfactual`. Run one reducer and measure what a second would have saved is a
+coherent product decision — but it is a new profile, not `safe`, and choosing it for a user without
+asking would be choosing what their tools do.
+
+Deliberately left open, and recorded in PLAN §17: whether `0.2.0` offers a profile that assigns
+`shell.output.reduce` to one provider and `dryrun` measurement to another. The two data points that
+decision needs — a second provider pair, and a fixture showing the counterfactual figures are
+comparable — are the same ones §Scope of the resolver at 0.1.0 defers the general solver for.
+
 Therefore, under `safe`, RTK owns shell reduction on all three harnesses and **HarnessTrim
 is not installed by Token Harness at all**. It is detected, adopted, reconciled against
 RTK's ownership, and measured. PLAN §6.1 records the full division of roles.

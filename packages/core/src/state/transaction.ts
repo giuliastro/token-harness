@@ -27,6 +27,7 @@ import type { PlannedAction } from '../domain/actions.js';
 import { snapshotIsAbsence, type FileSnapshot, type OwnedArtifact } from '../domain/ownership.js';
 
 import { applyAction, type ActionContext, type ActionOutcome } from './actions.js';
+import type { ProcessRunner } from '../domain/process.js';
 import type { FileSystemPort } from './filesystem.js';
 import type {
   JournalStore,
@@ -60,6 +61,11 @@ export interface TransactionRequest {
   fs: FileSystemPort;
   snapshots: SnapshotStore;
   journal: JournalStore;
+  /**
+   * Needed only by `package-manager-install`. Absent, that action reports why rather than
+   * silently doing nothing; every other family never asks for it.
+   */
+  runner?: ProcessRunner | null;
   /** ISO 8601 instants, injected so a journal is deterministic in tests. */
   now(): string;
   /**
@@ -153,7 +159,12 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
   // record a later rollback needs.
   await request.journal.write(journal);
 
-  const context: ActionContext = { fs: request.fs, snapshots: request.snapshots };
+  const context: ActionContext = {
+    fs: request.fs,
+    snapshots: request.snapshots,
+    runner: request.runner ?? null,
+    cwd: request.projectRoot,
+  };
 
   const finish = async (
     outcome: TransactionOutcomeKind,

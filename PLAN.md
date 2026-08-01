@@ -763,7 +763,14 @@ Suggested first implementation issues:
     last of PLAN §2's nine criteria, so the version is `0.1.0`. Two facts the machine supplied and
     the adapter records rather than papering over: HarnessTrim exposes no version command in any
     spelling, so `version` is null with evidence instead of a guess; and its telemetry is opt-in, so
-    the importer's ordinary answer is `unavailable`.
+    the importer's ordinary answer is `unavailable`. *(The first of those was overturned by the next
+    release, which added `--version`; the adapter now asks rather than assumes.)*
+19. Execute `package-manager-install` (§12). **Done** — the last unimplemented action family a
+    `safe` plan can produce. RFC 0004's rules shape it: elevation is refused rather than performed,
+    an unknown package manager is refused rather than guessed at, and an installed package is *not*
+    reversible by rollback, which the outcome states rather than leaving a "rolled back" report to
+    imply otherwise. Verified against the machine: RTK's winget id is `rtk-ai.rtk`, and the manifest
+    said `rtk`, which would have matched nothing.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
@@ -800,6 +807,15 @@ These are intentionally deferred to measured spikes or to a triggering need:
 2. Bundler and executable packaging beyond npm.
 3. Whether `core` and `adapters` need to be split further, or `cli` merged in.
 4. Whether a SQLite driver is ever needed, per the RFC 0005 triggers.
+5. **Whether `0.2.0` offers a measure-alongside profile.** RFC 0003 §Amended: the OpenCode row asks
+   the wrong question establishes that `mode: "dryrun"` *is* reachable — not through HarnessTrim's
+   installer, but by Token Harness writing the plugin options itself, which is what the JSONC editor
+   is for. That would let one provider reduce while another measures what it would have saved,
+   filed as `counterfactual` per RFC 0005.
+
+   Not taken for `0.1.0`: it is a different product decision from `safe`, not a better
+   implementation of it, and it needs the same two data points the general solver is waiting for —
+   a second provider pair, and a fixture showing the counterfactual figures are comparable.
 
 Resolved since the first draft of this plan:
 
