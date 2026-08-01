@@ -116,8 +116,13 @@ PLAN §2 lists what makes `0.1.0` useful. Measured, not estimated:
 
 ### What it looks like on a real machine
 
+A snapshot from the development machine on 2026-08-01. The figures move every time RTK runs; the
+relationships between them are the part that matters.
+
 ```text
 $ token-harness doctor
+Token Harness 0.1.0 — Windows 11 Pro (x64), Node 24.13.1
+
 Harnesses
   claude      configured  ~/.claude/settings.json
   codex       configured  ~/.codex/config.toml
@@ -125,23 +130,57 @@ Harnesses
 
 Providers
   rtk           configured    0.42.0  configured for claude (adopted, not managed)
-  harnesstrim   configured            configured for codex (adopted, not managed)
+  harnesstrim   configured    0.0.6   configured for codex (adopted, not managed)
+
+1 problem found. Fix it before running `token-harness plan`.
 ```
+
+That one problem is not a broken install. It is that no configured matcher covers Claude Code's
+PowerShell tool family, so commands routed through it bypass the pipeline entirely — measured, not
+inferred. An "all clear" there would have been the more comfortable lie.
 
 ```text
 $ token-harness verify
+No receipt — verifying the live configuration
+
 rtk — claude — adopted, not managed — declared tier: canary
-  pass           canary-intercepted         494 commands intercepted on 2026-07-31
+  pass           executable-resolves        rtk 0.42.0
+  pass           hook-registered            wired to claude
+  pass           canary-intercepted         592 commands intercepted on 2026-08-01
 harnesstrim — codex — adopted, not managed — declared tier: config-only
+  pass           executable-resolves        harnesstrim 0.0.6
+  pass           hook-registered            wired to codex
   not-exercised  canary-intercepted         no telemetry file exists, so no interception has been recorded
 ```
 
-That second line is the point of the whole verification model: the hook is correctly
-configured, and it has never run. RFC 0007 exists because "configured" and "working" are
-different claims, and `not-exercised` is neither a pass nor a failure.
+That last line is the point of the whole verification model: the hook is correctly configured, and
+it has never run. RFC 0007 exists because "configured" and "working" are different claims, and
+`not-exercised` is neither a pass nor a failure.
 
-`metrics` on the same machine reports **91,600 tokens saved over 2,847 intercepted
-commands** — exactly what `rtk gain` reports independently.
+### The figures reconcile with the provider's own, and where they differ they say why
+
+```text
+$ token-harness metrics --since 2020-01-01
+Exact local            1,429,689 -> 1,216,007 tokens    saved 213,682
+  rtk            saved 213,682 tokens   exact-local      1,361 operations
+
+Coverage 33%. Bypassed 2,741. Errors 0. Added median latency not measured.
+365 operations made the payload larger; the figures above are net of that.
+```
+
+`rtk gain` independently reports **4,102 commands** and **217.1K tokens saved** over the same
+history. Two of those agree exactly and one does not, and both facts are load-bearing:
+
+- **The operation count matches to the command.** 1,361 intercepted plus 2,741 bypassed is 4,102, and
+  the input and output totals match as well. Nothing is being double-counted or dropped.
+- **The saved figure is lower by about 3,400 tokens, on purpose.** RTK floors its own per-command
+  saving at zero, so its total is a sum of clamped values. Some operations genuinely make the payload
+  *larger*, and Token Harness reports the net effect and prints the inflated count beside it. A
+  higher number was available and would have been wrong.
+
+Coverage of 33% is the honest reading of the same data: two thirds of intercepted commands were
+passed through unchanged. That is what a token-saving tool actually does on a real workload, and it
+is the figure a report designed to flatter would have left out.
 
 ### The full command surface
 
@@ -213,20 +252,30 @@ rollback. Rollback restores files, and a package is not a file.
 
 ### Installing 0.1.0
 
-A single self-contained ESM artifact with **no dependencies at all**. Not on npm — publishing
-is PLAN §8.3, with provenance, SBOM, and signing — but it installs from a tarball you build
-yourself, and CI proves that on Windows, macOS, and Linux on every commit:
+On npm as [`token-harness`](https://www.npmjs.com/package/token-harness). A single self-contained
+ESM artifact with **no dependencies at all** — installing it adds one package and resolves nothing,
+because the whole workspace is inlined into one file and no third-party code is in it.
+
+```bash
+npm install -g token-harness
+token-harness doctor
+```
+
+Or without installing anything:
+
+```bash
+npx token-harness doctor
+```
+
+The tarball carries a CycloneDX SBOM alongside the bundle. CI packs it, installs it with no
+workspace above it, and runs the result on Windows, macOS, and Linux on every commit — because a
+bundle that runs is not the same as a package that installs.
+
+To build and install it from source instead:
 
 ```bash
 pnpm install && pnpm build && pnpm package
 npm install -g ./dist/package
-token-harness doctor
-```
-
-To run it without installing:
-
-```bash
-node dist/bundle/token-harness.mjs doctor
 ```
 
 Every read-only command is safe to run first. `doctor`, `plan`, `status`, `verify` and
@@ -272,9 +321,10 @@ touches the five human transcripts transcribed from RFC 0006 — see
 CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
 matrix set not to fail fast.
 
-Releases publish on a `v*` tag through npm trusted publishing: OIDC, no token in the repository
-secrets or anywhere else, and provenance signed by npm. A tag that does not match the staged version
-is refused before the publish rather than discovered by whoever installs it.
+Releases publish on a `v*` tag, with provenance, and a tag that does not match the staged version is
+refused before the publish rather than discovered by whoever installs it. The workflow authenticates
+with an `NPM_TOKEN` secret — a stopgap, and `.github/workflows/release.yml` says why at the top:
+trusted publishing needs an account-level configuration this account cannot currently perform.
 
 - [Compatibility, verification tiers, and known limitations](docs/matrices.md) — the tables are
   generated from the manifests and a test fails if they drift; the limitations below them are prose,

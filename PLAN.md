@@ -899,6 +899,29 @@ Suggested first implementation issues:
     `npm trust github token-harness --file release.yml --allow-publish` — and make that one first
     manual publish. Nothing in this repository can do either, and nothing in it holds a credential.
 
+25. Convert the release workflow to the token route (§8.3). **Done, as a stopgap.** Trusted
+    publishing cannot be configured from this account: `npm trust` returned 403, and so did
+    `npm profile get` — a plain read of one's own account — which proved the available credential is
+    package-scoped and cannot perform account operations at all. The account-level fix needs a second
+    factor that is currently unavailable, and npm's 2FA is not something to work around.
+
+    So `release.yml` authenticates with an `NPM_TOKEN` secret and passes `--provenance` explicitly,
+    which that route requires and the other forbade. `id-token: write` stays, for provenance rather
+    than authentication.
+
+    **The trigger for reverting:** the second factor becomes available again. Then it is three edits —
+    `id-token: write` as the only credential, drop `registry-url` / `--provenance` / the `env:` block,
+    raise Node to 24 — plus configuring the trusted publisher, which the package now existing makes
+    possible. The workflow header carries the same list.
+
+    Recorded because it is a real reduction in safety and not a neutral swap: a secret exists now
+    where none did, anyone who can read repository secrets can publish, and npm already warns that
+    tokens bypassing 2FA are being restricted for "account changes and direct publishing" — the first
+    is blocked today and the second is on the same path.
+
+    `0.1.0` itself was published by hand, which was always going to be true: a trusted publisher
+    cannot be configured before the package exists.
+
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
 ## 16. Release gates
