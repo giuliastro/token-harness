@@ -1,0 +1,97 @@
+# Publishes `token-harness` to npm — PLAN §8.3.
+#
+# Trusted publishing (OIDC), so there is no token anywhere: not in the repository secrets, not on a
+# laptop, not in this file. npm verifies the workflow's identity against a trust relationship
+# configured on the package, and signs provenance for what it publishes.
+#
+# Two things about this file are not obvious and are deliberate.
+#
+# **It does not pass `--provenance`.** With trusted publishing npm generates and publishes
+# provenance attestations by default; the flag is for the token-based route.
+#
+# **It does not run on the RFC 0001 runtime floor.** `ci.yml` pins Node 22.13.0 on purpose — CI runs
+# the oldest supported runtime so a feature newer than the floor fails there rather than for a user.
+# Trusted publishing requires npm 11.5.1 and Node 22.14.0 or newer, which is above that floor. This
+# job is not testing compatibility, it is publishing an artifact the matrix already tested at the
+# floor, so a newer runtime here weakens nothing.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  # The whole mechanism. Without it there is no OIDC token and npm has nothing to verify.
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    # A published version cannot be taken back after 72 hours and a name is permanent, so the
+    # environment gives the repository owner somewhere to require a review before this runs.
+    environment: npm-publish
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      # No `registry-url`: it writes an `.npmrc` expecting a token, which is what trusted publishing
+      # exists to avoid.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # Asserted rather than assumed. Node 24 currently bundles an npm new enough, but "currently"
+      # is not a guarantee, and the failure mode without this check is an authentication error that
+      # says nothing about the cause.
+      - name: Require an npm new enough for trusted publishing
+        run: |
+          npm install -g npm@latest
+          required=11.5.1
+          current=$(npm --version)
+          if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+            echo "trusted publishing needs npm >= $required, got $current" >&2
+            exit 1
+          fi
+          echo "npm $current"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The gates again, on the exact commit being published. `ci.yml` ran them on all three
+      # platforms when this commit landed on main; the artifact is one platform-independent bundle,
+      # so re-running on one platform is enough insurance for an irreversible step.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Bundle smoke test
+        run: pnpm smoke
+
+      - name: Stage the publishable package
+        run: pnpm package
+
+      - name: Install smoke test
+        run: pnpm smoke:install
+
+      # A tag is a human gesture and the version is a file. When they disagree, publishing the file
+      # silently ships something other than what the tag announced — so this refuses instead.
+      - name: Refuse a tag that does not match the staged version
+        run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+
+      - name: Publish
+        run: npm publish
+        working-directory: dist/package

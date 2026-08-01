@@ -272,6 +272,10 @@ touches the five human transcripts transcribed from RFC 0006 — see
 CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
 matrix set not to fail fast.
 
+Releases publish on a `v*` tag through npm trusted publishing: OIDC, no token in the repository
+secrets or anywhere else, and provenance signed by npm. A tag that does not match the staged version
+is refused before the publish rather than discovered by whoever installs it.
+
 - [Compatibility, verification tiers, and known limitations](docs/matrices.md) — the tables are
   generated from the manifests and a test fails if they drift; the limitations below them are prose,
   and a test checks that every limitation the code declares appears there
