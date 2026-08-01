@@ -32,6 +32,7 @@
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
 import type { PackageManagerInstallAction } from '../domain/actions.js';
 import type { ProcessRunner } from '../domain/process.js';
+import { parseSemanticVersion } from '../domain/version.js';
 
 /**
  * How to ask each package manager for a package, without a shell.
@@ -83,6 +84,219 @@ const INSTALL_COMMANDS: Readonly<
 
 export function knownPackageManagers(): string[] {
   return Object.keys(INSTALL_COMMANDS).sort();
+}
+
+/**
+ * Channels this build can *ask* about a version, which is deliberately not the same set it can
+ * install through.
+ *
+ * A query is a read and an install is a mutation, so they are held to different standards of
+ * evidence. `pnpm view <pkg> version` was verified against the machine; a global pnpm install argv
+ * was not, and adding one unverified so the two lists would match would be shipping an unreviewed
+ * mutation to make a symmetry look tidy.
+ *
+ * The asymmetry costs nothing today: RFC 0003 records that HarnessTrim, the provider whose channel
+ * is pnpm, "is not installed by Token Harness at all".
+ */
+export function knownVersionQueryChannels(): string[] {
+  return Object.keys(QUERY_COMMANDS).sort();
+}
+
+/**
+ * How to ask each package manager what version is *available* — RFC 0004 §Amended: version
+ * discovery belongs to the channel, not the provider.
+ *
+ * The provider contract cannot answer this: `detect` reports the version that is installed, which
+ * is the wrong side of the arrow `update` has to print. `winget` knows what exists for
+ * `rtk-ai.rtk`; RTK's own adapter has no idea.
+ *
+ * The parse is the interesting part, and verifying it changed the answer. `winget show --id <id>
+ * --exact` prints the version behind a **localized label** — `Versione:` on the machine this was
+ * written on, `Version:` on an English one — so matching that label would have shipped something
+ * that works in one locale and silently reports nothing in every other. `--versions` instead
+ * prints a table whose header is localized but whose body is bare versions, newest first, after a
+ * separator line of dashes that no translation touches.
+ */
+const QUERY_COMMANDS: Readonly<
+  Record<
+    string,
+    {
+      executable: string;
+      args: (packageName: string) => string[];
+      /** The newest available version, or null when the output named none. */
+      parse: (stdout: string) => string | null;
+      verified: boolean;
+    }
+  >
+> = {
+  winget: {
+    executable: 'winget',
+    args: (packageName) => ['show', '--id', packageName, '--exact', '--versions'],
+    parse: (stdout) => {
+      const lines = stdout.split(/\r?\n/);
+      // Anchored on the dashes rather than on a line count: `winget` prints a "Found <name> [<id>]"
+      // line above the table whose wording is also localized.
+      const separator = lines.findIndex((line) => /^-{3,}\s*$/.test(line.trim()));
+      if (separator < 0) return null;
+      for (const line of lines.slice(separator + 1)) {
+        const candidate = line.trim();
+        if (candidate === '') continue;
+        // Newest first, so the first parseable line is the answer. A line that is not a version is
+        // not skipped past — it means the table shape is not what was verified, and guessing
+        // further down would be reading an unknown format.
+        return parseSemanticVersion(candidate) === null ? null : candidate;
+      }
+      return null;
+    },
+    verified: true,
+  },
+  /**
+   * `pnpm view <pkg> version` prints the version alone, on one line, in every locale — the
+   * registry answers with data rather than with a rendered table, which is why this one needs no
+   * separator trick.
+   *
+   * Verified on the machine this was written on: `pnpm view harnesstrim version` → `0.0.6`, which
+   * matches what the installed binary reports. `npm view` prints the same thing, but the channel a
+   * user installed through is the channel to ask.
+   */
+  pnpm: {
+    executable: 'pnpm',
+    args: (packageName) => ['view', packageName, 'version'],
+    parse: (stdout) => {
+      const candidate = stdout.trim().split(/\r?\n/).at(-1)?.trim() ?? '';
+      return parseSemanticVersion(candidate) === null ? null : candidate;
+    },
+    verified: true,
+  },
+  cargo: {
+    executable: 'cargo',
+    args: (packageName) => ['search', packageName, '--limit', '1'],
+    // `name = "0.1.0"    # description`, per cargo's documented output. Not observed: cargo is not
+    // installed on the machine this was written on, which is what `verified: false` reports.
+    parse: (stdout) => {
+      const match = /^\s*\S+\s*=\s*"([^"]+)"/m.exec(stdout);
+      const candidate = match?.[1] ?? null;
+      if (candidate === null) return null;
+      return parseSemanticVersion(candidate) === null ? null : candidate;
+    },
+    verified: false,
+  },
+};
+
+export type VersionQueryStatus = 'found' | 'unknown' | 'unsupported' | 'failed';
+
+export interface VersionQueryOutcome {
+  status: VersionQueryStatus;
+  /** Non-null only when `status` is `found`. */
+  version: string | null;
+  /** The destination the query reached, for the plan's network summary. Null when none was. */
+  destination: string | null;
+  diagnostics: Diagnostic[];
+}
+
+export interface QueryVersionInput {
+  packageManager: string;
+  packageName: string;
+  runner: ProcessRunner | null;
+  cwd: string;
+  timeoutMs?: number;
+}
+
+/** A query is a read, so it is held to a much shorter leash than an install. */
+const DEFAULT_QUERY_TIMEOUT_MS = 60_000;
+
+export async function queryAvailableVersion(
+  input: QueryVersionInput,
+): Promise<VersionQueryOutcome> {
+  const recipe = QUERY_COMMANDS[input.packageManager];
+  if (recipe === undefined) {
+    return {
+      status: 'unsupported',
+      version: null,
+      destination: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'version-query-unsupported',
+          message: `This build cannot ask ${input.packageManager} what version of ${input.packageName} is available`,
+          remediation: `Check for a newer ${input.packageName} yourself`,
+        }),
+      ],
+    };
+  }
+
+  if (input.runner === null) {
+    return {
+      status: 'failed',
+      version: null,
+      destination: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'no-process-runner',
+          message: 'No process runner is available, so no channel can be queried',
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  const destination = `${input.packageManager} package index`;
+  const diagnostics: Diagnostic[] = [];
+  if (!recipe.verified) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'version-query-unverified',
+        message: `The ${input.packageManager} version query follows that tool's documented output but has not been observed working`,
+        remediation: 'Confirm the reported version before acting on it',
+      }),
+    );
+  }
+
+  const outcome = await input.runner.run({
+    executable: recipe.executable,
+    args: recipe.args(input.packageName),
+    cwd: input.cwd,
+    timeoutMs: input.timeoutMs ?? DEFAULT_QUERY_TIMEOUT_MS,
+  });
+
+  if (outcome.failure !== null || outcome.exitCode !== 0) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'version-query-failed',
+        message:
+          outcome.failure === null
+            ? `${outcome.displayCommand} exited with ${String(outcome.exitCode)}`
+            : `${recipe.executable} could not be run: ${outcome.failure.reason}`,
+        remediation: `Run it yourself to see the full output: ${outcome.displayCommand}`,
+      }),
+    );
+    return { status: 'failed', version: null, destination, diagnostics };
+  }
+
+  const version = recipe.parse(outcome.stdout);
+  if (version === null) {
+    /**
+     * A warning rather than an error, and never a guess.
+     *
+     * `unknown` is what a locale or a changed table shape produces, and the honest consequence is
+     * that `update` cannot say what a newer version would be — not that it invents one or reports
+     * "already current", which is the same sentence a user reads as good news.
+     */
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'version-query-unreadable',
+        message: `${recipe.executable} answered, but its output did not name a version in the form this build reads`,
+        remediation: `Run it yourself to see what it printed: ${outcome.displayCommand}`,
+      }),
+    );
+    return { status: 'unknown', version: null, destination, diagnostics };
+  }
+
+  return { status: 'found', version, destination, diagnostics };
 }
 
 export type InstallOutcomeStatus = 'installed' | 'refused' | 'failed';

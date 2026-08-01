@@ -19,7 +19,7 @@
  * untrusted by default, and this is one of the places that has to hold.
  */
 
-import { closeSync, constants, openSync, readSync, statSync, accessSync } from 'node:fs';
+import { closeSync, constants, lstatSync, openSync, readSync, statSync, accessSync } from 'node:fs';
 import { win32 } from 'node:path';
 
 import type { ExecutableKind, PlatformFacts, ResolvedExecutable } from '@token-harness/core';
@@ -45,7 +45,31 @@ export function nodeExecutableProbe(): ExecutableProbe {
         const stat = statSync(path);
         return stat.isDirectory() ? 'directory' : 'file';
       } catch {
-        return 'absent';
+        /**
+         * `stat` failing does not mean the entry is absent, and on Windows the difference is the
+         * whole primary install channel.
+         *
+         * `winget.exe` under `%LOCALAPPDATA%\Microsoft\WindowsApps` is an App Execution Alias: a
+         * reparse point that `CreateProcess` executes happily and that `stat` cannot open at all.
+         * Measured on the machine this was written on — `statSync` raises `EACCES`, `lstatSync`
+         * reports `isFile=false, isSymlink=true, size=99`.
+         *
+         * So the resolver rejected `winget` as absent, and every winget install and query failed
+         * with `executable-not-found`. That path had never actually run: the install argv was
+         * verified by reading `winget install --help`, and the *resolution* in front of it was
+         * never exercised end to end until `update` asked a channel a question.
+         *
+         * `lstat` does not follow the link, so it answers where `stat` refuses. A dangling symlink
+         * reaches here too and is reported as a file — correctly: whether it can be started is the
+         * spawn's answer to give, and a resolver that pre-emptively hid it would be making the same
+         * mistake in the other direction.
+         */
+        try {
+          const link = lstatSync(path);
+          return link.isDirectory() ? 'directory' : 'file';
+        } catch {
+          return 'absent';
+        }
       }
     },
     isExecutable(path) {

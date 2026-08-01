@@ -61,6 +61,68 @@ export interface StatusReport {
 }
 
 /**
+ * What `update` found for one provider — RFC 0004 §Provider update policy and §Amended.
+ *
+ * `installed` and `available` are separate nullable fields rather than one "needs update" flag,
+ * because the four ways this can be inconclusive call for different responses and a boolean
+ * collapses them into the same reassuring answer. A provider whose channel could not be read is
+ * not a provider that is up to date.
+ */
+export interface ProviderUpdateRow {
+  providerId: ProviderId;
+  /** Null when the provider is not installed, or reported no version. */
+  installed: string | null;
+  /** Null unless the channel answered with one. */
+  available: string | null;
+  /** The installation channel consulted, by its manifest id. Null when none applies here. */
+  channel: string | null;
+  verdict: /** Installed version equals what the channel offers. */
+  | 'current'
+    /** A newer version exists and an action was planned. */
+    | 'upgradable'
+    /** A pin holds this provider, so nothing was planned. Not a problem. */
+    | 'pinned'
+    /** The channel answered, and its answer named no version this build can read. */
+    | 'unknown'
+    /**
+     * The channel could not be asked at all — not supported by this build, or it failed to run.
+     *
+     * Separate from `unknown` because the first version of this collapsed the two and then printed
+     * "the channel did not report a version this build can read" for a channel that was never
+     * invoked. That is a false statement about what happened, and it is exactly the flattening the
+     * six verdicts exist to avoid.
+     */
+    | 'unavailable'
+    /** Nothing to update: `update` does not install what was never there. */
+    | 'not-installed'
+    /** The provider declares no channel for this platform. */
+    | 'no-channel';
+  /** The version the pin names, when `verdict` is `pinned`. */
+  pin: string | null;
+}
+
+/**
+ * What `update` did — RFC 0001 §CLI contract, the last command it declares.
+ *
+ * The execution half is an `ApplyReport` rather than six repeated fields: an update that runs is a
+ * transaction, and describing it in a second vocabulary would let the two disagree about what
+ * "rolled back" means.
+ */
+export interface UpdateReport {
+  providers: ProviderUpdateRow[];
+  /**
+   * Network destinations this command reached to answer the question — RFC 0004 §Network policy.
+   *
+   * Populated on a dry run too, and that is the point: `update` cannot name a target version
+   * without asking a channel, so the disclosure has to cover the reconnaissance and not only the
+   * install.
+   */
+  network: string[];
+  /** Null until something is actually applied. */
+  execution: ApplyReport | null;
+}
+
+/**
  * What `apply` did — RFC 0004 §Transaction lifecycle and RFC 0006 §Exit codes.
  *
  * Every field answers a question a user has after a mutation, and the ones that look

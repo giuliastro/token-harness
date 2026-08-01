@@ -51,6 +51,7 @@ const noisyCommands = {
   verify: () => Promise.reject(new Error('unused')),
   rollback: () => Promise.reject(new Error('unused')),
   uninstall: () => Promise.reject(new Error('unused')),
+  update: () => Promise.reject(new Error('unused')),
   status: () => Promise.reject(new Error('unused')),
 };
 

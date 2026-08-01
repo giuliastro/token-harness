@@ -45,7 +45,11 @@ import {
   type CompositionMode,
   type ResolvedCapability,
 } from '../domain/capabilities.js';
-import { findCompatibilityRule, type CompatibilityRule } from '../domain/compatibility.js';
+import {
+  findCompatibilityRule,
+  staleRecordedVersions,
+  type CompatibilityRule,
+} from '../domain/compatibility.js';
 import { digestText } from '../domain/digest.js';
 import type { HarnessId, ProviderId } from '../domain/ids.js';
 import type { HarnessManifest } from '../domain/manifest.js';
@@ -76,6 +80,16 @@ export interface ResolveInput {
   harnesses: readonly HarnessManifest[];
   providers: readonly ResolverProvider[];
   rules: readonly CompatibilityRule[];
+  /**
+   * The provider versions actually installed, by provider id, for checking a rule against what
+   * it was tested at — RFC 0004 §Amended: "Major" is the wrong test.
+   *
+   * Required rather than optional, deliberately. An optional field here would be a loophole: a
+   * caller that omitted it would get the old behaviour, in which a rule tested at one version
+   * kept applying at every later one and said nothing. A null entry, or an absent one, means the
+   * version could not be established — which is a valid input and is not treated as coverage.
+   */
+  observedVersions: Readonly<Record<string, string | null>>;
   /**
    * Required when `profile` is `custom`; ignored otherwise. RFC 0003: "`custom` is explicit
    * assignment."
@@ -315,15 +329,45 @@ function resolveContested(context: ContestedInput): void {
   const { scope, claims, capability, input, ownership, exclusions, conflicts } = context;
   const claimants = claims.map((claim) => claim.provider);
 
-  const rule = findCompatibilityRule(input.rules, {
+  const found = findCompatibilityRule(input.rules, {
     providers: claimants,
     harness: scope.harness,
     capability,
   });
 
+  /**
+   * A rule speaks only for the versions it records — RFC 0004 §Amended: "Major" is the wrong test,
+   * and nothing performs even that one.
+   *
+   * Withdrawing the rule rather than inventing a fourth outcome is the whole trick. RFC 0003
+   * already makes the absence of a rule a conservative conflict, so a result of unknown validity
+   * produces exactly what one should: the pair is unresolved and the user is told. A `stale`
+   * verdict would have been a second way to express the same thing, free to drift from it.
+   *
+   * The reason is reported below rather than swallowed, because "no rule names this pair" and "the
+   * rule that named it was tested at another version" call for different actions.
+   */
+  const stale = found === null ? [] : staleRecordedVersions(found, input.observedVersions);
+  const rule = stale.length > 0 ? null : found;
+
   // The fail-closed path, and the one that matters most. RFC 0003: "No rule means
   // conservative conflict for overlapping exclusive capabilities."
   if (rule === null) {
+    if (found !== null) {
+      conflicts.push({
+        code: 'compatibility-rule-stale',
+        scope: formatCapabilityScope(scope),
+        claimants,
+        detail: [
+          `${claimants.join(' and ')} both claim ${capability} on ${formatCapabilityScope(scope)}`,
+          `Rule ${found.id} was tested at ${stale.map((entry) => `${entry.provider} ${entry.recorded}`).join(', ')}`,
+          `Installed now: ${stale.map((entry) => `${entry.provider} ${entry.observed ?? 'unknown'}`).join(', ')}`,
+          'A compatibility result covers the versions it records, so this one is withdrawn rather than applied outside them',
+        ],
+        remediation: `Re-test ${found.id} against the installed versions and update its \`testedVersions\`, or assign the scope explicitly with \`profile: custom\``,
+      });
+      return;
+    }
     conflicts.push({
       code: 'exclusive-scope-contested',
       scope: formatCapabilityScope(scope),

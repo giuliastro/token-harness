@@ -33,17 +33,23 @@ export const AVAILABLE_COMMANDS = [
   'rollback',
   'status',
   'uninstall',
+  'update',
   'verify',
 ] as const;
 
 export type AvailableCommand = (typeof AVAILABLE_COMMANDS)[number];
 
 /**
- * Commands RFC 0001 §CLI contract declares for the stable surface but that this
- * build does not carry yet. They are rejected as usage errors with their own
- * diagnostic code, so `token-harness apply` never reads as a typo.
+ * Commands RFC 0001 §CLI contract declares for the stable surface but that this build does not
+ * carry yet. They are rejected as usage errors with their own diagnostic code, so a declared
+ * command never reads as a typo.
+ *
+ * Empty, and kept rather than deleted. `update` was the last entry, so every command RFC 0001
+ * §CLI contract declares is now implemented — and the mechanism is what makes the *next* declared
+ * command distinguishable from a misspelling, which is a property worth keeping past the moment
+ * the list happens to be empty.
  */
-export const PLANNED_COMMANDS = ['apply', 'verify', 'update', 'rollback', 'uninstall'] as const;
+export const PLANNED_COMMANDS: readonly string[] = [];
 
 export interface CommandOptions {
   harness: HarnessId | null;
@@ -108,7 +114,18 @@ function isAvailableCommand(value: string): value is AvailableCommand {
   return (AVAILABLE_COMMANDS as readonly string[]).includes(value);
 }
 
-export function parseArgv(argv: readonly string[]): Invocation {
+export function parseArgv(
+  argv: readonly string[],
+  /**
+   * The declared-but-unimplemented list, as data.
+   *
+   * A parameter rather than a closed-over constant because `PLANNED_COMMANDS` is now empty: every
+   * command RFC 0001 declares is implemented. A hardcoded reference to an empty list would make
+   * the branch below unreachable and untestable at the same moment, and the branch is what keeps
+   * the *next* declared command from reading as a typo.
+   */
+  plannedCommands: readonly string[] = PLANNED_COMMANDS,
+): Invocation {
   const json = detectJsonMode(argv);
 
   // Pre-scan: these two win over every other outcome, including an otherwise
@@ -292,7 +309,7 @@ export function parseArgv(argv: readonly string[]): Invocation {
   }
 
   if (!isAvailableCommand(command)) {
-    const planned = (PLANNED_COMMANDS as readonly string[]).includes(command);
+    const planned = plannedCommands.includes(command);
     diagnostics.push(
       planned
         ? diagnostic({

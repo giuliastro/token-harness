@@ -29,6 +29,7 @@ import { runMetrics } from './commands/metrics.js';
 import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
 import { runStatus } from './commands/status.js';
+import { runUpdate } from './commands/update.js';
 import { runVerify } from './commands/verify.js';
 import type { AdapterAccess, CommandContext } from './commands/context.js';
 import { renderHuman, shouldDecorate, type RenderContext } from './render/index.js';
@@ -52,6 +53,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   rollback: runRollback,
   status: runStatus,
   uninstall: runUninstall,
+  update: runUpdate,
   verify: runVerify,
 };
 

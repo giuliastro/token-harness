@@ -69,6 +69,7 @@ describe('exit codes', () => {
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
+        update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -90,12 +91,24 @@ describe('exit codes', () => {
     assert.match(result.stderr, /unknown-flag/);
   });
 
-  it('2 — a declared but unimplemented command is not reported as a typo', async () => {
-    // `apply` used to be the example here, then `rollback`. Both are implemented now, so the case
-    // is `update` — the last command RFC 0001 declares and this build does not carry.
+  it('dispatches every command RFC 0001 declares, including the last one added', async () => {
+    /**
+     * This test used to assert the opposite.
+     *
+     * It read "a declared but unimplemented command is not reported as a typo", with `apply` as the
+     * example, then `rollback`, then `update`. All three are implemented, so at the integration
+     * level the case has no subject left — `run()` takes no planned-command list to inject one.
+     * The mechanism itself is still tested in `apps/cli/test/argv.test.ts`, against a supplied list.
+     *
+     * What replaces it is the guard that actually matters now: `update` is wired into the command
+     * table. Without adapters it reports an unsupported environment rather than a usage error, and
+     * the difference between those two is the difference between "not built" and "built, and it
+     * ran".
+     */
     const result = await captureRun({ ...BASE, argv: ['update'] });
-    assert.equal(result.exitCode, EXIT_CODES['usage-error']);
-    assert.match(result.stderr, /command-not-available/);
+    assert.equal(result.exitCode, EXIT_CODES['unsupported-environment']);
+    assert.doesNotMatch(result.stderr, /command-not-available|unknown-command/);
+    produced.add('unsupported-environment');
   });
 
   it('3 — a broken integration', async () => {
@@ -125,6 +138,7 @@ describe('exit codes', () => {
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
+        update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
       },
     });
@@ -152,6 +166,7 @@ describe('exit codes', () => {
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
+        update: () => Promise.reject(new Error('unused')),
       },
     });
     assert.equal(result.exitCode, EXIT_CODES['blocked-by-conflict']);

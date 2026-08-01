@@ -136,11 +136,43 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     assignable: ASSIGNABLE_PROVIDERS.includes(adapter.manifest.id),
   }));
 
+  /**
+   * Every provider is detected before anything is resolved, not only the ones that end up owning
+   * a scope.
+   *
+   * The order used to be the other way round, because a version was needed only to record it in
+   * the stored plan. It is now an *input* to resolution: RFC 0004 §Amended makes a compatibility
+   * rule speak only for the versions it records, and a rule cannot be checked against a version
+   * discovered after the rule has already been applied.
+   *
+   * The cost is one extra probe per provider that owns nothing. `doctor` already probes all of
+   * them, so this is a cost the shipped surface pays anyway.
+   */
+  const providerContext =
+    detectionContext === null || context.adapters === null
+      ? null
+      : {
+          ...detectionContext,
+          harnessConfigs,
+          now: context.now,
+          localDatabase: context.adapters.localDatabase,
+          projectIdFor: context.adapters.projectIdFor,
+        };
+
+  if (providerContext !== null) {
+    for (const adapter of providerAdapters) {
+      const detection = await adapter.detect(providerContext);
+      // Recorded even when null, for the reason the harness loop above records its own nulls.
+      versions.providers[adapter.manifest.id] = detection.version;
+    }
+  }
+
   const resolution = resolveOwnership({
     profile,
     harnesses: present,
     providers,
     rules: [...COMPATIBILITY_RULES],
+    observedVersions: versions.providers,
     harness: context.harness,
   });
 
@@ -152,19 +184,10 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
    * meant to prevent.
    */
   const actions: PlannedAction[] = [];
-  if (detectionContext !== null && context.adapters !== null) {
-    const providerContext = {
-      ...detectionContext,
-      harnessConfigs,
-      now: context.now,
-      localDatabase: context.adapters.localDatabase,
-      projectIdFor: context.adapters.projectIdFor,
-    };
+  if (providerContext !== null) {
     for (const adapter of providerAdapters) {
       const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
       if (owned.length === 0) continue;
-      const detection = await adapter.detect(providerContext);
-      versions.providers[adapter.manifest.id] = detection.version;
       const providerPlan = await adapter.plan(providerContext, {
         ownership: owned,
         harnesses: present,

@@ -1,0 +1,14 @@
+{
+  "name": "update-mixed-verdicts",
+  "title": "Updating on a machine where each provider is in a different state",
+  "source": "project-local",
+  "command": "update",
+  "rendered": true,
+  "note": "No accepted RFC contains an `update` transcript \u2014 RFC 0006 \u00a7Golden path covers doctor, plan, verify and metrics only \u2014 so this layout is project-local and is not a frozen product surface until an RFC pins it. What it does pin is the property that made the six verdicts necessary: a provider whose channel could not be read must not render as a provider that is up to date. The four inconclusive rows each say something different, and the run reached a package index while changing nothing, which RFC 0004 \u00a7Network policy requires it to disclose. Four rows carry placeholder provider ids: only two providers exist at 0.1.0 and all six verdicts have to be rendered somewhere, and the alternative \u2014 a transcript showing two of them \u2014 would not pin the distinction it exists for. The first rendering of this fixture also exposed a real layout defect, since fixed column widths broke alignment on the longer ids; the widths are now computed from what is present, the way `verify` computes its status column.",
+  "roots": {
+    "home": "C:\\Users\\dev",
+    "stateRoot": "C:\\Users\\dev\\AppData\\Local\\TokenHarness",
+    "projectRoot": "C:\\work\\demo"
+  },
+  "toolVersion": "0.1.0"
+}
