@@ -23,6 +23,7 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:install": "node scripts/smoke-install.mjs",
     "golden": "node tests/tools/scenarios.mjs && node tests/tools/regenerate-golden.mjs",
+    "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

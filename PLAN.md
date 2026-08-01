@@ -824,6 +824,29 @@ Suggested first implementation issues:
     trust assumes and this build has none, and a project pin read without it would let any cloned
     repository choose which version of a tool the user runs.
 
+22. Publish the compatibility, verification-tier, and known-limitations matrices (§8.3). **Done** —
+    `docs/matrices.md`, generated from the manifests by `pnpm matrices`, with
+    `tests/integration/matrices.test.ts` failing if the committed tables and the manifests disagree.
+    A hand-maintained copy of data the code already holds goes stale in one direction only: the
+    document keeps promising what the build stopped doing.
+
+    Known limitations stay prose, because most of them are facts about the world rather than manifest
+    fields, and reducing "Codex keeps hook enablement in state no adapter can read" to a table cell
+    loses the part a reader needs. One constraint is machine-checked: every `limitation` a manifest
+    declares must appear there.
+
+    One column was deleted rather than shipped. A generated "what caps this tier" explanation derived
+    its reason from the harness alone and produced a row contradicting itself — HarnessTrim on Claude
+    is `config-only` beside "the receipt is readable, so interception can be observed". Both halves
+    were true of Claude and the sentence was false, because what caps HarnessTrim there is its own
+    opt-in telemetry, which no manifest field carries. Generated prose that is plausible and wrong is
+    worse than a column that stops at what it knows, so the table now states the gap and the prose
+    carries the cause.
+
+    Also closed here: `release-gates.test.ts` asserted a tier on every `HarnessSupport` entry but not
+    on every harness a *capability* names — and a capability is what the resolver assigns ownership
+    from. Nothing tripped it, which is when such a gap is cheapest to close.
+
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
 ## 16. Release gates

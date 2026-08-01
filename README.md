@@ -272,6 +272,9 @@ touches the five human transcripts transcribed from RFC 0006 — see
 CI runs Windows, macOS, and Linux, with Windows first in the matrix and the
 matrix set not to fail fast.
 
+- [Compatibility, verification tiers, and known limitations](docs/matrices.md) — the tables are
+  generated from the manifests and a test fails if they drift; the limitations below them are prose,
+  and a test checks that every limitation the code declares appears there
 - [Development plan](PLAN.md)
 - [Foundation decisions](docs/rfcs/0001-foundation.md)
 - [Provider contract](docs/rfcs/0002-provider-contract.md)
