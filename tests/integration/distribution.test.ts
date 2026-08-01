@@ -131,38 +131,47 @@ describe('distribution', () => {
     );
   });
 
-  it('publishes without a token, and says so structurally', () => {
+  it('signs provenance on the token route, and keeps the credential out of the file', () => {
     /**
-     * PLAN §8.3, publishing and provenance. Asserted against the workflow rather than trusted to a
-     * comment, because every one of these is a silent failure if it regresses.
+     * PLAN §8.3 and §15 item 25. This asserted the *opposite* until trusted publishing turned out to
+     * be unconfigurable from this account — `npm trust` returned 403, and so did `npm profile get`,
+     * which proved the available credential cannot perform account operations at all.
      *
-     * `id-token: write` is the whole mechanism — without it there is no OIDC token, npm has nothing
-     * to verify, and the publish falls back to looking for a credential that is deliberately absent.
+     * The route changed, so the assertions had to. Keeping the old ones and marking them skipped
+     * would have left a test claiming a property the workflow no longer has.
      */
+
+    // Still required — for provenance, not for authentication. The OIDC token attests the build
+    // while the npm token authenticates the publish, and dropping this signs nothing.
+    assert.match(RELEASE_CONFIG, /id-token: write/, 'the release workflow cannot sign provenance');
+
+    /**
+     * `--provenance` is explicit on this route and its absence is silent: the publish succeeds and
+     * ships nothing signed. On the trusted-publishing route the same flag was forbidden, because
+     * npm signs by default there and passing it meant the workflow had been written against the
+     * wrong mechanism. Same string, opposite meaning, which is why it is asserted either way.
+     */
+    assert.match(RELEASE_CONFIG, /npm publish --provenance/, 'the publish signs no provenance');
+
+    // The token arrives from a secret and is never written down. A literal token in the file would
+    // be a leaked credential in git history, and it would work, so nothing else would complain.
     assert.match(
       RELEASE_CONFIG,
-      /id-token: write/,
-      'the release workflow cannot obtain an OIDC token',
+      /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/,
+      'the publish step does not read the token from a repository secret',
     );
-
-    /**
-     * No token, anywhere. A `NODE_AUTH_TOKEN` or an `NPM_TOKEN` secret appearing here would mean the
-     * trusted-publishing route had quietly been replaced by the one it was chosen over — and it
-     * would still work, which is what makes it worth a test rather than a review.
-     */
     assert.doesNotMatch(
       RELEASE_CONFIG,
-      /NODE_AUTH_TOKEN|NPM_TOKEN|secrets\./,
-      'the release workflow uses a token',
+      /npm_[A-Za-z0-9]{10}/,
+      'something shaped like a literal npm token is in the workflow',
     );
 
-    // With trusted publishing npm signs provenance by default; `--provenance` belongs to the
-    // token-based route. Passing it is not harmless noise — it is a sign the workflow was written
-    // against the other mechanism.
-    assert.doesNotMatch(
+    // `registry-url` is what makes npm write an `.npmrc` that reads `NODE_AUTH_TOKEN`. Without it
+    // the token is set and ignored, and the publish fails on authentication for no visible reason.
+    assert.match(
       RELEASE_CONFIG,
-      /--provenance/,
-      'trusted publishing signs provenance without the flag',
+      /registry-url: 'https:\/\/registry\.npmjs\.org'/,
+      'the token will be ignored without a registry-url',
     );
 
     // The tag guard runs before the publish, which is the only order that helps.
@@ -172,37 +181,27 @@ describe('distribution', () => {
     assert.ok(publish > guard, 'the tag is checked after publishing, which is too late');
   });
 
-  it('does not publish on the runtime floor it tests on', () => {
+  it('publishes on the same runtime floor it tests on', () => {
     /**
-     * These two disagree on purpose, and the disagreement is load-bearing in both directions.
+     * These agreed, then diverged, then agreed again, and each step had a reason worth keeping.
      *
      * `ci.yml` pins the RFC 0001 floor so a feature newer than the floor fails in CI rather than for
-     * a user. Trusted publishing requires npm 11.5.1 and Node 22.14.0 or newer, which is above that
-     * floor — so the release job runs newer and asserts the npm version rather than hoping the
-     * runner's bundled one is recent enough.
+     * a user. Trusted publishing required npm 11.5.1 and Node 22.14.0 — above that floor — so the
+     * release job ran newer and this test asserted the divergence was deliberate. On the token route
+     * provenance needs only npm 9.5.0, which the floor's bundled npm already exceeds, so there is no
+     * reason to diverge and the two match again.
      *
-     * Asserted so that neither is "tidied" into matching the other later: raising the CI floor to
-     * match the release job would silently drop the oldest supported runtime from the matrix.
+     * Asserted rather than left implicit because the divergence is what returns if trusted
+     * publishing is ever restored, and it should return on purpose rather than by accident.
      */
-    assert.match(CI, /node-version: '22\.13\.0'/, 'CI no longer tests the RFC 0001 runtime floor');
+    const floor = "node-version: '22.13.0'";
+    assert.ok(CI.includes(floor), 'CI no longer tests the RFC 0001 runtime floor');
+    assert.ok(RELEASE_CONFIG.includes(floor), 'the release job no longer publishes on the floor');
     assert.match(
       RELEASE_CONFIG,
-      /required=11\.5\.1/,
-      'the release job does not assert an npm version',
+      /required=9\.5\.0/,
+      'the release job does not assert an npm able to sign provenance',
     );
-
-    /**
-     * The configured value, not the string anywhere in the file.
-     *
-     * The first version of this asserted the floor did not appear in `release.yml` at all — and
-     * failed, because the comment explaining why the floor is not used names it. An assertion that
-     * forbids a version from being *discussed* rather than from being *selected* is checking the
-     * prose, and its failure message would send a reader looking for a configuration problem that
-     * is not there.
-     */
-    const selected = /node-version: '([^']+)'/.exec(RELEASE_CONFIG)?.[1];
-    assert.ok(selected !== undefined, 'the release job pins no Node version');
-    assert.notEqual(selected, '22.13.0', 'the release job cannot publish on the RFC 0001 floor');
   });
 
   it('claims a version the contents actually satisfy', () => {

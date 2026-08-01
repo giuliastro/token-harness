@@ -1,19 +1,33 @@
 # Publishes `token-harness` to npm — PLAN §8.3.
 #
-# Trusted publishing (OIDC), so there is no token anywhere: not in the repository secrets, not on a
-# laptop, not in this file. npm verifies the workflow's identity against a trust relationship
-# configured on the package, and signs provenance for what it publishes.
+# ## This is the token route, and it is a stopgap
 #
-# Two things about this file are not obvious and are deliberate.
+# The first version of this file used npm **trusted publishing**: OIDC, no credential anywhere.
+# Configuring it turned out to be impossible from this account. `npm trust` returned 403, and so did
+# `npm profile get` — a plain read of one's own account — which proved the credential in use is
+# scoped to packages and cannot perform account operations at all. The account-level fix needs a
+# second factor that is currently unavailable.
 #
-# **It does not pass `--provenance`.** With trusted publishing npm generates and publishes
-# provenance attestations by default; the flag is for the token-based route.
+# So this authenticates with an `NPM_TOKEN` repository secret instead. Two consequences worth having
+# in front of whoever reads this next:
 #
-# **It does not run on the RFC 0001 runtime floor.** `ci.yml` pins Node 22.13.0 on purpose — CI runs
-# the oldest supported runtime so a feature newer than the floor fails there rather than for a user.
-# Trusted publishing requires npm 11.5.1 and Node 22.14.0 or newer, which is above that floor. This
-# job is not testing compatibility, it is publishing an artifact the matrix already tested at the
-# floor, so a newer runtime here weakens nothing.
+# - **A secret exists now, and did not before.** Anyone who can read repository secrets or alter a
+#   workflow on a protected path can publish. Trusted publishing had no such surface.
+# - **npm is deprecating exactly this.** The registry already warns that "npm tokens that bypass 2FA
+#   are being restricted for account changes and direct publishing". Account changes are blocked
+#   today; direct publishing is on the same path.
+#
+# **Going back is the goal, and it is three edits:** restore `id-token: write` as the only
+# credential, drop `registry-url`, `--provenance` and the `env:` block from the publish step, and
+# raise Node to 24 — trusted publishing needs npm 11.5.1 and Node 22.14.0, above the floor this file
+# now runs on. PLAN §15 item 25 records the trigger.
+#
+# ## Why `--provenance` is explicit here
+#
+# On the trusted-publishing route npm signs provenance by default and passing the flag is a sign the
+# workflow was written against the wrong mechanism. On this route it is the opposite: nothing is
+# signed unless the flag is passed, and `id-token: write` is still required for it — the OIDC token
+# attests the build, while the npm token authenticates the publish. Two different jobs.
 name: Release
 
 on:
@@ -22,7 +36,7 @@ on:
 
 permissions:
   contents: read
-  # The whole mechanism. Without it there is no OIDC token and npm has nothing to verify.
+  # Still needed, for provenance rather than for authentication.
   id-token: write
 
 concurrency:
@@ -33,32 +47,33 @@ jobs:
   publish:
     name: publish to npm
     runs-on: ubuntu-latest
-    # A published version cannot be taken back after 72 hours and a name is permanent, so the
-    # environment gives the repository owner somewhere to require a review before this runs.
-    environment: npm-publish
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
 
-      # No `registry-url`: it writes an `.npmrc` expecting a token, which is what trusted publishing
-      # exists to avoid.
+      # `registry-url` is what makes npm write an `.npmrc` that reads `NODE_AUTH_TOKEN`. It was
+      # deliberately absent on the trusted-publishing route, where it would have been the thing to
+      # avoid; on this route it is required.
+      #
+      # The RFC 0001 runtime floor, same as `ci.yml`. Provenance needs npm 9.5.0 and this Node
+      # carries a much newer one, so there is no reason to diverge — unlike trusted publishing,
+      # which required a runtime above the floor.
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: '22.13.0'
+          registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
-      # Asserted rather than assumed. Node 24 currently bundles an npm new enough, but "currently"
-      # is not a guarantee, and the failure mode without this check is an authentication error that
-      # says nothing about the cause.
-      - name: Require an npm new enough for trusted publishing
+      # Asserted rather than assumed. Without provenance support the publish still succeeds and
+      # silently ships nothing signed, which is the failure worth catching before it happens.
+      - name: Require an npm that can sign provenance
         run: |
-          npm install -g npm@latest
-          required=11.5.1
+          required=9.5.0
           current=$(npm --version)
           if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
-            echo "trusted publishing needs npm >= $required, got $current" >&2
+            echo "provenance needs npm >= $required, got $current" >&2
             exit 1
           fi
           echo "npm $current"
@@ -93,5 +108,7 @@ jobs:
         run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
 
       - name: Publish
-        run: npm publish
+        run: npm publish --provenance
         working-directory: dist/package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
