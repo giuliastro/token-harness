@@ -1,30 +1,32 @@
 /**
  * Human rendering of `token-harness doctor`.
  *
- * Pinned by RFC 0006 §Golden path, scenario "RTK and HarnessTrim installed, neither wired to a
- * harness" — and amended there, because the first version failed the only reader who matters, on
- * their first run.
+ * Pinned by RFC 0006 §Golden path, and amended there twice.
  *
- * ## What was wrong with it, reported from a real first run
+ * ## The first attempt at fixing this made it worse, which is the lesson
  *
- * Four misreadings, every one of them the output's fault rather than the reader's:
+ * A first run was reported as unreadable. The first fix added explanatory prose: a line saying the
+ * command was read-only, sentences as section headings, a paragraph telling the reader that a note
+ * was not a failure. The same reader came back with the same complaint plus three new ones — badly
+ * aligned, scattered useless text, still no idea what to do.
  *
- * 1. **The problem count named nothing.** On the machine that reported this, the single "problem"
- *    was HarnessTrim being `0.0.6` against a tested range ending at `0.0.5`. The table printed
- *    `0.0.6` with no mark on it, and a *separate* warning about PowerShell coverage appeared
- *    immediately above — so the reader connected the two. They are unrelated.
- * 2. **It claimed the problem blocked `plan`.** "Fix it before running `token-harness plan`" is
- *    false. RFC 0002 §Versioning makes an unknown newer version produce "a warning and default to
- *    conservative behavior"; it blocks nothing, and `plan` ran fine on that machine.
- * 3. **`configured` meant two different things** one section apart: a harness that has hooks written
- *    by anyone, and a provider wired into a harness.
- * 4. **Nothing said Token Harness had changed nothing.** A provider wired by hand and one wired by
- *    Token Harness both render as `configured`, so silence was read as "it installed something".
+ * They were right. Explaining a confusing table in prose beside it produces a confusing table with
+ * prose beside it. Two of those added lines said the same thing twice ("changed nothing" appeared
+ * in the header *and* under the tables), and none of them was the thing missing, which was a
+ * literal next command.
  *
- * ## The rule this file now follows
+ * ## What this file does instead
  *
- * A count is not a finding. Anything contributing to the count is named on its own line, and if
- * there is nothing to do about it, that is said rather than implied.
+ * - **Columns with headers.** `STATE`, `WIRED TO`, `SET UP BY`. The reader learns what a column
+ *   means from its heading, not from a sentence explaining the table.
+ * - **Harness and provider states in plain words**, because `configured` meant two different things
+ *   in the two tables — a harness with hooks, and a provider wired into one.
+ * - **A `NEXT` block containing a command to type.** Nothing else in the output tells anybody what
+ *   to do, so this does, always, in every state.
+ * - **`NOTES` only when there is something in it**, one line each, no commentary.
+ *
+ * Nothing here is prose about the output. If a fact needs a sentence to be understood, it belongs
+ * in a column heading or in `NEXT`.
  */
 
 import {
@@ -36,79 +38,74 @@ import {
 
 import { column, displayPath, document, type RenderContext } from './layout.js';
 
-const HARNESS_ID_WIDTH = 12;
-const HARNESS_STATE_WIDTH = 12;
-const PROVIDER_ID_WIDTH = 14;
-const PROVIDER_STATE_WIDTH = 14;
-const PROVIDER_VERSION_WIDTH = 8;
+const NAME_WIDTH = 15;
+const STATE_WIDTH = 12;
+const VERSION_WIDTH = 10;
+const WIRED_WIDTH = 14;
 
-function harnessDetail(detection: HarnessDetection, context: RenderContext): string {
-  if (detection.configPath === null) return '';
-  return displayPath(detection.configPath, context.home);
+/** RFC 0002's `HarnessState`, in words that do not need a glossary. */
+function harnessState(detection: HarnessDetection): string {
+  switch (detection.state) {
+    case 'absent':
+      return 'not found';
+    case 'detected':
+      return 'no hooks';
+    case 'configured':
+      return 'hooks';
+    case 'broken':
+      return 'unreadable';
+  }
+}
+
+/** Where a provider is wired, or the reason there is nowhere. */
+function wiredTo(detection: ProviderDetection): string {
+  if (detection.state === 'broken') return 'cannot run';
+  if (detection.state === 'absent') return 'not installed';
+  if (detection.configuredHarnesses.length === 0) return 'nothing yet';
+  return detection.configuredHarnesses.join(', ');
 }
 
 /**
- * RFC 0002 §Providers may exceed the managed surface is the reason RTK reads
- * "not configured for any harness" while HarnessTrim reads "not configured for
- * any managed harness": Token Harness can only speak for the harnesses it
- * manages, and a provider that supports more gets the qualifier.
- */
-function providerNote(detection: ProviderDetection): string {
-  if (detection.state === 'broken') {
-    return 'installed but not usable';
-  }
-  if (detection.state === 'absent' || detection.state === 'available') {
-    return '';
-  }
-  if (detection.configuredHarnesses.length === 0) {
-    const qualifier = detection.supportsUnmanagedHarnesses ? 'managed harness' : 'harness';
-    return `not configured for any ${qualifier}`;
-  }
-  const list = detection.configuredHarnesses.join(', ');
-  /**
-   * "adopted, not managed" was the wording, and it needed a glossary the reader does not have.
-   *
-   * The distinction matters — RFC 0004 §Brownfield adoption turns on it, and `uninstall` refuses to
-   * remove what no journal records as ours — so it is kept, in words that carry themselves.
-   */
-  const ownership = detection.managedByTokenHarness
-    ? ' (set up by Token Harness)'
-    : ' (you set this up; Token Harness has not touched it)';
-  return `wired to ${list}${ownership}`;
-}
-
-/**
- * One line per thing contributing to `problemCount`.
+ * Who put it there — the distinction RFC 0004 §Brownfield adoption turns on.
  *
- * `doctor.ts` counts exactly two kinds: a detection that is `broken`, and a version outside its
- * tested range. Rendering them from the same fields the count is derived from is what keeps the
- * list and the number from disagreeing.
+ * It was "adopted, not managed", then a parenthetical sentence per row. It is a column now: on most
+ * first runs every row says `you`, and that is the answer to "did this thing just install
+ * something", which no earlier version of this output gave.
  */
-function worthKnowing(report: DoctorReport): string[] {
-  const lines: string[] = [];
+function setUpBy(detection: ProviderDetection): string {
+  if (detection.state === 'absent' || detection.configuredHarnesses.length === 0) return '—';
+  return detection.managedByTokenHarness ? 'this tool' : 'you';
+}
 
+/**
+ * One line per item behind the exit code, and nothing else.
+ *
+ * `doctor.ts` counts two kinds: a detection that is `broken`, and a version outside its tested
+ * range. Neither blocks anything, which is why the heading is `NOTES` and why `NEXT` below is the
+ * same command whether this list is empty or not.
+ */
+function notes(report: DoctorReport): string[] {
+  const lines: string[] = [];
   for (const harness of report.harnesses) {
     if (harness.state === 'broken') {
-      lines.push(`  ${harness.harnessId} is present, and its configuration could not be read`);
+      lines.push(`  ${harness.harnessId}: configuration could not be read`);
     }
     if (harness.versionVerdict === 'unknown-newer') {
       lines.push(
-        `  ${harness.harnessId} ${harness.version ?? ''} is newer than any version this build was tested against`,
+        `  ${harness.harnessId} ${harness.version ?? ''}: newer than tested, so treated conservatively`,
       );
     }
   }
-
   for (const provider of report.providers) {
     if (provider.state === 'broken') {
-      lines.push(`  ${provider.providerId} is installed, and could not be run`);
+      lines.push(`  ${provider.providerId}: installed but could not be run`);
     }
     if (provider.versionVerdict === 'unknown-newer') {
       lines.push(
-        `  ${provider.providerId} ${provider.version ?? ''} is newer than any version this build was tested against`,
+        `  ${provider.providerId} ${provider.version ?? ''}: newer than tested, so treated conservatively`,
       );
     }
   }
-
   return lines;
 }
 
@@ -118,79 +115,67 @@ export function renderDoctorReport(report: DoctorReport, context: RenderContext)
   lines.push(
     `Token Harness ${context.toolVersion} — ${renderPlatformSummary(report.platform)}, Node ${report.platform.nodeVersion}`,
   );
-  // First, because the first question a first run raises is what the command just did.
-  lines.push('Read-only: this inspected your machine and changed nothing.');
   lines.push('');
 
-  // Annotated because `configured` appears in both tables meaning different things.
-  lines.push('Harnesses — coding agents a provider can plug into (configured = it has hooks)');
+  lines.push(`${column('HARNESSES', NAME_WIDTH)}${column('STATE', STATE_WIDTH)}CONFIG FILE`);
   if (report.harnesses.length === 0) {
-    lines.push('  no harness adapters registered');
+    lines.push('  none registered');
   } else {
     for (const harness of report.harnesses) {
       lines.push(
-        `  ${column(harness.harnessId, HARNESS_ID_WIDTH)}${column(harness.state, HARNESS_STATE_WIDTH)}${harnessDetail(harness, context)}`,
+        `  ${column(harness.harnessId, NAME_WIDTH - 2)}${column(harnessState(harness), STATE_WIDTH)}` +
+          `${harness.configPath === null ? '' : displayPath(harness.configPath, context.home)}`,
       );
     }
   }
   lines.push('');
 
-  lines.push('Providers — the token-saving tools (configured = wired into a harness)');
+  lines.push(
+    `${column('PROVIDERS', NAME_WIDTH)}${column('VERSION', VERSION_WIDTH)}${column('WIRED TO', WIRED_WIDTH)}SET UP BY`,
+  );
   if (report.providers.length === 0) {
-    lines.push('  no provider adapters registered');
+    lines.push('  none registered');
   } else {
     for (const provider of report.providers) {
       lines.push(
-        `  ${column(provider.providerId, PROVIDER_ID_WIDTH)}` +
-          `${column(provider.state, PROVIDER_STATE_WIDTH)}` +
-          `${column(provider.version ?? '', PROVIDER_VERSION_WIDTH)}` +
-          `${providerNote(provider)}`,
+        `  ${column(provider.providerId, NAME_WIDTH - 2)}` +
+          `${column(provider.version ?? '—', VERSION_WIDTH)}` +
+          `${column(wiredTo(provider), WIRED_WIDTH)}` +
+          `${setUpBy(provider)}`,
       );
     }
   }
-  lines.push('');
 
-  /**
-   * Whether anything above is ours, answered rather than left to inference.
-   *
-   * RFC 0004 §Brownfield adoption makes the hand-configured machine the common first run, so this
-   * is the ordinary answer and not an edge case.
-   */
-  if (report.providers.length > 0) {
-    const managed = report.providers
-      .filter((provider) => provider.managedByTokenHarness)
-      .map((provider) => provider.providerId);
-    lines.push(
-      managed.length === 0
-        ? 'Token Harness has changed nothing here. Everything above was already on the machine.'
-        : `Token Harness set up ${managed.join(', ')}. Everything else was already here.`,
-    );
-  }
-
-  const notable = worthKnowing(report);
-  if (notable.length === 0) {
-    lines.push('Nothing is broken. Run `token-harness plan` to see what would change.');
-    return document(lines);
+  const notable = notes(report);
+  if (notable.length > 0) {
+    lines.push('');
+    lines.push('NOTES');
+    lines.push(...notable);
   }
 
   /**
-   * "Worth knowing", not "problems to fix", and the difference is factual.
+   * Always present, always a command to type.
    *
-   * Everything reaching this list is a version outside a tested range or an integration that cannot
-   * be read. Neither prevents anything, and the previous wording — fix this *before* running
-   * `plan` — instructed the reader to do something unnecessary about something they often cannot
-   * change.
+   * Which command depends on what is missing, and that decision is the only thing in this output
+   * that is about the reader rather than about the machine.
    */
-  lines.push('');
-  lines.push('Worth knowing');
-  lines.push(...notable);
-  lines.push('');
-  lines.push(
-    notable.length === 1
-      ? 'Nothing is blocked. That is a note, not a failure: Token Harness stays conservative where a version is untested.'
-      : `Nothing is blocked. Those are ${String(notable.length)} notes, not failures: Token Harness stays conservative where a version is untested.`,
+  const unwired = report.providers.filter(
+    (provider) => provider.state !== 'absent' && provider.configuredHarnesses.length === 0,
   );
-  lines.push('Run `token-harness plan` to see what would change. It writes nothing.');
+  lines.push('');
+  lines.push('NEXT');
+  // Aligned on the widest command, so two suggestions do not read as two unrelated fragments.
+  const suggestions: [string, string][] =
+    report.providers.every((provider) => provider.state === 'absent') || unwired.length > 0
+      ? [['token-harness plan', 'see what would change — writes nothing']]
+      : [
+          ['token-harness verify', 'check the pipeline actually intercepts'],
+          ['token-harness metrics --since 7d', 'see what it saved'],
+        ];
+  const commandWidth = Math.max(...suggestions.map(([command]) => command.length)) + 2;
+  for (const [command, description] of suggestions) {
+    lines.push(`  ${column(command, commandWidth)}${description}`);
+  }
 
   return document(lines);
 }

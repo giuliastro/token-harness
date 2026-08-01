@@ -208,56 +208,58 @@ with the RFCs, and reachable from the fixture it declares.
 ```text
 $ token-harness doctor
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
-Read-only: this inspected your machine and changed nothing.
 
-Harnesses — coding agents a provider can plug into (configured = it has hooks)
-  claude      detected    ~/.claude/settings.json
-  codex       detected    ~/.codex/config.toml
-  opencode    absent
+HARNESSES      STATE       CONFIG FILE
+  claude       no hooks    ~/.claude/settings.json
+  codex        no hooks    ~/.codex/config.toml
+  opencode     not found
 
-Providers — the token-saving tools (configured = wired into a harness)
-  rtk           installed     1.4.2   not configured for any harness
-  harnesstrim   installed     0.0.5   not configured for any managed harness
+PROVIDERS      VERSION   WIRED TO      SET UP BY
+  rtk          1.4.2     nothing yet   —
+  harnesstrim  0.0.5     nothing yet   —
 
-Token Harness has changed nothing here. Everything above was already on the machine.
-Nothing is broken. Run `token-harness plan` to see what would change.
+NEXT
+  token-harness plan  see what would change — writes nothing
 ```
 
 Exit code 0. An installed-but-unwired provider is a state, not a problem, so nothing here
 contributes to exit 3.
 
-#### Amended: the transcript was unreadable on a first run
+#### Amended twice: the transcript was unreadable, and the first fix made it worse
 
-The three added lines, and the exit-3 rendering specified below, come from a real first run
-reported by a user who could not tell what the command had done. Four separate misreadings, each
-one the output's fault:
+Both amendments came from the same user reporting the same thing about a real first run. The second
+one exists because the first was the wrong kind of fix, and that is the part worth recording.
 
-**The problem count named nothing.** On that machine the single counted problem was HarnessTrim at
-`0.0.6` against a tested range ending `0.0.5`. The table printed `0.0.6` unmarked, and an unrelated
-warning about PowerShell tool coverage appeared immediately below — so the two were read as one
-thing. A count with nothing identifying what it counts is not a finding; it is a number.
+**What was wrong originally.** Four separate misreadings, each the output's fault. The exit-3 line
+read "*N* problems found. Fix them before running `token-harness plan`" — and on that machine the
+one counted problem was a provider version outside its tested range, printed unmarked in the table,
+with an unrelated tool-coverage warning immediately below it. So the count identified nothing, the
+two findings read as one, and the instruction was false: nothing in the exit-3 set blocks `plan`.
+RFC 0002 §Versioning makes an unknown newer version produce "a warning and default to conservative
+behavior". Meanwhile `configured` meant a harness with hooks in one table and a provider wired into
+a harness in the next, and nothing said whether Token Harness had changed anything — which matters
+because RFC 0004 §Brownfield adoption makes "you configured this yourself" the *common* first run.
 
-**It told the reader to fix something first, which was false.** The old exit-3 line read "*N*
-problems found. Fix them before running `token-harness plan`." Nothing in the exit-3 set blocks
-`plan`: §Versioning in RFC 0002 makes an unknown newer version produce "a warning and default to
-conservative behavior", and a broken integration is reported by `plan` rather than preventing it.
-The instruction sent the reader to fix something unnecessary, often something they cannot change,
-before a command that would have worked.
+**What the first fix got wrong.** It added prose: a line stating the command was read-only, full
+sentences as section headings, a paragraph explaining that a note was not a failure. The same reader
+returned with the same complaint and three new ones — badly aligned, scattered pointless text, still
+no idea what to do. They were right. Explaining a confusing table in prose beside it yields a
+confusing table with prose beside it. Two of the added lines said the same thing twice, and none of
+them was the missing piece.
 
-**`configured` meant two different things two sections apart** — a harness that has hooks written by
-anyone, and a provider wired into a harness. Both tables are now annotated with which sense applies.
+**What the missing piece was: a command to type.** Every rendering of `doctor` now ends with a
+`NEXT` block naming one, chosen from what the report shows — `plan` while anything is unwired,
+`verify` and `metrics` once everything is. The tables carry column headings instead of explanatory
+sentences, harness and provider states are words that need no glossary, and `SET UP BY` answers the
+ownership question in one column instead of a parenthetical per row.
 
-**Nothing said whether Token Harness had changed anything.** A provider wired by hand and one wired
-by Token Harness both render as `configured`, and RFC 0004 §Brownfield adoption makes the
-hand-wired case the *common* first run. The silence was read as "it installed something". The
-answer is now stated whenever any provider is present.
+For exit 3, a `NOTES` section lists one line per contributing finding. It is `NOTES` and not
+"problems" because nothing in it blocks anything, and `NEXT` is the same command whether it is
+present or empty.
 
-Therefore, for exit 3, `doctor` renders a `Worth knowing` section with one line per contributing
-finding, followed by a statement that nothing is blocked. The count is derived from the same fields
-the lines are, so the two cannot disagree.
-
-The density this replaces was not an accident and is worth naming as a lesson: the original
-transcript was written by someone who already knew what every column meant.
+The general lesson, since this document is where the next transcript will be written: the original
+was authored by someone who already knew what every column meant, and the first repair was authored
+by someone explaining the output rather than fixing it.
 
 ### Scenario: planning against the fixture above
 

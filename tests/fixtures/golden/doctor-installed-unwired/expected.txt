@@ -1,14 +1,13 @@
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
-Read-only: this inspected your machine and changed nothing.
 
-Harnesses — coding agents a provider can plug into (configured = it has hooks)
-  claude      detected    ~/.claude/settings.json
-  codex       detected    ~/.codex/config.toml
-  opencode    absent
+HARNESSES      STATE       CONFIG FILE
+  claude       no hooks    ~/.claude/settings.json
+  codex        no hooks    ~/.codex/config.toml
+  opencode     not found
 
-Providers — the token-saving tools (configured = wired into a harness)
-  rtk           installed     1.4.2   not configured for any harness
-  harnesstrim   installed     0.0.5   not configured for any managed harness
+PROVIDERS      VERSION   WIRED TO      SET UP BY
+  rtk          1.4.2     nothing yet   —
+  harnesstrim  0.0.5     nothing yet   —
 
-Token Harness has changed nothing here. Everything above was already on the machine.
-Nothing is broken. Run `token-harness plan` to see what would change.
+NEXT
+  token-harness plan  see what would change — writes nothing
