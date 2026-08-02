@@ -1,33 +1,4 @@
-# Publishes `token-harness` to npm — PLAN §8.3.
-#
-# ## This is the token route, and it is a stopgap
-#
-# The first version of this file used npm **trusted publishing**: OIDC, no credential anywhere.
-# Configuring it turned out to be impossible from this account. `npm trust` returned 403, and so did
-# `npm profile get` — a plain read of one's own account — which proved the credential in use is
-# scoped to packages and cannot perform account operations at all. The account-level fix needs a
-# second factor that is currently unavailable.
-#
-# So this authenticates with an `NPM_TOKEN` repository secret instead. Two consequences worth having
-# in front of whoever reads this next:
-#
-# - **A secret exists now, and did not before.** Anyone who can read repository secrets or alter a
-#   workflow on a protected path can publish. Trusted publishing had no such surface.
-# - **npm is deprecating exactly this.** The registry already warns that "npm tokens that bypass 2FA
-#   are being restricted for account changes and direct publishing". Account changes are blocked
-#   today; direct publishing is on the same path.
-#
-# **Going back is the goal, and it is three edits:** restore `id-token: write` as the only
-# credential, drop `registry-url`, `--provenance` and the `env:` block from the publish step, and
-# raise Node to 24 — trusted publishing needs npm 11.5.1 and Node 22.14.0, above the floor this file
-# now runs on. PLAN §15 item 25 records the trigger.
-#
-# ## Why `--provenance` is explicit here
-#
-# On the trusted-publishing route npm signs provenance by default and passing the flag is a sign the
-# workflow was written against the wrong mechanism. On this route it is the opposite: nothing is
-# signed unless the flag is passed, and `id-token: write` is still required for it — the OIDC token
-# attests the build, while the npm token authenticates the publish. Two different jobs.
+# Publishes `token-harness` after the release gates pass — PLAN §8.3.
 name: Release
 
 on:
@@ -36,16 +7,14 @@ on:
 
 permissions:
   contents: read
-  # Still needed, for provenance rather than for authentication.
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: publish to npm
+  verify:
+    name: verify release
     runs-on: ubuntu-latest
 
     steps:
@@ -53,37 +22,14 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      # `registry-url` is what makes npm write an `.npmrc` that reads `NODE_AUTH_TOKEN`. It was
-      # deliberately absent on the trusted-publishing route, where it would have been the thing to
-      # avoid; on this route it is required.
-      #
-      # The RFC 0001 runtime floor, same as `ci.yml`. Provenance needs npm 9.5.0 and this Node
-      # carries a much newer one, so there is no reason to diverge — unlike trusted publishing,
-      # which required a runtime above the floor.
       - uses: actions/setup-node@v5
         with:
           node-version: '22.13.0'
-          registry-url: 'https://registry.npmjs.org'
           cache: pnpm
-
-      # Asserted rather than assumed. Without provenance support the publish still succeeds and
-      # silently ships nothing signed, which is the failure worth catching before it happens.
-      - name: Require an npm that can sign provenance
-        run: |
-          required=9.5.0
-          current=$(npm --version)
-          if [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
-            echo "provenance needs npm >= $required, got $current" >&2
-            exit 1
-          fi
-          echo "npm $current"
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # The gates again, on the exact commit being published. `ci.yml` ran them on all three
-      # platforms when this commit landed on main; the artifact is one platform-independent bundle,
-      # so re-running on one platform is enough insurance for an irreversible step.
       - name: Typecheck
         run: pnpm typecheck
 
@@ -102,45 +48,5 @@ jobs:
       - name: Install smoke test
         run: pnpm smoke:install
 
-      # A tag is a human gesture and the version is a file. When they disagree, publishing the file
-      # silently ships something other than what the tag announced — so this refuses instead.
       - name: Refuse a tag that does not match the staged version
         run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
-
-      # Two reasons a tag may legitimately not publish, and neither is a failure.
-      #
-      # Without these, tagging is a trap: `v0.1.0` already exists on the registry, and no credential
-      # is configured yet, so a tag pushed to fill in the releases page would leave a red job behind
-      # it. A red job that means "nothing to do" trains people to ignore red jobs.
-      - name: Decide whether there is anything to publish
-        id: gate
-        run: |
-          if [ -z "${NPM_TOKEN}" ]; then
-            echo "no NPM_TOKEN is configured, so this tag cannot publish"
-            echo 'publish=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          version=$(node -p "require('./dist/package/package.json').version")
-          name=$(node -p "require('./dist/package/package.json').name")
-          if npm view "$name@$version" version >/dev/null 2>&1; then
-            echo "$name@$version is already on the registry; nothing to publish"
-            echo 'publish=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "$name@$version is not on the registry yet"
-          echo 'publish=true' >> "$GITHUB_OUTPUT"
-        env:
-          # Read to test for emptiness only. Never echoed.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish
-        if: steps.gate.outputs.publish == 'true'
-        run: npm publish --provenance
-        working-directory: dist/package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Say what happened when nothing was published
-        if: steps.gate.outputs.publish != 'true'
-        run: |
-          echo "::notice::Gates passed and nothing was published. See the previous step for why."

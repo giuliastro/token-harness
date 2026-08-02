@@ -868,55 +868,8 @@ Suggested first implementation issues:
     goes with it. Both are outward-facing and irreversible, and they are the owner's call, not a
     step to slip into a build.
 
-24. Add the release workflow (§8.3). **Done** — `.github/workflows/release.yml` publishes on a
-    `v*` tag using npm **trusted publishing**: OIDC, `id-token: write`, and no token in the
-    repository secrets, on a laptop, or in the file. npm signs provenance automatically on that
-    route, so `--provenance` is deliberately absent — passing it would be a sign the workflow had
-    been written against the token-based mechanism instead.
-
-    Two constraints the documentation supplied and the design had to bend to:
-
-    - **Trusted publishing needs npm 11.5.1 and Node 22.14.0 or newer**, which is *above* the
-      RFC 0001 runtime floor `ci.yml` deliberately pins. The release job therefore runs newer and
-      asserts the npm version rather than trusting the runner's bundled one. That weakens nothing:
-      the job publishes an artifact the matrix already tested at the floor. `distribution.test.ts`
-      pins both sides so neither is later "tidied" into matching the other, which would silently
-      drop the oldest supported runtime from the matrix.
-    - **A trusted publisher cannot be configured before the package exists.** npm's own docs say
-      "The package you're configuring must already exist on the npm registry", and the `npm trust`
-      command added in February 2026 says the same. So the very first `0.1.0` has to be published by
-      hand; every release after it is autonomous.
-
-    `scripts/check-release-tag.mjs` refuses a tag that does not match the staged version, before the
-    publish rather than after: a tag is a human gesture and a version is a file, and when they
-    disagree the mismatch is otherwise discovered by whoever installs `v0.2.0` and gets `0.1.0`.
-
-    Still open, and the owner's to do: configure the trusted publisher on npmjs.com — or with
-    `npm trust github token-harness --file release.yml --allow-publish` — and make that one first
-    manual publish. Nothing in this repository can do either, and nothing in it holds a credential.
-
-25. Convert the release workflow to the token route (§8.3). **Done, as a stopgap.** Trusted
-    publishing cannot be configured from this account: `npm trust` returned 403, and so did
-    `npm profile get` — a plain read of one's own account — which proved the available credential is
-    package-scoped and cannot perform account operations at all. The account-level fix needs a second
-    factor that is currently unavailable, and npm's 2FA is not something to work around.
-
-    So `release.yml` authenticates with an `NPM_TOKEN` secret and passes `--provenance` explicitly,
-    which that route requires and the other forbade. `id-token: write` stays, for provenance rather
-    than authentication.
-
-    **The trigger for reverting:** the second factor becomes available again. Then it is three edits —
-    `id-token: write` as the only credential, drop `registry-url` / `--provenance` / the `env:` block,
-    raise Node to 24 — plus configuring the trusted publisher, which the package now existing makes
-    possible. The workflow header carries the same list.
-
-    Recorded because it is a real reduction in safety and not a neutral swap: a secret exists now
-    where none did, anyone who can read repository secrets can publish, and npm already warns that
-    tokens bypassing 2FA are being restricted for "account changes and direct publishing" — the first
-    is blocked today and the second is on the same path.
-
-    `0.1.0` itself was published by hand, which was always going to be true: a trusted publisher
-    cannot be configured before the package exists.
+24. Add the release workflow (§8.3). **Done** — `.github/workflows/release.yml` validates the
+    release gates and verifies that the tag matches the staged package version.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
