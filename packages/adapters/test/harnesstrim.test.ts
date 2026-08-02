@@ -22,6 +22,7 @@ import type {
 } from '@token-harness/core';
 
 import {
+  claudeAdapter,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   synthesizeEventId,
@@ -542,6 +543,25 @@ describe('planning', () => {
     // PLAN §11: "Under `safe`, Token Harness installs no HarnessTrim integration on any MVP
     // harness." The resolver already enforces it by not making the provider assignable.
     assert.deepEqual(result.actions, []);
+  });
+
+  it('delegates the reviewed 0.0.7 Claude skills-only invocation', async () => {
+    const result = await harnesstrimAdapter.plan(context({ version: '0.0.7' }), {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
+    const action = result.actions[0];
+    assert.ok(action !== undefined && action.kind === 'delegated-provider-install');
+    assert.deepEqual(action.args, [
+      'install',
+      'claude',
+      PROJECT,
+      '--apply',
+      '--no-hook',
+      '--no-instructions',
+    ]);
+    assert.deepEqual(action.affectedPaths, [`${PROJECT}\\.claude`, `${PROJECT}\\.claude\\skills`]);
   });
 
   it('plans nothing to remove, because it owns nothing', async () => {

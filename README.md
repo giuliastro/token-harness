@@ -91,17 +91,15 @@ There are three separate layers. Installing one does not automatically provide t
 | --- | --- | --- |
 | Coding agent (harness) | Claude Code, Codex, OpenCode | You, using the agent's official installer |
 | Token Harness | `token-harness` | You, from npm or this repository |
-| Optimization provider | RTK, HarnessTrim | RTK can be installed by Token Harness; HarnessTrim must currently be installed separately |
+| Optimization provider | RTK, HarnessTrim | RTK can be installed by Token Harness; HarnessTrim Claude skills can be installed safely when HarnessTrim 0.0.7 is already available |
 
 Token Harness does not install Claude Code, Codex, or OpenCode. Install and run at least one of
 them first so that `token-harness doctor` can detect it.
 
-### Support in version 0.1.0
-
-| Provider | Claude Code | Codex | OpenCode | Installed by Token Harness? |
+| Provider | Claude Code | Codex | OpenCode | Installed by Token Harness |
 | --- | --- | --- | --- | --- |
 | RTK | Configure, verify, and measure | Not managed | Not managed | **Yes**, for the supported Claude Code path |
-| HarnessTrim | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **No** |
+| HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **Yes**, when `harnesstrim 0.0.7` is already installed |
 
 "Not managed" does not mean the upstream tool cannot support that agent. It means this release
 does not claim ownership of that integration and will not modify it.
@@ -207,16 +205,16 @@ token-harness doctor --provider rtk
 
 ### 3. Install or adopt HarnessTrim
 
-Token Harness 0.1.0 **never installs HarnessTrim**. Install it with HarnessTrim's own CLI, first
-as a dry run and then with its explicit apply flag. For example:
+With HarnessTrim `0.0.7` already on `PATH`, `token-harness plan --harness claude` can install its
+Claude skills without creating the competing Bash hook or reduce-pipe instruction. The planned
+upstream invocation is:
 
 ```sh
-npx harnesstrim doctor
-npx harnesstrim install opencode
-npx harnesstrim install opencode --apply
+harnesstrim install claude <project> --apply --no-hook --no-instructions
 ```
 
-Replace `opencode` with `codex` or `claude` when appropriate. Consult the
+Codex and OpenCode remain adoption-only. Install those integrations with HarnessTrim's own CLI,
+first as a dry run and then with its explicit apply flag. Consult the
 [HarnessTrim README](https://github.com/giuliastro/HarnessTrim#quick-start) because its adapter
 contents, modes, and telemetry differ by coding agent.
 

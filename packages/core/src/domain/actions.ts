@@ -77,6 +77,8 @@ export interface DelegatedProviderInstallAction extends PlannedActionBase {
   containmentBoundary: string[];
   /** Rollback is restore-from-snapshot, never an inverse command. */
   rollbackStrategy: 'restore-snapshot';
+  /** Upper bound on bytes captured from the containment boundary before execution. */
+  snapshotSizeCapBytes: number;
   /** True when the provider ships an uninstall command Token Harness may call. */
   upstreamUninstallAvailable: boolean;
 }

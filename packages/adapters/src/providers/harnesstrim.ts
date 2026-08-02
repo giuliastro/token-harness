@@ -1,46 +1,10 @@
 /**
- * HarnessTrim — PLAN §11, RFC 0003 §Resolution at 0.1.0, RFC 0005 §Importers §HarnessTrim.
+ * HarnessTrim — PLAN §11 and RFC 0005 §Importers §HarnessTrim.
  *
- * The second provider, and a deliberately narrower one than RTK. PLAN §11 states the division:
- *
- * | RTK | Managed: detected, installed, configured, verified, measured |
- * | HarnessTrim | Detected, adopted, reconciled against RTK's ownership, measured — **not installed** |
- *
- * Not installed is a conclusion, not an omission. RFC 0003 §Resolution at 0.1.0 checked each
- * installer at `0.0.5` and found no `safe`-compatible target state is producible: the Claude and
- * Codex adapters match Bash and nothing else, the OpenCode plugin reduces every tool result and
- * never uses `input.tool` as a filter, and no flag narrows any of them. So HarnessTrim's reducing
- * surface is always exactly RTK's assigned scope or a strict superset of it. An installer that
- * cannot be asked for the target state cannot be delegated to for it.
- *
- * What is left is the part that carries the value for someone who already runs it, and this adapter
- * does all of it: find the installation, say which harnesses it is wired to, report the contest with
- * RTK rather than hiding it, adopt without reinstalling, and import its metrics.
- *
- * ## Two things this machine taught the adapter
- *
- * **A version command may or may not exist, so it is asked rather than assumed.** When this adapter
- * was first written the installed CLI rejected `--version`, `-v` and `version` alike, and the
- * adapter hardcoded that conclusion: it probed `--help` and reported `version: null` with evidence
- * saying no version command existed. Upstream then shipped one — `harnesstrim --version` now prints
- * `0.0.5` — and a fact frozen at the time of writing became a false statement about a tool that
- * could answer.
- *
- * So `probeExecutable` asks `--version` first and falls back to `--help` only to establish that the
- * binary runs at all. That is the shape a detector should have had from the start: a claim
- * re-derived on every run rather than one baked in.
- *
- * When no version can be read, `version` stays null and so does the verdict. `classifyVersion`
- * cannot run, and that is correct — an unreadable version is not an out-of-range one, and treating
- * it as one would exit 3 on every machine running an older build. What is never done is reading the
- * `package.json` reachable from the pnpm shim: it says `harnesstrim-monorepo` `0.0.1`, the
- * monorepo's version and not the CLI's, and a precise-looking wrong answer is worse than none.
- *
- * **Telemetry is opt-in and usually absent.** `--metrics <path>` is what records a `TrimEvent`, and
- * on this machine the Codex hook is configured with it and no metrics file has ever appeared —
- * consistent with the Phase 2.5 finding that the Codex hook does not fire. So the importer's
- * ordinary answer is `unavailable`, and RFC 0005 §Importer degradation policy makes that "a
- * supported steady state, not a warning".
+ * HarnessTrim 0.0.7 can install Claude skills without either the Bash hook or the
+ * reduce-pipe instruction. That is a non-intercepting integration, so it composes with RTK:
+ * the resolver retains RTK as sole owner of `shell.output.reduce`, while this adapter delegates
+ * only `harnesstrim install claude --apply --no-hook --no-instructions`.
  */
 
 import {
@@ -59,12 +23,12 @@ import {
   type MetricsStore,
   type OptimizationEvent,
   type ProviderDetection,
+  type DelegatedProviderInstallAction,
   type ProviderManifest,
   type ProviderPlan,
   type ProviderState,
   type VerificationCheck,
 } from '@token-harness/core';
-
 import type {
   MetricsImport,
   PassiveReceipt,
@@ -172,15 +136,19 @@ const MANIFEST: ProviderManifest = {
     mode: 'legacy',
     locations: ['.harnesstrim/metrics.jsonl', '~/.hermes/harnesstrim-metrics.jsonl'],
   },
-  delegatedInstallReview: null,
+  delegatedInstallReview: {
+    upstreamVersion: '0.0.7',
+    reviewedWriteSet: ['.claude', '.claude/skills'],
+    containmentBoundary: ['.claude'],
+    upstreamUninstallAvailable: true,
+  },
 };
 
 /**
- * The upstream release this adapter's mapping was written against, per RFC 0005 §Importers
- * §HarnessTrim — and now also the range a detected version is judged against.
+ * The reviewed release that supports the safe Claude skills-only invocation.
  */
-const TESTED_UPSTREAM = '0.0.5';
-const TESTED_VERSIONS = { minimum: TESTED_UPSTREAM, maximum: TESTED_UPSTREAM };
+const TESTED_UPSTREAM = '0.0.7';
+const TESTED_VERSIONS = { minimum: '0.0.5', maximum: TESTED_UPSTREAM };
 
 function identifiesCommand(command: string): boolean {
   return HOOK_COMMAND_PATTERN.test(command);
@@ -777,24 +745,59 @@ async function collectMetrics(
 }
 
 /**
- * The plan, which under `safe` is always empty.
- *
- * PLAN §11: "Under `safe`, Token Harness installs no HarnessTrim integration on any MVP harness."
- * The resolver already enforces it — the provider is not `assignable`, so it owns no scope and is
- * never asked for a `configured` plan. This method exists for the two cases that remain: a
- * `custom` profile that assigned it a scope, and removal.
- *
- * Removal plans nothing either, and for a structural reason rather than a missing feature: Token
- * Harness never wrote a HarnessTrim integration, so it owns none to remove. `uninstall` already
- * refuses to delete an entry no journal records as ours; returning no action says the same thing
- * one step earlier.
+ * Safe HarnessTrim onboarding is deliberately outside payload ownership: version 0.0.7 can copy
+ * Claude skills while skipping both output-reduction paths. The reviewed write set is confined to
+ * the project's `.claude` directory and the executor restores its snapshot on failure.
  */
-async function plan(
-  _context: ProviderContext,
-  request: ProviderPlanRequest,
-): Promise<ProviderPlan> {
-  await Promise.resolve();
-  return { providerId: HARNESSTRIM, desiredState: request.desiredState, actions: [] };
+async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
+  if (request.desiredState === 'absent') {
+    return { providerId: HARNESSTRIM, desiredState: 'absent', actions: [] };
+  }
+
+  const claude = request.harnesses.find((harness) => harness.id === CLAUDE);
+  const installed = await probeExecutable(context);
+  if (installed.version !== TESTED_UPSTREAM) {
+    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
+  }
+
+  if (claude === undefined) {
+    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
+  }
+
+  const review = MANIFEST.delegatedInstallReview;
+  if (review === null) throw new Error('HarnessTrim delegated-install review is missing');
+
+  const claudeDirectory = context.fs.join(context.projectRoot, '.claude');
+  const skillsDirectory = context.fs.join(claudeDirectory, 'skills');
+  const action: DelegatedProviderInstallAction = {
+    kind: 'delegated-provider-install',
+    id: `harnesstrim-claude-skills-${digestText(context.projectRoot).slice(7, 15)}`,
+    riskClass: 'delegated',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [claudeDirectory, skillsDirectory],
+    affectedProcesses: ['harnesstrim'],
+    preconditions: [
+      'harnesstrim 0.0.7 is installed and on PATH',
+      'the reviewed installer writes only within the declared Claude configuration boundary',
+    ],
+    postconditions: [
+      'HarnessTrim Claude skills are present',
+      'no HarnessTrim hook or reduce-pipe instruction was added',
+    ],
+    rollbackData: 'directory-snapshot',
+    explanation: 'Install HarnessTrim Claude skills without a hook or reduce-pipe instruction',
+    executable: 'harnesstrim',
+    args: ['install', 'claude', context.projectRoot, '--apply', '--no-hook', '--no-instructions'],
+    containmentBoundary: review.containmentBoundary.map((path) =>
+      context.fs.join(context.projectRoot, path),
+    ),
+    rollbackStrategy: 'restore-snapshot',
+    snapshotSizeCapBytes: 1_048_576,
+    upstreamUninstallAvailable: review.upstreamUninstallAvailable,
+  };
+
+  return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [action] };
 }
 
 export const harnesstrimAdapter: ProviderAdapter = {
@@ -804,4 +807,5 @@ export const harnesstrimAdapter: ProviderAdapter = {
   verify,
   collectMetrics,
   plan,
+  plansWithoutOwnership: true,
 };

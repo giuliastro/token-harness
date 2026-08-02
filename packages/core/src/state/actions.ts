@@ -16,22 +16,19 @@
  * planning, an owned block the user edited, a marker fence somebody removed. The
  * outcome is `precondition-drift`, which the CLI reports as exit 5 — never a write.
  *
- * Six of the thirteen action families are implemented: the four that touch files without a
- * parser (PLAN §15 issue 6), `merge-json` (issue 7), and `package-manager-install`. The rest
- * report `action-not-implemented` rather than silently succeeding, and a test asserts that for
- * every one of them.
- *
- * `package-manager-install` is the one that does not touch a file, and it is the exception in
- * every way that matters: it takes no snapshot, it owns nothing afterwards, and a rollback cannot
- * undo it. `install.ts` holds the rules RFC 0004 imposes on it.
+ * Seven action families are implemented: the four that touch files without a parser (PLAN §15
+ * issue 6), `merge-json` (issue 7), `package-manager-install`, and the containment-bounded
+ * `delegated-provider-install`. The rest report `action-not-implemented` rather than silently
+ * succeeding.
  */
 
 import { runPackageManagerInstall } from './install.js';
-import type { ProcessRunner } from '../domain/process.js';
+import { processSucceeded, type ProcessRunner } from '../domain/process.js';
 import type {
   CreateDirectoryAction,
-  PackageManagerInstallAction,
+  DelegatedProviderInstallAction,
   MergeJsonAction,
+  PackageManagerInstallAction,
   PatchMarkerBlockAction,
   PlannedAction,
   PlannedActionKind,
@@ -638,6 +635,125 @@ async function applyRemoveOwnedChange(
   return outcome(action, 'applied', { snapshots: [snapshot] });
 }
 
+interface TreeEntry {
+  path: string;
+  kind: 'file' | 'directory' | 'other';
+  digest: string | null;
+  byteLength: number;
+}
+
+async function scanTree(
+  fs: FileSystemPort,
+  path: string,
+  entries: TreeEntry[] = [],
+): Promise<TreeEntry[]> {
+  const stat = await fs.stat(path);
+  if (stat === null) return entries;
+  const digest = stat.kind === 'file' ? digestBytes(await fs.readFile(path)) : null;
+  entries.push({ path, kind: stat.kind, digest, byteLength: stat.byteLength });
+  if (stat.kind === 'directory') {
+    for (const child of await fs.readDirectory(path)) {
+      await scanTree(fs, fs.join(path, child), entries);
+    }
+  }
+  return entries;
+}
+
+function equalTreeEntry(left: TreeEntry, right: TreeEntry | undefined): boolean {
+  return right !== undefined && left.kind === right.kind && left.digest === right.digest;
+}
+
+async function applyDelegatedProviderInstall(
+  action: DelegatedProviderInstallAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  if (context.runner === null || context.runner === undefined || context.cwd === undefined) {
+    return refusal(
+      action,
+      'process-runner-unavailable',
+      action.executable,
+      'A delegated provider install requires a process runner and working directory',
+      'Run this command through the Token Harness CLI',
+    );
+  }
+
+  const before = new Map<string, TreeEntry>();
+  const expectedDirectory = action.affectedPaths.at(-1);
+  if (expectedDirectory !== undefined && (await context.fs.stat(expectedDirectory)) !== null) {
+    return outcome(action, 'already-satisfied');
+  }
+
+  for (const boundary of action.containmentBoundary) {
+    for (const entry of await scanTree(context.fs, boundary)) before.set(entry.path, entry);
+  }
+  const bytes = [...before.values()].reduce((total, entry) => total + entry.byteLength, 0);
+  if (bytes > action.snapshotSizeCapBytes) {
+    return refusal(
+      action,
+      'delegated-install-snapshot-too-large',
+      action.containmentBoundary[0] ?? action.executable,
+      `The delegated install boundary is ${String(bytes)} bytes, above its ${String(action.snapshotSizeCapBytes)} byte snapshot cap`,
+      'Narrow the provider containment boundary before applying this plan',
+    );
+  }
+
+  const snapshots = [];
+  for (const boundary of action.containmentBoundary) {
+    for (const entry of await scanTree(context.fs, boundary)) {
+      snapshots.push(await context.snapshots.capture(entry.path));
+    }
+    if (!before.has(boundary)) snapshots.push(await context.snapshots.capture(boundary));
+  }
+  for (const path of action.affectedPaths) {
+    if (!before.has(path)) snapshots.push(await context.snapshots.capture(path));
+  }
+
+  const result = await context.runner.run({
+    executable: action.executable,
+    args: action.args,
+    cwd: context.cwd,
+    timeoutMs: 30_000,
+  });
+  if (!processSucceeded(result)) {
+    return outcome(action, 'failed', {
+      snapshots,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'delegated-install-failed',
+          message: `${action.executable} did not complete its delegated install successfully`,
+          remediation: 'Review the provider output and rerun the plan after correcting the problem',
+        }),
+      ],
+    });
+  }
+
+  const after = new Map<string, TreeEntry>();
+  for (const boundary of action.containmentBoundary) {
+    for (const entry of await scanTree(context.fs, boundary)) after.set(entry.path, entry);
+  }
+  const undeclared = [...after.values()].find(
+    (entry) =>
+      !action.affectedPaths.some((path) => context.fs.isInside(entry.path, path)) &&
+      !equalTreeEntry(entry, before.get(entry.path)),
+  );
+  if (undeclared !== undefined) {
+    return outcome(action, 'failed', {
+      snapshots,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'delegated-install-undeclared-write',
+          message: `The delegated installer changed an undeclared path inside its containment boundary: ${undeclared.path}`,
+          path: undeclared.path,
+          remediation: 'Do not apply this provider until its reviewed write set is updated',
+        }),
+      ],
+    });
+  }
+
+  return outcome(action, 'applied', { snapshots });
+}
 /**
  * The action families PLAN §15 issue 6 does not cover.
  *
@@ -674,9 +790,10 @@ export async function applyAction(
       return applyMergeJson(action, context);
     case 'package-manager-install':
       return applyPackageManagerInstall(action, context);
+    case 'delegated-provider-install':
+      return applyDelegatedProviderInstall(action, context);
     case 'download-artifact':
     case 'run-installer-command':
-    case 'delegated-provider-install':
     case 'merge-toml':
     case 'merge-yaml':
     case 'register-mcp-server':
@@ -721,6 +838,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'merge-json',
   'remove-owned-change',
   'package-manager-install',
+  'delegated-provider-install',
 ];
 
 export function isExecutableActionKind(kind: PlannedActionKind): boolean {

@@ -28,10 +28,11 @@ import {
   type ActionContext,
   type ActionOutcome,
   type CreateDirectoryAction,
+  type DelegatedProviderInstallAction,
   type JsonValue,
   type MergeJsonAction,
-  type PatchMarkerBlockAction,
   type PackageManagerInstallAction,
+  type PatchMarkerBlockAction,
   type PlannedAction,
   type PlannedActionBase,
   type PlannedActionKind,
@@ -1060,11 +1061,61 @@ describe('installing a package', () => {
   });
 });
 
+describe('delegated-provider-install', () => {
+  it('snapshots and restores a reviewed provider write set', async () => {
+    const h = harness();
+    const boundary = join(h.project, '.claude');
+    const skills = join(boundary, 'skills');
+    const runner: ProcessRunner = {
+      async run() {
+        mkdirSync(skills, { recursive: true });
+        writeFileSync(join(skills, 'SKILL.md'), 'skill\n');
+        return {
+          displayCommand: 'harnesstrim install claude',
+          interpreter: 'direct',
+          executablePath: '/fake/harnesstrim',
+          exitCode: 0,
+          signal: null,
+          stdout: '',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+    const action: DelegatedProviderInstallAction = {
+      ...BASE,
+      id: 'delegate-1',
+      kind: 'delegated-provider-install',
+      riskClass: 'delegated',
+      rollbackData: 'directory-snapshot',
+      affectedPaths: [boundary, skills],
+      affectedProcesses: ['harnesstrim'],
+      executable: 'harnesstrim',
+      args: ['install', 'claude', '--apply'],
+      containmentBoundary: [boundary],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1024,
+      upstreamUninstallAvailable: true,
+    };
+    const outcome = await applyAction(action, { ...h.context, runner, cwd: h.project });
+    assert.equal(outcome.status, 'applied');
+    assert.equal(readFileSync(join(skills, 'SKILL.md'), 'utf8'), 'skill\n');
+    const again = await applyAction(action, { ...h.context, runner, cwd: h.project });
+    assert.equal(again.status, 'already-satisfied');
+    await rollback(h, outcome);
+    assert.equal(statSync(boundary, { throwIfNoEntry: false }), undefined);
+    claim('delegated-provider-install', 'apply', 'idempotency', 'rollback');
+  });
+});
+
 describe('action families this build does not execute', () => {
   const unimplemented: readonly PlannedActionKind[] = [
     'download-artifact',
     'run-installer-command',
-    'delegated-provider-install',
     'merge-toml',
     'merge-yaml',
     'register-mcp-server',
@@ -1088,7 +1139,7 @@ describe('action families this build does not execute', () => {
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       assert.equal(isExecutableActionKind(kind), true, kind);
     }
-    assert.equal(EXECUTABLE_ACTION_KINDS.length, 6);
+    assert.equal(EXECUTABLE_ACTION_KINDS.length, 7);
   });
 });
 
@@ -1122,6 +1173,10 @@ describe('RFC 0004 test obligations', () => {
    */
   const inapplicable: Readonly<Partial<Record<PlannedActionKind, readonly Obligation[]>>> = {
     'package-manager-install': ['precondition-drift', 'user-modification', 'windows-path'],
+    // The reviewed boundary is snapshotted before invocation and restore-only afterwards. It does
+    // not own a provider-created artifact, so removal-style user-modification and a planned-input
+    // digest do not exist for this action family.
+    'delegated-provider-install': ['precondition-drift', 'user-modification', 'windows-path'],
   };
 
   for (const kind of EXECUTABLE_ACTION_KINDS) {
