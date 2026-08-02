@@ -177,17 +177,14 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
   });
 
   /**
-   * One `plan` call per provider that owns something.
-   *
-   * A provider with no resolved scope is not asked. Asking it anyway would invite a plan for a
-   * scope the resolver declined to give it, which is the one thing centralising ownership was
-   * meant to prevent.
+   * Providers normally plan only the payload scopes the resolver assigned. A provider may opt in
+   * to a separate, non-intercepting install; it must not use that path to claim an exclusive scope.
    */
   const actions: PlannedAction[] = [];
   if (providerContext !== null) {
     for (const adapter of providerAdapters) {
       const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
-      if (owned.length === 0) continue;
+      if (owned.length === 0 && adapter.plansWithoutOwnership !== true) continue;
       const providerPlan = await adapter.plan(providerContext, {
         ownership: owned,
         harnesses: present,

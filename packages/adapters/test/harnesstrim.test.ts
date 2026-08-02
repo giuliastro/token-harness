@@ -22,6 +22,7 @@ import type {
 } from '@token-harness/core';
 
 import {
+  claudeAdapter,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   synthesizeEventId,
@@ -32,6 +33,7 @@ const HOME = 'C:\\Users\\dev';
 const PROJECT = 'C:\\work\\demo';
 const METRICS = `${PROJECT}\\.harnesstrim\\metrics.jsonl`;
 const HERMES = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
+const CLAUDE_MD = `${PROJECT}\\CLAUDE.md`;
 const AGENTS = `${PROJECT}\\AGENTS.md`;
 
 const FACTS: PlatformFacts = {
@@ -533,26 +535,54 @@ describe('verification', () => {
 });
 
 describe('planning', () => {
-  it('plans nothing to install, because Token Harness never installs it', async () => {
+  it('plans nothing without Claude Code in scope', async () => {
     const result = await harnesstrimAdapter.plan(context(), {
       ownership: [],
       harnesses: [],
       desiredState: 'configured',
     });
-    // PLAN §11: "Under `safe`, Token Harness installs no HarnessTrim integration on any MVP
-    // harness." The resolver already enforces it by not making the provider assignable.
     assert.deepEqual(result.actions, []);
   });
 
-  it('plans nothing to remove, because it owns nothing', async () => {
-    const result = await harnesstrimAdapter.plan(context({ configs: [wired('codex')] }), {
+  it('delegates the reviewed 0.0.7 Claude skills-only invocation', async () => {
+    const result = await harnesstrimAdapter.plan(context({ version: '0.0.7' }), {
       ownership: [],
-      harnesses: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
+    const action = result.actions[0];
+    assert.ok(action !== undefined && action.kind === 'delegated-provider-install');
+    assert.deepEqual(action.args, [
+      'install',
+      'claude',
+      PROJECT,
+      '--apply',
+      '--no-hook',
+      '--no-instructions',
+    ]);
+    assert.equal(action.expectedArtifacts.length, 7);
+    assert.deepEqual(
+      action.expectedArtifacts.find((artifact) =>
+        artifact.path.endsWith('\\delta-response\\references\\examples.md'),
+      ),
+      {
+        path: `${PROJECT}\\.claude\\skills\\delta-response\\references\\examples.md`,
+        digest: 'sha256:c67a1f57e63550b396043c3072b7e1a3a0c1522376471f53d6829253339e64e7',
+      },
+    );
+    assert.deepEqual(action.protectedPaths, [`${PROJECT}\\.claude\\settings.json`, CLAUDE_MD]);
+  });
+
+  it('plans removal of the reviewed skills only when Claude Code is in scope', async () => {
+    const result = await harnesstrimAdapter.plan(context(), {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
       desiredState: 'absent',
     });
-    // Structural, not a missing feature: Token Harness never wrote this integration, so there is no
-    // owned entry to remove — and `uninstall` refuses to delete one no journal records as ours.
-    assert.deepEqual(result.actions, []);
-    assert.equal(result.desiredState, 'absent');
+    assert.equal(result.actions.length, 7);
+    assert.equal(
+      result.actions.every((action) => action.kind === 'remove-owned-change'),
+      true,
+    );
   });
 });

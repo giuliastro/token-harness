@@ -15,7 +15,15 @@
  */
 
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -56,6 +64,18 @@ before(() => {
 });
 
 after(() => {
+  // POSIX fixtures deliberately exercise restrictive modes. Repair every directory before Node
+  // descends into it for cleanup; making only the sandbox traversable is insufficient.
+  if (!NATIVE_WINDOWS) {
+    const restoreTraversal = (path: string): void => {
+      chmodSync(path, 0o700);
+      for (const name of readdirSync(path)) {
+        const child = join(path, name);
+        if (statSync(child).isDirectory()) restoreTraversal(child);
+      }
+    };
+    restoreTraversal(sandbox);
+  }
   rmSync(sandbox, { recursive: true, force: true });
 });
 

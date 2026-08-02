@@ -194,4 +194,10 @@ export interface ProviderAdapter {
    * user-managed installation is tolerated rather than overwritten.
    */
   plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan>;
+  /**
+   * Allows a provider to plan a non-intercepting integration even when the capability resolver
+   * assigned it no payload scope. The provider must keep that action isolated from every exclusive
+   * scope; HarnessTrim's Claude skills-only install is the initial case.
+   */
+  readonly plansWithoutOwnership?: boolean;
 }

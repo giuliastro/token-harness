@@ -437,10 +437,9 @@ Acceptance:
 
 ## 11. Phase 6 — HarnessTrim provider
 
-HarnessTrim `0.0.5` provides `doctor`, `install <harness>` with dry-run default and
-explicit `--apply`, `metrics` over JSONL, and adapters for five harnesses. The adapter is
-written against that release, with no upstream change as a gate.
-
+HarnessTrim `0.0.7` provides `doctor`, `install <harness>` with dry-run default and
+explicit `--apply`, `--no-hook` and `--no-instructions` for Claude, `metrics` over JSONL,
+and adapters for five harnesses.
 ### 6.1 What 0.0.5 can and cannot be assigned
 
 An earlier draft of this phase required "capability narrowing based on RTK ownership" and
@@ -471,26 +470,23 @@ A second draft then proposed target states the installer cannot produce either:
 
 An installer that cannot be asked for the target state cannot be delegated to for it.
 
-### What Token Harness manages at 0.1.0
+### What Token Harness manages at 0.1.1
 
 | Provider | Role |
 | --- | --- |
 | RTK | Managed: detected, installed, configured, verified, measured |
-| HarnessTrim | Detected, adopted, reconciled against RTK's ownership, measured — **not installed by Token Harness** |
+| HarnessTrim | Detected, adopted, reconciled against RTK's ownership, measured, and installed as Claude skills only |
 
-Under `safe`, Token Harness installs no HarnessTrim integration on any MVP harness, because
-no `safe`-compatible target state is producible with `0.0.5`. What it does instead is the
-part that carries the value for an existing HarnessTrim user:
+Under `safe`, Token Harness keeps RTK as the only owner of `shell.output.reduce`. For Claude,
+HarnessTrim `0.0.7` is installed only through its reviewed skills-only invocation:
 
-- detect the installation and which harnesses it is wired to;
-- report a contest with RTK on an exclusive scope, including the `AGENTS.md` snippet path;
-- adopt it without reinstalling, per RFC 0004 §Brownfield adoption;
-- import its metrics;
-- leave unmanaged harnesses untouched.
+```text
+harnesstrim install claude <project> --apply --no-hook --no-instructions
+```
 
-Under `custom`, a user may assign `shell.output.reduce` to HarnessTrim instead of RTK. That
-state *is* producible — it is the installer's own default — so the plan delegates
-`harnesstrim install <harness> --apply` unmodified and excludes RTK from that scope.
+The invocation creates no HarnessTrim hook and no reduce-pipe instruction, so it does not contest
+RTK's exclusive scope. Its containment boundary and write set are reviewed against `0.0.7`; rollback
+restores the pre-install snapshot rather than calling the upstream uninstaller.
 
 ### What 0.1.0 actually demonstrates
 
