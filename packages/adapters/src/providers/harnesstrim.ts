@@ -43,13 +43,21 @@ const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 
-const CLAUDE_SKILL_DIGESTS: Readonly<Record<string, string>> = {
-  'compact-handoff': 'sha256:0efbf35581c559359e755b204778b64a289dab4d20dadc1cba3d5b5c995b5f01',
-  'debug-log-slim': 'sha256:17f5ccc34d29d7aba083444e0e4d87fd3d49916ebcb4e6544caf8c89f13f0045',
-  'delegate-bulk': 'sha256:3753de2ad18271c24832e4cda63115d353620515d5d80f40e93bc07d2a7257d7',
-  'delta-response': 'sha256:b6a71f4bdcfcadde3b5242994baa017d0371fe11652dd763f55a2f6d3840cfa8',
-  'review-delta': 'sha256:4dfbf9d6ec08dff27b4759726536b43928370e288706fa01f5b498648e741388',
-  'scaffold-fast': 'sha256:1a18d52c4d335fbd3f74e2559bc20d6346193a40eef7b85149f51f44f697d182',
+const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
+  'compact-handoff/SKILL.md':
+    'sha256:0efbf35581c559359e755b204778b64a289dab4d20dadc1cba3d5b5c995b5f01',
+  'debug-log-slim/SKILL.md':
+    'sha256:17f5ccc34d29d7aba083444e0e4d87fd3d49916ebcb4e6544caf8c89f13f0045',
+  'delegate-bulk/SKILL.md':
+    'sha256:3753de2ad18271c24832e4cda63115d353620515d5d80f40e93bc07d2a7257d7',
+  'delta-response/SKILL.md':
+    'sha256:b6a71f4bdcfcadde3b5242994baa017d0371fe11652dd763f55a2f6d3840cfa8',
+  'delta-response/references/examples.md':
+    'sha256:c67a1f57e63550b396043c3072b7e1a3a0c1522376471f53d6829253339e64e7',
+  'review-delta/SKILL.md':
+    'sha256:4dfbf9d6ec08dff27b4759726536b43928370e288706fa01f5b498648e741388',
+  'scaffold-fast/SKILL.md':
+    'sha256:1a18d52c4d335fbd3f74e2559bc20d6346193a40eef7b85149f51f44f697d182',
 };
 const OPENCODE = harnessId('opencode');
 
@@ -149,7 +157,7 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReview: {
     upstreamVersion: '0.0.7',
     reviewedWriteSet: [
-      ...Object.keys(CLAUDE_SKILL_DIGESTS).map((name) => `.claude/skills/${name}/SKILL.md`),
+      ...Object.keys(CLAUDE_ARTIFACT_DIGESTS).map((path) => `.claude/skills/${path}`),
     ],
     containmentBoundary: ['.claude', 'CLAUDE.md'],
     upstreamUninstallAvailable: true,
@@ -764,8 +772,8 @@ async function collectMetrics(
 async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
   const claudeDirectory = context.fs.join(context.projectRoot, '.claude');
   const skillsDirectory = context.fs.join(claudeDirectory, 'skills');
-  const expectedArtifacts = Object.entries(CLAUDE_SKILL_DIGESTS).map(([name, digest]) => ({
-    path: context.fs.join(skillsDirectory, name, 'SKILL.md'),
+  const expectedArtifacts = Object.entries(CLAUDE_ARTIFACT_DIGESTS).map(([path, digest]) => ({
+    path: context.fs.join(skillsDirectory, ...path.split('/')),
     digest,
   }));
 

@@ -560,10 +560,15 @@ describe('planning', () => {
       '--no-hook',
       '--no-instructions',
     ]);
-    assert.equal(action.expectedArtifacts.length, 6);
-    assert.equal(
-      action.expectedArtifacts.every((artifact) => artifact.path.endsWith('\\SKILL.md')),
-      true,
+    assert.equal(action.expectedArtifacts.length, 7);
+    assert.deepEqual(
+      action.expectedArtifacts.find((artifact) =>
+        artifact.path.endsWith('\\delta-response\\references\\examples.md'),
+      ),
+      {
+        path: `${PROJECT}\\.claude\\skills\\delta-response\\references\\examples.md`,
+        digest: 'sha256:c67a1f57e63550b396043c3072b7e1a3a0c1522376471f53d6829253339e64e7',
+      },
     );
     assert.deepEqual(action.protectedPaths, [`${PROJECT}\\.claude\\settings.json`, CLAUDE_MD]);
   });
@@ -574,7 +579,7 @@ describe('planning', () => {
       harnesses: [claudeAdapter.manifest],
       desiredState: 'absent',
     });
-    assert.equal(result.actions.length, 6);
+    assert.equal(result.actions.length, 7);
     assert.equal(
       result.actions.every((action) => action.kind === 'remove-owned-change'),
       true,

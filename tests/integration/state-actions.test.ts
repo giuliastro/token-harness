@@ -1068,8 +1068,9 @@ describe('delegated-provider-install', () => {
     const skills = join(boundary, 'skills');
     const runner: ProcessRunner = {
       async run() {
-        mkdirSync(skills, { recursive: true });
-        writeFileSync(join(skills, 'SKILL.md'), 'skill\n');
+        mkdirSync(join(skills, 'delta-response', 'references'), { recursive: true });
+        writeFileSync(join(skills, 'delta-response', 'SKILL.md'), 'skill\n');
+        writeFileSync(join(skills, 'delta-response', 'references', 'examples.md'), 'examples\n');
         return {
           displayCommand: 'harnesstrim install claude',
           interpreter: 'direct',
@@ -1092,12 +1093,21 @@ describe('delegated-provider-install', () => {
       kind: 'delegated-provider-install',
       riskClass: 'delegated',
       rollbackData: 'directory-snapshot',
-      affectedPaths: [join(skills, 'SKILL.md')],
+      affectedPaths: [
+        join(skills, 'delta-response', 'SKILL.md'),
+        join(skills, 'delta-response', 'references', 'examples.md'),
+      ],
       affectedProcesses: ['harnesstrim'],
       executable: 'harnesstrim',
       args: ['install', 'claude', '--apply'],
       containmentBoundary: [boundary],
-      expectedArtifacts: [{ path: join(skills, 'SKILL.md'), digest: digestText('skill\n') }],
+      expectedArtifacts: [
+        { path: join(skills, 'delta-response', 'SKILL.md'), digest: digestText('skill\n') },
+        {
+          path: join(skills, 'delta-response', 'references', 'examples.md'),
+          digest: digestText('examples\n'),
+        },
+      ],
       protectedPaths: [],
       rollbackStrategy: 'restore-snapshot',
       snapshotSizeCapBytes: 1024,
@@ -1105,7 +1115,11 @@ describe('delegated-provider-install', () => {
     };
     const outcome = await applyAction(action, { ...h.context, runner, cwd: h.project });
     assert.equal(outcome.status, 'applied');
-    assert.equal(readFileSync(join(skills, 'SKILL.md'), 'utf8'), 'skill\n');
+    assert.equal(readFileSync(join(skills, 'delta-response', 'SKILL.md'), 'utf8'), 'skill\n');
+    assert.equal(
+      readFileSync(join(skills, 'delta-response', 'references', 'examples.md'), 'utf8'),
+      'examples\n',
+    );
     const again = await applyAction(action, { ...h.context, runner, cwd: h.project });
     assert.equal(again.status, 'already-satisfied');
     await rollback(h, outcome);
