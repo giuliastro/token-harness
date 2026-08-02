@@ -659,8 +659,13 @@ async function scanTree(
   return entries;
 }
 
-function equalTreeEntry(left: TreeEntry, right: TreeEntry | undefined): boolean {
-  return right !== undefined && left.kind === right.kind && left.digest === right.digest;
+function equalTreeEntry(left: TreeEntry | undefined, right: TreeEntry | undefined): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.kind === right.kind &&
+    left.digest === right.digest
+  );
 }
 
 async function applyDelegatedProviderInstall(
@@ -678,14 +683,19 @@ async function applyDelegatedProviderInstall(
   }
 
   const before = new Map<string, TreeEntry>();
-  const expectedDirectory = action.affectedPaths.at(-1);
-  if (expectedDirectory !== undefined && (await context.fs.stat(expectedDirectory)) !== null) {
-    return outcome(action, 'already-satisfied');
-  }
-
   for (const boundary of action.containmentBoundary) {
     for (const entry of await scanTree(context.fs, boundary)) before.set(entry.path, entry);
   }
+  if (
+    action.expectedArtifacts.every(
+      (artifact) =>
+        before.get(artifact.path)?.kind === 'file' &&
+        before.get(artifact.path)?.digest === artifact.digest,
+    )
+  ) {
+    return outcome(action, 'already-satisfied');
+  }
+
   const bytes = [...before.values()].reduce((total, entry) => total + entry.byteLength, 0);
   if (bytes > action.snapshotSizeCapBytes) {
     return refusal(
@@ -698,14 +708,18 @@ async function applyDelegatedProviderInstall(
   }
 
   const snapshots = [];
+  const capturedPaths = new Set<string>();
   for (const boundary of action.containmentBoundary) {
-    for (const entry of await scanTree(context.fs, boundary)) {
-      snapshots.push(await context.snapshots.capture(entry.path));
+    const entries = await scanTree(context.fs, boundary);
+    if (entries.length === 0) {
+      snapshots.push(await context.snapshots.capture(boundary));
+      capturedPaths.add(boundary);
+      continue;
     }
-    if (!before.has(boundary)) snapshots.push(await context.snapshots.capture(boundary));
-  }
-  for (const path of action.affectedPaths) {
-    if (!before.has(path)) snapshots.push(await context.snapshots.capture(path));
+    for (const entry of entries) {
+      snapshots.push(await context.snapshots.capture(entry.path));
+      capturedPaths.add(entry.path);
+    }
   }
 
   const result = await context.runner.run({
@@ -732,11 +746,44 @@ async function applyDelegatedProviderInstall(
   for (const boundary of action.containmentBoundary) {
     for (const entry of await scanTree(context.fs, boundary)) after.set(entry.path, entry);
   }
-  const undeclared = [...after.values()].find(
-    (entry) =>
-      !action.affectedPaths.some((path) => context.fs.isInside(entry.path, path)) &&
-      !equalTreeEntry(entry, before.get(entry.path)),
+  for (const entry of after.values()) {
+    if (!before.has(entry.path) && !capturedPaths.has(entry.path)) {
+      snapshots.push(context.snapshots.captureAbsent(entry.path));
+      capturedPaths.add(entry.path);
+    }
+  }
+
+  const protectedPath = action.protectedPaths.find(
+    (path) => !equalTreeEntry(before.get(path), after.get(path)),
   );
+  if (protectedPath !== undefined) {
+    return outcome(action, 'failed', {
+      snapshots,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'delegated-install-protected-path-changed',
+          message: `The delegated installer changed the protected path ${protectedPath}`,
+          path: protectedPath,
+          remediation: 'Do not apply this provider until its reviewed write set is updated',
+        }),
+      ],
+    });
+  }
+
+  const changed = new Set([...before.keys(), ...after.keys()]);
+  const undeclared = [...changed]
+    .map((path) => after.get(path) ?? before.get(path))
+    .find(
+      (entry) =>
+        entry !== undefined &&
+        !equalTreeEntry(before.get(entry.path), after.get(entry.path)) &&
+        !action.expectedArtifacts.some(
+          (artifact) =>
+            artifact.path === entry.path ||
+            (entry.kind === 'directory' && context.fs.isInside(artifact.path, entry.path)),
+        ),
+    );
   if (undeclared !== undefined) {
     return outcome(action, 'failed', {
       snapshots,
@@ -752,7 +799,36 @@ async function applyDelegatedProviderInstall(
     });
   }
 
-  return outcome(action, 'applied', { snapshots });
+  const missing = action.expectedArtifacts.find(
+    (artifact) =>
+      after.get(artifact.path)?.kind !== 'file' ||
+      after.get(artifact.path)?.digest !== artifact.digest,
+  );
+  if (missing !== undefined) {
+    return outcome(action, 'failed', {
+      snapshots,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'delegated-install-artifact-mismatch',
+          message: `The delegated installer did not produce the reviewed artifact ${missing.path}`,
+          path: missing.path,
+          remediation: 'Do not apply this provider until its reviewed artifact digests are updated',
+        }),
+      ],
+    });
+  }
+
+  const ownership: OwnedArtifact[] = [];
+  for (const artifact of action.expectedArtifacts) {
+    ownership.push({
+      kind: 'owned-file',
+      path: artifact.path,
+      digest: artifact.digest,
+      mode: (await context.fs.stat(artifact.path))?.mode ?? null,
+    });
+  }
+  return outcome(action, 'applied', { snapshots, ownership });
 }
 /**
  * The action families PLAN §15 issue 6 does not cover.

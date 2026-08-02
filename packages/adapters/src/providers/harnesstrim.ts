@@ -27,6 +27,7 @@ import {
   type ProviderManifest,
   type ProviderPlan,
   type ProviderState,
+  type RemoveOwnedChangeAction,
   type VerificationCheck,
 } from '@token-harness/core';
 import type {
@@ -41,6 +42,15 @@ import type {
 const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
+
+const CLAUDE_SKILL_DIGESTS: Readonly<Record<string, string>> = {
+  'compact-handoff': 'sha256:0efbf35581c559359e755b204778b64a289dab4d20dadc1cba3d5b5c995b5f01',
+  'debug-log-slim': 'sha256:17f5ccc34d29d7aba083444e0e4d87fd3d49916ebcb4e6544caf8c89f13f0045',
+  'delegate-bulk': 'sha256:3753de2ad18271c24832e4cda63115d353620515d5d80f40e93bc07d2a7257d7',
+  'delta-response': 'sha256:b6a71f4bdcfcadde3b5242994baa017d0371fe11652dd763f55a2f6d3840cfa8',
+  'review-delta': 'sha256:4dfbf9d6ec08dff27b4759726536b43928370e288706fa01f5b498648e741388',
+  'scaffold-fast': 'sha256:1a18d52c4d335fbd3f74e2559bc20d6346193a40eef7b85149f51f44f697d182',
+};
 const OPENCODE = harnessId('opencode');
 
 /** Recognises HarnessTrim's own invocation, including the Windows batch shim. */
@@ -138,8 +148,10 @@ const MANIFEST: ProviderManifest = {
   },
   delegatedInstallReview: {
     upstreamVersion: '0.0.7',
-    reviewedWriteSet: ['.claude', '.claude/skills'],
-    containmentBoundary: ['.claude'],
+    reviewedWriteSet: [
+      ...Object.keys(CLAUDE_SKILL_DIGESTS).map((name) => `.claude/skills/${name}/SKILL.md`),
+    ],
+    containmentBoundary: ['.claude', 'CLAUDE.md'],
     upstreamUninstallAvailable: true,
   },
 };
@@ -746,43 +758,62 @@ async function collectMetrics(
 
 /**
  * Safe HarnessTrim onboarding is deliberately outside payload ownership: version 0.0.7 can copy
- * Claude skills while skipping both output-reduction paths. The reviewed write set is confined to
- * the project's `.claude` directory and the executor restores its snapshot on failure.
+ * Claude skills while skipping both output-reduction paths. The reviewed files are exact, and the
+ * executor rejects any hook or instruction change before restoring its snapshot.
  */
 async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
-  if (request.desiredState === 'absent') {
-    return { providerId: HARNESSTRIM, desiredState: 'absent', actions: [] };
+  const claudeDirectory = context.fs.join(context.projectRoot, '.claude');
+  const skillsDirectory = context.fs.join(claudeDirectory, 'skills');
+  const expectedArtifacts = Object.entries(CLAUDE_SKILL_DIGESTS).map(([name, digest]) => ({
+    path: context.fs.join(skillsDirectory, name, 'SKILL.md'),
+    digest,
+  }));
+
+  if (!request.harnesses.some((harness) => harness.id === CLAUDE)) {
+    return { providerId: HARNESSTRIM, desiredState: request.desiredState, actions: [] };
   }
 
-  const claude = request.harnesses.find((harness) => harness.id === CLAUDE);
+  if (request.desiredState === 'absent') {
+    const actions: RemoveOwnedChangeAction[] = expectedArtifacts.map((artifact) => ({
+      kind: 'remove-owned-change',
+      id: `harnesstrim-claude-skill-remove-${digestText(artifact.path).slice(7, 15)}`,
+      riskClass: 'reversible',
+      requiresNetwork: false,
+      requiresElevation: false,
+      affectedPaths: [artifact.path],
+      affectedProcesses: [],
+      preconditions: ['the HarnessTrim skill still matches the reviewed 0.0.7 artifact'],
+      postconditions: ['the owned HarnessTrim skill is absent'],
+      rollbackData: 'file-snapshot',
+      explanation: `Remove the owned HarnessTrim Claude skill ${context.fs.basename(context.fs.dirname(artifact.path))}`,
+      path: artifact.path,
+      reverses: `harnesstrim-claude-skills-${digestText(context.projectRoot).slice(7, 15)}`,
+      target: { kind: 'owned-file', path: artifact.path, digest: artifact.digest, mode: null },
+    }));
+    return { providerId: HARNESSTRIM, desiredState: 'absent', actions };
+  }
+
   const installed = await probeExecutable(context);
   if (installed.version !== TESTED_UPSTREAM) {
     return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
   }
-
-  if (claude === undefined) {
-    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
-  }
-
   const review = MANIFEST.delegatedInstallReview;
   if (review === null) throw new Error('HarnessTrim delegated-install review is missing');
 
-  const claudeDirectory = context.fs.join(context.projectRoot, '.claude');
-  const skillsDirectory = context.fs.join(claudeDirectory, 'skills');
   const action: DelegatedProviderInstallAction = {
     kind: 'delegated-provider-install',
     id: `harnesstrim-claude-skills-${digestText(context.projectRoot).slice(7, 15)}`,
     riskClass: 'delegated',
     requiresNetwork: false,
     requiresElevation: false,
-    affectedPaths: [claudeDirectory, skillsDirectory],
+    affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
     affectedProcesses: ['harnesstrim'],
     preconditions: [
       'harnesstrim 0.0.7 is installed and on PATH',
-      'the reviewed installer writes only within the declared Claude configuration boundary',
+      'the reviewed installer writes only the declared Claude skill artifacts',
     ],
     postconditions: [
-      'HarnessTrim Claude skills are present',
+      'HarnessTrim Claude skills match the reviewed 0.0.7 artifacts',
       'no HarnessTrim hook or reduce-pipe instruction was added',
     ],
     rollbackData: 'directory-snapshot',
@@ -792,11 +823,15 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     containmentBoundary: review.containmentBoundary.map((path) =>
       context.fs.join(context.projectRoot, path),
     ),
+    expectedArtifacts,
+    protectedPaths: [
+      context.fs.join(claudeDirectory, 'settings.json'),
+      context.fs.join(context.projectRoot, 'CLAUDE.md'),
+    ],
     rollbackStrategy: 'restore-snapshot',
     snapshotSizeCapBytes: 1_048_576,
     upstreamUninstallAvailable: review.upstreamUninstallAvailable,
   };
-
   return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [action] };
 }
 

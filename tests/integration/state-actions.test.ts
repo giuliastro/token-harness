@@ -1092,11 +1092,13 @@ describe('delegated-provider-install', () => {
       kind: 'delegated-provider-install',
       riskClass: 'delegated',
       rollbackData: 'directory-snapshot',
-      affectedPaths: [boundary, skills],
+      affectedPaths: [join(skills, 'SKILL.md')],
       affectedProcesses: ['harnesstrim'],
       executable: 'harnesstrim',
       args: ['install', 'claude', '--apply'],
       containmentBoundary: [boundary],
+      expectedArtifacts: [{ path: join(skills, 'SKILL.md'), digest: digestText('skill\n') }],
+      protectedPaths: [],
       rollbackStrategy: 'restore-snapshot',
       snapshotSizeCapBytes: 1024,
       upstreamUninstallAvailable: true,
@@ -1109,6 +1111,61 @@ describe('delegated-provider-install', () => {
     await rollback(h, outcome);
     assert.equal(statSync(boundary, { throwIfNoEntry: false }), undefined);
     claim('delegated-provider-install', 'apply', 'idempotency', 'rollback');
+  });
+
+  it('rejects undeclared creations and deletions, then restores both directions', async () => {
+    const h = harness();
+    const boundary = join(h.project, '.claude');
+    const skills = join(boundary, 'skills');
+    const preserved = join(boundary, 'settings.json');
+    mkdirSync(boundary, { recursive: true });
+    writeFileSync(preserved, '{"theme":"dark"}\n');
+    const runner: ProcessRunner = {
+      async run() {
+        mkdirSync(skills, { recursive: true });
+        writeFileSync(join(skills, 'SKILL.md'), 'skill\n');
+        writeFileSync(join(boundary, 'unexpected.txt'), 'unexpected\n');
+        rmSync(preserved);
+        return {
+          displayCommand: 'harnesstrim install claude',
+          interpreter: 'direct',
+          executablePath: '/fake/harnesstrim',
+          exitCode: 0,
+          signal: null,
+          stdout: '',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+    const skill = join(skills, 'SKILL.md');
+    const action: DelegatedProviderInstallAction = {
+      ...BASE,
+      id: 'delegate-2',
+      kind: 'delegated-provider-install',
+      riskClass: 'delegated',
+      rollbackData: 'directory-snapshot',
+      affectedPaths: [skill],
+      affectedProcesses: ['harnesstrim'],
+      executable: 'harnesstrim',
+      args: ['install', 'claude', '--apply'],
+      containmentBoundary: [boundary],
+      expectedArtifacts: [{ path: skill, digest: digestText('skill\n') }],
+      protectedPaths: [preserved],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1024,
+      upstreamUninstallAvailable: true,
+    };
+    const outcome = await applyAction(action, { ...h.context, runner, cwd: h.project });
+    assert.equal(outcome.diagnostics[0]?.code, 'delegated-install-protected-path-changed');
+    await rollback(h, outcome);
+    assert.equal(readFileSync(preserved, 'utf8'), '{"theme":"dark"}\n');
+    assert.equal(statSync(join(boundary, 'unexpected.txt'), { throwIfNoEntry: false }), undefined);
+    assert.equal(statSync(skill, { throwIfNoEntry: false }), undefined);
   });
 });
 

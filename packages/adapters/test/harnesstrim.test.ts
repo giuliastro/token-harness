@@ -33,6 +33,7 @@ const HOME = 'C:\\Users\\dev';
 const PROJECT = 'C:\\work\\demo';
 const METRICS = `${PROJECT}\\.harnesstrim\\metrics.jsonl`;
 const HERMES = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
+const CLAUDE_MD = `${PROJECT}\\CLAUDE.md`;
 const AGENTS = `${PROJECT}\\AGENTS.md`;
 
 const FACTS: PlatformFacts = {
@@ -534,14 +535,12 @@ describe('verification', () => {
 });
 
 describe('planning', () => {
-  it('plans nothing to install, because Token Harness never installs it', async () => {
+  it('plans nothing without Claude Code in scope', async () => {
     const result = await harnesstrimAdapter.plan(context(), {
       ownership: [],
       harnesses: [],
       desiredState: 'configured',
     });
-    // PLAN §11: "Under `safe`, Token Harness installs no HarnessTrim integration on any MVP
-    // harness." The resolver already enforces it by not making the provider assignable.
     assert.deepEqual(result.actions, []);
   });
 
@@ -561,18 +560,24 @@ describe('planning', () => {
       '--no-hook',
       '--no-instructions',
     ]);
-    assert.deepEqual(action.affectedPaths, [`${PROJECT}\\.claude`, `${PROJECT}\\.claude\\skills`]);
+    assert.equal(action.expectedArtifacts.length, 6);
+    assert.equal(
+      action.expectedArtifacts.every((artifact) => artifact.path.endsWith('\\SKILL.md')),
+      true,
+    );
+    assert.deepEqual(action.protectedPaths, [`${PROJECT}\\.claude\\settings.json`, CLAUDE_MD]);
   });
 
-  it('plans nothing to remove, because it owns nothing', async () => {
-    const result = await harnesstrimAdapter.plan(context({ configs: [wired('codex')] }), {
+  it('plans removal of the reviewed skills only when Claude Code is in scope', async () => {
+    const result = await harnesstrimAdapter.plan(context(), {
       ownership: [],
-      harnesses: [],
+      harnesses: [claudeAdapter.manifest],
       desiredState: 'absent',
     });
-    // Structural, not a missing feature: Token Harness never wrote this integration, so there is no
-    // owned entry to remove — and `uninstall` refuses to delete one no journal records as ours.
-    assert.deepEqual(result.actions, []);
-    assert.equal(result.desiredState, 'absent');
+    assert.equal(result.actions.length, 6);
+    assert.equal(
+      result.actions.every((action) => action.kind === 'remove-owned-change'),
+      true,
+    );
   });
 });

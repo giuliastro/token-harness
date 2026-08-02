@@ -25,6 +25,8 @@ import type { FileSystemPort } from './filesystem.js';
 export interface SnapshotStore {
   /** Captures the current state of a path, including its absence. */
   capture(path: string): Promise<FileSnapshot>;
+  /** Records an absence established by a pre-invocation tree scan. */
+  captureAbsent(path: string): FileSnapshot;
   /** Puts the captured state back, byte-for-byte, including putting nothing back. */
   restore(snapshot: FileSnapshot): Promise<void>;
   /** Restores in reverse order, so a directory created last is removed first. */
@@ -102,27 +104,25 @@ export class TransactionSnapshotStore implements SnapshotStore {
     this.taken.push(snapshot);
     return snapshot;
   }
-
+  captureAbsent(path: string): FileSnapshot {
+    return this.remember({
+      schemaVersion: 1,
+      path,
+      existed: false,
+      wasDirectory: false,
+      digest: null,
+      mode: null,
+      byteLength: null,
+      contentRef: null,
+      capturedAt: this.input.now(),
+    });
+  }
   async capture(path: string): Promise<FileSnapshot> {
     const { fs } = this.input;
     const stat = await fs.stat(path);
     const capturedAt = this.input.now();
 
-    if (stat === null) {
-      // The absence *is* the snapshot. Without this record a rollback could restore
-      // content but never undo a creation.
-      return this.remember({
-        schemaVersion: 1,
-        path,
-        existed: false,
-        wasDirectory: false,
-        digest: null,
-        mode: null,
-        byteLength: null,
-        contentRef: null,
-        capturedAt,
-      });
-    }
+    if (stat === null) return this.captureAbsent(path);
 
     if (stat.kind === 'directory') {
       return this.remember({

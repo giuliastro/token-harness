@@ -75,6 +75,13 @@ export interface DelegatedProviderInstallAction extends PlannedActionBase {
    * detected and reversible.
    */
   containmentBoundary: string[];
+  /** Exact provider artifacts that prove this reviewed install completed. */
+  expectedArtifacts: Array<{
+    path: string;
+    digest: string;
+  }>;
+  /** Paths the installer must leave byte-for-byte unchanged. */
+  protectedPaths: string[];
   /** Rollback is restore-from-snapshot, never an inverse command. */
   rollbackStrategy: 'restore-snapshot';
   /** Upper bound on bytes captured from the containment boundary before execution. */
