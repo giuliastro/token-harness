@@ -898,7 +898,32 @@ A/B benchmark matrix.
 - documented security model and threat review;
 - end-to-end benchmark suite with published raw results.
 
-## 17. Open implementation decisions
+## 17. Phase 9 — Managed lifecycle and compatibility
+
+RFC 0008 extends the first-release control plane from adopting installed tools to installing and
+updating compatible tools through the same plan/apply/verify/rollback lifecycle.
+
+Implement in this order:
+
+1. a package-manager executor with exact-version plans, package-inventory snapshots, ownership
+   checks, rollback and human/JSON receipts;
+2. a comment- and trailing-comma-preserving JSONC editor;
+3. OpenCode managed-plugin rows, beginning with the observed schema and fixtures for clean,
+   brownfield, update, drift, rollback and uninstall states;
+4. reviewed installation/update channels for RTK and HarnessTrim; and
+5. matrix rows for additional harness and provider versions only after their fixtures pass.
+
+Acceptance:
+
+- `doctor` reports every detected version, while `plan` refuses managed mutation outside a reviewed
+  matrix row with the missing schema/fixture named;
+- a stored update plan pins the resolved package version and rejects inventory, version, config or
+  compatibility drift before mutation;
+- failures restore configuration and package inventory when Token Harness owns the package;
+- a managed OpenCode plugin preserves JSONC comments, trailing commas and user plugin entries; and
+- Windows, macOS, Linux and WSL fixtures cover every shipped matrix row.
+
+## 18. Open implementation decisions
 
 These are intentionally deferred to measured spikes or to a triggering need:
 
