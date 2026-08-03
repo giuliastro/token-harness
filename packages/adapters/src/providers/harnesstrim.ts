@@ -152,7 +152,11 @@ const MANIFEST: ProviderManifest = {
     // counts and native ids, which `0.0.5` does not.
     source: 'jsonl',
     mode: 'legacy',
-    locations: ['.harnesstrim/metrics.jsonl', '~/.hermes/harnesstrim-metrics.jsonl'],
+    // PLAN §15 item 25: Hermes has no adapter, tested range or tier, so the home-relative path that
+    // names it is not read. Item 30 readmits it together with the adapter and a matrix row; the
+    // registry assertion in `registries.test.ts` refuses a home-relative location that names a
+    // harness the registry does not know.
+    locations: ['.harnesstrim/metrics.jsonl'],
   },
   delegatedInstallReview: {
     upstreamVersion: '0.0.7',
@@ -284,10 +288,7 @@ async function probeExecutable(context: ProviderContext): Promise<{
 
 /** The metrics files this provider might have written, in RFC 0005's declared order. */
 export function metricsLocations(context: ProviderContext): string[] {
-  return [
-    context.fs.join(context.projectRoot, '.harnesstrim', 'metrics.jsonl'),
-    context.fs.join(context.paths.home, '.hermes', 'harnesstrim-metrics.jsonl'),
-  ];
+  return [context.fs.join(context.projectRoot, '.harnesstrim', 'metrics.jsonl')];
 }
 
 async function detect(context: ProviderContext): Promise<ProviderDetection> {

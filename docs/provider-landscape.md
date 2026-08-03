@@ -117,7 +117,7 @@ The build supports three — `claude`, `codex`, `opencode`. The rest are candida
 
 | Harness | Interception evidence | What is still missing | Note |
 | --- | --- | --- | --- |
-| [Hermes Agent](https://github.com/giuliastro/HarnessTrim) | HarnessTrim ships a plugin adapter, installed by `harnesstrim install hermes` | Config schema and paths, tool families, tested version range, verification tier, fixture suite | HarnessTrim's manifest already declares `~/.hermes/harnesstrim-metrics.jsonl` among its metrics locations, so this path is read today by a build with no Hermes adapter |
+| [Hermes Agent](https://github.com/giuliastro/HarnessTrim) | HarnessTrim ships a plugin adapter, installed by `harnesstrim install hermes` | Config schema and paths, tool families, tested version range, verification tier, fixture suite | PLAN §15 item 25 removed `~/.hermes/harnesstrim-metrics.jsonl` from HarnessTrim's metrics locations until Hermes is admitted; item 30 restores it together with the adapter, a registry entry and a matrix row |
 | [PI](https://pi.dev/) | HarnessTrim ships an extension, installed by `harnesstrim install pi`; `harness-remote` reaches it over ACP through `@automatalabs/pi-acp` | The same list, plus whether the extension point yields an observable receipt or stops at `config-only` | Reported as unmanaged context by the current build |
 | [Oh My Pi (OMP)](https://omp.sh/) | A local bridge in `harness-remote` | An interception point. A control bridge shows the harness can be *driven*, not that a payload can be intercepted | Detection-only until an interception point is observed on a real installation |
 

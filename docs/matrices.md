@@ -61,7 +61,7 @@ RFC 0005 §Importer degradation policy: an importer states the fidelity mode it 
 | Provider | Metrics source | Importer mode | Default locations |
 | --- | --- | --- | --- |
 | rtk | local-database | native | `<user data directory>/rtk/history.db` |
-| harnesstrim | jsonl | legacy | `.harnesstrim/metrics.jsonl`, `~/.hermes/harnesstrim-metrics.jsonl` |
+| harnesstrim | jsonl | legacy | `.harnesstrim/metrics.jsonl` |
 
 ## Known limitations
 
