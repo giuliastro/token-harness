@@ -96,6 +96,7 @@ Exit criteria:
 | 0006 | CLI contract | Accepted |
 | 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL is outgrown |
+| 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -659,7 +660,98 @@ Deferred to `0.2.0` and `1.0.0`:
 - document native package-manager options only after npm is stable;
 - publish compatibility, verification-tier, and known-limitations matrices.
 
-## 14. Phase 9 — Provider expansion
+## 14. Phase 9 — Managed lifecycle, harnesses, and providers
+
+Three workstreams and a boundary, in dependency order rather than in order of appeal. §9.1 is the
+mechanism; §9.2 and §9.3 are what the mechanism is for, and neither can install anything without
+it. §9.4 is the seam an ecosystem tool reads, and it mutates nothing.
+
+One rule spans all four, and it is the rule the `0.1.0` gates were written to protect: **detection
+is broad, mutation is narrow.** Adding a harness or a provider to the registry makes it *visible*.
+Making it manageable additionally requires a compatibility row backed by a fixture, and nothing
+below shortens that.
+
+### 9.1 Managed lifecycle and compatibility
+
+RFC 0009 extends the control plane from adopting installed tools to installing and updating
+compatible tools through the same plan/apply/verify/rollback lifecycle.
+
+Implement in this order, which the RFC states with the part already built named rather than
+re-requested:
+
+1. package-inventory capture, the package-ownership test, and a receipt that distinguishes a
+   reverted package from an unreverted one. The `package-manager-install` executor already exists
+   (§15 item 19); `rollbackData: 'package-inventory'` is the declared value nothing implements;
+2. JSONC mutation beyond `appendJsoncRootArray` — object-member and nested-array edits, at the same
+   standard of refusing an edit it cannot locate exactly;
+3. OpenCode managed-plugin rows, beginning with the observed schema and fixtures for clean,
+   brownfield, update, drift, rollback and uninstall states;
+4. reviewed installation/update channels for RTK and HarnessTrim; and
+5. matrix rows for additional harness and provider versions only after their fixtures pass.
+
+Acceptance:
+
+- `doctor` reports every detected version, while `plan` refuses managed mutation outside a reviewed
+  matrix row with the missing schema/fixture named;
+- a stored update plan pins the resolved package version and rejects inventory, version, config or
+  compatibility drift before mutation;
+- failures restore configuration, and restore package inventory where the channel can report one
+  and Token Harness owns the package — a channel with no inventory is reported as unreverted rather
+  than exempted;
+- a managed OpenCode plugin preserves JSONC comments, trailing commas and user plugin entries; and
+- Windows, macOS, Linux and WSL fixtures cover every shipped matrix row.
+
+### 9.2 Harness expansion
+
+The harness admission sequence, symmetric with the provider one below:
+
+```text
+research
+  -> interception points observed on a real installation
+  -> config schema, parser, and ownership scopes
+  -> manifest and tool families
+  -> verification tier per RFC 0007, config-only where nothing is observable
+  -> fixture suite: absent, partial, healthy, broken, user-modified, brownfield
+  -> matrix row
+  -> opt-in release
+```
+
+Order, by evidence available rather than by audience size:
+
+1. **Hermes Agent.** HarnessTrim ships a plugin adapter for it (`harnesstrim install hermes`), so
+   the interception point is already implemented upstream instead of needing to be discovered. And
+   there is a discrepancy to close either way: HarnessTrim's manifest already declares
+   `~/.hermes/harnesstrim-metrics.jsonl` among its metrics locations, so Token Harness reads a
+   Hermes path today while having no Hermes adapter, no tested version range, and no tier for it.
+   Importing a harness's telemetry without admitting the harness is the narrower kind of the same
+   dishonesty §8.2 exists to prevent.
+2. **Pi.** HarnessTrim ships an extension for it (`harnesstrim install pi`), on the same footing as
+   Hermes. Both are currently reported as unmanaged context per §11 §6.2 — that clause is what this
+   item replaces.
+3. **Oh My Pi (OMP).** A bridge exists in `harness-remote`, which is evidence of a *control*
+   surface, not of an interception point. It is admitted only once an interception point is observed
+   on a real installation, and stays detection-only until then.
+
+Then a researched wave, held to the same gates and none of it admitted from a feature list: Gemini
+CLI, GitHub Copilot CLI, Cursor CLI, Amp, Crush, and Cline. `docs/provider-landscape.md` §Harness
+landscape holds that queue, and separates what has been observed from what has only been named; an
+entry there is not a support claim.
+
+The first two items unlock something the provider queue cannot: **HarnessTrim becomes a managed
+provider rather than an adopted one.** RTK declares Claude Code alone, so on Hermes and Pi nothing
+contests `shell.output.reduce` — the exclusion recorded in §11 is a fact about Claude, Codex and
+OpenCode, not a property of the pair. The first managed HarnessTrim installation therefore happens
+on a harness where the arbitration is trivially satisfied and the lifecycle is the only thing under
+test, which is the right order to prove a lifecycle in.
+
+Acceptance for each added harness:
+
+- a declared verification tier, `config-only` where nothing is observable, and never implicit;
+- a matrix row and platform coverage per §9.1, or detection-only with the reason stated;
+- no provider claims it until that provider's own fixture on that harness passes;
+- `metrics` never imports from a harness path the registry does not know.
+
+### 9.3 Provider expansion
 
 Each provider uses the same admission sequence:
 
@@ -702,6 +794,40 @@ savings. RouteLLM and vLLM Semantic Router remain alternative owners of a model 
 Before either can be admitted, a new RFC must define the model-routing capability and a
 cost/quality attribution class: routing a request to a cheaper model is never folded into
 RFC 0005's exact or estimated token-saving totals.
+
+### 9.4 The read-only status seam, and its first consumer
+
+`harness-remote` controls coding-agent harnesses from a phone or a second machine, over the
+OpenCode HTTP server and ACP bridges for PI, OMP and Claude Code. Stated plainly, because the
+alternative is a category error that costs an adapter: **it is not a provider under RFC 0002.** It
+intercepts no payload, owns no interception point, transforms nothing, and produces no saving to
+attribute. It has no manifest to write.
+
+What it is, is the first thing outside this repository that wants to *read* what Token Harness
+knows — which harnesses are present, which pipeline is installed, whether verification passed, and
+what was saved — from a process that is not a terminal. That surface already exists in one form:
+RFC 0006's `--json` envelope on `doctor`, `status`, `verify` and `metrics`. Nothing is missing
+functionally. What is missing is a promise about it.
+
+So the deliverable here is an RFC, not an adapter, and it defines only:
+
+- which envelopes are a consumed contract rather than a rendering, and the compatibility policy for
+  their `schemaVersion` — today a consumer's only guarantee is that the tests would notice a change,
+  which is not a guarantee made to the consumer;
+- how a reader locates the state root without re-deriving RFC 0004's path rules;
+- what a reader is guaranteed never to find in it: RFC 0005 §Privacy already forbids prompts,
+  arguments and raw output entering the store, and a read surface is the place that promise becomes
+  externally checkable;
+- that the seam is read-only.
+
+That last point is a boundary, not a phase ordering. Accepting a mutation over any remote surface
+needs the repository-trust mechanism RFC 0004 §Repository trust assumes and this build does not
+have — the same absence that keeps version pins global at `0.1.0` (§15 item 21). Until it exists, a
+remote `apply` would let whatever is on the other end of a socket choose which tools run on the
+user's machine, and there is no version of that which is a smaller decision than it sounds.
+
+`squeezed` is out of scope and named here so the question is answered once: it is a Blender desktop
+assistant, and it shares an author with this repository and nothing else.
 
 ## 15. Issue/PR slicing
 
@@ -864,12 +990,20 @@ Suggested first implementation issues:
     ignore the output. It now accepts either code `doctor` may legitimately produce and rejects
     anything else, which is what the step is actually for.
 
-    Still open in §8.3 and deliberately not taken: publishing to npm, and the artifact signing that
-    goes with it. Both are outward-facing and irreversible, and they are the owner's call, not a
-    step to slip into a build.
+    Still open in §8.3 at the time this item was written, and deliberately not taken then: publishing
+    to npm, and the artifact signing that goes with it. Both are outward-facing and irreversible, and
+    they are the owner's call, not a step to slip into a build.
 
 24. Add the release workflow (§8.3). **Done** — `.github/workflows/release.yml` validates the
-    release gates and verifies that the tag matches the staged package version.
+    release gates and verifies that the tag matches the staged package version. It does not publish:
+    the publishing job was removed again, so a tag proves the gates passed and nothing more.
+
+    Publishing has since happened, by hand: `token-harness` `0.1.0` on 2026-08-01 and `0.1.1` on
+    2026-08-02. Two of §8.3's six bullets are therefore closed — the npm package and `npx
+    token-harness doctor` — and one that reads as closed is not. The tarball carries the registry's
+    own signature, which every npm package gets; it carries no build provenance attestation, so
+    "sign or attest release artifacts" is still open, and item 23's phrasing above is left as it was
+    written rather than retrofitted into having anticipated this.
 
 RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
 
@@ -886,8 +1020,13 @@ tiers, metrics, brownfield adoption.
 
 ### `0.2.0`
 
-First additional provider after compatibility validation, goal-based profiles, and the
-A/B benchmark matrix.
+The managed lifecycle of §9.1, the first additional harness after its fixtures pass, the first
+additional provider after compatibility validation, goal-based profiles, and the A/B benchmark
+matrix.
+
+The managed lifecycle is listed first because the other four assume it. A new provider that cannot
+be installed and a new harness on which nothing can be planned are both detection-only, which is a
+smaller release than this line has been promising.
 
 ### `1.0.0`
 
@@ -898,32 +1037,7 @@ A/B benchmark matrix.
 - documented security model and threat review;
 - end-to-end benchmark suite with published raw results.
 
-## 17. Phase 9 — Managed lifecycle and compatibility
-
-RFC 0008 extends the first-release control plane from adopting installed tools to installing and
-updating compatible tools through the same plan/apply/verify/rollback lifecycle.
-
-Implement in this order:
-
-1. a package-manager executor with exact-version plans, package-inventory snapshots, ownership
-   checks, rollback and human/JSON receipts;
-2. a comment- and trailing-comma-preserving JSONC editor;
-3. OpenCode managed-plugin rows, beginning with the observed schema and fixtures for clean,
-   brownfield, update, drift, rollback and uninstall states;
-4. reviewed installation/update channels for RTK and HarnessTrim; and
-5. matrix rows for additional harness and provider versions only after their fixtures pass.
-
-Acceptance:
-
-- `doctor` reports every detected version, while `plan` refuses managed mutation outside a reviewed
-  matrix row with the missing schema/fixture named;
-- a stored update plan pins the resolved package version and rejects inventory, version, config or
-  compatibility drift before mutation;
-- failures restore configuration and package inventory when Token Harness owns the package;
-- a managed OpenCode plugin preserves JSONC comments, trailing commas and user plugin entries; and
-- Windows, macOS, Linux and WSL fixtures cover every shipped matrix row.
-
-## 18. Open implementation decisions
+## 17. Open implementation decisions
 
 These are intentionally deferred to measured spikes or to a triggering need:
 
