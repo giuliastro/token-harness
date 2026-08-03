@@ -231,11 +231,12 @@ describe('a machine with nothing on it', () => {
     // An installed package is removed by uninstalling it, not by restoring a file, and the risk
     // classes exist so a reviewer sees that difference before approving.
     assert.equal(result.actions[0]?.riskClass, 'delegated');
-    // `none`, not `package-inventory`: that promised an inventory-based reversal nothing
-    // implements. RFC 0004 permits rollback only by restoring snapshots, "never by inventing an
-    // uninstall command", and a package is not a file — so it survives a rollback, and the
-    // executor says so rather than letting the report imply otherwise.
-    assert.equal(result.actions[0]?.rollbackData, 'none');
+    // `package-inventory`, the value RFC 0009 §Initial delivery order item 1 defines: both RTK
+    // channels (winget, cargo) can be asked what they have installed, so the executor captures
+    // that before the install and a rollback restores the captured version through the channel.
+    // The channels that cannot answer would still be `none`, and the executor says the package
+    // stayed.
+    assert.equal(result.actions[0]?.rollbackData, 'package-inventory');
   });
 });
 

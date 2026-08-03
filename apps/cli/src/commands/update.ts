@@ -35,6 +35,7 @@ import {
   EXIT_CODES,
   FileJournalStore,
   TransactionSnapshotStore,
+  channelCanReportInventory,
   commandResult,
   compareVersions,
   diagnostic,
@@ -102,14 +103,15 @@ function upgradeAction(input: {
     ],
     postconditions: [`${input.packageName} reports ${input.target}`],
     /**
-     * `none`, and the consequence is worth stating where a reviewer sees it.
+     * `package-inventory` where the channel can report what is installed, `none` otherwise.
      *
      * An update replaces a binary. Rolling the transaction back restores files and leaves the new
-     * version in place, so the executor's `install-not-reversible` diagnostic is not boilerplate
-     * here — it is the difference between the machine being restored and the *configuration*
-     * being restored.
+     * version in place, so the executor's receipt is not boilerplate here — it is the difference
+     * between the machine being restored and the *configuration* being restored. With an
+     * inventory-capturing channel the rollback also reinstalls the previous version, and the
+     * receipt says per package whether that reinstall took.
      */
-    rollbackData: 'none',
+    rollbackData: channelCanReportInventory(input.channel) ? 'package-inventory' : 'none',
     explanation: `Update ${input.packageName} from ${input.installed} to ${input.target} through ${input.channel}`,
     packageManager: input.channel,
     packageName: input.packageName,

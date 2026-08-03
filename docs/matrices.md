@@ -106,13 +106,19 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Installation and updates
 
-- **A delegated install is not reversible by rollback.** Rollback restores files; a package is not a
-  file. Every transaction that installs one says so, and the machine is not returned to where it was
-  even when the report reads `rolled-back`.
+- **A delegated install is reversible only when the channel can report its inventory.** Before a
+  `package-inventory` install runs, the channel is asked what it has installed; a rollback then
+  restores that captured version through the channel and re-reads the inventory to verify it
+  (RFC 0009 §Initial delivery order item 1). Where the channel cannot answer — or answered nothing
+  readable — the install is not reversible, and every such transaction says so: the machine is not
+  returned to where it was even when the report reads `rolled-back`. An *absent* package is never
+  restored either, because doing so would require inventing an uninstall command.
 - **Elevation is never automatic.** An action that needs it is refused, with the exact command to run.
-- **The cargo channel is documented, not observed.** Its install and query invocations follow cargo's
-  documented forms and have not been seen working, which is reported at run time rather than implied.
-  On Linux and macOS cargo is the channel RTK prefers, so `update` there carries that warning.
+- **The cargo channel is documented, not observed.** Its install, version-query, and inventory
+  invocations follow cargo's documented forms and have not been seen working, which is reported at
+  run time rather than implied. On Linux and macOS cargo is the channel RTK prefers, so `update`
+  there carries that warning, and an inventory capture through it carries
+  `inventory-query-unverified`.
 - **Version pins are global only.** A pin written inside a repository is reported and not honored,
   because honoring it would let any cloned repository choose which version of a tool you run — and
   the repository-trust mechanism that would make it safe does not exist in this build.
