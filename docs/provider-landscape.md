@@ -27,6 +27,10 @@ This order does not mean that every earlier item can be enabled together. The ca
 resolver still fails closed until the exact provider pair, order, versions, and fixture
 are recorded.
 
+It is also a ranking by source of waste, not an implementation order. PLAN §9.3 §The admission set
+for this phase records which of these are implemented first and why the two rankings differ: an
+entry high on this list can carry an unresolved admission gate, and one lower down can carry none.
+
 ## Context and token reduction
 
 | System | License | Intended capability | Why it adds value | Admission gates |
