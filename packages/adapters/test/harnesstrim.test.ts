@@ -32,7 +32,7 @@ import {
 const HOME = 'C:\\Users\\dev';
 const PROJECT = 'C:\\work\\demo';
 const METRICS = `${PROJECT}\\.harnesstrim\\metrics.jsonl`;
-const HERMES = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
+const HERMES_METRICS = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
 const CLAUDE_MD = `${PROJECT}\\CLAUDE.md`;
 const AGENTS = `${PROJECT}\\AGENTS.md`;
 
@@ -323,22 +323,25 @@ describe('the metrics importer', () => {
     assert.equal(target.events[0]?.outcome.bypassReason, 'no-reduction-applied');
   });
 
-  it('imports both declared locations', async () => {
+  it('reads the declared location and ignores a home path naming an unregistered harness', async () => {
     const target = store();
     const result = await harnesstrimAdapter.collectMetrics(
       context({
         files: {
           [METRICS]: `${trimEvent()}\n`,
-          [HERMES]: `${trimEvent({ harness: 'hermes' })}\n`,
+          // A Hermes file can exist on the machine without Hermes being in the registry: it is
+          // present, and it is not read. PLAN §15 item 25 removes the location until item 30 admits
+          // the harness; the registry assertion in `registries.test.ts` refuses to reintroduce it.
+          [HERMES_METRICS]: `${trimEvent({ harness: 'hermes' })}\n`,
         },
       }),
       target,
     );
-    assert.equal(result.imported, 2);
-    assert.deepEqual(target.events.map((event) => event.context.harnessId).sort(), [
-      'claude',
-      'hermes',
-    ]);
+    assert.equal(result.imported, 1);
+    assert.deepEqual(
+      target.events.map((event) => event.context.harnessId),
+      ['claude'],
+    );
   });
 
   it('resumes from the stored byte offset', async () => {

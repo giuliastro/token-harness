@@ -107,4 +107,28 @@ describe('adapter registries', () => {
       }
     }
   });
+
+  it('reads metrics only from a registered harness home or a harness-neutral path', () => {
+    // PLAN §15 item 25: "every metrics location a provider declares belongs to a harness in the
+    // registry, or is project-relative and harness-neutral." The failure mode is a provider
+    // silently importing `~/.hermes/...` in a build with no Hermes adapter — telemetry read from
+    // a harness the registry does not know. The harness homes come from the adapters' own
+    // user-scope configuration directories, so admitting Hermes (item 30) is what makes a
+    // `~/.hermes` location legal again, and nothing else does.
+    const harnessHomes = listHarnessAdapters().flatMap((adapter) =>
+      adapter.manifest.configFiles
+        .filter((file) => file.scope === 'user')
+        .map((file) => `~/${file.path.split('/').slice(0, -1).join('/')}`),
+    );
+    assert.ok(harnessHomes.length > 0, 'no registered harness contributes a home directory');
+    for (const adapter of listProviderAdapters()) {
+      for (const location of adapter.manifest.metrics.locations) {
+        if (!location.startsWith('~')) continue;
+        assert.ok(
+          harnessHomes.some((home) => location.startsWith(`${home}/`)),
+          `${adapter.manifest.id} reads ${location}, which names no harness in the registry; a home-relative metrics location must belong to a registered harness`,
+        );
+      }
+    }
+  });
 });
