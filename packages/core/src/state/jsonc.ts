@@ -243,17 +243,9 @@ export function appendJsoncRootArray(
           state: 'uneditable',
           reason: `the ${JSON.stringify(key)} property is not an array`,
         };
-      const inside = text.slice(valueStart + 1, valueEnd);
-      const hasValue = withoutComments(inside).trim().replace(/,$/, '').trim().length > 0;
-      const indent = /\n([ \t]+)\S/.exec(inside)?.[1] ?? '  ';
-      const eol = text.includes('\r\n') ? '\r\n' : '\n';
-      const hasTrailingComma = /,\s*$/.test(withoutComments(inside));
-      const insertion = hasValue
-        ? `${hasTrailingComma ? '' : ','}${eol}${indent}${JSON.stringify(value, null, indent).replace(/\n/g, eol + indent)}`
-        : `${eol}${indent}${JSON.stringify(value, null, indent)}${eol}`;
       return {
         state: 'edited',
-        text: `${text.slice(0, valueEnd)}${insertion}${text.slice(valueEnd)}`,
+        text: `${text.slice(0, valueEnd)}${arrayElementInsertion(text, valueStart, valueEnd, value)}${text.slice(valueEnd)}`,
       };
     }
     index = skipTrivia(text, valueEnd + 1);
@@ -265,4 +257,285 @@ export function appendJsoncRootArray(
     return { state: 'uneditable', reason: 'root properties are not separated safely' };
   }
   return { state: 'uneditable', reason: `the ${JSON.stringify(key)} array does not exist` };
+}
+
+/**
+ * The bytes to place before a closing bracket to add `value` to the array whose body runs from
+ * `valueStart + 1` (the `[`) to `valueEnd` (the `]`). Everything the caller keeps around this
+ * fragment — the other elements, their comments, the closing bracket itself — is untouched.
+ */
+function arrayElementInsertion(
+  text: string,
+  valueStart: number,
+  valueEnd: number,
+  value: JsonValue,
+): string {
+  const inside = text.slice(valueStart + 1, valueEnd);
+  const hasValue = withoutComments(inside).trim().replace(/,$/, '').trim().length > 0;
+  const indent = /\n([ \t]+)\S/.exec(inside)?.[1] ?? '  ';
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const hasTrailingComma = /,\s*$/.test(withoutComments(inside));
+  return hasValue
+    ? `${hasTrailingComma ? '' : ','}${eol}${indent}${JSON.stringify(value, null, indent).replace(/\n/g, eol + indent)}`
+    : `${eol}${indent}${JSON.stringify(value, null, indent)}${eol}`;
+}
+
+/** The member spans a `{ ... }` body holds, none of the surrounding trivia. */
+interface JsoncMember {
+  readonly key: string;
+  /** First byte of the value. */
+  readonly valueStart: number;
+  /** One past the last byte of the value; trailing comments and commas are outside. */
+  readonly valueEnd: number;
+  /** Whether a `,` follows the value (after any comment), so an insertion can keep JSON valid. */
+  readonly trailingComma: boolean;
+}
+
+function memberList(text: string, open: number, close: number): JsoncMember[] | null {
+  const members: JsoncMember[] = [];
+  let index = skipTrivia(text, open + 1);
+  while (true) {
+    index = skipTrivia(text, index);
+    if (index >= close || text[index] === '}') break;
+    const keyEnd = stringEnd(text, index);
+    if (keyEnd === null) return null;
+    let key: string;
+    try {
+      key = JSON.parse(text.slice(index, keyEnd)) as string;
+    } catch {
+      return null;
+    }
+    index = skipTrivia(text, keyEnd);
+    if (text[index] !== ':') return null;
+    index = skipTrivia(text, index + 1);
+    const valueStart = index;
+    const valueEnd = valueEndExclusive(text, valueStart);
+    if (valueEnd === null) return null;
+    index = skipTrivia(text, valueEnd);
+    let trailingComma = false;
+    if (text[index] === ',') {
+      trailingComma = true;
+      index += 1;
+    } else if (text[index] !== '}') {
+      return null;
+    }
+    members.push({ key, valueStart, valueEnd, trailingComma });
+  }
+  return members;
+}
+
+/** The byte just past a value, or null when the value cannot be bounded safely. */
+function valueEndExclusive(text: string, start: number): number | null {
+  const char = text[start];
+  if (char === '"') return stringEnd(text, start);
+  if (char === '[' || char === '{') {
+    const end = closingBracket(text, start);
+    return end === null ? null : end + 1;
+  }
+  // A scalar ends at the first byte that can only be a separator or terminator.
+  let index = start;
+  while (index < text.length && !/[\s,}\]]/.test(text[index] ?? '')) index += 1;
+  return index === start ? null : index;
+}
+
+/** The indentation the members of this document region are written with. */
+function indentOf(text: string, open: number, close: number): string {
+  return /\n([ \t]+)\S/.exec(text.slice(open + 1, close))?.[1] ?? '  ';
+}
+
+type MemberLookup =
+  | { readonly state: 'found'; readonly valueStart: number; readonly valueEnd: number }
+  | { readonly state: 'absent' }
+  | { readonly state: 'ambiguous' }
+  | { readonly state: 'unreadable' };
+
+function locateMember(text: string, open: number, close: number, key: string): MemberLookup {
+  const members = memberList(text, open, close);
+  if (members === null) return { state: 'unreadable' };
+  const matches = members.filter((member) => member.key === key);
+  if (matches.length > 1) return { state: 'ambiguous' };
+  const member = matches[0];
+  if (member === undefined) return { state: 'absent' };
+  return { state: 'found', valueStart: member.valueStart, valueEnd: member.valueEnd };
+}
+
+/**
+ * The object an expression resolves to, walking `segments` from the root.
+ *
+ * An expression is a dotted path such as `experimental.plugins`; an empty expression is the root
+ * object itself. This half refuses anything it cannot prove: a member that is absent, a value that
+ * is not an object, an edge this build cannot bound — each names the expression and the member.
+ */
+type ObjectResolution =
+  | { readonly state: 'resolved'; readonly open: number; readonly close: number }
+  | { readonly state: 'unresolvable'; readonly reason: string };
+
+function resolveObject(
+  text: string,
+  segments: readonly string[],
+  expression: string,
+): ObjectResolution {
+  const root = skipTrivia(text, 0);
+  if (text[root] !== '{')
+    return {
+      state: 'unresolvable',
+      reason: `could not resolve ${JSON.stringify(expression)}: the JSONC root is not an object`,
+    };
+  let open = root;
+  let close = closingBracket(text, root);
+  if (close === null)
+    return {
+      state: 'unresolvable',
+      reason: `could not resolve ${JSON.stringify(expression)}: the JSONC root is not bounded safely`,
+    };
+  for (const segment of segments) {
+    const member = locateMember(text, open, close, segment);
+    if (member.state === 'unreadable')
+      return {
+        state: 'unresolvable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(segment)} member could not be bounded safely`,
+      };
+    if (member.state === 'absent')
+      return {
+        state: 'unresolvable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(segment)} member does not exist`,
+      };
+    if (member.state === 'ambiguous')
+      return {
+        state: 'unresolvable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(segment)} member appears more than once, so which one is meant is ambiguous`,
+      };
+    if (text[member.valueStart] !== '{')
+      return {
+        state: 'unresolvable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(segment)} value is not an object`,
+      };
+    open = member.valueStart;
+    close = closingBracket(text, open);
+    if (close === null)
+      return {
+        state: 'unresolvable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(segment)} value is not bounded safely`,
+      };
+  }
+  return { state: 'resolved', open, close };
+}
+
+/**
+ * The single mutation this module performs beyond `appendJsoncRootArray` — RFC 0009 §Initial
+ * delivery order item 2.
+ *
+ * Two operations, both with the same refusal contract:
+ *
+ * - `append-element` adds `value` to the array the expression resolves to, e.g.
+ *   `editJsonc(text, 'experimental.plugins', { kind: 'append-element', value })`.
+ * - `set-member` sets or inserts an object member inside the object the expression resolves to,
+ *   e.g. `editJsonc(text, 'experimental', { kind: 'set-member', member: 'plugins', value })`.
+ *
+ * The edited bytes cover only the located region — the rest of the document is carried through
+ * byte for byte, comments and trailing commas included. `replaced` names that region so a caller
+ * can show a reviewer exactly what changed. When the expression cannot be resolved exactly the
+ * edit is refused, and the refusal names the expression and the member it could not resolve: an
+ * editor that approximates is how a user's comments disappear.
+ */
+export type JsoncEditOperation =
+  | { readonly kind: 'append-element'; readonly value: JsonValue }
+  | { readonly kind: 'set-member'; readonly member: string; readonly value: JsonValue };
+
+export interface JsoncEditedSpan {
+  /** Byte offset in the input where the replacement begins. */
+  readonly from: number;
+  /** One past the last byte replaced in the input; equal to `from` for a pure insertion. */
+  readonly to: number;
+  /** The bytes written in place of `input.slice(from, to)`. */
+  readonly with: string;
+}
+
+export type JsoncEditOutcome =
+  | { readonly state: 'edited'; readonly text: string; readonly replaced: JsoncEditedSpan }
+  | { readonly state: 'uneditable'; readonly reason: string };
+
+export function editJsonc(
+  text: string,
+  expression: string,
+  operation: JsoncEditOperation,
+): JsoncEditOutcome {
+  const segments = expression === '' ? [] : expression.split('.');
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+
+  if (operation.kind === 'append-element') {
+    const containerPath = segments.slice(0, -1);
+    const memberKey = segments.at(-1) ?? '';
+    const container = resolveObject(text, containerPath, expression);
+    if (container.state !== 'resolved') return { state: 'uneditable', reason: container.reason };
+    const target = locateMember(text, container.open, container.close, memberKey);
+    if (target.state === 'unreadable')
+      return {
+        state: 'uneditable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(memberKey)} member could not be bounded safely`,
+      };
+    if (target.state === 'absent')
+      return {
+        state: 'uneditable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(memberKey)} member does not exist`,
+      };
+    if (target.state === 'ambiguous')
+      return {
+        state: 'uneditable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(memberKey)} member appears more than once, so which one is meant is ambiguous`,
+      };
+    if (text[target.valueStart] !== '[')
+      return {
+        state: 'uneditable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(memberKey)} value is not an array`,
+      };
+    const arrayEnd = closingBracket(text, target.valueStart);
+    if (arrayEnd === null)
+      return {
+        state: 'uneditable',
+        reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(memberKey)} array is not bounded safely`,
+      };
+    const withInsertion = arrayElementInsertion(text, target.valueStart, arrayEnd, operation.value);
+    return {
+      state: 'edited',
+      text: `${text.slice(0, arrayEnd)}${withInsertion}${text.slice(arrayEnd)}`,
+      replaced: { from: arrayEnd, to: arrayEnd, with: withInsertion },
+    };
+  }
+
+  const container = resolveObject(text, segments, expression);
+  if (container.state !== 'resolved') return { state: 'uneditable', reason: container.reason };
+  const indent = indentOf(text, container.open, container.close);
+  const serialized = JSON.stringify(operation.value, null, indent).replace(/\n/g, eol + indent);
+
+  const member = locateMember(text, container.open, container.close, operation.member);
+  if (member.state === 'unreadable')
+    return {
+      state: 'uneditable',
+      reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(operation.member)} member could not be bounded safely`,
+    };
+  if (member.state === 'ambiguous')
+    return {
+      state: 'uneditable',
+      reason: `could not resolve ${JSON.stringify(expression)}: the ${JSON.stringify(operation.member)} member appears more than once, so which one is meant is ambiguous`,
+    };
+  if (member.state === 'found') {
+    return {
+      state: 'edited',
+      text: `${text.slice(0, member.valueStart)}${serialized}${text.slice(member.valueEnd)}`,
+      replaced: { from: member.valueStart, to: member.valueEnd, with: serialized },
+    };
+  }
+
+  const members = memberList(text, container.open, container.close) ?? [];
+  const hasMembers = members.length > 0;
+  const inserted = `${JSON.stringify(operation.member)}: ${serialized}`;
+  const insertion = hasMembers
+    ? `${members.at(-1)?.trailingComma === true ? '' : ','}${eol}${indent}${inserted}`
+    : `${eol}${indent}${inserted}${eol}`;
+  return {
+    state: 'edited',
+    text: `${text.slice(0, container.close)}${insertion}${text.slice(container.close)}`,
+    replaced: { from: container.close, to: container.close, with: insertion },
+  };
 }
