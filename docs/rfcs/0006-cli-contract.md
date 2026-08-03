@@ -480,6 +480,10 @@ To keep numbering coherent, the next identifiers are reserved now:
 | 0006 | CLI contract | Accepted (this document) |
 | 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL storage is outgrown |
+| 0009 | Managed lifecycle and compatibility matrix | Accepted |
+
+0008 stayed reserved when 0009 was written. A reservation that is quietly reused leaves the
+reserved decision with no identifier, and this table is where that would have gone unnoticed.
 
 ## Decisions
 

@@ -1,11 +1,11 @@
-# Provider landscape
+# Provider and harness landscape
 
-Research snapshot: **2026-07-31**.
+Research snapshot: **2026-07-31**. Harness section added **2026-08-03**.
 
-This document is the researched intake queue for Token Harness providers. It is not a
-support matrix: only adapters in `packages/adapters/src/providers` are supported by the
-current build. Upstream measurements below are discovery evidence, not Token Harness
-benchmark results.
+This document is the researched intake queue for Token Harness providers and harnesses. It is
+not a support matrix: only adapters in `packages/adapters/src/providers` and
+`packages/adapters/src/harnesses` are supported by the current build. Upstream measurements
+below are discovery evidence, not Token Harness benchmark results.
 
 ## Recommendation
 
@@ -101,6 +101,38 @@ verifiable routing receipts make them a worse first fit for a local-first defaul
 - Source-available and copyleft tools may be managed externally, but are not bundled
   without the licensing review required by RFC 0001.
 
+## Harness landscape
+
+PLAN §9.2 admits a harness through its own sequence, and this is that queue. A harness earns a
+place here by having an *observable interception point*, which is a different claim from being a
+popular coding agent: Token Harness can only own what a harness exposes deterministically.
+
+The build supports three — `claude`, `codex`, `opencode`. The rest are candidates.
+
+### Evidence in hand
+
+| Harness | Interception evidence | What is still missing | Note |
+| --- | --- | --- | --- |
+| [Hermes Agent](https://github.com/giuliastro/HarnessTrim) | HarnessTrim ships a plugin adapter, installed by `harnesstrim install hermes` | Config schema and paths, tool families, tested version range, verification tier, fixture suite | HarnessTrim's manifest already declares `~/.hermes/harnesstrim-metrics.jsonl` among its metrics locations, so this path is read today by a build with no Hermes adapter |
+| [PI](https://pi.dev/) | HarnessTrim ships an extension, installed by `harnesstrim install pi`; `harness-remote` reaches it over ACP through `@automatalabs/pi-acp` | The same list, plus whether the extension point yields an observable receipt or stops at `config-only` | Reported as unmanaged context by the current build |
+| [Oh My Pi (OMP)](https://omp.sh/) | A local bridge in `harness-remote` | An interception point. A control bridge shows the harness can be *driven*, not that a payload can be intercepted | Detection-only until an interception point is observed on a real installation |
+
+### Named, not yet researched
+
+Gemini CLI, GitHub Copilot CLI, Cursor CLI, Amp, Crush, and Cline are listed so the queue is
+explicit about its own edges. Nothing has been observed about their interception points, config
+schemas, or verification surfaces, and no row above may be written for them from a feature list.
+
+### Admission gates common to every harness
+
+- an interception point observed on a real installation, not inferred from documentation;
+- a config schema with a parser that round-trips unrelated content, including comments where the
+  format carries them;
+- a declared verification tier per RFC 0007, `config-only` where nothing is observable;
+- absent, partial, healthy, broken, user-modified and brownfield fixtures;
+- no provider claims the harness until that provider's fixture on it passes;
+- `metrics` never imports from a harness path the registry does not know.
+
 ## Source notes
 
 Primary upstream sources reviewed for this snapshot:
@@ -115,3 +147,9 @@ Primary upstream sources reviewed for this snapshot:
 - [LiteLLM README and license](https://github.com/BerriAI/litellm)
 - [RouteLLM README](https://github.com/lm-sys/RouteLLM)
 - [vLLM Semantic Router README](https://github.com/vllm-project/semantic-router)
+
+For the harness section:
+
+- [HarnessTrim README, adapter install commands](https://github.com/giuliastro/HarnessTrim)
+- [harness-remote README, supported-harness table and bridge setup](https://github.com/giuliastro/harness-remote)
+- `packages/adapters/src/providers/harnesstrim.ts`, for the metrics locations the build declares
