@@ -299,6 +299,287 @@ export async function queryAvailableVersion(
   return { status: 'found', version, destination, diagnostics };
 }
 
+/**
+ * How to ask each package manager what it has *installed* — the inventory side of
+ * `rollbackData: 'package-inventory'`.
+ *
+ * A query is a read and an install is a mutation, and an inventory query is a read that decides
+ * whether a rollback may claim it restored something. The same evidence standard applies as to
+ * the version query: a channel that cannot answer is recorded as not having answered, never as
+ * having answered "nothing".
+ *
+ * Two of the six are exercised by real plans today — RTK installs through `winget` and `cargo` —
+ * and the other four are declared for the channels RFC 0009 names before a provider needs them.
+ * `verified` means the invocation was observed against a real machine; the rest follow the
+ * documented form and report `inventory-query-unverified` at run time, exactly as the cargo
+ * install invocation already does.
+ */
+const INVENTORY_COMMANDS: Readonly<
+  Record<
+    string,
+    {
+      executable: string;
+      args: (packageName: string) => string[];
+      /**
+       * `captured` means the channel reported the package installed at a parseable version;
+       * `absent` means the channel's answer positively excludes it (`cargo install --list` lists
+       * every installed crate, so a crate that is not listed is not installed). Anything else is
+       * `unknown` — a parse failure is not an answer.
+       */
+      parse: (
+        stdout: string,
+        packageName: string,
+      ) => { status: 'captured' | 'absent' | 'unknown'; version: string | null };
+      verified: boolean;
+    }
+  >
+> = {
+  /**
+   * `winget list --id <id> --exact` prints the same dashes-anchored table as `show --versions`,
+   * with the installed version as the last token of the row. The header is localized, which is
+   * why the parse is anchored on the separator and the row tail rather than on a column title.
+   *
+   * A missing package makes winget exit non-zero with a localized "no package found" message,
+   * which this build cannot tell from any other failure — so that case is `failed` at the caller,
+   * never `absent`.
+   */
+  winget: {
+    executable: 'winget',
+    args: (packageName) => ['list', '--id', packageName, '--exact'],
+    parse: (stdout, _packageName) => {
+      const lines = stdout.split(/\r?\n/);
+      const separator = lines.findIndex((line) => /^-{3,}\s*$/.test(line.trim()));
+      if (separator < 0) return { status: 'unknown', version: null };
+      for (const line of lines.slice(separator + 1)) {
+        const row = line.trim();
+        if (row === '') continue;
+        const candidate = row.split(/\s+/).at(-1) ?? '';
+        if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
+        return { status: 'captured', version: candidate };
+      }
+      return { status: 'unknown', version: null };
+    },
+    verified: false,
+  },
+  /**
+   * `cargo install --list` prints one `crate v0.1.0:` line per installed crate, so absence is a
+   * positive answer: the crate simply does not appear. This is the one inventory among the six
+   * that can confirm absence.
+   */
+  cargo: {
+    executable: 'cargo',
+    args: () => ['install', '--list'],
+    parse: (stdout, packageName) => {
+      const pattern = new RegExp(`^\\s*${packageName}\\s+v(\\S+)\\s*:`, 'm');
+      const match = pattern.exec(stdout);
+      if (match === null) return { status: 'absent', version: null };
+      const candidate = match[1] ?? '';
+      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
+      return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+  npm: {
+    executable: 'npm',
+    args: (packageName) => ['ls', '-g', packageName, '--depth=0'],
+    parse: (stdout, packageName) => {
+      const pattern = new RegExp(`(?:^|[^@\\w.-])${packageName}@(\\d[^\\s]*)`);
+      const match = pattern.exec(stdout);
+      const candidate = match?.[1] ?? null;
+      if (candidate === null || parseSemanticVersion(candidate) === null) {
+        return { status: 'unknown', version: null };
+      }
+      return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+  homebrew: {
+    executable: 'brew',
+    args: (packageName) => ['list', '--versions', packageName],
+    parse: (stdout, packageName) => {
+      const pattern = new RegExp(`^${packageName}\\s+(.+)$`);
+      const match = pattern.exec(stdout.trim());
+      const candidate = match?.[1]?.trim().split(/\s+/).at(-1) ?? null;
+      if (candidate === null || parseSemanticVersion(candidate) === null) {
+        return { status: 'unknown', version: null };
+      }
+      return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+  uv: {
+    executable: 'uv',
+    args: () => ['tool', 'list'],
+    parse: (stdout, packageName) => {
+      const pattern = new RegExp(`^${packageName}\\s+v?(\\S+)`, 'm');
+      const match = pattern.exec(stdout);
+      if (match === null) return { status: 'absent', version: null };
+      const candidate = match[1] ?? '';
+      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
+      return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+  pipx: {
+    executable: 'pipx',
+    args: () => ['list'],
+    parse: (stdout, packageName) => {
+      const pattern = new RegExp(`^\\s*${packageName}\\s+(\\S+)`, 'm');
+      const match = pattern.exec(stdout);
+      if (match === null) return { status: 'absent', version: null };
+      const candidate = match[1] ?? '';
+      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
+      return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+};
+
+/** The channels that can report an inventory, sorted for deterministic output. */
+export function knownInventoryChannels(): string[] {
+  return Object.keys(INVENTORY_COMMANDS).sort();
+}
+
+/**
+ * Whether a channel can report the inventory a `package-inventory` rollback needs.
+ *
+ * This is the planner-facing half of RFC 0009 §Initial delivery order item 1: an action declares
+ * `rollbackData: 'package-inventory'` only where the channel can actually be asked. The executor
+ * half is `queryPackageInventory`.
+ */
+export function channelCanReportInventory(channelId: string): boolean {
+  return Object.hasOwn(INVENTORY_COMMANDS, channelId);
+}
+
+export type PackageInventoryStatus = 'captured' | 'absent' | 'unknown' | 'unsupported' | 'failed';
+
+export interface PackageInventoryCapture {
+  channel: string;
+  packageName: string;
+  status: PackageInventoryStatus;
+  /** Non-null only when `status` is `captured`. */
+  version: string | null;
+  diagnostics: Diagnostic[];
+}
+
+export interface QueryInventoryInput {
+  channel: string;
+  packageName: string;
+  runner: ProcessRunner | null;
+  cwd: string;
+  timeoutMs?: number;
+}
+
+const DEFAULT_INVENTORY_TIMEOUT_MS = 60_000;
+
+/**
+ * Asks the channel what it has installed, before a `package-inventory` install runs.
+ *
+ * A read, held to the same standard as the version query: an unreadable answer is `unknown` and
+ * a channel not in the table is `unsupported` — both recorded as "could not answer" in the
+ * capture, which is what the rollback receipt later says rather than inventing a restoration.
+ */
+export async function queryPackageInventory(
+  input: QueryInventoryInput,
+): Promise<PackageInventoryCapture> {
+  const recipe = INVENTORY_COMMANDS[input.channel];
+  if (recipe === undefined) {
+    return {
+      channel: input.channel,
+      packageName: input.packageName,
+      status: 'unsupported',
+      version: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'inventory-query-unsupported',
+          message: `This build cannot ask ${input.channel} what it has installed`,
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  if (input.runner === null) {
+    return {
+      channel: input.channel,
+      packageName: input.packageName,
+      status: 'failed',
+      version: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'no-process-runner',
+          message: 'No process runner is available, so no inventory can be captured',
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  if (!recipe.verified) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'inventory-query-unverified',
+        message: `The ${input.channel} inventory query follows that tool's documented output but has not been observed working`,
+        remediation: 'Confirm the rollback receipt after any failure',
+      }),
+    );
+  }
+
+  const outcome = await input.runner.run({
+    executable: recipe.executable,
+    args: recipe.args(input.packageName),
+    cwd: input.cwd,
+    timeoutMs: input.timeoutMs ?? DEFAULT_INVENTORY_TIMEOUT_MS,
+  });
+
+  if (outcome.failure !== null || outcome.exitCode !== 0) {
+    // A non-zero exit can be "no package found" and can be a broken tool; the machine is the
+    // only one that knows which, so this build records neither.
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'inventory-query-failed',
+        message:
+          outcome.failure === null
+            ? `${outcome.displayCommand} exited with ${String(outcome.exitCode)}`
+            : `${recipe.executable} could not be run: ${outcome.failure.reason}`,
+        remediation: null,
+      }),
+    );
+    return {
+      channel: input.channel,
+      packageName: input.packageName,
+      status: 'failed',
+      version: null,
+      diagnostics,
+    };
+  }
+
+  const reading = recipe.parse(outcome.stdout, input.packageName);
+  if (reading.status === 'unknown') {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'inventory-query-unreadable',
+        message: `${recipe.executable} answered, but its output did not name an installed version in the form this build reads`,
+        remediation: null,
+      }),
+    );
+  }
+
+  return {
+    channel: input.channel,
+    packageName: input.packageName,
+    status: reading.status,
+    version: reading.version,
+    diagnostics,
+  };
+}
+
 export type InstallOutcomeStatus = 'installed' | 'refused' | 'failed';
 
 export interface InstallOutcome {
@@ -415,20 +696,165 @@ export async function runPackageManagerInstall(input: RunInstallInput): Promise<
   }
 
   /**
-   * Said on success, not only on failure.
+   * The success receipt is deliberately not emitted here.
    *
-   * A later action can still fail and roll the transaction back, and the rollback restores files.
-   * This package is not a file and will still be installed afterwards. Reporting a clean rollback
-   * without saying so would leave the user believing the machine is as it was.
+   * What a rollback can do with an installed package depends on the inventory captured before the
+   * install ran — `install-inventory-captured` when the prior version is known, `install-not-reversible`
+   * when it is not. That capture lives in the executor, so the receipt belongs there too; emitting
+   * it here would let an executor that skipped the capture report a restoration it cannot perform.
    */
-  diagnostics.push(
-    diagnostic({
-      severity: 'info',
-      code: 'install-not-reversible',
-      message: `${action.packageName} was installed through ${action.packageManager}; a rollback restores files and will not uninstall it`,
-      remediation: null,
-    }),
-  );
-
   return { status: 'installed', diagnostics };
+}
+
+/**
+ * Restores a captured package inventory after a rollback — RFC 0009 §Initial delivery order
+ * item 1, the executor half of `rollbackData: 'package-inventory'`.
+ *
+ * ## What "restoring an inventory" is, and is not
+ *
+ * The capture holds what the channel reported *before* the install: a version, or a confirmed
+ * absence. A version is restored by installing that exact version through the same channel — an
+ * install command, which RFC 0004 permits, not the "invented uninstall command" it forbids. A
+ * confirmed absence cannot be restored: putting the machine back to "not installed" would mean
+ * exactly such an invented uninstall, so the receipt says the package stays.
+ *
+ * ## Why the restore verifies itself
+ *
+ * The same clause that makes a file rollback read the disk back instead of trusting the write
+ * applies here: the inventory is re-queried after the restore install and must match the capture.
+ * A mismatch is a failed restore, reported as such — never a successful one.
+ */
+export interface InventoryRestoreOutcome {
+  restored: boolean;
+  diagnostics: Diagnostic[];
+}
+
+export interface RestoreInventoryInput {
+  capture: PackageInventoryCapture;
+  runner: ProcessRunner | null;
+  cwd: string;
+  timeoutMs?: number;
+}
+
+export async function restorePackageInventory(
+  input: RestoreInventoryInput,
+): Promise<InventoryRestoreOutcome> {
+  const { capture } = input;
+
+  if (capture.status === 'absent') {
+    return {
+      restored: false,
+      diagnostics: [
+        diagnostic({
+          severity: 'info',
+          code: 'package-inventory-unrestored',
+          message: `${capture.packageName} was not installed before the transaction; restoring that absence would require an uninstall command, so it stays installed`,
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  if (capture.status !== 'captured' || capture.version === null) {
+    return {
+      restored: false,
+      diagnostics: [
+        diagnostic({
+          severity: 'info',
+          code: 'package-inventory-unrestored',
+          message: `${capture.packageName} was installed without a captured inventory, so it could not be restored`,
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  if (input.runner === null) {
+    return {
+      restored: false,
+      diagnostics: [
+        diagnostic({
+          severity: 'info',
+          code: 'package-inventory-unrestored',
+          message: `${capture.packageName} could not be restored: no process runner is available`,
+          remediation: null,
+        }),
+      ],
+    };
+  }
+
+  const restoreAction: PackageManagerInstallAction = {
+    kind: 'package-manager-install',
+    id: `restore-${capture.packageName}`,
+    riskClass: 'delegated',
+    requiresNetwork: true,
+    requiresElevation: false,
+    affectedPaths: [],
+    affectedProcesses: [capture.channel],
+    preconditions: [],
+    postconditions: [],
+    rollbackData: 'none',
+    explanation: `Restore ${capture.packageName} to ${capture.version} after a rollback`,
+    packageManager: capture.channel,
+    packageName: capture.packageName,
+    version: capture.version,
+  };
+
+  const result = await runPackageManagerInstall({
+    action: restoreAction,
+    runner: input.runner,
+    cwd: input.cwd,
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+  });
+
+  if (result.status !== 'installed') {
+    return {
+      restored: false,
+      diagnostics: [
+        ...result.diagnostics,
+        diagnostic({
+          severity: 'error',
+          code: 'package-restore-failed',
+          message: `${capture.packageName} could not be restored to ${capture.version} through ${capture.channel}`,
+          path: null,
+          remediation: `Install ${capture.packageName} at ${capture.version} yourself, then run the command again`,
+        }),
+      ],
+    };
+  }
+
+  const verified = await queryPackageInventory({
+    channel: capture.channel,
+    packageName: capture.packageName,
+    runner: input.runner,
+    cwd: input.cwd,
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+  });
+
+  if (verified.status !== 'captured' || verified.version !== capture.version) {
+    return {
+      restored: false,
+      diagnostics: [
+        ...verified.diagnostics,
+        diagnostic({
+          severity: 'error',
+          code: 'package-restore-failed',
+          message: `${capture.packageName} was reinstalled but the inventory does not report ${capture.version}`,
+          remediation: `Confirm what ${capture.channel} has installed and correct it by hand`,
+        }),
+      ],
+    };
+  }
+
+  return {
+    restored: true,
+    diagnostics: [
+      diagnostic({
+        severity: 'info',
+        code: 'package-inventory-restored',
+        message: `${capture.packageName} was restored to ${capture.version} through ${capture.channel} and the inventory was re-read`,
+        remediation: null,
+      }),
+    ],
+  };
 }

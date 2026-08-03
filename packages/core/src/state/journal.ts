@@ -27,6 +27,7 @@ import type { FileSnapshot, OwnedArtifact } from '../domain/ownership.js';
 
 import type { FileSystemPort } from './filesystem.js';
 import type { ActionStatus } from './actions.js';
+import type { PackageInventoryCapture } from './install.js';
 
 export const JOURNAL_SCHEMA_VERSION = 1;
 
@@ -52,6 +53,13 @@ export interface TransactionJournalEntry {
   snapshots: FileSnapshot[];
   ownership: OwnedArtifact[];
   diagnostics: Diagnostic[];
+  /**
+   * The inventory captured before a `package-inventory` install ran.
+   *
+   * Absent in journals written before this field existed; a rollback that reads such an entry
+   * must treat the missing field as "nothing captured", which the receipt path already does.
+   */
+  packageInventory: PackageInventoryCapture | null;
 }
 
 export interface TransactionJournal {

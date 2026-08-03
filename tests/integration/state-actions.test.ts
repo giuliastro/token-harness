@@ -892,23 +892,49 @@ describe('remove-owned-change', () => {
  * AGENTS.md already protects.
  */
 describe('installing a package', () => {
-  function installer(options: { exitCode?: number; fails?: boolean } = {}) {
+  function installer(
+    options: {
+      exitCode?: number;
+      fails?: boolean;
+      /** Answers the inventory query (`winget list`, `cargo install --list`). */
+      inventory?: { stdout?: string; exitCode?: number };
+    } = {},
+  ) {
     const spawned: { executable: string; args: string[] }[] = [];
+    const base = {
+      displayCommand: '',
+      interpreter: 'direct' as const,
+      executablePath: `/usr/bin/`,
+      exitCode: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 1,
+      timedOut: false,
+      failure: null,
+    };
     const runner: ProcessRunner = {
       run: (request) => {
         spawned.push({ executable: request.executable, args: [...request.args] });
+        const inventory =
+          options.inventory !== undefined &&
+          (request.args[0] === 'list' || request.args[1] === '--list');
+        if (inventory) {
+          return Promise.resolve({
+            ...base,
+            displayCommand: `${request.executable} ${request.args.join(' ')}`,
+            executablePath: `/usr/bin/${request.executable}`,
+            exitCode: options.inventory?.exitCode ?? 0,
+            stdout: options.inventory?.stdout ?? '',
+          });
+        }
         return Promise.resolve({
+          ...base,
           displayCommand: `${request.executable} ${request.args.join(' ')}`,
-          interpreter: 'direct' as const,
           executablePath: options.fails === true ? null : `/usr/bin/${request.executable}`,
           exitCode: options.fails === true ? null : (options.exitCode ?? 0),
-          signal: null,
-          stdout: '',
-          stderr: '',
-          stdoutTruncated: false,
-          stderrTruncated: false,
-          durationMs: 1,
-          timedOut: false,
           failure:
             options.fails === true
               ? { reason: 'executable-not-found' as const, message: 'missing' }
@@ -979,12 +1005,70 @@ describe('installing a package', () => {
      * command", and there is no snapshot of a package. A later failure restores the files and
      * leaves the package — and a report saying "rolled back" without this would let a user believe
      * the machine is as it was.
+     *
+     * This is the `rollbackData: 'none'` contract. The `package-inventory` contract, when the
+     * channel answered what it has installed, is the next test.
      */
     assert.equal(
       outcome.diagnostics.some((entry) => entry.code === 'install-not-reversible'),
       true,
     );
+    assert.equal(outcome.packageInventory, null);
     claim('package-manager-install', 'rollback');
+  });
+
+  it('captures what the channel has installed before a package-inventory install', async () => {
+    const h = harness();
+    // `winget list --id <id> --exact` prints the same separator-anchored table as `show --versions`,
+    // with the installed version as the last token of the row.
+    const { spawned, runner } = installer({
+      inventory: { stdout: 'Trovato rtk [rtk-ai.rtk]\nVersione\n--------\n0.42.0\r\n' },
+    });
+    const outcome = await applyAction(installAction({ rollbackData: 'package-inventory' }), {
+      ...h.context,
+      runner,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.status, 'applied');
+    // Asked before the install ran: the capture is the *prior* state, which is the only one a
+    // rollback can restore.
+    assert.equal(spawned[0]?.args[0], 'list');
+    assert.equal(spawned[1]?.args[0], 'install');
+    assert.equal(outcome.packageInventory?.status, 'captured');
+    assert.equal(outcome.packageInventory?.version, '0.42.0');
+    // RFC 0009: with a captured prior version the rollback can restore the package, and the
+    // receipt says so instead of the pre-0009 "rollback will not uninstall it".
+    assert.ok(outcome.diagnostics.some((entry) => entry.code === 'install-inventory-captured'));
+  });
+
+  it('says the install is not reversible when the capture cannot be read', async () => {
+    const h = harness();
+    // The channel answered something this build cannot read, so there is no prior version to
+    // restore — an unreadable answer is "no capture", never "captured at nothing".
+    const { runner } = installer({ inventory: { stdout: 'Versione: 0.42.0\r\n' } });
+    const outcome = await applyAction(installAction({ rollbackData: 'package-inventory' }), {
+      ...h.context,
+      runner,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.status, 'applied');
+    assert.equal(outcome.packageInventory?.status, 'unknown');
+    assert.ok(outcome.diagnostics.some((entry) => entry.code === 'install-not-reversible'));
+  });
+
+  it('skips the capture for an elevated install, which is refused anyway', async () => {
+    const h = harness();
+    const { spawned, runner } = installer();
+    const outcome = await applyAction(
+      installAction({ rollbackData: 'package-inventory', requiresElevation: true }),
+      { ...h.context, runner, cwd: '/work' },
+    );
+    // A refused install never runs, so querying the channel first would have been pure I/O.
+    assert.equal(outcome.status, 'refused');
+    assert.deepEqual(spawned, []);
+    assert.equal(outcome.packageInventory, null);
   });
 
   it('produces the same outcome when the package is already installed', async () => {

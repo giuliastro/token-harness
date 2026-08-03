@@ -54,6 +54,10 @@ const CHANNEL = FACTS.os === 'windows' ? 'winget' : 'cargo';
 const PACKAGE = FACTS.os === 'windows' ? 'rtk-ai.rtk' : 'rtk';
 const QUERY_VERB = FACTS.os === 'windows' ? 'show' : 'search';
 
+/** The inventory query the channel answers, by name — `winget list`, `cargo install --list`. */
+const INVENTORY_LINE =
+  FACTS.os === 'windows' ? 'winget list --id rtk-ai.rtk --exact' : 'cargo install --list';
+
 /**
  * What the channel prints for a given available version.
  *
@@ -65,6 +69,16 @@ function channelAnswer(...versions: string[]): string {
     return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', ...versions, ''].join('\r\n');
   }
   return `${versions.map((version) => `rtk = "${version}"    # a token-saving proxy`).join('\n')}\n`;
+}
+
+/**
+ * What the channel reports as *installed* — `winget list` rows and `cargo install --list` lines.
+ */
+function inventoryAnswer(version: string): string {
+  if (FACTS.os === 'windows') {
+    return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', version, ''].join('\r\n');
+  }
+  return `rtk v${version}:\n    /home/user/.cargo/bin/rtk\n`;
 }
 
 let sandbox = '';
@@ -118,6 +132,8 @@ interface FakeChannel {
   installed?: Readonly<Record<string, string>>;
   /** Raw stdout the channel query returns, by executable name. */
   channelStdout?: Readonly<Record<string, string>>;
+  /** Raw stdout the inventory query returns, keyed by the full command line. */
+  inventoryStdout?: Readonly<Record<string, string>>;
   /** Exit code the install invocation returns. */
   installExitCode?: number;
 }
@@ -132,6 +148,7 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
   const asked: string[] = [];
   const installed = config.installed ?? {};
   const channelStdout = config.channelStdout ?? {};
+  const inventoryStdout = config.inventoryStdout ?? {};
 
   const answer = (request: ProcessRequest): ProcessOutcome => {
     const line = `${request.executable} ${request.args.join(' ')}`;
@@ -147,6 +164,12 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
       timedOut: false,
       failure: null,
     };
+
+    // The inventory query is a read, but it shares the executable with the install (on cargo,
+    // `install --list` vs `install <crate>`), so it is keyed by the full line rather than guessed
+    // from a flag.
+    const inventory = inventoryStdout[line];
+    if (inventory !== undefined) return { ...base, exitCode: 0, stdout: inventory };
 
     const channel = channelStdout[request.executable];
     if (channel !== undefined) {
@@ -405,10 +428,34 @@ describe('update', () => {
     );
   });
 
-  it('says the installed package will survive a rollback', async () => {
+  it('captures the installed version so a later rollback can restore it', async () => {
     const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
       channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+      inventoryStdout: { [INVENTORY_LINE]: inventoryAnswer('0.42.0') },
+    });
+
+    // RFC 0009 §Initial delivery order item 1: the channel was asked what it has installed before
+    // the update ran, so a rollback can put the machine back — the receipt says so instead of the
+    // pre-0009 "a package is not a file".
+    assert.ok(
+      result.asked.some(
+        (line) =>
+          line.startsWith(`${CHANNEL} list`) || line.startsWith(`${CHANNEL} install --list`),
+      ),
+      `expected the inventory query: ${JSON.stringify(result.asked)}`,
+    );
+    assert.ok(result.codes.includes('install-inventory-captured'));
+    assert.ok(!result.codes.includes('install-not-reversible'));
+  });
+
+  it('says the installed package will survive a rollback when no capture exists', async () => {
+    const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
+      installed: { rtk: 'rtk 0.42.0' },
+      channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+      // The channel answered nothing this build reads — a shape a future winget, or another
+      // locale, would produce — so the update cannot restore the machine and says so.
+      inventoryStdout: { [INVENTORY_LINE]: 'Versione: 0.44.0\r\n' },
     });
 
     // RFC 0004: rollback restores files, and a package is not a file. Reporting a clean transaction

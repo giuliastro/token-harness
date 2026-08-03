@@ -23,11 +23,17 @@
 
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
 import { digestBytes } from '../domain/digest.js';
-import type { PlannedAction } from '../domain/actions.js';
+import type { PlannedAction, PlannedActionKind } from '../domain/actions.js';
 import { snapshotIsAbsence, type FileSnapshot, type OwnedArtifact } from '../domain/ownership.js';
 
-import { applyAction, type ActionContext, type ActionOutcome } from './actions.js';
+import {
+  applyAction,
+  type ActionContext,
+  type ActionOutcome,
+  type ActionStatus,
+} from './actions.js';
 import type { ProcessRunner } from '../domain/process.js';
+import { restorePackageInventory, type PackageInventoryCapture } from './install.js';
 import type { FileSystemPort } from './filesystem.js';
 import type {
   JournalStore,
@@ -134,6 +140,44 @@ export async function verifyRestoration(
   return unrestored;
 }
 
+/**
+ * Restores every package a transaction installed and captured the inventory for.
+ *
+ * Takes the action records because both rollback paths pass a different shape: the in-flight
+ * rollback has the action outcomes, the committed one has the journal entries. The filter is the
+ * ownership test, and it comes straight from RFC 0009 §Initial delivery order item 1: ownership is
+ * decided from the journal — an applied `package-manager-install` with a capture — never from
+ * presence. A package that was already on PATH when the transaction ran does not matter; the
+ * journal says this transaction installed it.
+ *
+ * Returns the package's receipt diagnostics. Whether each package was restored or stayed is in the
+ * diagnostic codes (`package-inventory-restored` / `package-inventory-unrestored` /
+ * `package-restore-failed`), never guessed from the recorder's state afterwards.
+ */
+async function restorePackageInventories(
+  records: readonly {
+    kind: PlannedActionKind;
+    status: ActionStatus;
+    packageInventory: PackageInventoryCapture | null;
+  }[],
+  runner: ProcessRunner | null,
+  cwd: string,
+): Promise<Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  for (const record of records) {
+    if (record.kind !== 'package-manager-install') continue;
+    if (record.status !== 'applied') continue;
+    if (record.packageInventory === null || record.packageInventory === undefined) continue;
+    const outcome = await restorePackageInventory({
+      capture: record.packageInventory,
+      runner,
+      cwd,
+    });
+    diagnostics.push(...outcome.diagnostics);
+  }
+  return diagnostics;
+}
+
 export async function executeTransaction(request: TransactionRequest): Promise<TransactionResult> {
   const startedAt = request.now();
   const entries: TransactionJournalEntry[] = [];
@@ -195,7 +239,20 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
 
     const unrestored = await verifyRestoration(request.fs, snapshots);
 
-    if (restoreError === null && unrestored.length === 0) {
+    // The package half of the rollback, after the file half verified: a `package-inventory`
+    // capture from this transaction means the transaction installed that package, so restoring
+    // it is this rollback's job. Its receipts say per package whether it was restored or stayed.
+    // An `error` receipt here means the restore was attempted and did not take, which is the
+    // same "rollback did not fully restore" condition as an unrestored file.
+    const packageDiagnostics = await restorePackageInventories(
+      applied,
+      request.runner ?? null,
+      request.projectRoot,
+    );
+    diagnostics.push(...packageDiagnostics);
+    const packageRestoreFailed = packageDiagnostics.some((entry) => entry.severity === 'error');
+
+    if (restoreError === null && unrestored.length === 0 && !packageRestoreFailed) {
       diagnostics.push(
         diagnostic({
           severity: 'info',
@@ -236,6 +293,7 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
         status: 'failed',
         snapshots: [],
         ownership: [],
+        packageInventory: null,
         diagnostics: [
           diagnostic({
             severity: 'error',
@@ -254,6 +312,7 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
       snapshots: result.snapshots,
       ownership: result.ownership,
       diagnostics: result.diagnostics,
+      packageInventory: result.packageInventory,
     };
     entries.push(entry);
     applied.push(result);
@@ -334,6 +393,13 @@ export interface RollbackRequest {
   snapshots: SnapshotStore;
   journal: JournalStore;
   now(): string;
+  /**
+   * Needed only when the transaction installed packages with captured inventories. Absent, those
+   * packages are reported as not restored rather than being silently skipped.
+   */
+  runner?: ProcessRunner | null;
+  /** Working directory for a restore install; defaults to the journal's project root. */
+  cwd?: string;
 }
 
 export type RollbackRefusal =
@@ -418,7 +484,18 @@ export async function rollbackTransaction(request: RollbackRequest): Promise<Rol
   // makes exit 7 reachable during an apply, and it is what separates "restored" from "attempted".
   const unrestored = await verifyRestoration(request.fs, snapshots);
 
-  if (restoreError === null && unrestored.length === 0) {
+  // The package half, from the journal the transaction left behind. Journal-derived ownership:
+  // an applied `package-manager-install` entry with a capture is this transaction's package,
+  // whether or not the binary is still where the install put it.
+  const packageDiagnostics = await restorePackageInventories(
+    journal.entries,
+    request.runner ?? null,
+    request.cwd ?? journal.projectRoot,
+  );
+  diagnostics.push(...packageDiagnostics);
+  const packageRestoreFailed = packageDiagnostics.some((entry) => entry.severity === 'error');
+
+  if (restoreError === null && unrestored.length === 0 && !packageRestoreFailed) {
     journal.outcome = 'rolled-back';
     journal.ownership = [];
     journal.finishedAt = request.now();

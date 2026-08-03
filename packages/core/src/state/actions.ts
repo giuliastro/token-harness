@@ -22,7 +22,11 @@
  * succeeding.
  */
 
-import { runPackageManagerInstall } from './install.js';
+import {
+  queryPackageInventory,
+  runPackageManagerInstall,
+  type PackageInventoryCapture,
+} from './install.js';
 import { processSucceeded, type ProcessRunner } from '../domain/process.js';
 import type {
   CreateDirectoryAction,
@@ -94,12 +98,23 @@ export interface ActionOutcome {
   /** What Token Harness owns as a result. Empty unless the status is `applied`. */
   ownership: OwnedArtifact[];
   diagnostics: Diagnostic[];
+  /**
+   * The package inventory captured before a `package-inventory` install ran.
+   *
+   * Non-null only for a `package-manager-install` whose action declared `rollbackData:
+   * 'package-inventory'`. The journal entry carries it, which is what lets a rollback later
+   * restore the package it was captured for — and, when it is null, lets the rollback say the
+   * package was not restored instead of implying it was.
+   */
+  packageInventory: PackageInventoryCapture | null;
 }
 
 function outcome(
   action: PlannedAction,
   status: ActionStatus,
-  parts: Partial<Pick<ActionOutcome, 'snapshots' | 'ownership' | 'diagnostics'>> = {},
+  parts: Partial<
+    Pick<ActionOutcome, 'snapshots' | 'ownership' | 'diagnostics' | 'packageInventory'>
+  > = {},
 ): ActionOutcome {
   return {
     actionId: action.id,
@@ -108,6 +123,7 @@ function outcome(
     snapshots: parts.snapshots ?? [],
     ownership: parts.ownership ?? [],
     diagnostics: parts.diagnostics ?? [],
+    packageInventory: parts.packageInventory ?? null,
   };
 }
 
@@ -879,22 +895,39 @@ export async function applyAction(
 }
 
 /**
- * Installs a package, and owns nothing afterwards.
+ * Installs a package, capturing the inventory when the action asked for one.
  *
- * The three departures from every other family here, each required by RFC 0004:
+ * The three departures from every other family here, each required by RFC 0004, plus the capture
+ * that RFC 0009 §Initial delivery order item 1 adds:
  *
  * - **no snapshot.** A package is not a file, so there is nothing to capture and nothing a
- *   rollback can restore. `install.ts` emits `install-not-reversible` on success so a later
- *   rollback does not read as "the machine is as it was".
+ *   rollback can restore from the filesystem. Instead, when the action declares `rollbackData:
+ *   'package-inventory'`, the channel is asked what it has installed *before* the install runs,
+ *   and that capture travels with the outcome into the journal.
  * - **no ownership.** Token Harness did not compose the installed files and will not remove them;
  *   `uninstall` leaves a provider installed for the same reason.
  * - **`refused`, not `failed`, when elevation is required.** Nothing is broken, and RFC 0004 says
  *   the user runs that step explicitly. The outcome carries the exact command.
+ *
+ * The success receipt follows the capture: `install-inventory-captured` when the channel reported
+ * a prior version (a rollback can restore it), `install-not-reversible` when it did not (a
+ * rollback will say the package stayed).
  */
 async function applyPackageManagerInstall(
   action: PackageManagerInstallAction,
   context: ActionContext,
 ): Promise<ActionOutcome> {
+  const wantsInventory = action.rollbackData === 'package-inventory' && !action.requiresElevation;
+  const packageInventory =
+    wantsInventory && context.runner !== undefined
+      ? await queryPackageInventory({
+          channel: action.packageManager,
+          packageName: action.packageName,
+          runner: context.runner,
+          cwd: context.cwd ?? '',
+        })
+      : null;
+
   const result = await runPackageManagerInstall({
     action,
     runner: context.runner ?? null,
@@ -903,7 +936,36 @@ async function applyPackageManagerInstall(
 
   const status: ActionStatus =
     result.status === 'installed' ? 'applied' : result.status === 'refused' ? 'refused' : 'failed';
-  return outcome(action, status, { diagnostics: result.diagnostics });
+
+  const diagnostics = [...result.diagnostics];
+  if (status === 'applied') {
+    if (packageInventory?.status === 'captured' && packageInventory.version !== null) {
+      // RFC 0009: the rollback may now restore this package and verify the restore, so the
+      // receipt says so instead of the old "rollback will not uninstall it".
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'install-inventory-captured',
+          message: `${action.packageName} was installed through ${action.packageManager}; the prior state (${packageInventory.version}) was captured, so a rollback can restore it`,
+          remediation: null,
+        }),
+      );
+    } else {
+      // The pre-0009 contract, kept for every case without a captured prior version: a package
+      // is not a file, so it survives a rollback, and the receipt says so rather than letting
+      // the report imply the machine is as it was.
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'install-not-reversible',
+          message: `${action.packageName} was installed through ${action.packageManager}; a rollback restores files and will not uninstall it`,
+          remediation: null,
+        }),
+      );
+    }
+  }
+
+  return outcome(action, status, { diagnostics, packageInventory });
 }
 
 /** The families this build can execute, exported so a planner can refuse to plan the rest. */

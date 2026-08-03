@@ -44,6 +44,7 @@ import {
   deriveProjectId,
   executeTransaction,
   measurementUnit,
+  rollbackTransaction,
   type ApplyReport,
   type CliEnvelope,
   type JsonValue,
@@ -396,31 +397,43 @@ describe('rollback after a delegated install', () => {
     explanation: 'gate action',
   };
 
-  function stubInstaller(): { spawned: string[]; runner: ProcessRunner } {
+  function stubInstaller(options: { inventory?: string } = {}): {
+    spawned: string[];
+    runner: ProcessRunner;
+  } {
     const spawned: string[] = [];
+    const base = {
+      displayCommand: '',
+      interpreter: 'direct' as const,
+      executablePath: `/usr/bin/`,
+      exitCode: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 1,
+      timedOut: false,
+      failure: null,
+    };
     const runner: ProcessRunner = {
       run(request) {
         spawned.push(`${request.executable} ${request.args.join(' ')}`);
-        return Promise.resolve({
-          displayCommand: `${request.executable} ${request.args.join(' ')}`,
-          interpreter: 'direct' as const,
-          executablePath: `/usr/bin/${request.executable}`,
-          exitCode: 0,
-          signal: null,
-          stdout: '',
-          stderr: '',
-          stdoutTruncated: false,
-          stderrTruncated: false,
-          durationMs: 1,
-          timedOut: false,
-          failure: null,
-        });
+        const displayCommand = `${request.executable} ${request.args.join(' ')}`;
+        // An inventory query (`winget list`, `cargo install --list`) answers from the stub; an
+        // install answers success with nothing to say.
+        if (request.args[0] === 'list') {
+          return Promise.resolve({ ...base, displayCommand, stdout: options.inventory ?? '' });
+        }
+        return Promise.resolve({ ...base, displayCommand });
       },
     };
     return { spawned, runner };
   }
 
-  function install(): PackageManagerInstallAction {
+  function install(
+    overrides: Partial<PackageManagerInstallAction> = {},
+  ): PackageManagerInstallAction {
     return {
       ...BASE,
       id: 'install-1',
@@ -431,6 +444,7 @@ describe('rollback after a delegated install', () => {
       packageManager: 'winget',
       packageName: 'rtk-ai.rtk',
       version: null,
+      ...overrides,
     };
   }
 
@@ -524,6 +538,273 @@ describe('rollback after a delegated install', () => {
     assert.ok(
       result.diagnostics.some((entry) => entry.code === 'install-not-reversible'),
       `expected the surviving package to be reported: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+  });
+
+  it('restores a captured package through the channel and verifies the reinstall', async () => {
+    const root = mkdtempSync(join(sandbox, 'delegated-captured-'));
+    const project = join(root, 'project');
+    const state = join(root, 'state');
+    mkdirSync(project, { recursive: true });
+    mkdirSync(state, { recursive: true });
+    cpSync(FIXTURE, project, { recursive: true });
+
+    const original = new Map(
+      readdirSync(project).map((name) => [name, readFileSync(join(project, name))] as const),
+    );
+
+    const fs = new NodeFileSystem(FACTS);
+    const created = TransactionSnapshotStore.create({
+      fs,
+      backupRoot: join(state, 'backups'),
+      transactionId: 'gate-delegated-captured',
+      projectRoot: project,
+      now: () => CLOCK,
+    });
+    assert.ok(created.ok, created.ok ? '' : JSON.stringify(created.diagnostics));
+
+    // `winget list --id <id> --exact` prints the installed version as the last token of the row
+    // after the separator line, so the stub answers in that shape — and keeps answering the same
+    // version after the restore, which is the verification the restore performs.
+    const { spawned, runner } = stubInstaller({
+      inventory: 'Trovato rtk [rtk-ai.rtk]\r\nVersione\r\n--------\r\n0.42.0\r\n',
+    });
+
+    const result = await executeTransaction({
+      transactionId: 'gate-delegated-captured',
+      planId: 'gate-plan',
+      projectId: 'gate-project',
+      projectRoot: project,
+      actions: [
+        install({ rollbackData: 'package-inventory' }),
+        mergeHook(join(project, 'settings.json')),
+        mergeHook(join(project, 'commented.json')),
+      ],
+      fs,
+      snapshots: created.store,
+      journal: new FileJournalStore({
+        fs,
+        journalRoot: join(state, 'journals'),
+        backupRoot: join(state, 'backups'),
+      }),
+      runner,
+      now: () => CLOCK,
+    });
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.deepEqual(result.unrestored, []);
+    // Capture before the install, install, restore install of the captured version, then the
+    // verification re-query — in that order.
+    assert.deepEqual(spawned, [
+      'winget list --id rtk-ai.rtk --exact',
+      'winget install --id rtk-ai.rtk --exact --silent --accept-package-agreements --accept-source-agreements',
+      'winget install --id rtk-ai.rtk --exact --silent --accept-package-agreements --accept-source-agreements --version 0.42.0',
+      'winget list --id rtk-ai.rtk --exact',
+    ]);
+
+    for (const [name, bytes] of original) {
+      assert.deepEqual(readFileSync(join(project, name)), bytes, `${name} came back changed`);
+    }
+
+    // RFC 0009 §Initial delivery order item 1: the machine is as it was, because the package was
+    // restored to the captured version and the restoration was re-read — not assumed.
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'package-inventory-restored'),
+      `expected the restored package to be reported: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+    assert.ok(
+      !result.diagnostics.some((entry) => entry.code === 'install-not-reversible'),
+      `a restored package must not also be reported as surviving: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+  });
+
+  it('reports a package as staying when its capture could not be read', async () => {
+    const root = mkdtempSync(join(sandbox, 'delegated-unreadable-'));
+    const project = join(root, 'project');
+    const state = join(root, 'state');
+    mkdirSync(project, { recursive: true });
+    mkdirSync(state, { recursive: true });
+    cpSync(FIXTURE, project, { recursive: true });
+
+    const fs = new NodeFileSystem(FACTS);
+    const created = TransactionSnapshotStore.create({
+      fs,
+      backupRoot: join(state, 'backups'),
+      transactionId: 'gate-delegated-unreadable',
+      projectRoot: project,
+      now: () => CLOCK,
+    });
+    assert.ok(created.ok, created.ok ? '' : JSON.stringify(created.diagnostics));
+
+    // The channel answered nothing this build reads, so the capture says "could not answer" —
+    // and the rollback says the package stays, rather than pretending to have restored it.
+    const { runner } = stubInstaller({ inventory: '' });
+
+    const result = await executeTransaction({
+      transactionId: 'gate-delegated-unreadable',
+      planId: 'gate-plan',
+      projectId: 'gate-project',
+      projectRoot: project,
+      actions: [
+        install({ rollbackData: 'package-inventory' }),
+        mergeHook(join(project, 'settings.json')),
+        mergeHook(join(project, 'commented.json')),
+      ],
+      fs,
+      snapshots: created.store,
+      journal: new FileJournalStore({
+        fs,
+        journalRoot: join(state, 'journals'),
+        backupRoot: join(state, 'backups'),
+      }),
+      runner,
+      now: () => CLOCK,
+    });
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'package-inventory-unrestored'),
+      `expected the staying package to be reported: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+    assert.ok(
+      !result.diagnostics.some((entry) => entry.code === 'package-inventory-restored'),
+      `an unrestored package must not be reported as restored: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+  });
+
+  it('restores a captured package when a committed transaction is rolled back', async () => {
+    const root = mkdtempSync(join(sandbox, 'committed-captured-'));
+    const project = join(root, 'project');
+    const state = join(root, 'state');
+    mkdirSync(project, { recursive: true });
+    mkdirSync(state, { recursive: true });
+    cpSync(FIXTURE, project, { recursive: true });
+
+    const fs = new NodeFileSystem(FACTS);
+    const created = TransactionSnapshotStore.create({
+      fs,
+      backupRoot: join(state, 'backups'),
+      transactionId: 'committed-captured',
+      projectRoot: project,
+      now: () => CLOCK,
+    });
+    assert.ok(created.ok, created.ok ? '' : JSON.stringify(created.diagnostics));
+
+    const journal = new FileJournalStore({
+      fs,
+      journalRoot: join(state, 'journals'),
+      backupRoot: join(state, 'backups'),
+    });
+
+    const { spawned, runner } = stubInstaller({
+      inventory: 'Trovato rtk [rtk-ai.rtk]\r\nVersione\r\n--------\r\n0.42.0\r\n',
+    });
+
+    // Commit a transaction that only installs the package — the rollback target.
+    const committed = await executeTransaction({
+      transactionId: 'committed-captured',
+      planId: 'gate-plan',
+      projectId: 'gate-project',
+      projectRoot: project,
+      actions: [install({ rollbackData: 'package-inventory' })],
+      fs,
+      snapshots: created.store,
+      journal,
+      runner,
+      now: () => CLOCK,
+    });
+    assert.equal(committed.exitCode, TRANSACTION_EXIT_CODES.ok);
+    assert.equal(committed.journal.outcome, 'committed');
+    assert.equal(committed.journal.entries[0]?.packageInventory?.version, '0.42.0');
+    spawned.length = 0;
+
+    // The committed rollback reads the journal — the only record that survives the process — and
+    // restores the package from the capture it holds, the same restore an in-flight rollback runs.
+    const result = await rollbackTransaction({
+      transactionId: 'committed-captured',
+      fs,
+      snapshots: created.store,
+      journal,
+      now: () => CLOCK,
+      runner,
+    });
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.ok);
+    assert.equal(result.refusal, null);
+    assert.equal(result.journal?.outcome, 'rolled-back');
+    assert.deepEqual(spawned, [
+      'winget install --id rtk-ai.rtk --exact --silent --accept-package-agreements --accept-source-agreements --version 0.42.0',
+      'winget list --id rtk-ai.rtk --exact',
+    ]);
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'package-inventory-restored'),
+      `expected the restored package to be reported: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+  });
+
+  it('does not claim a restore it could not perform on a committed rollback', async () => {
+    const root = mkdtempSync(join(sandbox, 'committed-unrestorable-'));
+    const project = join(root, 'project');
+    const state = join(root, 'state');
+    mkdirSync(project, { recursive: true });
+    mkdirSync(state, { recursive: true });
+    cpSync(FIXTURE, project, { recursive: true });
+
+    const fs = new NodeFileSystem(FACTS);
+    const created = TransactionSnapshotStore.create({
+      fs,
+      backupRoot: join(state, 'backups'),
+      transactionId: 'committed-unrestorable',
+      projectRoot: project,
+      now: () => CLOCK,
+    });
+    assert.ok(created.ok, created.ok ? '' : JSON.stringify(created.diagnostics));
+
+    const journal = new FileJournalStore({
+      fs,
+      journalRoot: join(state, 'journals'),
+      backupRoot: join(state, 'backups'),
+    });
+
+    const { runner } = stubInstaller({
+      inventory: 'Trovato rtk [rtk-ai.rtk]\r\nVersione\r\n--------\r\n0.42.0\r\n',
+    });
+
+    const committed = await executeTransaction({
+      transactionId: 'committed-unrestorable',
+      planId: 'gate-plan',
+      projectId: 'gate-project',
+      projectRoot: project,
+      actions: [install({ rollbackData: 'package-inventory' })],
+      fs,
+      snapshots: created.store,
+      journal,
+      runner,
+      now: () => CLOCK,
+    });
+    assert.equal(committed.exitCode, TRANSACTION_EXIT_CODES.ok);
+
+    // No runner on the rollback: the capture exists and the channel could be asked, but nothing
+    // can invoke it. The receipt says the package stays — it never claims a restore.
+    const result = await rollbackTransaction({
+      transactionId: 'committed-unrestorable',
+      fs,
+      snapshots: created.store,
+      journal,
+      now: () => CLOCK,
+    });
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.ok);
+    assert.equal(result.journal?.outcome, 'rolled-back');
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'package-inventory-unrestored'),
+      `expected the staying package to be reported: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
+    );
+    assert.ok(
+      !result.diagnostics.some((entry) => entry.code === 'package-inventory-restored'),
+      `an unrestored package must not be reported as restored: ${JSON.stringify(result.diagnostics.map((entry) => entry.code))}`,
     );
   });
 });

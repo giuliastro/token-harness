@@ -214,6 +214,11 @@ export async function runRollback(context: CommandContext): Promise<CommandResul
     snapshots: built.store,
     journal: built.journal,
     now: context.now,
+    // Package inventories, when the transaction captured any: restoring a package needs the same
+    // process runner the install used. Absent, the rollback reports those packages as not
+    // restored instead of attempting a silent reinstall.
+    runner: context.adapters.runner,
+    cwd: context.projectRoot,
   });
   diagnostics.push(...result.diagnostics);
 
