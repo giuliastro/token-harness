@@ -97,6 +97,7 @@ Exit criteria:
 | 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL is outgrown |
 | 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
+| 0010 | Read-only status seam for external consumers | Reserved — Phase 9, §9.4, §15 item 41 |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -662,14 +663,54 @@ Deferred to `0.2.0` and `1.0.0`:
 
 ## 14. Phase 9 — Managed lifecycle, harnesses, and providers
 
-Three workstreams and a boundary, in dependency order rather than in order of appeal. §9.1 is the
-mechanism; §9.2 and §9.3 are what the mechanism is for, and neither can install anything without
-it. §9.4 is the seam an ecosystem tool reads, and it mutates nothing.
+The objective of this phase, stated as the user-visible result rather than as a list of
+workstreams: **one tool installs, updates, verifies, measures and removes the whole
+token-saving pipeline, on every harness on the machine, and no channel of waste has two
+owners.** `0.1.0` proved the arbitration on one contested pair. Phase 9 makes the pipeline
+whole and makes Token Harness the thing that owns it.
 
-One rule spans all four, and it is the rule the `0.1.0` gates were written to protect: **detection
+§9.0 is what the other workstreams are written against; §9.1 is the mechanism; §9.2 and §9.3 are
+what the mechanism is for, and neither can install anything without it; §9.4 is the seam an
+ecosystem tool reads, and it mutates nothing; §9.5 is what makes the collection behave as one tool
+rather than as five installations that happen to coexist.
+
+One rule spans all of it, and it is the rule the `0.1.0` gates were written to protect: **detection
 is broad, mutation is narrow.** Adding a harness or a provider to the registry makes it *visible*.
 Making it manageable additionally requires a compatibility row backed by a fixture, and nothing
 below shortens that.
+
+### 9.0 Observation spike — the harnesses and installers of the second machine
+
+Phase 2.5 sits before the adapters in §4 because "discovering it late would force a rewrite of
+every adapter". The same applies to Hermes, Pi and OMP, and more sharply: none of the three has
+been seen by this build. Their configuration formats, interception points and enablement semantics
+are unknown here, and the three known ones each broke a different assumption — Claude Code routes
+shell through a second tool family on Windows, Codex keeps enablement in unreadable state, and
+OpenCode's real config is JSONC that `JSON.parse` rejects.
+
+No production code. Per harness, record on a real installation:
+
+- version, and the command that reports it;
+- configuration files, user and project scope, with absolute paths and the parser each needs;
+- interception points, as exact key paths, with a real example of a configured entry;
+- tool families, and whether any shell-executing family is reachable without being matched;
+- whether enablement or trust lives in separate state, and whether it is readable from outside;
+- whether anything externally observable records that an interception ran — which decides the
+  achievable tier, and `config-only` is the expected answer rather than a disappointing one;
+- what HarnessTrim's own installer writes there: the exact write set and artifact digests at the
+  observed upstream version, which is what RFC 0002 requires before any delegated install.
+
+Deliverable: `docs/spikes/9.0-harness-observation-log.md`, in the shape of the Phase 2.5 log —
+every claim carrying a path or a command transcript.
+
+Acceptance:
+
+- nothing recorded from a README or an upstream issue; a claim without local evidence is written
+  as an open question instead;
+- each harness has a proposed tier with the reason, and a proposed tested-version range of exactly
+  the version observed;
+- where a harness cannot be given an interception point, that is the finding, and the harness is
+  queued as detection-only rather than dropped.
 
 ### 9.1 Managed lifecycle and compatibility
 
@@ -789,6 +830,54 @@ otherwise. Caveman remains opt-in until its instruction overhead is included in 
 break-even calculation. Dejavu remains non-default until RTK ordering and native
 Windows support are resolved.
 
+#### The admission set for this phase, and the channel each one closes
+
+The queue above ranks candidates by how different their source of waste is. Implementation order is
+not the same question, because two of the highest-ranked entries carry unresolved admission gates
+and one does not. This is a sequencing decision inside that queue, not a re-ranking of it, and it is
+written down so the difference is visible:
+
+| Channel of waste | Owner after this phase | Capability | Contest with what ships |
+| --- | --- | --- | --- |
+| Shell command, before execution | RTK | `shell.command.rewrite` | — |
+| One command's output | RTK, or HarnessTrim where RTK declares no support | `shell.output.reduce` | resolved at `0.1.0` |
+| Output repeated across runs | Dejavu | `shell.output.deduplicate` | chainable with RTK, order undecided |
+| Generic tool results | HarnessTrim | `tool.output.reduce` | — |
+| MCP tool schemas | Lazy MCP | `mcp.schema.lazy` | **none** |
+| The model's own verbosity | Caveman | `model.output.terse` | **none** |
+| Always-loaded instructions | HarnessTrim skills | `instructions.progressive` | file-level, see below |
+| Repository context | repowise, later | `repo.context.retrieve` | needs a size cap and an attribution fixture |
+| Conversation history | harness-native compaction | — | not a provider surface |
+
+Implementation order:
+
+1. **Lazy MCP.** MIT, and the only candidate whose capability no shipped provider claims — nothing
+   arbitrates, so the resolver work is a declaration rather than a rule. Its gates are all local and
+   testable here: Windows packaging, recursive discovery, schema byte accounting, restoration of the
+   original MCP registry on uninstall, and adoption of a proxy the user configured by hand.
+2. **Caveman.** MIT, `model.output.terse` unclaimed, and it reaches a channel neither RTK nor
+   HarnessTrim touches at all. Opt-in, with the instruction overhead inside the break-even
+   calculation rather than beside it — a provider that spends 200 tokens of instruction to save 300
+   is a rounding error being reported as a feature.
+
+   It also surfaces something the resolver does not yet model. Caveman and HarnessTrim both write
+   marker-fenced instructions into the same file — `CLAUDE.md`, `AGENTS.md` — so they contest a
+   *file region*, not a capability. `PatchMarkerBlockAction` already makes each block owned and
+   reversible, and RFC 0003 arbitrates over interception points, which an instruction file is not
+   one of. Two providers writing distinct owned blocks into one file is legitimate; two providers
+   writing the *same* block is a conflict nothing currently detects. That gap is admitted with
+   Caveman or Caveman waits.
+3. **Dejavu.** Last of the three, and non-default when it lands, for the two reasons already
+   recorded: RFC 0003 §Dejavu policy asks seven questions that only an ordered-chain integration
+   test can answer, and native Windows is unsupported upstream — which on a Windows-first project
+   means the platform declaration says so rather than the provider being quietly absent there.
+
+Excluded from this phase, each for a reason already accepted rather than a new one: Headroom and
+Context Mode contest `tool.output.reduce` with HarnessTrim, so admitting either into a
+maximum-savings profile is exactly the fail-closed violation RFC 0003 §Context provider policy
+forbids; LLMLingua is an engine with no lifecycle; and the routers need the capability and
+attribution-class RFC named below before a manifest can honestly describe them.
+
 LiteLLM is a gateway substrate, not by itself evidence of intelligent routing or token
 savings. RouteLLM and vLLM Semantic Router remain alternative owners of a model request.
 Before either can be admitted, a new RFC must define the model-routing capability and a
@@ -828,6 +917,53 @@ user's machine, and there is no version of that which is a smaller decision than
 
 `squeezed` is out of scope and named here so the question is answered once: it is a Blender desktop
 assistant, and it shares an author with this repository and nothing else.
+
+### 9.5 The pipeline as one tool
+
+Five managed providers across five harnesses is not one tool merely because one CLI can reach them
+all. It becomes one tool when a user states an intent once and every subsequent operation is about
+the pipeline rather than about its members. Four things are missing for that, and none is cosmetic.
+
+**Goal-based profiles.** RFC 0003 §0.2.0 already specifies them, including the `goals` block
+already reserved in `token-harness.yaml` and the `balanced` profile deliberately absent rather than
+aliased. They were deferred for one stated reason — "it needs more than one provider pair to be
+designed against, so it is deferred rather than guessed" — and §9.3 supplies three more pairs. The
+resolver converts goals into owners using installed harnesses, OS support, provider availability,
+license policy, verified compatibility and user overrides, and `plan` keeps explaining every
+selection *and every rejection*, which is what stops a profile from degenerating into an installer
+recipe. A `max` goal set is the one the user actually asks for; it is legitimate only because every
+channel in the §9.3 table has exactly one owner, and it must fail closed rather than co-enable two
+claimants when a provider is missing.
+
+**One lifecycle over the set.** `apply` already executes a multi-provider plan; the gaps are on the
+other three verbs. `update` must cover every managed provider in one transaction and report the ones
+whose channel could not answer, distinctly from the ones already current. `uninstall` must remove in
+reverse dependency order and preserve anything the user owns. `rollback` must restore a partially
+applied *pipeline*, not a partially applied action — which is the case where a package survives, and
+the receipt says so.
+
+**One pipeline identity.** The pipeline ID is already derived from the ordered owner list, so it
+changes when the composition changes. `status` should lead with it: the channels, their owners, the
+tier each reaches, and the drift on any of them — one table, not five provider sections a reader has
+to compose mentally.
+
+**One savings figure that is still honest.** Per-channel attribution with the measurement classes
+kept apart is the whole difficulty. Five providers reducing five different channels must not sum
+into a single number that mixes exact token counts, character-derived estimates and counterfactuals;
+an overlapping stage must be counted once; and a channel with no measurement reports that rather
+than a zero. RFC 0005's deduplication keys and measurement classes already carry this, and the work
+is a report that reaches five providers without loosening either.
+
+Acceptance:
+
+- a goal set resolves to exactly one owner per channel, or fails closed naming the unowned channel
+  and the missing provider;
+- `balanced` and `max` exist as goal sets, and neither is an alias of `safe`;
+- `update`, `uninstall` and `rollback` each act over the whole pipeline with one receipt;
+- `status` shows one pipeline, its ID, and per-channel owner, tier and drift;
+- `metrics` reports per channel and per provider, never merging measurement classes, and the total
+  of a mixed pipeline is refused rather than approximated;
+- removing Token Harness leaves every user-managed installation intact, on all five harnesses.
 
 ## 15. Issue/PR slicing
 
@@ -1005,7 +1141,137 @@ Suggested first implementation issues:
     "sign or attest release artifacts" is still open, and item 23's phrasing above is left as it was
     written rather than retrofitted into having anticipated this.
 
-RTK and HarnessTrim detection follow once RFC 0007 fixes the verification surface.
+### Phase 9 queue
+
+Items 1–24 are the `0.1.0` record. What follows is the Phase 9 work, in dependency order, one PR
+each unless an item says otherwise. Three of them need a machine with Hermes, Pi and OMP installed
+and are marked **[second machine]**; the rest need nothing that is not in this repository, so they
+can proceed in parallel with the observation spike rather than waiting behind it.
+
+25. **Stop reading a harness the registry does not know.** `harnesstrim`'s manifest declares
+    `~/.hermes/harnesstrim-metrics.jsonl` among its metrics locations while no Hermes adapter, tested
+    range or tier exists. Remove that location until item 30 admits Hermes, and add the assertion
+    that makes the gap impossible to reintroduce: every metrics location a provider declares belongs
+    to a harness in the registry, or is project-relative and harness-neutral.
+
+    Small, and first because it is the one live inconsistency rather than a future feature.
+    Regenerate `docs/matrices.md`; the metrics-sources table changes.
+
+26. **The observation spike (§9.0). [second machine]** No production code, one document. Blocks items
+    30, 31, 32 and 33 and nothing else.
+
+27. **Package inventory capture, ownership, and receipt (§9.1 item 1).** Implements the declared
+    `rollbackData: 'package-inventory'`. Capture the inventory for the channels that can report one
+    (`npm`, `cargo`, `winget`, `homebrew`, `uv`, `pipx`); record which channel answered and which
+    could not; decide ownership from the transaction journal rather than from presence, exactly as
+    `uninstall` already does. A rollback that restores an inventory says so; one that cannot still
+    says so, and never the other way round.
+
+    Acceptance: a mid-plan failure after an install reports the package as reverted only where the
+    inventory was captured and the package was ours; the RTK plan's `rollbackData` moves off `none`
+    for inventory-capable channels and the comment recording why it was `none` is replaced by the
+    behaviour, not deleted.
+
+28. **JSONC object-member and nested-array mutation (§9.1 item 2).** Extend `state/jsonc.ts` beyond
+    `appendJsoncRootArray`: set or insert an object member, and append into a nested array, keeping
+    comments, trailing commas and formatting, and refusing an edit it cannot locate exactly. The
+    refusal is the feature — a CST editor that approximates is how a user's comments disappear.
+
+    Acceptance: property test over real `opencode.jsonc` shapes asserting that every byte outside the
+    edited region is unchanged; an ambiguous or absent target is a planning error naming the path and
+    the expression it could not resolve.
+
+29. **`CompatibilityRow` and the managed-mutation gate (RFC 0009).** The row type, the lookup, the
+    classification of an out-of-range version as `unknown-newer` / `unknown-older` / `below-range`,
+    and `plan` refusing managed mutation outside a row with the missing schema or fixture named. Keep
+    it distinct from `CompatibilityRule` as RFC 0009 §This is not RFC 0003's compatibility rule
+    requires; a row must not be reachable from the arbitration path.
+
+    Acceptance: a provider/harness/version combination with no row is detected and reported by
+    `doctor` and refused by `plan`, with distinct exit codes for "nothing to do" and "cannot do this
+    safely"; a lockfile, a successful probe and a matching major version each fail to satisfy a row.
+
+30. **Hermes harness adapter. [second machine]** Written against item 26's log: detection, config
+    discovery, inspection, declared tier, tested range of exactly the observed version, and the
+    fixture set every adapter carries — absent, partial, healthy, broken, user-modified, brownfield.
+    Registry entry, matrix row, regenerated matrices.
+
+31. **Pi harness adapter. [second machine]** The same, separately, because one PR per adapter.
+
+32. **OMP: adapter or a recorded refusal. [second machine]** A control bridge is not an interception
+    point. If item 26 found one, this is an adapter; if it did not, this item is the paragraph in
+    `docs/provider-landscape.md` §Harness landscape saying so with the evidence, and OMP stays
+    detection-only or absent. Either outcome closes the item; a silent omission does not.
+
+33. **HarnessTrim as a managed provider on Hermes and Pi. [second machine]** The first managed
+    HarnessTrim installation, and the reason it is first: RTK declares Claude Code alone, so nothing
+    contests `shell.output.reduce` there and the lifecycle is the only thing under test. A
+    `DelegatedProviderInstallAction` with the write set and artifact digests item 26 recorded, a
+    containment boundary, snapshot rollback, and the resolver assigning the scope for real rather
+    than excluding it.
+
+    Acceptance: `plan` under `safe` now contains a HarnessTrim install action on Hermes and Pi and
+    still contains none on Claude, Codex or OpenCode; a write outside `affectedPaths` but inside the
+    boundary fails and names the path; uninstalling restores the pre-install snapshot and never calls
+    an upstream uninstaller that was not declared available.
+
+34. **HarnessTrim managed on OpenCode (§9.1 item 3).** The managed-plugin row: the wrapper file, the
+    configuration directory's package manifest and lockfile inside the reviewed write set, and the
+    JSONC editor from item 28 doing the config edit. Fixtures for clean, brownfield, update, drift,
+    rollback and uninstall.
+
+    Acceptance: a user plugin entry and a user dependency both survive install and uninstall; the
+    plugin entry alone is never reported as a complete installation.
+
+35. **Lazy MCP provider (§9.3).** `mcp.schema.lazy`, which nothing else claims. Manifest with license
+    and channels, detection, plan and uninstall restoring the original MCP registry byte-for-byte,
+    metrics or an honest `unavailable`, brownfield adoption of a proxy the user configured by hand,
+    and matrix rows. Windows packaging is an admission gate, not a follow-up.
+
+    Acceptance: uninstall restores the pre-install MCP registry exactly; the schema bytes it claims to
+    have avoided are measured, not asserted; a hand-configured proxy is adopted rather than
+    overwritten.
+
+36. **Caveman provider, and instruction-file region ownership (§9.3).** `model.output.terse`, opt-in,
+    with the instruction overhead inside the break-even figure. The second half is the part that is
+    not about Caveman: two providers writing marker-fenced blocks into one instruction file contest a
+    file region rather than an interception point, and nothing detects a collision on the *same*
+    block today. Model it, or Caveman waits.
+
+    Acceptance: two providers with distinct owned blocks in one `AGENTS.md` both apply and both roll
+    back independently; two providers claiming the same marker block are a conflict reported before
+    apply; a reported saving from terser output is net of the instruction it costs.
+
+37. **Dejavu provider (§9.3), non-default.** The seven questions in RFC 0003 §Dejavu policy answered
+    by ordered-chain integration tests, not by prose. Native Windows unsupported upstream is declared
+    in the platform support rather than discovered by a user.
+
+    Acceptance: each of the seven has a test that would fail if the answer changed; exit codes survive
+    the full chain; the original raw output is retrievable; incremental savings are attributable per
+    stage with no double counting.
+
+38. **Goal-based profiles (§9.5, RFC 0003 §0.2.0).** The `goals` block, resolution from goals to
+    owners, `balanced`, and the `max` goal set. Amend RFC 0003 with what three additional provider
+    pairs teach, since the deferral was explicitly waiting for them.
+
+    Acceptance: exactly one owner per channel or a closed failure naming the unowned channel;
+    `balanced` and `max` are neither absent nor aliases of `safe`; `plan` explains every selection and
+    every rejection; a missing provider narrows the pipeline instead of co-enabling two claimants.
+
+39. **Pipeline-level `update`, `uninstall`, `rollback`, and `status` (§9.5).** One transaction and one
+    receipt over the whole set; reverse dependency order on removal; `status` leading with the
+    pipeline ID, its channels, owners, tiers and drift.
+
+40. **Per-channel metrics over five providers (§9.5).** Reports per channel and per provider with the
+    measurement classes structurally apart, overlapping stages counted once, and a refusal rather than
+    an approximation where a mixed pipeline has no comparable total.
+
+41. **RFC 0010, the read-only status seam (§9.4).** Documentation only, no dependency in either
+    direction, and best written before `harness-remote` starts parsing envelopes rather than after.
+
+42. **`0.2.0` release gates (§16).** The A/B benchmark matrix across the scenarios §8.2 deferred, the
+    per-channel savings report, regenerated matrices, and the build provenance attestation §8.3 still
+    lacks.
 
 ## 16. Release gates
 
@@ -1020,13 +1286,20 @@ tiers, metrics, brownfield adoption.
 
 ### `0.2.0`
 
-The managed lifecycle of §9.1, the first additional harness after its fixtures pass, the first
-additional provider after compatibility validation, goal-based profiles, and the A/B benchmark
-matrix.
+The managed lifecycle of §9.1; Hermes and Pi admitted with declared tiers; HarnessTrim managed
+rather than adopted; at least one additional provider on a channel nothing owned before; goal-based
+profiles with `balanced` and `max`; pipeline-level `update`, `uninstall`, `rollback` and `status`;
+per-channel metrics with the measurement classes apart; and the A/B benchmark matrix.
 
-The managed lifecycle is listed first because the other four assume it. A new provider that cannot
-be installed and a new harness on which nothing can be planned are both detection-only, which is a
-smaller release than this line has been promising.
+The managed lifecycle is listed first because everything after it assumes it. A new provider that
+cannot be installed and a new harness on which nothing can be planned are both detection-only, which
+is a smaller release than this line has been promising.
+
+What `0.2.0` claims, in the form a user can check: one command installs the pipeline on every
+harness present, one command updates it, one removes it without touching anything they configured by
+hand, and every channel of waste in §9.3's table has exactly one owner or is honestly reported as
+having none. `0.1.0` proved that arbitration is possible on one contested pair; `0.2.0` is the claim
+that the whole pipeline is one thing.
 
 ### `1.0.0`
 
