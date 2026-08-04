@@ -19,6 +19,7 @@ import { after, before, describe, it } from 'node:test';
 
 import type { CliEnvelope, PlanReport, PlatformFacts } from '@token-harness/core';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
+import { fakeResolve, nodeVersionRows } from '@token-harness/tests';
 import { run } from 'token-harness';
 
 const FACTS: PlatformFacts = {
@@ -68,13 +69,15 @@ async function planIn(home: string): Promise<{ exitCode: number; report: PlanRep
       runner: new NodeProcessRunner({
         facts: FACTS,
         env: process.env,
-        // Nothing resolves.
+        // `rtk` and `claude` resolve to the Node binary; nothing else does.
         //
-        // Deliberate, and it is what keeps this test honest on a CI runner: AGENTS.md forbids a
-        // test requiring an upstream executable, and `claude --version` would spawn the real
-        // binary on the developer's machine and nothing on Linux. Detection falls back to the
-        // configuration file, which is the evidence this test actually cares about.
-        resolve: () => null,
+        // The suite needs both versions observed: RFC 0009 admits a managed mutation only
+        // inside a compatibility row, and a row cannot admit a version nothing reported. The
+        // `claude --version` probe would spawn the real binary on the developer's machine and
+        // nothing on Linux, so resolving to the running Node keeps the suite honest on every
+        // runner — AGENTS.md forbids a test requiring an upstream executable, and Node is the
+        // interpreter the test already runs under.
+        resolve: fakeResolve,
       }),
       paths: {
         home,
@@ -86,6 +89,9 @@ async function planIn(home: string): Promise<{ exitCode: number; report: PlanRep
       localDatabase: null,
       projectIdFor: () => 'p_test',
     },
+    // RFC 0009: the fake environment observes both versions (Node's), and this table covers
+    // exactly what it observes, so the machinery under test — not the gate — is what runs.
+    compatibilityRows: nodeVersionRows(FACTS),
     metrics: null,
     now: () => NOW,
   });
@@ -139,9 +145,7 @@ describe('a home already carrying the RTK hook', () => {
     assert.ok(report);
     // RFC 0004 §Brownfield adoption: for the *configuration*, the desired state is the current
     // state. This asserts the absence of a `merge-json` rather than of every action, because
-    // nothing is resolvable in this test — so `rtk` is not runnable, and proposing to install it
-    // is correct. Asserting an empty plan here would have been asserting two things at once and
-    // passing only by accident on a machine that happened to have RTK on PATH.
+    // the hook already covers the tool family and nothing about that can improve by rewriting.
     assert.equal(
       report.actions.some((action) => action.kind === 'merge-json'),
       false,
@@ -155,10 +159,9 @@ describe('a home already carrying the RTK hook', () => {
     // input rather than a property of the machine the suite runs on.
     const { report } = await planIn(homeWith(RTK_HOOK));
     assert.ok(report);
-    assert.deepEqual(
-      report.actions.map((action) => action.kind),
-      ['package-manager-install'],
-    );
+    // `rtk` resolves in this suite, so it reads as installed and the hook is already
+    // registered: the honest plan is empty, and the gate has nothing to admit or refuse.
+    assert.deepEqual(report.actions, []);
   });
 
   it('still resolves ownership', async () => {

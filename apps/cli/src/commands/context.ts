@@ -7,6 +7,7 @@
  */
 
 import type {
+  CompatibilityRow,
   FileSystemPort,
   HarnessId,
   LocalDatabasePort,
@@ -59,6 +60,14 @@ export interface CommandContext {
    * command reaching for the developer's home. AGENTS.md forbids the second.
    */
   adapters: AdapterAccess | null;
+  /**
+   * RFC 0009 §Compatibility matrix — the rows a managed mutation must fall inside.
+   *
+   * Null means the shipped table (currently empty: rows arrive with fixtures, RFC 0009 item 5).
+   * A non-null value is how a test admits a combination so the rest of the machinery can be
+   * exercised; production always resolves through the shipped table.
+   */
+  compatibilityRows: readonly CompatibilityRow[] | null;
   /** ISO 8601 instant. Injected so a report is deterministic in tests. */
   now(): string;
 }

@@ -25,6 +25,7 @@ import {
   type ResolvedExecutable,
   type VerifyReport,
 } from '@token-harness/core';
+import { nodeVersionRows } from '@token-harness/tests';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
@@ -80,7 +81,10 @@ function world(): World {
 }
 
 function resolve(name: string): ResolvedExecutable | null {
-  if (name !== 'rtk') return null;
+  // `rtk` and `claude` resolve to the Node binary: RFC 0009 admits a managed mutation only
+  // inside a compatibility row, and the injected table (below) covers exactly the versions
+  // this reports — Node's own. Nothing else resolves, so no upstream executable is involved.
+  if (name !== 'rtk' && name !== 'claude') return null;
   return { requested: name, path: process.execPath, kind: 'native' };
 }
 
@@ -121,6 +125,7 @@ async function invoke<T>(
       localDatabase: null,
       projectIdFor: (path) => deriveProjectId(path, SALT, FACTS.os === 'windows'),
     },
+    compatibilityRows: nodeVersionRows(FACTS),
     metrics: null,
     now: () => now,
   };

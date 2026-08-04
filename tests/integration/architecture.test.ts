@@ -366,6 +366,22 @@ describe('module boundaries', () => {
     }
   });
 
+  it('the arbitration path never reaches a compatibility row', () => {
+    // RFC 0009 §This is not RFC 0003's compatibility rule: a row "never arbitrates between
+    // providers and never overrides a rule". The resolver is the arbitration path, so no
+    // planner module may import the row module — not even the shipped empty table, which would
+    // make the path grow an input the rule table does not have.
+    for (const file of SOURCES.filter((f) => inPackage(f, 'packages/core/src/planner/'))) {
+      for (const specifier of file.imports) {
+        const resolved = resolveRelative(file.path, specifier);
+        assert.ok(
+          !resolved.includes('/compatibility-rows'),
+          `${file.path} imports the compatibility-row module: ${specifier}`,
+        );
+      }
+    }
+  });
+
   it('the cli reaches core and adapters only through their entry points', () => {
     for (const file of SOURCES.filter((f) => inPackage(f, 'apps/cli/'))) {
       for (const specifier of file.imports) {

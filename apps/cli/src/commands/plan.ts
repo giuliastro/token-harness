@@ -20,8 +20,10 @@
 
 import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 import {
+  COMPATIBILITY_ROWS,
   COMPATIBILITY_RULES,
   EXIT_CODES,
+  admitManagedMutation,
   commandResult,
   diagnostic,
   isProfileId,
@@ -34,10 +36,12 @@ import {
   type CommandResult,
   type Diagnostic,
   type HarnessConfigSummary,
+  type HarnessId,
   type HarnessManifest,
   type PlanReport,
   type PlannedAction,
   type ProfileId,
+  type ProviderId,
   type RecordedVersions,
   type ResolverProvider,
 } from '@token-harness/core';
@@ -78,6 +82,25 @@ export interface ComputedPlan {
   present: HarnessManifest[];
   /** What the harness adapters found on disk, for a brownfield-aware provider plan. */
   harnessConfigs: HarnessConfigSummary[];
+  /**
+   * RFC 0009 §Compatibility matrix — managed mutations the gate refused, each with the missing
+   * config schema or provider fixture named. Present actions were dropped; the plan is empty and
+   * `runPlan` exits with the unsupported-environment code rather than propose what a row has not
+   * admitted.
+   */
+  blocked: BlockedManagedMutation[];
+}
+
+/** One refused managed mutation, as the plan reports it. */
+export interface BlockedManagedMutation {
+  provider: ProviderId;
+  providerVersion: string | null;
+  harness: HarnessId;
+  harnessVersion: string | null;
+  /** `unknown-newer`, `unknown-older`, `below-range`, or `no-row`. */
+  verdict: string;
+  /** What a row would have to name: the missing harness schema or provider fixture. */
+  missing: string;
 }
 
 export async function computePlan(context: CommandContext): Promise<ComputedPlan> {
@@ -181,7 +204,9 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
    * to a separate, non-intercepting install; it must not use that path to claim an exclusive scope.
    */
   const actions: PlannedAction[] = [];
+  const blocked: BlockedManagedMutation[] = [];
   if (providerContext !== null) {
+    const rows = context.compatibilityRows ?? COMPATIBILITY_ROWS;
     for (const adapter of providerAdapters) {
       const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
       if (owned.length === 0 && adapter.plansWithoutOwnership !== true) continue;
@@ -190,7 +215,43 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         harnesses: present,
         desiredState: 'configured',
       });
-      actions.push(...providerPlan.actions);
+      if (providerPlan.actions.length === 0) continue;
+
+      /**
+       * RFC 0009 §Compatibility matrix — the managed-mutation gate.
+       *
+       * A provider plan is admitted as a whole only when every harness it would mutate is
+       * covered by a row for the observed provider × harness × version × platform combination.
+       * The harnesses are read from the scopes the resolver assigned, never from a wider list:
+       * gating a plan for a harness it does not touch would refuse a mutation that is not
+       * planned. A plan refused on any combination is dropped whole — proposing half of a
+       * mutation a row has not admitted is how a reviewer learns to trust the gate.
+       */
+      const touched = [...new Set(owned.map((entry) => entry.scope.harness))];
+      if (touched.length === 0) touched.push(...present.map((harness) => harness.id));
+      let admitted = true;
+      for (const harness of touched) {
+        const admission = admitManagedMutation(rows, {
+          provider: adapter.manifest.id,
+          providerVersion: versions.providers[adapter.manifest.id] ?? null,
+          harness,
+          harnessVersion: versions.harnesses[harness] ?? null,
+          os: context.platform.os,
+          wsl: context.platform.isWsl,
+        });
+        if (admission.state !== 'admitted') {
+          admitted = false;
+          blocked.push({
+            provider: adapter.manifest.id,
+            providerVersion: versions.providers[adapter.manifest.id] ?? null,
+            harness,
+            harnessVersion: versions.harnesses[harness] ?? null,
+            verdict: admission.verdict,
+            missing: admission.missing,
+          });
+        }
+      }
+      if (admitted) actions.push(...providerPlan.actions);
     }
   }
 
@@ -262,7 +323,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
-  if (resolution.ownership.length > 0 && actions.length === 0) {
+  if (resolution.ownership.length > 0 && actions.length === 0 && blocked.length === 0) {
     // RFC 0004 §Brownfield adoption, and the ordinary outcome on a machine already set up: the
     // desired state is the current state, so the honest plan is empty. Saying nothing here
     // would leave a reader wondering whether the plan failed.
@@ -273,6 +334,24 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         message:
           'Every scope Token Harness would own is already configured, so this plan has nothing to change',
         remediation: null,
+      }),
+    );
+  }
+
+  for (const entry of blocked) {
+    // RFC 0009 §Compatibility matrix: a provider/harness/version combination with no row is
+    // refused by plan, which must name the missing config schema or provider fixture. The
+    // verdict tells the reader how far the observed version sits from the nearest row.
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'managed-mutation-blocked',
+        message:
+          `plan refuses managed mutation of ${entry.harness} by ${entry.provider}` +
+          `${entry.providerVersion !== null ? ` at ${entry.providerVersion}` : ''}: ` +
+          `${entry.missing}`,
+        remediation:
+          'Add a compatibility row whose fixture proves this combination, or configure this integration by hand',
       }),
     );
   }
@@ -288,7 +367,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
-  return { report, versions, diagnostics, present, harnessConfigs };
+  return { report, versions, diagnostics, present, harnessConfigs, blocked };
 }
 
 /**
@@ -335,8 +414,17 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
   const persisted = await persist(context, computed);
   const report: PlanReport = { ...computed.report, persisted };
 
-  // RFC 0006 §Exit codes: 4 is "planning succeeded but a hard conflict prevents apply".
-  const exitCode = report.conflicts.length > 0 ? EXIT_CODES['blocked-by-conflict'] : EXIT_CODES.ok;
+  // RFC 0006 §Exit codes: 4 is "planning succeeded but a hard conflict prevents apply";
+  // 9 (unsupported-environment) is the refused managed mutation — the combination a row has
+  // not admitted, RFC 0009. Both leave the plan empty, but they are not the same outcome:
+  // "cannot do this safely" is an admission the tooling does not cover, not a dispute between
+  // scopes a user can resolve by editing configuration.
+  const exitCode =
+    computed.blocked.length > 0
+      ? EXIT_CODES['unsupported-environment']
+      : report.conflicts.length > 0
+        ? EXIT_CODES['blocked-by-conflict']
+        : EXIT_CODES.ok;
 
   return commandResult<PlanReport>({
     command: 'plan',

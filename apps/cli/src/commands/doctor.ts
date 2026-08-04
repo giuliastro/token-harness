@@ -9,8 +9,11 @@
 
 import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 import {
+  COMPATIBILITY_ROWS,
   EXIT_CODES,
+  admitManagedMutation,
   commandResult,
+  diagnostic,
   type CommandResult,
   type DoctorReport,
   type HarnessDetection,
@@ -105,10 +108,53 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
     [...harnesses, ...providers].filter((detection) => detection.versionVerdict === 'unknown-newer')
       .length;
 
+  /**
+   * RFC 0009 §Compatibility matrix — no-row combinations are reported, not counted.
+   *
+   * A provider/harness/version combination with no row is not a broken integration: the
+   * environment is fine, and the user may configure it by hand. It is why `plan` will refuse
+   * managed mutation, and `doctor` naming it here — on the provider's own detection, where the
+   * reader is already looking at that provider — is how the refusal stops being a surprise.
+   * It is a warning, not a problem, so it leaves the exit code alone.
+   */
+  const rows = context.compatibilityRows ?? COMPATIBILITY_ROWS;
+  const providersWithCoverage = providers.map((detection) => {
+    if (detection.state !== 'configured' || detection.configuredHarnesses.length === 0) {
+      return detection;
+    }
+    const uncovered = detection.configuredHarnesses.flatMap((harness) => {
+      const harnessVersion =
+        harnesses.find((candidate) => candidate.harnessId === harness)?.version ?? null;
+      const admission = admitManagedMutation(rows, {
+        provider: detection.providerId,
+        providerVersion: detection.version,
+        harness,
+        harnessVersion,
+        os: context.platform.os,
+        wsl: context.platform.isWsl,
+      });
+      if (admission.state === 'admitted') return [];
+      return [
+        diagnostic({
+          severity: 'warning',
+          code: 'no-compatibility-row',
+          message:
+            `no compatibility row covers ${detection.providerId} on ${harness}` +
+            `${detection.version !== null ? ` at ${detection.version}` : ''} — ` +
+            `${admission.missing}`,
+          remediation:
+            'Add a compatibility row whose fixture proves this combination, or configure this integration by hand',
+        }),
+      ];
+    });
+    if (uncovered.length === 0) return detection;
+    return { ...detection, warnings: [...detection.warnings, ...uncovered] };
+  });
+
   const report: DoctorReport = {
     platform: context.platform,
     harnesses,
-    providers,
+    providers: providersWithCoverage,
     problemCount,
   };
 

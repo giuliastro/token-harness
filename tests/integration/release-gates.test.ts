@@ -61,7 +61,7 @@ import {
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
-import { FIXTURES_ROOT } from '../src/index.js';
+import { FIXTURES_ROOT, rowFor } from '../src/index.js';
 
 const FACTS: PlatformFacts = {
   os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
@@ -165,18 +165,27 @@ function world(
 }
 
 /**
- * Both providers resolve; no harness executable does.
+ * Both providers and both harnesses resolve — to the Node binary.
  *
- * A harness is detected from its configuration here, which keeps the suite from needing Claude Code
- * or Codex installed — AGENTS.md forbids a test requiring an upstream executable, and a CI runner
- * has neither.
+ * A harness is otherwise detected from its configuration, which keeps the suite from needing
+ * Claude Code or Codex installed — AGENTS.md forbids a test requiring an upstream executable,
+ * and a CI runner has neither. Resolving them to the running Node adds a reported version
+ * without adding an upstream binary, and RFC 0009 admits a managed mutation only when the
+ * observed versions fall inside a row — the injected table below covers exactly this.
  */
 function resolve(name: string): ResolvedExecutable | null {
-  if (name === 'rtk' || name === 'harnesstrim') {
+  if (name === 'rtk' || name === 'harnesstrim' || name === 'claude' || name === 'codex') {
     return { requested: name, path: process.execPath, kind: 'native' };
   }
   return null;
 }
+
+/** RFC 0009 rows covering every provider × harness combination these fixtures wire up. */
+const RELEASE_ROWS = [
+  rowFor('rtk', 'claude', FACTS),
+  rowFor('harnesstrim', 'claude', FACTS),
+  rowFor('harnesstrim', 'codex', FACTS),
+];
 
 async function invoke<T>(
   argv: readonly string[],
@@ -211,6 +220,7 @@ async function invoke<T>(
       localDatabase: null,
       projectIdFor: (path) => deriveProjectId(path, SALT, FACTS.os === 'windows'),
     },
+    compatibilityRows: RELEASE_ROWS,
     metrics: null,
     now: () => now,
   };

@@ -8,6 +8,7 @@
 
 export * from './domain/actions.js';
 export * from './domain/capabilities.js';
+export * from './domain/compatibility-rows.js';
 export * from './domain/compatibility.js';
 export * from './domain/detection.js';
 export * from './domain/diagnostics.js';
