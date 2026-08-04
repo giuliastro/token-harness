@@ -83,6 +83,15 @@ npx token-harness doctor
 `npx` may download Token Harness into npm's cache, but it does not install or configure RTK,
 HarnessTrim, or a coding agent.
 
+### Managed compatibility rows
+
+Token Harness changes a harness configuration only when a reviewed compatibility row covers the
+exact provider version, harness version, platform, and configuration schema. The current
+development build deliberately ships no managed rows while the cross-platform fixtures are being
+completed. In that state, `doctor` can still detect and report an existing setup, but `plan` and
+`apply` refuse an uncovered managed mutation with exit 9; install or configure the provider by
+hand until a matching row is released.
+
 ## How the components fit together
 
 There are three separate layers. Installing one does not automatically provide the others.
@@ -148,13 +157,13 @@ If `corepack` is unavailable, install the pinned package manager with
 
 ### 2. Install or adopt RTK
 
-For the supported managed path, you normally do **not** install RTK yourself:
+When a reviewed compatibility row covers the installed versions, you normally do **not** install RTK yourself:
 
 ```sh
 token-harness plan --harness claude --provider rtk
 ```
 
-If RTK is absent, the plan contains two actions:
+Once a matching compatibility row exists, if RTK is absent, the plan contains two actions:
 
 1. install RTK through the selected package manager;
 2. append one RTK entry to Claude Code's `PreToolUse` hook configuration.
