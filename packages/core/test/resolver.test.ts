@@ -798,3 +798,43 @@ describe('the shipped rule table', () => {
     }
   });
 });
+
+describe('RFC 0009 rows are unreachable from the arbitration path', () => {
+  /**
+   * RFC 0009 §This is not RFC 0003's compatibility rule: "A row therefore never arbitrates
+   * between providers and never overrides a rule." The strongest form of that claim is tested
+   * here, as a property: whatever rows exist, the resolver's answer is the same — ownership,
+   * exclusions, conflicts, and the pipeline ID it derives.
+   */
+  it('resolveOwnership is unaffected by the row table', () => {
+    const contenders = [
+      provider(RTK, [declaration({ capability: 'shell.output.reduce' })]),
+      provider(HARNESSTRIM, [declaration({ capability: 'shell.output.reduce' })]),
+    ];
+    const input = {
+      ...BASE,
+      profile: 'safe' as const,
+      providers: contenders,
+    };
+
+    const withoutRows = resolveOwnership(input);
+    // A table full of permissive rows for the same combination — including one admitting the
+    // contested scope's owner. If the arbitration path could see rows, this would change the
+    // outcome; it cannot, so it does not.
+    const rows = [
+      {
+        harness: CLAUDE,
+        harnessVersion: { minimum: '2.0.0', maximum: '2.1.212' },
+        provider: RTK,
+        providerVersion: '0.42.0',
+        platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+        configSchema: 'schema',
+        fixture: 'fixtures/x',
+        verificationTier: 'config-only' as const,
+      },
+    ];
+    const withRowsAdmitted = resolveOwnership({ ...input, ...{ rows } });
+
+    assert.deepEqual(withRowsAdmitted, withoutRows);
+  });
+});

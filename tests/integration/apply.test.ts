@@ -6,9 +6,11 @@
  * transaction layer. An in-memory double could not check the property that matters most — that
  * the user's own hook entry is still there afterwards.
  *
- * `rtk` resolves to the Node binary so `rtk --version` prints something and RTK reads as
- * installed. Nothing else resolves, so the suite needs no upstream executable and behaves the
- * same on a CI runner as here.
+ * `rtk` and `claude` resolve to the Node binary so `--version` prints something and RTK reads
+ * as installed while Claude reads as present. Nothing else resolves, so the suite needs no
+ * upstream executable and behaves the same on a CI runner as here. The injected compatibility
+ * row covers exactly the versions this reports, which is what lets the plan through the RFC 0009
+ * gate and reach the write this file verifies.
  */
 
 import assert from 'node:assert/strict';
@@ -26,6 +28,7 @@ import {
   type PlatformFacts,
   type ResolvedExecutable,
 } from '@token-harness/core';
+import { nodeVersionRows } from '@token-harness/tests';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
@@ -80,16 +83,15 @@ function world(settings: unknown): World {
   return { home, state, project, settings: file };
 }
 
-/**
- * `rtk` resolves, nothing else does.
- *
- * Pointing it at the Node binary makes `rtk --version` print a version, so RTK reads as
- * installed and the plan carries no install action — which the executor does not implement
- * anyway. Resolving nothing at all would make every plan start with an install and never reach
- * the write this file is about.
- */
 function resolve(name: string): ResolvedExecutable | null {
-  if (name !== 'rtk') return null;
+  // `rtk` and `claude` resolve to the Node binary; nothing else does.
+  //
+  // Pointing them at the Node binary makes `--version` print a version, so RTK reads as
+  // installed and the plan carries no install action — which the executor does not implement
+  // anyway — and Claude reads as present, which the compatibility row (injected below) admits.
+  // Resolving nothing at all would make every plan start with an install and never reach the
+  // write this file is about.
+  if (name !== 'rtk' && name !== 'claude') return null;
   return { requested: name, path: process.execPath, kind: 'native' };
 }
 
@@ -99,7 +101,11 @@ interface Captured<T> {
   envelope: CliEnvelope<T>;
 }
 
-async function invoke<T>(argv: readonly string[], place: World): Promise<Captured<T>> {
+async function invoke<T>(
+  argv: readonly string[],
+  place: World,
+  resolveRunner: (name: string) => ResolvedExecutable | null = resolve,
+): Promise<Captured<T>> {
   const fs = new NodeFileSystem(FACTS);
   let stdout = '';
   const options: RunOptions = {
@@ -116,7 +122,7 @@ async function invoke<T>(argv: readonly string[], place: World): Promise<Capture
     stateRoot: place.state,
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: resolveRunner }),
       paths: {
         home: place.home,
         config: join(place.home, 'config'),
@@ -127,6 +133,7 @@ async function invoke<T>(argv: readonly string[], place: World): Promise<Capture
       localDatabase: null,
       projectIdFor: (path) => deriveProjectId(path, SALT, FACTS.os === 'windows'),
     },
+    compatibilityRows: nodeVersionRows(FACTS),
     metrics: null,
     now: () => NOW,
   };
@@ -227,6 +234,8 @@ describe('a committed apply', () => {
 
   it('applies nothing when the harness itself cannot be detected', async () => {
     // No settings file and no runnable `claude`, so there is no evidence the harness is here.
+    // The runner here overrides the suite default: `claude` stays unresolvable, so detection
+    // has nothing to go on — a settings file is the other evidence, and there is none.
     //
     // My first version of this test expected the file to be *created*. That was wrong: a machine
     // where the harness cannot be detected is not a machine to plan for, and writing a
@@ -234,7 +243,9 @@ describe('a committed apply', () => {
     // RFC 0002 §Detection forbids. `createIfMissing` remains correct for the
     // detected-but-unwritten case, and it is covered against the adapter directly.
     const place = world(null);
-    const result = await invoke<ApplyReport>(['apply', '--yes'], place);
+    const noClaude = (name: string): ResolvedExecutable | null =>
+      name === 'rtk' ? resolve(name) : null;
+    const result = await invoke<ApplyReport>(['apply', '--yes'], place, noClaude);
 
     assert.equal(result.exitCode, 0);
     assert.equal(result.data?.outcome, 'nothing-to-do');

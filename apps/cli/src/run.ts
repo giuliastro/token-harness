@@ -16,6 +16,7 @@ import {
   serializeEnvelope,
   toEnvelope,
   type CommandResult,
+  type CompatibilityRow,
   type Diagnostic,
   type ExitCode,
   type MetricsStore,
@@ -90,6 +91,11 @@ export interface RunOptions {
    * filesystem; `doctor` then inspects nothing rather than reading the real machine.
    */
   adapters?: AdapterAccess | null;
+  /**
+   * RFC 0009 compatibility rows. Omitted (or null) to use the shipped table; tests pass a
+   * non-null table to admit combinations the shipped, still-empty table refuses.
+   */
+  compatibilityRows?: readonly CompatibilityRow[] | null;
   /** ISO 8601 instant. Defaults to the real clock; injected by tests. */
   now?: () => string;
   /** The metrics store. Omitted by tests that assert the CLI contract without one. */
@@ -381,6 +387,7 @@ export async function run(options: RunOptions): Promise<number> {
     planId: invocation.options.plan,
     confirmed: invocation.options.yes,
     metrics: options.metrics ?? null,
+    compatibilityRows: options.compatibilityRows ?? null,
   };
 
   const table = options.commands ?? DEFAULT_COMMANDS;
