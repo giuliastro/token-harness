@@ -19,6 +19,7 @@ import process from 'node:process';
 import { after, before, describe, it } from 'node:test';
 
 import type {
+  ApplyReport,
   CliEnvelope,
   CompatibilityRow,
   DoctorReport,
@@ -199,6 +200,38 @@ describe('plan with an injected row table', () => {
     const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
     assert.ok(blocked);
     assert.match(blocked.message, /provider fixture covering rtk/);
+  });
+});
+
+describe('apply refuses the same combinations', () => {
+  it('returns exit 9 rather than nothing-to-do when the gate refuses', async () => {
+    // Regression: `runApply` used to drop the refused actions and report `nothing-to-do` with
+    // exit 0, collapsing "already in the desired state" and "a row has not admitted this".
+    const { exitCode, data, diagnostics } = await invoke<ApplyReport>(['apply', '--yes'], null);
+
+    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
+    assert.equal(data, null);
+    const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
+    assert.ok(
+      blocked,
+      `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
+    );
+  });
+
+  it('refuses before loading a stored plan', async () => {
+    // The gate check sits ahead of the `--plan` load, so a bogus id must surface as the same
+    // coverage refusal, not as a usage error about the id — executing stored actions on an
+    // uncovered combination would be the worse failure mode.
+    const { exitCode, diagnostics } = await invoke<ApplyReport>(
+      ['apply', '--plan', '00000000'],
+      null,
+    );
+
+    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
+    assert.ok(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
+    );
   });
 });
 
