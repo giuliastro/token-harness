@@ -21,3 +21,17 @@
 - A provider supporting a harness that Token Harness does not manage is normal context,
   never a problem, and never something to modify.
 - Extract a package when a consumer appears; do not pre-split.
+
+
+<!-- harnesstrim:begin -->
+## Token economy (HarnessTrim)
+
+When a shell command produces long, noisy output — test runners, `git diff`, build logs,
+large file dumps — pipe it through the reducer so only the signal enters context:
+
+    <your command> 2>&1 | harnesstrim reduce
+
+This keeps failures, errors, assertions, and summaries while dropping passing-test noise and
+generated-file (lockfile/dist) diffs. Prefer the installed skills for output, review, and
+scaffolding discipline.
+<!-- harnesstrim:end -->
