@@ -472,6 +472,30 @@ A second draft then proposed target states the installer cannot produce either:
 
 An installer that cannot be asked for the target state cannot be delegated to for it.
 
+#### Amended: `0.0.7` and `0.1.0` can be asked, and the record above is now history
+
+Everything in this section was true of `0.0.5` and is false of `0.1.0`. It is kept rather than
+rewritten, because the analysis is what produced the `0.1.0` design and a reader deserves to see the
+constraint that shaped it — but the constraint is gone, and the following flags exist:
+
+| Harness | Narrowing available at `0.1.0` |
+| --- | --- |
+| claude | `--no-hook`, `--no-instructions` |
+| codex | `--no-instructions`, `--hook`, `--global` |
+| opencode | `--mode active\|dryrun\|off`, `--min-length <n>`, `--tools <list>`, `--preset <name>` |
+
+`--tools` is `input.tool` used as a filter — the exact line this section cites as unfiltered. The
+OpenCode `dryrun` state §17 item 5 called reachable "not through HarnessTrim's installer" is now
+reachable *through* it. And `harnesstrim capabilities` publishes all of this as JSON, per harness,
+with the produced state named beside each flag, so no future draft has to read upstream source to
+find out.
+
+The consequence is §15 item 46, and it is larger than a text change: HarnessTrim stops being the
+provider that must be excluded to keep an interception point single-owned, and becomes one that can
+be narrowed to what is left over. `plan` currently tells a user running `0.1.0` that its installer
+"cannot produce this in isolation", which was a fact about a release from before either of them
+started.
+
 ### What Token Harness manages at 0.1.1
 
 | Provider | Role |
@@ -567,6 +591,29 @@ Ordered by what it unblocks:
 5. `schemaVersion`, native event ID, and token counts on `TrimEvent`.
 
 HarnessTrim never depends on Token Harness.
+
+#### Delivered — all five, by `0.1.0` on 2026-08-03
+
+| # | Landed in | What shipped |
+| --- | --- | --- |
+| 1 | `0.0.7` | `--no-hook` and `--no-instructions` on claude, `--no-instructions` on codex, and `--mode` / `--min-length` / `--tools` / `--preset` on opencode |
+| 2 | `0.0.7` | `--json` on `doctor`, `metrics`, `install` and `uninstall` |
+| 3 | `0.0.7` | `harnesstrim capabilities` — JSON, per harness: adapter, surfaces, narrowing flags with the state each produces, and write set |
+| 4 | `0.0.7` | `harnesstrim uninstall <harness>`, dry-run by default, removing only what install wrote |
+| 5 | `0.0.7`, extended in `0.1.0` | `schemaVersion`, `eventId`, nullable `beforeTokens`/`afterTokens`; `0.1.0` adds `changed` for pass-through rate |
+
+So the sentence at the head of this section — "when each lands, the importer prefers the richer
+source and the legacy path becomes the fallback" — is now work rather than a plan, and it is §15
+item 43. The write set in item 3 reaches further than the importer: it is the input to
+`delegatedInstallReview`, which is why the manifest could pin one upstream version by hand and had
+to.
+
+Worth recording plainly, because it is the point of the boundary and not a coincidence: none of this
+was built for Token Harness. The task brief in HarnessTrim's own repository says so — "design and
+name each item as a normal HarnessTrim feature… a downstream tool happens to consume this CLI too;
+that must never require a HarnessTrim-specific concept". Five generic features, useful from that CLI
+alone, and a downstream control plane gets to stop guessing. That is the direction the dependency is
+supposed to run.
 
 ## 12. Phase 7 — Unified workflows and metrics
 
@@ -1148,7 +1195,13 @@ each unless an item says otherwise. Three of them need a machine with Hermes, Pi
 and are marked **[second machine]**; the rest need nothing that is not in this repository, so they
 can proceed in parallel with the observation spike rather than waiting behind it.
 
-25. **Stop reading a harness the registry does not know.** `harnesstrim`'s manifest declares
+Items 25 to 29 are **done** — PRs #39, #40, #41, #42, #43. Items 43 to 46 were added after them, and
+they change the execution order of what remains: HarnessTrim `0.1.0` delivered every upstream
+refinement §6.3 was waiting for, which makes item 43 the highest-leverage work available and
+supersedes part of §11. §Order after HarnessTrim `0.1.0` below states the sequence.
+
+25. **Stop reading a harness the registry does not know. Done** — #39.
+    `harnesstrim`'s manifest declares
     `~/.hermes/harnesstrim-metrics.jsonl` among its metrics locations while no Hermes adapter, tested
     range or tier exists. Remove that location until item 30 admits Hermes, and add the assertion
     that makes the gap impossible to reintroduce: every metrics location a provider declares belongs
@@ -1157,10 +1210,27 @@ can proceed in parallel with the observation spike rather than waiting behind it
     Small, and first because it is the one live inconsistency rather than a future feature.
     Regenerate `docs/matrices.md`; the metrics-sources table changes.
 
-26. **The observation spike (§9.0). [second machine]** No production code, one document. Blocks items
-    30, 31, 32 and 33 and nothing else.
+26. **The observation spike (§9.0). [second machine] Done** — #40,
+    `docs/spikes/9.0-harness-observation-log.md`, taken on Zorin OS with Hermes 0.19.0, Pi 0.83.0,
+    OMP 17.2.4, OpenCode 1.18.11, Codex 0.142.0, RTK 0.44.0, HarnessTrim 0.0.6 and no Claude Code.
 
-27. **Package inventory capture, ownership, and receipt (§9.1 item 1).** Implements the declared
+    Four findings the documents could not have supplied, each of which shapes an item below:
+
+    - **Hermes has a real receipt.** `~/.hermes/harnesstrim-metrics.jsonl` was live — 111 events,
+      the gateway process environment carrying `HARNESSTRIM_MODE=active` and telemetry on. So Hermes
+      is the *second* harness above `config-only`, and the only one reachable without a model call.
+      The attributed one-operation-to-one-event delta is the step still outstanding before a tier-3
+      claim, and the log says so rather than rounding up.
+    - **Hermes' enablement is readable.** A plain `plugins.enabled` list in `~/.hermes/config.yaml`,
+      no trusted-hash equivalent of the Codex finding, readable while the harness runs.
+    - **Pi is `config-only` and will stay there.** The extension patches the content it returns and
+      writes nothing; there is no artifact a deterministic probe could read.
+    - **OMP has no HarnessTrim installer.** `install` covers claude, codex, hermes, opencode and pi,
+      and there is no `adapter-omp` asset. So OMP cannot be delegated for, and its hooks were found
+      hand-written with no `.installed` marker and no observed execution. Item 32 inherits that.
+
+27. **Package inventory capture, ownership, and receipt (§9.1 item 1). Done** — #41.
+    Implements the declared
     `rollbackData: 'package-inventory'`. Capture the inventory for the channels that can report one
     (`npm`, `cargo`, `winget`, `homebrew`, `uv`, `pipx`); record which channel answered and which
     could not; decide ownership from the transaction journal rather than from presence, exactly as
@@ -1172,7 +1242,8 @@ can proceed in parallel with the observation spike rather than waiting behind it
     for inventory-capable channels and the comment recording why it was `none` is replaced by the
     behaviour, not deleted.
 
-28. **JSONC object-member and nested-array mutation (§9.1 item 2).** Extend `state/jsonc.ts` beyond
+28. **JSONC object-member and nested-array mutation (§9.1 item 2). Done** — #42.
+    Extend `state/jsonc.ts` beyond
     `appendJsoncRootArray`: set or insert an object member, and append into a nested array, keeping
     comments, trailing commas and formatting, and refusing an edit it cannot locate exactly. The
     refusal is the feature — a CST editor that approximates is how a user's comments disappear.
@@ -1181,7 +1252,9 @@ can proceed in parallel with the observation spike rather than waiting behind it
     edited region is unchanged; an ambiguous or absent target is a planning error naming the path and
     the expression it could not resolve.
 
-29. **`CompatibilityRow` and the managed-mutation gate (RFC 0009).** The row type, the lookup, the
+29. **`CompatibilityRow` and the managed-mutation gate (RFC 0009). Done** — #43,
+    `packages/core/src/domain/compatibility-rows.ts` with `tests/integration/gate-rfc0009.test.ts`.
+    The row type, the lookup, the
     classification of an out-of-range version as `unknown-newer` / `unknown-older` / `below-range`,
     and `plan` refusing managed mutation outside a row with the missing schema or fixture named. Keep
     it distinct from `CompatibilityRule` as RFC 0009 §This is not RFC 0003's compatibility rule
@@ -1272,6 +1345,113 @@ can proceed in parallel with the observation spike rather than waiting behind it
 42. **`0.2.0` release gates (§16).** The A/B benchmark matrix across the scenarios §8.2 deferred, the
     per-channel savings report, regenerated matrices, and the build provenance attestation §8.3 still
     lacks.
+
+43. **Consume HarnessTrim's machine-readable surfaces.** HarnessTrim `0.1.0` ships all five upstream
+    refinements §6.3 was waiting for, so every workaround §6.3 justified is now a choice rather than a
+    constraint. Four PRs, in this order, each independently useful:
+
+    a. **`capabilities` replaces the statically declared capability set.** `harnesstrim capabilities`
+       emits JSON: per harness, the adapter, the surfaces, the *narrowing flags with what each
+       produces*, and the write set. Read it at detection, compare it against the manifest
+       declaration, and report a disagreement as drift naming both sides. The manifest keeps its
+       declaration — a provider that cannot be asked must still be describable — but it stops being
+       the only source, which is what let a rule sit at `0.0.5` while `0.0.6` was installed (§15
+       item 21).
+
+       The write set is the part that changes the lifecycle rather than the reporting: RFC 0002
+       requires a *reviewed* write set for a delegated install, and reviewing it by hand is what
+       pinned `delegatedInstallReview.upstreamVersion` to one release. A declared write set does not
+       remove the review; it turns it into a fixture that compares declaration against what an apply
+       actually wrote. Cheap, repeatable, and it fails when upstream changes what it writes.
+
+    b. **`--json` on `doctor` and `metrics` replaces prose parsing** in the detection path.
+
+    c. **`uninstall` makes removal more than restore-only.** `harnesstrim uninstall <harness>` is
+       dry-run by default and removes only what install wrote. `upstreamUninstallAvailable` is
+       already a manifest field and already true; the executor may now call it, with the snapshot
+       restore kept as the fallback rather than deleted.
+
+    d. **The importer moves toward `native`.** `TrimEvent` now carries `schemaVersion`, a producer
+       `eventId` from `randomUUID`, `beforeTokens`/`afterTokens` — null where the emitting path has
+       no tokenizer — and, at `0.1.0`, `changed`, which marks a recorded pass-through. So dedup uses
+       the native ID instead of the synthesized identity RFC 0005 specified for a stream that had
+       none; a token count is a token count where one exists; and the pass-through rate becomes
+       reportable. Character-only legacy lines still parse as schema 0 and stay `estimated-local`,
+       and the two must not merge — which is the same rule as before, now with two real classes in
+       one stream instead of one.
+
+44. **Refresh the tested version ranges, with fixtures rather than with numbers.** On the development
+    machine today `doctor` prints four notes — Claude Code 2.1.220, OpenCode 1.18.11, RTK 0.44.0 and
+    HarnessTrim 0.1.0 are each newer than any tested version — and the compatibility rule in
+    `planner/rules.ts` still records `rtk 0.42.0` and `harnesstrim 0.0.5`. Four honest notes on a
+    stock machine is the failure RFC 0006 §Exit codes warns about: it teaches the reader to ignore
+    the section.
+
+    Extending a range means exercising the fixtures at the observed version and recording the row,
+    per §9.1 and RFC 0009 — not editing a constant. Where a version cannot be exercised, the range
+    stays and the note stays, because the note is true.
+
+45. **An update that outdates reviewed data is refused, not performed.** This is the gap between
+    "Token Harness can update a provider" — which item 21 built — and "Token Harness can be trusted
+    to update it". `update` resolves an exact version from the channel and installs it; nothing then
+    checks whether the manifest's reviewed write set, the compatibility rule's tested versions, or a
+    `CompatibilityRow` still describe what is now on disk. HarnessTrim `0.0.5` → `0.1.0` is the
+    worked example: the write set was reviewed at `0.0.7`, the rule records `0.0.5`, and the
+    installer gained four narrowing flags in between.
+
+    Planning an update therefore also resolves what the *target* version declares, and a managed
+    update outside a row is refused with the missing fixture named — the item 29 gate, applied to
+    the provider dimension. An adopted installation is still updated freely, because Token Harness
+    owns nothing there; the refusal protects the case where it does.
+
+    Acceptance: an update whose target version leaves the reviewed write set behind is refused
+    before the package manager is invoked, naming the version, the row and what changed; a provider
+    with no managed installation updates as it does today; the refusal is a distinct exit code from
+    a channel that had nothing to offer.
+
+46. **HarnessTrim managed on Claude, Codex and OpenCode.** Supersedes §11 §6.1 §Amended. With
+    `--no-hook`, `--no-instructions`, `--mode`, `--min-length` and `--tools`, every target state
+    §6.1 recorded as unproducible is now producible, so the exclusion `plan` currently prints —
+    "its installer cannot produce this in isolation" — is a statement about `0.0.5` being shown to
+    a user running `0.1.0`.
+
+    Under `safe` this does not hand HarnessTrim a contested scope: RTK stays the owner of
+    `shell.output.reduce` where RTK is supported. What changes is that HarnessTrim becomes
+    *installable* on the harnesses RTK does not claim, and narrowable rather than excluded where it
+    does. `--tools` on OpenCode is the first real per-surface narrowing the resolver has ever been
+    offered, and the first case where two providers could split one harness by tool family instead
+    of one being excluded whole.
+
+    Acceptance: the exclusion text names the version it is true of; a plan under `safe` on
+    HarnessTrim `0.1.0` narrows rather than excludes wherever a narrowing flag produces the assigned
+    state; `custom` can assign a tool-family subset and the plan shows which families each provider
+    got.
+
+### Order after HarnessTrim `0.1.0`
+
+Items 30 to 42 keep their numbers and their content. What changed is which of them is next, because
+`0.1.0` landed upstream after the queue was written and item 43 is now worth more than anything else
+on the list:
+
+1. **43a and 43d** — the capability and metrics surfaces. Highest leverage, no external dependency,
+   and 43a is what makes every later version bump cheap instead of a hand review.
+2. **46**, then **44** — stop showing a user a constraint that no longer exists, then stop showing
+   four notes about versions nobody exercised. 46 before 44 because 46 changes which fixtures 44
+   needs to run.
+3. **45** — the update-revalidation gate, which is the honest form of "Token Harness manages
+   updates".
+4. **43b and 43c** — prose parsing and restore-only removal, both real and neither blocking.
+5. **30 and 31** — Hermes and Pi adapters. The spike is done, so these are ready; Hermes carries the
+   only receipt outside Claude Code, which makes it the first harness where a provider can be
+   verified above `config-only` without a model call.
+6. **33**, then **34** — HarnessTrim managed on Hermes and Pi, then on OpenCode.
+7. **32** — OMP, which the spike showed cannot be delegated to an installer that has no `omp`
+   target. Writing its hook ourselves is a different decision from admitting a harness, and it needs
+   open questions 3 and 4 of the spike log answered first.
+8. **35**, **36**, **37** — Lazy MCP, Caveman, Dejavu.
+9. **38**, **39**, **40** — the profiles and the pipeline-level verbs, which is where the collection
+   starts behaving as one tool.
+10. **41**, **42** — the seam RFC and the release gates.
 
 ## 16. Release gates
 
