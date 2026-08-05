@@ -23,9 +23,12 @@ import type {
 
 import {
   claudeAdapter,
+  compareCapabilities,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   synthesizeEventId,
+  type HarnessTrimCapabilities,
+  type HarnessTrimHarnessCapabilities,
   type ProviderContext,
 } from '../src/index.js';
 
@@ -63,6 +66,60 @@ interface Options {
   configs?: HarnessConfigSummary[];
   /** What `--version` prints. Null makes the build reject the flag, as older ones do. */
   version?: string | null;
+  /**
+   * What `harnesstrim capabilities` prints. Defaults to a declaration that agrees with the
+   * manifest; null makes the build reject the unknown option, as builds before `0.0.7` do.
+   */
+  capabilities?: string | null;
+}
+
+/**
+ * The minimal machine-readable declaration that agrees with the manifest.
+ *
+ * The same shape upstream publishes — one entry per harness with surfaces, narrowing flags and a
+ * write set — with only the anchors this adapter compares against. The authoritative snapshot is
+ * the committed fixture; this is the agreement case the drift tests mutate from.
+ */
+function defaultCapabilities(): string {
+  return JSON.stringify({
+    version: '0.1.0',
+    harnesses: {
+      claude: {
+        adapter: '@harnesstrim/adapter-claude',
+        surfaces: ['PostToolUse Bash hook — deterministic reduction of Bash output'],
+        narrowing: [],
+        writeSet: [
+          '.claude/skills/',
+          '.claude/settings.json',
+          'CLAUDE.md (marker-guarded snippet)',
+        ],
+      },
+      codex: {
+        adapter: '@harnesstrim/adapter-codex',
+        surfaces: ['PostToolUse Bash hook — deterministic reduction of Bash output'],
+        narrowing: [],
+        writeSet: ['.codex/skills/'],
+      },
+      opencode: {
+        adapter: '@harnesstrim/adapter-opencode',
+        surfaces: ['tool.execute.after — slims noisy tool output in place'],
+        narrowing: [],
+        writeSet: ['.opencode/plugin/harnesstrim.ts'],
+      },
+      hermes: {
+        adapter: '@harnesstrim/adapter-hermes',
+        surfaces: ['transform_tool_result — deterministic reduction'],
+        narrowing: [],
+        writeSet: ['.hermes/plugins/harnesstrim/'],
+      },
+      pi: {
+        adapter: '@harnesstrim/adapter-pi',
+        surfaces: ['tool_result — deterministic reduction'],
+        narrowing: [],
+        writeSet: ['.pi/extensions/harnesstrim/'],
+      },
+    },
+  });
 }
 
 function context(options: Options = {}): ProviderContext {
@@ -90,24 +147,34 @@ function context(options: Options = {}): ProviderContext {
     runner: {
       run: (request: ProcessRequest): Promise<ProcessOutcome> => {
         const asksVersion = request.args.includes('--version');
+        const asksCapabilities = request.args[0] === 'capabilities';
         // `version: null` models the older build, which rejects the unknown option with a non-zero
         // exit — a different thing from not being installed, and the distinction the probe exists
         // to draw.
         const declared = options.version === undefined ? '0.0.5' : options.version;
         const rejects = asksVersion && declared === null;
+        const capabilitiesAnswer =
+          options.capabilities === undefined ? defaultCapabilities() : options.capabilities;
+        const capabilitiesRejects = asksCapabilities && capabilitiesAnswer === null;
         return Promise.resolve({
           displayCommand: `${request.executable} ${request.args.join(' ')}`,
           interpreter: 'direct',
           executablePath: options.runnable === false ? null : `${HOME}\\pnpm\\harnesstrim.CMD`,
-          exitCode: options.runnable === false ? null : rejects ? 1 : 0,
+          exitCode: options.runnable === false ? null : rejects || capabilitiesRejects ? 1 : 0,
           signal: null,
           stdout:
             options.runnable === false
               ? ''
               : asksVersion
                 ? (declared ?? '')
-                : 'harnesstrim — one token policy',
-          stderr: rejects ? "Unknown option '--version'" : '',
+                : asksCapabilities
+                  ? (capabilitiesAnswer ?? '')
+                  : 'harnesstrim — one token policy',
+          stderr: rejects
+            ? "Unknown option '--version'"
+            : capabilitiesRejects
+              ? "Unknown option 'capabilities'"
+              : '',
           stdoutTruncated: false,
           stderrTruncated: false,
           durationMs: 1,
@@ -249,6 +316,101 @@ describe('detection', () => {
       ['codex'],
     );
     assert.deepEqual(harnessesWiredToHarnessTrim([wired('claude', 'rtk hook claude')]), []);
+  });
+});
+
+/** A mutable parse of the agreement declaration, for the drift tests to mutate from. */
+function parsedCapabilities(): HarnessTrimCapabilities {
+  return JSON.parse(defaultCapabilities()) as HarnessTrimCapabilities;
+}
+
+describe('the machine-readable capability declaration (item 43a)', () => {
+  it('reads it at detection and reports no drift when it agrees with the manifest', async () => {
+    const detection = await harnesstrimAdapter.detect(context());
+    assert.equal(
+      detection.warnings.some((warning) => warning.code === 'provider-capabilities-drift'),
+      false,
+    );
+    assert.match(
+      detection.evidence.map((entry) => entry.detail).join(' '),
+      /declared 0\.1\.0 for claude, codex, opencode, hermes, pi/,
+    );
+  });
+
+  it('keeps the manifest declaration, and stays quiet, when the build cannot answer', async () => {
+    // A build before the `capabilities` command exists rejects the unknown option, exactly as it
+    // rejects `--version`. The manifest is the only source for that build, which is what "a
+    // provider that cannot be asked must still be describable" means.
+    const detection = await harnesstrimAdapter.detect(context({ capabilities: null }));
+    assert.equal(detection.state, 'installed');
+    assert.equal(
+      detection.warnings.some((warning) => warning.code === 'provider-capabilities-drift'),
+      false,
+    );
+  });
+
+  it('reports a harness the manifest declares and the answer omits, naming both sides', async () => {
+    const capabilities = parsedCapabilities() as {
+      version: string;
+      harnesses: Record<string, HarnessTrimHarnessCapabilities>;
+    };
+    delete capabilities.harnesses['opencode'];
+    const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
+    assert.equal(warnings.length, 1);
+    const warning = warnings[0];
+    assert.ok(warning);
+    assert.match(warning.message, /manifest declares tool\.output\.reduce on opencode/);
+    assert.match(warning.message, /capabilities.* lists no opencode entry/);
+  });
+
+  it('reports a surface disagreement, naming the declared anchor and the reported list', async () => {
+    const capabilities = parsedCapabilities();
+    const claude = capabilities.harnesses['claude'];
+    assert.ok(claude);
+    claude.surfaces = ['CLAUDE.md reduce-pipe instruction — the effective reduction path'];
+    const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
+    assert.equal(warnings.length, 1);
+    const warning = warnings[0];
+    assert.ok(warning);
+    assert.match(warning.message, /Bash\/post-tool-use/);
+    assert.match(warning.message, /CLAUDE\.md reduce-pipe instruction/);
+    assert.match(warning.message, /0\.1\.0/);
+  });
+
+  it('reports a reviewed path the write set no longer covers', async () => {
+    const capabilities = parsedCapabilities();
+    const claude = capabilities.harnesses['claude'];
+    assert.ok(claude);
+    claude.writeSet = [
+      '.claude/other/',
+      '.claude/settings.json',
+      'CLAUDE.md (marker-guarded snippet)',
+    ];
+    const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
+    const warning = warnings.find((entry) => /reviewed write set/.test(entry.message));
+    assert.ok(warning);
+    assert.match(warning.message, /\.claude\/skills\/compact-handoff\/SKILL\.md/);
+    assert.match(
+      warning.message,
+      /declares nothing covering it \(\.claude\/other\/, \.claude\/settings\.json, CLAUDE\.md\)/,
+    );
+  });
+
+  it('reports a declared write-set path outside the containment boundary', async () => {
+    const capabilities = parsedCapabilities();
+    const claude = capabilities.harnesses['claude'];
+    assert.ok(claude);
+    claude.writeSet = [
+      '.claude/skills/',
+      '.claude/settings.json',
+      'CLAUDE.md (marker-guarded snippet)',
+      '.codex/skills/',
+    ];
+    const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
+    const warning = warnings.find((entry) => /containment boundary/.test(entry.message));
+    assert.ok(warning);
+    assert.match(warning.message, /\.codex\/skills\//);
+    assert.match(warning.message, /recorded at 0\.0\.7 \(\.claude, CLAUDE\.md\)/);
   });
 });
 
