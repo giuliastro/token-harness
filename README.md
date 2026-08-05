@@ -243,6 +243,19 @@ conflict instead of guessing an execution order. It never deletes the competing 
 HarnessTrim telemetry is opt-in in some adapters. Without a `.harnesstrim/metrics.jsonl` file,
 verification can still inspect configuration, but `metrics` has no HarnessTrim events to import.
 
+From `0.1.0`, HarnessTrim publishes a machine-readable capability declaration: the surfaces it
+intercepts per coding agent, the flags that narrow an install, and the paths each install writes.
+
+```sh
+harnesstrim capabilities
+```
+
+Detection reads that declaration and compares it against the one Token Harness records, so an
+upstream change is reported rather than assumed compatible. A disagreement becomes a
+`provider-capabilities-drift` warning naming both sides. A build older than the command cannot
+answer; Token Harness then falls back to its own recorded declaration and reports nothing, because a
+provider that cannot be asked must still be describable.
+
 ## The recommended operating workflow
 
 ### Step 1: diagnose
@@ -258,7 +271,9 @@ This answers:
 - which agent configuration files exist;
 - which provider is wired to which agent;
 - whether Token Harness owns the integration or merely adopted it;
-- whether a version, configuration file, or tool-family matcher needs attention.
+- whether a version, configuration file, or tool-family matcher needs attention;
+- whether the installed provider's own capability declaration still agrees with the one Token
+  Harness records.
 
 Common states:
 
@@ -527,6 +542,23 @@ Check all of the following:
 - `--since` is not excluding older events.
 
 An empty metrics report exits 0 because it is a valid observation, not a command failure.
+
+### `doctor` or `status` reports `provider-capabilities-drift`
+
+The installed provider's own capability declaration no longer agrees with the one Token Harness
+records. The warning names both sides: what the recorded declaration claims, and what the installed
+build reported. Nothing is modified, and the recorded declaration still drives planning.
+
+Three disagreements are reported:
+
+- a coding agent that Token Harness records a capability on is missing from the build's declaration;
+- the reduction surface Token Harness records is absent from the surfaces the build reports;
+- the build no longer covers a reviewed write-set path, or declares a path outside the reviewed
+  containment boundary.
+
+The last one matters most before a delegated install. Rollback restores the reviewed boundary, so a
+path outside it would survive a rollback. Re-review the write set at the installed version, or hold
+at the reviewed one.
 
 ### A newer provider or agent version is reported
 
