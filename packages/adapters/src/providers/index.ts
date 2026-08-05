@@ -14,10 +14,13 @@ import type { ProviderAdapter } from './contract.js';
 export * from './contract.js';
 export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 export {
+  compareCapabilities,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   metricsLocations,
   synthesizeEventId,
+  type HarnessTrimCapabilities,
+  type HarnessTrimHarnessCapabilities,
 } from './harnesstrim.js';
 
 /**

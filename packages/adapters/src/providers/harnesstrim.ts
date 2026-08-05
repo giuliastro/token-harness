@@ -8,6 +8,7 @@
  */
 
 import {
+  EVERY_TOOL_FAMILY,
   MANIFEST_SCHEMA_VERSION,
   OPTIMIZATION_EVENT_SCHEMA_VERSION,
   classifyVersion,
@@ -16,6 +17,7 @@ import {
   evidence,
   harnessId,
   providerId,
+  type CapabilitySurface,
   type Diagnostic,
   type Evidence,
   type HarnessId,
@@ -178,6 +180,269 @@ function identifiesCommand(command: string): boolean {
   return HOOK_COMMAND_PATTERN.test(command);
 }
 
+/**
+ * One harness entry in `harnesstrim capabilities`, as upstream publishes it — PLAN §15 item 43a.
+ *
+ * `surfaces` and `writeSet` are upstream's own strings, stable to read and never parsed further
+ * than the anchors below. `narrowing` is the flags that produce narrower install states; item 46
+ * consumes it for assignability, item 43a only reads the declaration.
+ */
+export interface HarnessTrimHarnessCapabilities {
+  adapter: string;
+  surfaces: string[];
+  narrowing: readonly { flag: string; produces: string }[];
+  writeSet: string[];
+}
+
+/** The machine-readable contract `harnesstrim capabilities` publishes. */
+export interface HarnessTrimCapabilities {
+  version: string;
+  harnesses: Readonly<Record<string, HarnessTrimHarnessCapabilities>>;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function parseHarnessCapabilities(value: unknown): HarnessTrimHarnessCapabilities | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const surfaces = record['surfaces'];
+  const writeSet = record['writeSet'];
+  const narrowing = record['narrowing'];
+  if (!isStringArray(surfaces) || !isStringArray(writeSet) || !Array.isArray(narrowing)) {
+    return null;
+  }
+  const flags: { flag: string; produces: string }[] = [];
+  for (const item of narrowing) {
+    if (typeof item !== 'object' || item === null) return null;
+    const flag = (item as Record<string, unknown>)['flag'];
+    const produces = (item as Record<string, unknown>)['produces'];
+    if (typeof flag !== 'string' || typeof produces !== 'string') return null;
+    flags.push({ flag, produces });
+  }
+  return {
+    adapter: typeof record['adapter'] === 'string' ? record['adapter'] : '',
+    surfaces,
+    writeSet,
+    narrowing: flags,
+  };
+}
+
+function parseCapabilities(stdout: string): HarnessTrimCapabilities | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+  const record = parsed as Record<string, unknown>;
+  const version = record['version'];
+  const harnesses = record['harnesses'];
+  if (typeof version !== 'string' || typeof harnesses !== 'object' || harnesses === null) {
+    return null;
+  }
+  const entries: Record<string, HarnessTrimHarnessCapabilities> = {};
+  for (const [harness, value] of Object.entries(harnesses)) {
+    const entry = parseHarnessCapabilities(value);
+    if (entry === null) return null;
+    entries[harness] = entry;
+  }
+  return { version, harnesses: entries };
+}
+
+/**
+ * Asks the installed build what it declares, at detection.
+ *
+ * PLAN §15 item 43a: the manifest keeps its declaration — a provider that cannot be asked must
+ * still be describable — but an installed build that answers becomes the better source. A build
+ * that cannot answer (older than the command, or a failed run) is `null`, which is a fact about
+ * the build, not a disagreement.
+ */
+async function probeCapabilities(context: ProviderContext): Promise<{
+  capabilities: HarnessTrimCapabilities | null;
+  evidence: Evidence[];
+}> {
+  const outcome = await context.runner.run({
+    executable: 'harnesstrim',
+    args: ['capabilities'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+
+  if (outcome.failure !== null || outcome.exitCode !== 0) {
+    return {
+      capabilities: null,
+      evidence: [
+        evidence({
+          kind: 'absence',
+          source: 'harnesstrim capabilities',
+          detail: 'did not answer with a machine-readable declaration',
+        }),
+      ],
+    };
+  }
+
+  const capabilities = parseCapabilities(outcome.stdout);
+  if (capabilities === null) {
+    return {
+      capabilities: null,
+      evidence: [
+        evidence({
+          kind: 'version-output',
+          source: 'harnesstrim capabilities',
+          path: outcome.executablePath,
+          detail: 'answered, but not with a declaration this build can read',
+        }),
+      ],
+    };
+  }
+
+  return {
+    capabilities,
+    evidence: [
+      evidence({
+        kind: 'version-output',
+        source: 'harnesstrim capabilities',
+        path: outcome.executablePath,
+        detail: `declared ${capabilities.version} for ${Object.keys(capabilities.harnesses).join(', ')}`,
+      }),
+    ],
+  };
+}
+
+/**
+ * The anchors mapping this manifest's interception points onto upstream's surface prose.
+ *
+ * Upstream writes "PostToolUse Bash hook — …" and "tool.execute.after — …"; the manifest records
+ * `post-tool-use` and `tool-execute-after`. The mapping is one string each way, and nothing after
+ * the dash is parsed, because that prose is upstream's, not a contract.
+ */
+const SURFACE_ANCHORS: Readonly<Record<string, string>> = {
+  'post-tool-use': 'PostToolUse',
+  'tool-execute-after': 'tool.execute.after',
+};
+
+function surfaceMatchesDeclaration(surface: string, declaration: CapabilitySurface): boolean {
+  const pointAnchor = SURFACE_ANCHORS[declaration.interceptionPoint];
+  if (pointAnchor !== undefined && !surface.includes(pointAnchor)) return false;
+  if (declaration.toolFamily !== EVERY_TOOL_FAMILY && !surface.includes(declaration.toolFamily)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The path part of a write-set entry.
+ *
+ * Upstream annotates entries in prose — "CLAUDE.md (marker-guarded snippet)" — and the
+ * annotation is not part of the path. Stripped here, and only here, so the comparison is over
+ * paths and the prose is never parsed twice.
+ */
+function writeSetPath(entry: string): string {
+  return entry.replace(/\s*\([^)]*\)\s*$/, '').replaceAll('\\', '/');
+}
+
+/** Whether `path` sits at or under `declared`, both normalised and separator-free. */
+function coveredBy(path: string, declared: string): boolean {
+  const base = declared.endsWith('/') ? declared : `${declared}/`;
+  return path === declared || path.startsWith(base);
+}
+
+function driftWarning(message: string, remediation: string): Diagnostic {
+  return diagnostic({
+    severity: 'warning',
+    code: 'provider-capabilities-drift',
+    subject: 'harnesstrim',
+    message,
+    remediation,
+  });
+}
+
+function formatSurface(surface: CapabilitySurface): string {
+  return `${surface.toolFamily}/${surface.interceptionPoint}`;
+}
+
+/**
+ * Compares the manifest declaration against the installed build's machine-readable declaration.
+ *
+ * PLAN §15 item 43a: "Read it at detection, compare it against the manifest declaration, and
+ * report a disagreement as drift naming both sides." Three disagreements are checked, each naming
+ * both sides in its message:
+ *
+ * - a harness the manifest declares a capability on is absent from the answer;
+ * - the reduction surface the declaration records is not in the answer's surface list;
+ * - the reviewed write set is not covered by the answer's write set, or the answer declares a
+ *   path outside the containment boundary.
+ *
+ * The write-set checks run for the harness the delegated review covers, which is where a
+ * disagreement changes the lifecycle rather than the reporting.
+ */
+export function compareCapabilities(
+  manifest: ProviderManifest,
+  capabilities: HarnessTrimCapabilities,
+): Diagnostic[] {
+  const warnings: Diagnostic[] = [];
+
+  for (const declaration of manifest.capabilities) {
+    for (const harness of declaration.harnesses) {
+      const observed = capabilities.harnesses[harness];
+      if (observed === undefined) {
+        warnings.push(
+          driftWarning(
+            `the manifest declares ${declaration.capability} on ${harness}, but \`harnesstrim capabilities\` (${capabilities.version}) lists no ${harness} entry`,
+            `Re-test the ${harness} integration: either the manifest is stale or ${harness} lost its HarnessTrim surface`,
+          ),
+        );
+        continue;
+      }
+      const matched = declaration.surfaces.some((surface) =>
+        observed.surfaces.some((entry) => surfaceMatchesDeclaration(entry, surface)),
+      );
+      if (!matched) {
+        warnings.push(
+          driftWarning(
+            `the manifest records ${declaration.capability} on ${harness} over ${declaration.surfaces
+              .map(formatSurface)
+              .join(
+                ', ',
+              )}, but \`harnesstrim capabilities\` (${capabilities.version}) reports ${observed.surfaces.length === 0 ? 'no surfaces' : observed.surfaces.join(' | ')}`,
+            `Re-test the ${harness} integration and update the manifest declaration`,
+          ),
+        );
+      }
+    }
+  }
+
+  const review = manifest.delegatedInstallReview;
+  if (review === null) return warnings;
+  const claude = capabilities.harnesses['claude'];
+  if (claude === undefined) return warnings;
+
+  const declared = claude.writeSet.map(writeSetPath);
+  for (const reviewed of review.reviewedWriteSet) {
+    if (declared.some((entry) => coveredBy(reviewed, entry))) continue;
+    warnings.push(
+      driftWarning(
+        `the reviewed write set records ${reviewed} at ${review.upstreamVersion}, but \`harnesstrim capabilities\` (${capabilities.version}) declares nothing covering it (${declared.length === 0 ? 'nothing' : declared.join(', ')})`,
+        `Re-review the write set at the installed version before delegating another install`,
+      ),
+    );
+  }
+  const boundary = review.containmentBoundary.map(writeSetPath);
+  for (const entry of declared) {
+    if (boundary.some((prefix) => coveredBy(entry, prefix))) continue;
+    warnings.push(
+      driftWarning(
+        `\`harnesstrim capabilities\` (${capabilities.version}) declares ${entry} for claude, which sits outside the containment boundary recorded at ${review.upstreamVersion} (${boundary.join(', ')})`,
+        'Re-review the write set: rollback restores the boundary, and a path it does not cover would survive a rollback',
+      ),
+    );
+  }
+  return warnings;
+}
+
 /** Harnesses whose configuration names HarnessTrim in a hook command. */
 export function harnessesWiredToHarnessTrim(
   configs: readonly ProviderContext['harnessConfigs'][number][],
@@ -293,9 +558,17 @@ export function metricsLocations(context: ProviderContext): string[] {
 
 async function detect(context: ProviderContext): Promise<ProviderDetection> {
   const probe = await probeExecutable(context);
+  // PLAN §15 item 43a: the installed build's machine-readable declaration is read at detection
+  // and compared against the manifest's. A build that cannot answer contributes nothing; an
+  // answer that disagrees is drift, named on both sides.
+  const observed = probe.installed ? await probeCapabilities(context) : null;
   const configured = harnessesWiredToHarnessTrim(context.harnessConfigs);
   const warnings: Diagnostic[] = [];
-  const evidenceItems: Evidence[] = [...probe.evidence];
+  const evidenceItems: Evidence[] = [...probe.evidence, ...(observed?.evidence ?? [])];
+
+  if (observed !== null && observed.capabilities !== null) {
+    warnings.push(...compareCapabilities(MANIFEST, observed.capabilities));
+  }
 
   for (const harness of configured) {
     evidenceItems.push(
