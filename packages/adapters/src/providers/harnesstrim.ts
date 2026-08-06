@@ -440,6 +440,43 @@ function narrowable(capabilities: HarnessTrimCapabilities | null | undefined): b
 }
 
 /**
+ * Whether the installed build still writes what the delegated review covers — PLAN §15 item 46.
+ *
+ * The plan used to gate on `installed.version !== TESTED_UPSTREAM`, an exact string equality with
+ * `0.0.7`. On a machine running `0.1.0` that produced no action at all: the provider was detected,
+ * reported, resolved a scope, and then planned nothing, for no reason a user could see.
+ *
+ * The gate exists for a real constraint — RFC 0002 requires a *reviewed* write set for a delegated
+ * install — but a version string is a proxy for it, and the wrong one: the review is about which
+ * paths the installer touches. Item 43a made those readable, so this asks the question the review
+ * actually asks. A build whose declared write set still sits inside the reviewed containment
+ * boundary and still covers every reviewed path is one the review speaks for, whatever it calls
+ * itself; one that has moved outside it is not, at any version number.
+ *
+ * A build that cannot be asked falls back to the exact-version gate. That is the conservative
+ * direction and the reason `0.0.5` and `0.0.6` keep planning nothing.
+ */
+function writeSetStillReviewed(
+  capabilities: HarnessTrimCapabilities | null,
+  harness: HarnessId,
+): boolean {
+  const review = MANIFEST.delegatedInstallReview;
+  if (review === null || capabilities === null) return false;
+  const observed = capabilities.harnesses[harness];
+  if (observed === undefined) return false;
+
+  const declared = observed.writeSet.map(writeSetPath);
+  const boundary = review.containmentBoundary.map(writeSetPath);
+  const everyDeclaredPathContained = declared.every((entry) =>
+    boundary.some((prefix) => coveredBy(entry, prefix)),
+  );
+  const everyReviewedPathCovered = review.reviewedWriteSet.every((reviewed) =>
+    declared.some((entry) => coveredBy(reviewed, entry)),
+  );
+  return everyDeclaredPathContained && everyReviewedPathCovered;
+}
+
+/**
  * Compares the manifest declaration against the installed build's machine-readable declaration.
  *
  * PLAN §15 item 43a: "Read it at detection, compare it against the manifest declaration, and
@@ -1303,7 +1340,22 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
   }
 
   const installed = await probeExecutable(context);
-  if (installed.version !== TESTED_UPSTREAM) {
+  if (!installed.installed) {
+    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
+  }
+
+  /**
+   * Ask the build what it writes; fall back to the version string when it cannot answer.
+   *
+   * `writeSetStillReviewed` says why the question moved: the review is about paths, and the exact
+   * `0.0.7` equality made every later build plan nothing without saying so.
+   */
+  const observed = await probeCapabilities(context);
+  const reviewed =
+    observed.capabilities === null
+      ? installed.version === TESTED_UPSTREAM
+      : writeSetStillReviewed(observed.capabilities, CLAUDE);
+  if (!reviewed) {
     return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
   }
   const review = MANIFEST.delegatedInstallReview;
