@@ -52,8 +52,28 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-/** The six states RFC 0009 requires a row's fixture to cover, in the order the RFC lists them. */
-const STAGES = ['empty', 'brownfield', 'post-apply', 'invalidating-update', 'drift', 'rollback'];
+/**
+ * The states RFC 0009 requires a row's fixture to cover, in the order the RFC lists them.
+ *
+ * `uninstall` is separate from `rollback` because the two do different things and only one of them
+ * matches the RFC's phrase "rollback *and uninstall* with user-owned entries preserved". `rollback`
+ * is whole-file time travel to the pre-apply snapshot — its own help says "anything you changed in
+ * those files since the apply is inside the snapshot too and goes back with it" — so it discards
+ * user drift by design. `uninstall` removes only what Token Harness owns. Recording one and calling
+ * it both would file a fixture claiming preservation for the command that does not preserve.
+ *
+ * Found by recording the sequence on a real machine: rollback correctly threw away a hook the user
+ * had added after the apply, which is right, and is not what the preservation clause is about.
+ */
+const STAGES = [
+  'empty',
+  'brownfield',
+  'post-apply',
+  'invalidating-update',
+  'drift',
+  'rollback',
+  'uninstall',
+];
 
 /**
  * The configuration each harness keeps, and where.
