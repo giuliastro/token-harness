@@ -72,13 +72,21 @@ const OPENCODE = harnessId('opencode');
  * dryrun branch *also* writes the reduced `afterChars` with `changed: true` (the plugin's
  * `_write_metric` records before the dryrun return). Pi's follows `env.HARNESSTRIM_MODE` with
  * fallback to baked mode, defaulting to `dryrun`, and its dryrun branch explicitly writes "a
- * receipt with the would-be counts — dryrun's value is proof it WOULD reduce". All three strip
- * the mode out of the line the importer sees.
+ * receipt with the would-be counts — dryrun's value is proof it WOULD reduce". OMP's hook
+ * resolves the mode the same way Pi's does (`env.HARNESSTRIM_MODE ?? baked.mode ?? "dryrun"`)
+ * and its dryrun branch writes the would-be counts too. All four strip the mode out of the line
+ * the importer sees.
+ *
+ * The list is a defence in depth rather than the only one: `parseTrimEvent` accepts any `harness`
+ * string, so an event from a harness this build does not register still reaches the mapping. Until
+ * that is filtered, a mode-carrying adapter missing from here is a realized-looking figure for a
+ * reduction nobody can prove happened, which is why each entry cites the source it was read from.
  */
 const MODE_CARRYING_HARNESSES = new Set<HarnessId>([
   OPENCODE,
   harnessId('hermes'),
   harnessId('pi'),
+  harnessId('omp'),
 ]);
 
 /** Recognises HarnessTrim's own invocation, including the Windows batch shim. */
@@ -793,11 +801,12 @@ function toEvent(
   const hasTokens = native && event.beforeTokens !== null && event.afterTokens !== null;
 
   /**
-   * The mode-carrying harnesses (`opencode`, `hermes`, `pi`) each have an adapter that can run
-   * in `dryrun`, and the schema 1 envelope dropped the `mode` field that carried that decision
-   * on the legacy line. Worse, all three record a dryrun identically to an applied reduction:
-   * OpenCode's dryrun branch emits the reduced event unchanged, Hermes' `_write_metric` writes
-   * before its dryrun return, and Pi's dryrun writes "a receipt with the would-be counts" —
+   * The mode-carrying harnesses — `MODE_CARRYING_HARNESSES`, which reads them off each adapter's
+   * own flags — each have an adapter that can run in `dryrun`, and the schema 1 envelope dropped
+   * the `mode` field that carried that decision on the legacy line. Worse, all of them record a
+   * dryrun identically to an applied reduction: OpenCode's dryrun branch emits the reduced event
+   * unchanged, Hermes' `_write_metric` writes before its dryrun return, and Pi's and OMP's dryrun
+   * write "a receipt with the would-be counts" —
    * same producer id, same reduced `afterChars`, `changed: true`. A char-only native line from
    * any of them therefore cannot be *proven* to describe a saving the model saw, so it is never
    * classed as one here (RFC 0005 §A measured reduction is not always a realized one). The
