@@ -242,12 +242,19 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
           // Gate two: RFC 0003 §Resolution at 0.1.0. A capability that cannot be asked for
           // is not assignable.
           if (!provider.assignable) {
+            // PLAN §15 item 46: the version is named because the statement is only true of a
+            // version. Saying "its installer cannot produce this in isolation" about `0.0.5` while
+            // the reader is running `0.1.0`, whose installer grew the flags that produce it, is a
+            // false claim delivered with the authority of a plan.
+            const observed = input.observedVersions[provider.id] ?? null;
             exclusions.push({
               scope,
               excluded: provider.id,
               retained: null,
               reason: [
-                `${provider.id} implements ${capability} but no installer state produces it in isolation`,
+                observed === null
+                  ? `${provider.id} implements ${capability} but no installer state this build could observe produces it in isolation`
+                  : `${provider.id} ${observed} implements ${capability} but no installer state at that version produces it in isolation`,
                 'RFC 0003: a capability the provider has but cannot be asked for is not an assignable capability',
                 'It is still detected, adopted, reconciled against the owner, and measured',
               ],
@@ -293,6 +300,8 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
     }
   }
 
+  narrowChannelOverlaps({ ownership, exclusions, conflicts, input });
+
   // Retained providers are only knowable once a scope is resolved, so the back-reference is
   // filled in here rather than guessed at the point of exclusion.
   const ownerByScope = new Map(
@@ -305,6 +314,94 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
   }
 
   return { ownership, exclusions, conflicts, pipelineId: derivePipelineId(ownership) };
+}
+
+/**
+ * The channel a payload actually travels: one harness, one tool family, one capability.
+ *
+ * RFC 0003 §Scope resolves ownership over `<harness>/<tool-family>/<interception-point>/<capability>`,
+ * and the interception point belongs there — two providers at two points are two different
+ * assignments, and the resolver is right to arbitrate them separately.
+ *
+ * What the point cannot express is that the *payload* is the same one. RTK rewrites a Bash command
+ * at `pre-tool-use` and HarnessTrim reduces that command's output at `post-tool-use`: different
+ * scopes, no contest, and both were assigned `shell.output.reduce` on Claude Code the moment
+ * HarnessTrim became assignable (PLAN §15 item 46). That is the double reduction this project's
+ * first paragraph names as the problem, arrived at through a resolver behaving exactly as
+ * specified.
+ *
+ * So the channel is checked after the scopes are: RFC 0003 §Rule §Amended, an `exclusive` capability
+ * admits one owner per channel, and a rule naming the pair decides which. Without a rule the pair
+ * is a hard conflict, which is the same fail-closed default that governs a contested scope — an
+ * overlap nobody has reviewed is not permission.
+ */
+function narrowChannelOverlaps(context: {
+  ownership: ResolvedCapability[];
+  exclusions: CapabilityExclusion[];
+  conflicts: HardConflict[];
+  input: ResolveInput;
+}): void {
+  const { ownership, exclusions, conflicts, input } = context;
+  const channels = new Map<string, ResolvedCapability[]>();
+  for (const entry of ownership) {
+    // A chainable assignment is one an `ordered` rule already reviewed for this exact composition,
+    // so it is not an unreviewed overlap and is left alone.
+    if (entry.mode !== 'exclusive') continue;
+    const key = `${entry.scope.harness}/${entry.scope.toolFamily}/${entry.scope.capability}`;
+    const group = channels.get(key) ?? [];
+    group.push(entry);
+    channels.set(key, group);
+  }
+
+  const dropped = new Set<ResolvedCapability>();
+  for (const group of channels.values()) {
+    const owners = [...new Set(group.map((entry) => entry.owner))];
+    if (owners.length < 2) continue;
+    const first = group[0];
+    if (first === undefined) continue;
+    const { harness, toolFamily, capability } = first.scope;
+    const rule = findCompatibilityRule(input.rules, { providers: owners, harness, capability });
+
+    if (rule === null || rule.outcome !== 'narrowed' || rule.retains === undefined) {
+      conflicts.push({
+        code: 'exclusive-scope-contested',
+        scope: `${harness}/${toolFamily}/${capability}`,
+        claimants: [...owners].sort(),
+        detail: [
+          `${owners.join(' and ')} each own ${capability} on ${harness}/${toolFamily}, at different interception points`,
+          'The interception points differ but the payload does not, so the reduction would run twice',
+          rule === null
+            ? 'No rule names this pair on this channel, and an unreviewed overlap is not permission'
+            : `Rule ${rule.id} does not say which provider keeps the channel`,
+        ],
+        remediation: `Choose one owner for ${harness}/${toolFamily}/${capability} with \`profile: custom\``,
+      });
+      for (const entry of group) dropped.add(entry);
+      continue;
+    }
+
+    const retains = rule.retains;
+    for (const entry of group) {
+      if (entry.owner === retains) continue;
+      dropped.add(entry);
+      exclusions.push({
+        scope: entry.scope,
+        excluded: entry.owner,
+        retained: retains,
+        reason: [
+          `rule ${rule.id} keeps ${capability} on ${harness}/${toolFamily} with ${retains}, at every interception point`,
+          `${entry.owner} is narrowed to the install its own flags produce rather than excluded whole`,
+          rule.rationale,
+        ],
+      });
+    }
+  }
+
+  if (dropped.size > 0) {
+    const kept = ownership.filter((entry) => !dropped.has(entry));
+    ownership.length = 0;
+    ownership.push(...kept);
+  }
 }
 
 interface ContestedInput {
@@ -418,6 +515,46 @@ function resolveContested(context: ContestedInput): void {
       const claim = claims.find((entry) => entry.provider === provider);
       if (claim === undefined) continue;
       ownership.push({ scope, owner: provider, mode: 'chainable', order: index });
+    }
+    return;
+  }
+
+  if (rule.outcome === 'narrowed') {
+    // RFC 0003 §Rule §Amended. The same decision `narrowChannelOverlaps` applies across points,
+    // reached here when two providers claim the identical scope: one keeps it, the other is
+    // narrowed to what its own flags produce. `isWellFormedRule` guarantees `retains` names one of
+    // the rule's providers, so a table that reached here without it is malformed rather than
+    // permissive.
+    const retains = rule.retains;
+    if (retains === undefined) {
+      conflicts.push({
+        code: 'compatibility-rule-malformed',
+        scope: formatCapabilityScope(scope),
+        claimants,
+        detail: [
+          `Rule ${rule.id} narrows a pair without naming which provider keeps the channel`,
+          'Choosing one here would make the resolver decide what the rule exists to record',
+        ],
+        remediation: `Fix rule ${rule.id} so it names the provider that retains the capability`,
+      });
+      return;
+    }
+    for (const claimant of claimants) {
+      if (claimant === retains) continue;
+      exclusions.push({
+        scope,
+        excluded: claimant,
+        retained: retains,
+        reason: [
+          `rule ${rule.id} keeps ${capability} on ${scope.harness} with ${retains}`,
+          `${claimant} is narrowed to the install its own flags produce rather than excluded whole`,
+          rule.rationale,
+        ],
+      });
+    }
+    const retainedClaim = claims.find((claim) => claim.provider === retains);
+    if (retainedClaim !== undefined) {
+      ownership.push({ scope, owner: retains, mode: retainedClaim.mode, order: 0 });
     }
     return;
   }

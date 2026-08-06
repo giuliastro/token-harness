@@ -16,9 +16,31 @@ export interface CompatibilityRule {
   /** `"*"` means every harness; RFC 0003 §Rule keeps the harness dimension. */
   harnesses: HarnessId[] | '*';
   capabilities: CapabilityId[];
-  outcome: 'compatible' | 'ordered' | 'conflict';
+  /**
+   * RFC 0003 §Rule §Amended (PLAN §15 item 46) adds `narrowed`.
+   *
+   * The first three answer "may these two share this capability, and in what order". `narrowed`
+   * answers a question the pair could not express before: *neither* shares it — one keeps the
+   * channel and the other installs the reduced form its own flags produce. It is not `conflict`,
+   * because nothing is blocked and there is nothing for the user to resolve; it is not `ordered`,
+   * because the two never both run on the payload.
+   *
+   * It exists because the alternative was to keep telling a user running HarnessTrim `0.1.0` that
+   * "its installer cannot produce this in isolation" — true of `0.0.5` and false of the build in
+   * front of them — or to hand them a hard conflict where the honest answer is that one tool
+   * reduces and the other installs its skills.
+   */
+  outcome: 'compatible' | 'ordered' | 'conflict' | 'narrowed';
   /** Required when `outcome` is `ordered`. */
   order?: ProviderId[];
+  /**
+   * Required when `outcome` is `narrowed`: the provider that keeps the channel.
+   *
+   * Named in the rule rather than derived, for the reason the order is. "RTK keeps shell reduction"
+   * is a reviewed decision about a pair, and a resolver that picked a winner by some property of
+   * the providers would be making that decision silently and differently as providers changed.
+   */
+  retains?: ProviderId;
   testedVersions: Record<string, string>;
   rationale: string;
   fixtures: string[];
@@ -53,12 +75,27 @@ export function findCompatibilityRule(
   return null;
 }
 
-/** An `ordered` rule without an order is malformed data, not a permissive rule. */
+/**
+ * An `ordered` rule without an order is malformed data, not a permissive rule. A `narrowed` rule
+ * without a `retains` naming one of its own providers is the same kind of malformed: it would
+ * decide that someone keeps the channel without saying who.
+ */
 export function isWellFormedRule(rule: CompatibilityRule): boolean {
   if (rule.outcome === 'ordered') {
-    return Array.isArray(rule.order) && rule.order.length === rule.providers.length;
+    return (
+      Array.isArray(rule.order) &&
+      rule.order.length === rule.providers.length &&
+      rule.retains === undefined
+    );
   }
-  return rule.order === undefined;
+  if (rule.outcome === 'narrowed') {
+    return (
+      rule.order === undefined &&
+      rule.retains !== undefined &&
+      rule.providers.includes(rule.retains)
+    );
+  }
+  return rule.order === undefined && rule.retains === undefined;
 }
 
 /**

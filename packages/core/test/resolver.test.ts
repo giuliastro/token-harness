@@ -219,15 +219,16 @@ describe('fail-closed on undeclared overlap', () => {
         profile: 'safe',
         providers: contenders,
         rules: [...COMPATIBILITY_RULES],
-        // The live case: the shipped rule records 0.0.5.
-        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.6' },
+        // The live case: the shipped rule records 0.1.0, and 0.1.1 is a patch bump away from it.
+        // Below 1.0.0 semver promises nothing across a patch, so coverage there is exact equality.
+        observedVersions: { rtk: '0.44.0', harnesstrim: '0.1.1' },
       });
 
       const conflict = result.conflicts[0];
       assert.equal(conflict?.code, 'compatibility-rule-stale');
       // Both sides of the comparison, because "stale" without the numbers is not actionable.
-      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.0.5')));
-      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.0.6')));
+      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.1.0')));
+      assert.ok(conflict?.detail.some((line) => line.includes('harnesstrim 0.1.1')));
       assert.deepEqual(result.ownership, []);
     });
 
@@ -239,7 +240,7 @@ describe('fail-closed on undeclared overlap', () => {
         profile: 'safe',
         providers: contenders,
         rules: [...COMPATIBILITY_RULES],
-        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.6' },
+        observedVersions: { rtk: '0.44.0', harnesstrim: '0.1.1' },
       });
       const missing = resolveOwnership({ ...BASE, profile: 'safe', providers: contenders });
       assert.deepEqual(stale.ownership, missing.ownership);
@@ -254,7 +255,7 @@ describe('fail-closed on undeclared overlap', () => {
         profile: 'safe',
         providers: contenders,
         rules: [...COMPATIBILITY_RULES],
-        observedVersions: { rtk: '0.42.0', harnesstrim: null },
+        observedVersions: { rtk: '0.44.0', harnesstrim: null },
       });
       assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
       assert.ok(result.conflicts[0]?.detail.some((line) => line.includes('unknown')));
@@ -268,9 +269,16 @@ describe('fail-closed on undeclared overlap', () => {
         profile: 'safe',
         providers: contenders,
         rules: [...COMPATIBILITY_RULES],
-        observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' },
+        observedVersions: { rtk: '0.44.0', harnesstrim: '0.1.0' },
       });
-      assert.equal(result.conflicts[0]?.code, 'exclusive-scope-incompatible');
+      // The rule applied, so it decided rather than being withdrawn: no staleness conflict, and
+      // the channel went to the provider it names. Before item 46 this asserted
+      // `exclusive-scope-incompatible`, which was the same statement about a `conflict` rule.
+      assert.deepEqual(result.conflicts, []);
+      assert.deepEqual(
+        result.ownership.map((entry) => entry.owner),
+        ['rtk'],
+      );
     });
 
     it('allows a later patch at or above 1.0.0 but not a later major', () => {
@@ -314,19 +322,31 @@ describe('fail-closed on undeclared overlap', () => {
     assert.match(remediation, /compatibility rule/);
   });
 
-  it('reports a named incompatibility with its rationale', () => {
-    // The shipped table records the RTK/HarnessTrim overlap explicitly, so the user learns it
-    // is a measured property of HarnessTrim 0.0.5 rather than missing data.
+  it('keeps the channel with the provider the shipped rule names, and narrows the other', () => {
+    // PLAN §15 item 46 changed the shipped rule from `conflict` to `narrowed`, so the overlap is
+    // no longer something for the user to resolve: RTK keeps shell reduction, and HarnessTrim is
+    // installed in the form its own flags produce. The rationale is still what carries *why*.
     const result = resolveOwnership({
       ...BASE,
       profile: 'safe',
       providers: contenders,
       rules: [...COMPATIBILITY_RULES],
+      // The versions the shipped rule records. `BASE` keeps the older pair so the locally defined
+      // rules in this file stay inside their own recorded versions.
+      observedVersions: { rtk: '0.44.0', harnesstrim: '0.1.0' },
     });
 
-    assert.equal(result.conflicts[0]?.code, 'exclusive-scope-incompatible');
-    assert.match(result.conflicts[0]?.detail.join(' ') ?? '', /HarnessTrim 0\.0\.5/);
-    assert.deepEqual(result.ownership, []);
+    assert.deepEqual(result.conflicts, []);
+    assert.deepEqual(
+      result.ownership.map((entry) => entry.owner),
+      ['rtk'],
+    );
+    const excluded = result.exclusions.find((entry) => entry.excluded === 'harnesstrim');
+    assert.ok(excluded);
+    assert.equal(excluded.retained, 'rtk');
+    assert.match(excluded.reason.join(' '), /narrowed to the install its own flags produce/);
+    // And the reason still names the measured property rather than only the verdict.
+    assert.match(excluded.reason.join(' '), /--no-hook/);
   });
 
   it('treats an ordered rule with no order as unresolved rather than guessing', () => {
@@ -778,11 +798,17 @@ describe('the shipped rule table', () => {
       entry.capabilities.includes('shell.output.reduce'),
     );
     assert.ok(rule);
-    assert.equal(rule.outcome, 'conflict');
-    // A rule is a permission, so the shipped table grants none: this entry exists to carry a
-    // reason the fail-closed default cannot.
+    // `narrowed` since PLAN §15 item 46: the rule no longer refuses the pair, it says which
+    // provider keeps the channel. RTK keeps shell reduction, and HarnessTrim 0.1.0 is installed in
+    // the form its own flags produce rather than excluded whole — which is why the entry stopped
+    // being a `conflict` without becoming a permission to compose.
+    assert.equal(rule.outcome, 'narrowed');
+    assert.equal(rule.retains, 'rtk');
     assert.ok(rule.fixtures.length > 0);
     assert.ok(rule.rationale.length > 0);
+    // The versions it speaks for are the ones the narrowing was read from; at 0.0.5 no flag
+    // produced any narrowed state, which is what the old `conflict` recorded.
+    assert.deepEqual(rule.testedVersions, { rtk: '0.44.0', harnesstrim: '0.1.0' });
   });
 
   it('grants no provider pair permission to share an exclusive scope', () => {

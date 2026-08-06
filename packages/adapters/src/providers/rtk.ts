@@ -493,6 +493,15 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // RFC 0004 §Brownfield adoption: nothing has been applied by Token Harness yet, so
     // every installation it finds is the user's.
     managedByTokenHarness: false,
+    /**
+     * Always, and independent of the observed version.
+     *
+     * RTK's assignment is produced by this build writing the hook itself — `rtk-plan.ts` appends
+     * the entry — so nothing about the installed `rtk` decides whether the state is reachable.
+     * That is the difference from HarnessTrim, whose assignment is produced by *its* installer and
+     * therefore depends on which flags that installer has.
+     */
+    assignable: true,
     evidence: evidenceItems,
     warnings,
   };
