@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   COMPATIBILITY_ROWS,
@@ -38,8 +41,38 @@ function combination(overrides: Partial<ManagedCombination> = {}): ManagedCombin
 }
 
 describe('classification of a harness version against the row set', () => {
-  it('ships no rows until fixtures exist (RFC 0009 item 5)', () => {
-    assert.deepEqual(COMPATIBILITY_ROWS, []);
+  it('ships no row whose fixture is not on disk (RFC 0009 item 5)', () => {
+    /**
+     * This asserted `deepEqual(COMPATIBILITY_ROWS, [])` while no fixture had been recorded, which
+     * held the right rule the only way it could at the time. Now that two recordings exist the rule
+     * has to be stated properly, or shipping the first row would have meant deleting the test that
+     * guards them: RFC 0009 item 5 is "add matrix rows only after the relevant cross-platform
+     * fixtures pass", so what must be true is that every row points at a recording that is there.
+     *
+     * A row naming a directory nobody recorded is the failure mode this replaces — it would admit a
+     * managed mutation on the strength of a path.
+     */
+    // Walked rather than counted: this file runs from `packages/core/dist/test`, and a fixed number
+    // of `..` segments is a hostage to the build layout — the first attempt here resolved to
+    // `packages/` and reported a fixture that is on disk as missing.
+    let root = fileURLToPath(new URL('.', import.meta.url));
+    while (!existsSync(join(root, 'pnpm-workspace.yaml'))) {
+      const parent = join(root, '..');
+      assert.notEqual(parent, root, 'no workspace root above this test file');
+      root = parent;
+    }
+    for (const entry of COMPATIBILITY_ROWS) {
+      assert.ok(
+        existsSync(join(root, entry.fixture)),
+        `row ${entry.provider} × ${entry.harness} names a fixture that does not exist: ${entry.fixture}`,
+      );
+      // And the recording has to be of the versions the row claims, not of some other machine.
+      const recorded = JSON.parse(
+        readFileSync(join(root, entry.fixture, 'post-apply.json'), 'utf8'),
+      ) as { observed: { harnessVersion: string; providerVersion: string } };
+      assert.equal(recorded.observed.providerVersion, entry.providerVersion);
+      assert.equal(recorded.observed.harnessVersion, entry.harnessVersion.maximum);
+    }
   });
 
   it('finds a version inside a row', () => {

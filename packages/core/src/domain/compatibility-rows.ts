@@ -61,11 +61,58 @@ export interface CompatibilityRow {
  * The rows shipped in this build.
  *
  * RFC 0009 §Initial delivery order item 5: "Add matrix rows only after the relevant
- * cross-platform fixtures and verification evidence pass." None have — so none exist, and the
- * gate refuses every managed mutation with the missing schema or fixture named. An empty table
- * is the honest admission set, not a gap.
+ * cross-platform fixtures and verification evidence pass." Two have, both on Windows, and each
+ * names the recording that admits it. Every other combination stays refused with the missing schema
+ * or fixture named — the table is an admission set, not a list of things that probably work.
+ *
+ * ## Why these two, and why Windows alone
+ *
+ * `rtk × claude` and `harnesstrim × claude` are the only combinations any provider can currently be
+ * *planned* for: `rtk-plan.ts` writes a Claude-shaped hook list and nothing else, and HarnessTrim's
+ * `delegatedInstallReview` covers Claude only. A row for a combination that produces no action would
+ * admit nothing.
+ *
+ * Windows alone because that is where the fixtures were recorded. The Linux recordings under
+ * `tests/fixtures/rows/*-linux` cover harnesses that plan nothing on that machine — Claude is not
+ * installed there — so their post-apply stages record no mutation and cannot admit one. macOS has no
+ * machine behind it at all. On both, `doctor` still detects and reports; only the mutation is
+ * refused, which is the difference RFC 0009 exists to keep.
+ *
+ * ## What each row is standing on
+ *
+ * The harness range is a point, not a span: one Claude Code version was observed, so one is claimed.
+ * A newer one reads `unknown-newer` and refuses, which is a true statement rather than a guess that
+ * `2.1.221` behaves like `2.1.220`.
+ *
+ * The tiers differ because the evidence does. RTK's row claims `canary`: its history database is a
+ * per-harness receipt `verify` can read on the user's machine. HarnessTrim's claims `config-only`:
+ * the skills-only install deliberately writes no hook, so nothing outside the configuration can
+ * witness it. A row must not promise a tier `verify` cannot reach.
  */
-export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [];
+export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.220', maximum: '2.1.220' },
+    provider: 'rtk' as ProviderId,
+    providerVersion: '0.44.0',
+    platform: { os: 'windows', wsl: false, supported: true, limitation: null },
+    configSchema: 'claude-settings-json-hooks',
+    fixture: 'tests/fixtures/rows/rtk-claude-windows',
+    verificationTier: 'canary',
+  },
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.220', maximum: '2.1.220' },
+    provider: 'harnesstrim' as ProviderId,
+    providerVersion: '0.1.0',
+    platform: { os: 'windows', wsl: false, supported: true, limitation: null },
+    // The install writes skill files, not a document this build parses, so the schema it depends on
+    // is the skills directory layout rather than `settings.json`.
+    configSchema: 'claude-skills-directory',
+    fixture: 'tests/fixtures/rows/harnesstrim-claude-windows',
+    verificationTier: 'config-only',
+  },
+];
 
 export type RowHarnessVerdict = 'in-row' | 'unknown-newer' | 'unknown-older' | 'below-range';
 

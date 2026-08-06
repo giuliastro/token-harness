@@ -126,6 +126,24 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Installation and updates
 
+- **Two compatibility rows ship, both on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
+  `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
+  (`config-only`). Each names a recording under `tests/fixtures/rows/`. macOS and Linux have no row:
+  a row is a state of a real machine and no such machine was available, so `plan` and `apply` refuse
+  there while detection, verification, and measurement continue to work. Codex and OpenCode have no
+  row either, for a different reason — nothing proposes a mutation on them, because RTK's plan
+  builder writes a Claude-shaped hook list and HarnessTrim's reviewed write set covers Claude only.
+- **Two stages are missing from every recording.** `invalidating-update` needs two versions of a
+  provider on one machine and neither machine had them; a synthesised state would assert something
+  nobody stood in. `uninstall` is missing from the HarnessTrim recording because `uninstall` computes
+  a plan and the RFC 0009 gate refused it before the row existed — it is recordable now and is not yet
+  recorded.
+- **The managed install refuses to adopt a hand-placed skill.** Applying HarnessTrim's skills-only
+  install over a `SKILL.md` a user copied there themselves fails with
+  `delegated-install-artifact-mismatch` naming that path, and rolls back with everything restored.
+  The installer does not overwrite it, so the reviewed digest never matches. That protects the user's
+  file and it also means there is no migration path from a hand-placed copy: it has to be removed
+  first, and nothing does that for them.
 - **A delegated install is reversible only when the channel can report its inventory.** Before a
   `package-inventory` install runs, the channel is asked what it has installed; a rollback then
   restores that captured version through the channel and re-reads the inventory to verify it
