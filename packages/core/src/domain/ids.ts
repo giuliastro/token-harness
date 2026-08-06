@@ -48,6 +48,16 @@ export function harnessId(value: string): HarnessId {
  */
 export const TOKEN_HARNESS_OWNER = 'token-harness' as ProviderId;
 
+/**
+ * The project identity for an event that names no project.
+ *
+ * RTK's history records a `project_path` that can be empty, and "attributing the event to the
+ * directory `metrics` happens to run in would invent an attribution". Such an event belongs to no
+ * project, so a project-scoped report excludes it and says how many it excluded rather than
+ * letting it inflate whichever project was asked about.
+ */
+export const UNATTRIBUTED_PROJECT_ID = 'p_unattributed';
+
 /** Harnesses managed at 0.1.0 — PLAN §8.1. */
 export const MANAGED_HARNESS_IDS = ['claude', 'codex', 'opencode'] as const;
 
