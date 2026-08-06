@@ -60,6 +60,27 @@ function trimEvent(overrides: Partial<Record<string, unknown>> = {}): string {
   });
 }
 
+/** One native `TrimEvent` in the `0.1.0` shape: schema envelope, producer id, nullable tokens. */
+function nativeTrimEvent(
+  overrides: Partial<Record<string, unknown>> = {},
+  eventId = '3f8c9a91-7c2d-4a1e-9f6b-5d4e8c2a1b00',
+): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    eventId,
+    ts: '2026-08-01T10:00:00.000Z',
+    harness: 'opencode',
+    tool: 'bash',
+    reducer: 'test-output-slim',
+    beforeChars: 1410,
+    afterChars: 124,
+    changed: true,
+    beforeTokens: null,
+    afterTokens: null,
+    ...overrides,
+  });
+}
+
 interface Options {
   files?: Record<string, string>;
   runnable?: boolean;
@@ -613,6 +634,234 @@ describe('the metrics importer', () => {
     assert.ok((result.cursor?.byteOffset ?? 0) > 0);
     assert.match(result.cursor?.lastLineDigest ?? '', /^sha256:/);
     assert.equal(result.cursor?.highWaterMark, null);
+  });
+});
+
+describe('native events (PLAN §15 item 43d)', () => {
+  it('uses the producer event id as the identity', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({ files: { [METRICS]: `${nativeTrimEvent()}\n` } }),
+      target,
+    );
+    assert.equal(result.mode, 'native-with-residue');
+    const event = target.events[0];
+    assert.ok(event);
+    // The identity is the producer's, everywhere an identity appears: the dedup id, the native
+    // reference, and the operation id are the same string, and none of them is synthesized.
+    assert.equal(event.eventId, '3f8c9a91-7c2d-4a1e-9f6b-5d4e8c2a1b00');
+    assert.equal(event.source.nativeEventId, '3f8c9a91-7c2d-4a1e-9f6b-5d4e8c2a1b00');
+    assert.equal(event.context.operationId, '3f8c9a91-7c2d-4a1e-9f6b-5d4e8c2a1b00');
+  });
+
+  it('maps a real token count as exact-local', async () => {
+    const target = store();
+    await harnesstrimAdapter.collectMetrics(
+      context({
+        files: { [METRICS]: `${nativeTrimEvent({ beforeTokens: 320, afterTokens: 31 })}\n` },
+      }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // "A token count is a token count where one exists": the producer's figures are used as
+    // they are, which is what makes the class exact rather than estimated.
+    assert.equal(event.measurement.class, 'exact-local');
+    assert.equal(event.measurement.beforeTokens, 320);
+    assert.equal(event.measurement.afterTokens, 31);
+  });
+
+  it('stays estimated-local for a native char event on a harness that cannot dryrun', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: {
+          // A codex event: the fixture's adapter list gives that harness no `--mode` flag, so a
+          // char-only native line from it can only describe an applied reduction.
+          [METRICS]: `${nativeTrimEvent({ harness: 'codex' })}\n`,
+        },
+      }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // No tokenizer here, so the class is the character estimate — exactly as for a legacy line.
+    assert.equal(event.measurement.class, 'estimated-local');
+    assert.equal(event.measurement.beforeTokens, null);
+    assert.equal(event.measurement.afterTokens, null);
+    // And, being provably applied, it is not flagged as an unresolved mode.
+    assert.equal(event.outcome.bypassReason, null);
+    // With nothing unresolved, the native mode needs no residue qualification.
+    assert.equal(result.mode, 'native');
+  });
+
+  for (const harness of ['opencode', 'hermes', 'pi']) {
+    it(`files a char-only native ${harness} event as counterfactual, not estimated`, async () => {
+      const target = store();
+      const result = await harnesstrimAdapter.collectMetrics(
+        context({ files: { [METRICS]: `${nativeTrimEvent({ harness })}\n` } }),
+        target,
+      );
+      const event = target.events[0];
+      assert.ok(event);
+      // This is the regression PLAN §15 item 43d must not reintroduce: the schema 1 envelope no
+      // longer carries `mode`, and every mode-carrying adapter records a dryrun identically to
+      // its active one — OpenCode emits the reduced line unchanged, Hermes writes its metric
+      // before the dryrun return, Pi writes "a receipt with the would-be counts" — so a char-only
+      // native line from them can never be proven realized. It is counterfactual — excluded from
+      // every realized total — and only the residual is reported, once.
+      assert.equal(event.measurement.class, 'counterfactual');
+      assert.equal(event.outcome.changed, false);
+      assert.equal(event.outcome.bypassReason, 'mode-unresolved');
+      // The stream is natively read, but a part of it could not be classed as realized.
+      assert.equal(result.mode, 'native-with-residue');
+      const unresolved = result.diagnostics.find(
+        (entry) => entry.code === 'provider-metrics-mode-unresolved',
+      );
+      assert.ok(unresolved);
+      assert.equal(unresolved.severity, 'info');
+      assert.match(unresolved.message, /1 native event from a mode-carrying harness/);
+    });
+  }
+
+  it('reports the unresolved-mode count once per import, not once per event', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: { [METRICS]: `${nativeTrimEvent()}\n${nativeTrimEvent({}, 'id-2')}\n` },
+      }),
+      target,
+    );
+    assert.equal(target.events.length, 2);
+    // The mode plainly states the residue rather than a bare `native`.
+    assert.equal(result.mode, 'native-with-residue');
+    // One aggregated line for the whole import — the 78-character budget and a thousand-line
+    // file make a per-event diagnostic the failure mode line-width.test.ts exists to catch.
+    assert.equal(
+      result.diagnostics.filter((entry) => entry.code === 'provider-metrics-mode-unresolved')
+        .length,
+      1,
+    );
+    const unresolved = result.diagnostics.find(
+      (entry) => entry.code === 'provider-metrics-mode-unresolved',
+    );
+    assert.match(unresolved?.message ?? '', /2 native events from a mode-carrying harness/);
+  });
+
+  it('leaves a token-counting native event exact even on opencode', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: { [METRICS]: `${nativeTrimEvent({ beforeTokens: 320, afterTokens: 31 })}\n` },
+      }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // A token count reaches the line from a reduce-pipe or MCP run, which is a separate process
+    // and cannot be dryrun; it is exact.
+    assert.equal(event.measurement.class, 'exact-local');
+    assert.equal(event.outcome.changed, true);
+    // Everything was classed, so there is no residue to qualify the native mode.
+    assert.equal(result.mode, 'native');
+  });
+
+  it('files a recorded pass-through as a bypass, not as a saving', async () => {
+    const target = store();
+    await harnesstrimAdapter.collectMetrics(
+      context({ files: { [METRICS]: `${nativeTrimEvent({ changed: false })}\n` } }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // `changed: false` is the producer's pass-through mark: the reducer ran in active mode and
+    // changed nothing. It is not a dryrun — the attempt happened — so the class stays a measured
+    // one, and the figure is no saving of any sign.
+    assert.equal(event.outcome.changed, false);
+    assert.equal(event.outcome.bypassReason, 'pass-through');
+    assert.equal(event.measurement.class, 'estimated-local');
+  });
+
+  it('keeps legacy lines on the synthesized identity in a mixed stream', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({ files: { [METRICS]: `${trimEvent()}\n${nativeTrimEvent()}\n` } }),
+      target,
+    );
+    // The stream is natively read, but its OpenCode line cannot prove a realized reduction.
+    assert.equal(result.mode, 'native-with-residue');
+    assert.equal(target.events.length, 2);
+    const [legacy, native] = target.events;
+    assert.ok(legacy && native);
+    // The two shapes keep their own identities and their own classes: the legacy line is still
+    // synthesized and estimated, the native line is not, and nothing merges them.
+    assert.equal(legacy.source.nativeEventId, null);
+    assert.equal(legacy.measurement.class, 'estimated-local');
+    assert.equal(native.source.nativeEventId, '3f8c9a91-7c2d-4a1e-9f6b-5d4e8c2a1b00');
+    assert.notEqual(legacy.eventId, native.eventId);
+  });
+
+  it('keeps the identity when the file is rewritten with the same events', async () => {
+    const first = store();
+    await harnesstrimAdapter.collectMetrics(
+      context({
+        files: {
+          [METRICS]: `${nativeTrimEvent()}\n${nativeTrimEvent({}, 'id-2')}\n`,
+        },
+      }),
+      first,
+    );
+    // Same events, reversed order — a different file, the same identities. This is what the
+    // synthesized identity cannot do: its digest of source, ordinal, and line changes with the
+    // ordinal, so a rewritten file would look like new events.
+    const second = store();
+    await harnesstrimAdapter.collectMetrics(
+      context({
+        files: {
+          [METRICS]: `${nativeTrimEvent({}, 'id-2')}\n${nativeTrimEvent()}\n`,
+        },
+      }),
+      second,
+    );
+    // Order follows the file, not the identity, so the two runs sort to the same id set.
+    assert.deepEqual(
+      first.events.map((event) => event.eventId).sort(),
+      second.events.map((event) => event.eventId).sort(),
+    );
+  });
+
+  it('skips a schema this build does not understand', async () => {
+    const target = store();
+    const future = JSON.parse(nativeTrimEvent()) as Record<string, unknown>;
+    future['schemaVersion'] = 2;
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({ files: { [METRICS]: `${nativeTrimEvent()}\n${JSON.stringify(future)}\n` } }),
+      target,
+    );
+    // RFC 0006 rule 1 at the line: a shape this build does not understand is skipped, and the
+    // existing rows-skipped warning already says to check whether upstream changed its schema.
+    assert.equal(result.imported, 1);
+    assert.equal(result.skipped, 1);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'provider-metrics-rows-skipped'),
+      true,
+    );
+  });
+
+  it('skips a native line without its identity rather than synthesizing one', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({ files: { [METRICS]: `${nativeTrimEvent({ eventId: '' })}\n` } }),
+      target,
+    );
+    // A schema 1 line is not an older file, so it does not get the legacy fallback; an identity
+    // that cannot dedup is skipped, loudly enough for the warning.
+    assert.equal(result.imported, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'provider-metrics-rows-skipped'),
+      true,
+    );
   });
 });
 

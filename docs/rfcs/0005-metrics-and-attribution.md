@@ -331,9 +331,10 @@ Mapping to the normalized event:
 ### A measured reduction is not always a realized one
 
 `TrimEvent` records what the reducer computed, not whether the result reached the model.
-HarnessTrim's OpenCode adapter emits an event in `mode: "dryrun"` as well as in
-`mode: "active"`: it measures `beforeChars` and `afterChars` identically, and in `dryrun`
-leaves `output.output` untouched.
+The mode-carrying harness adapters — opencode, hermes, and pi — each run in `mode: "dryrun"`
+as well as `mode: "active"` (OpenCode defaults to `active`; hermes and pi default to
+`dryrun`). In `dryrun` they measure `beforeChars` and `afterChars` identically, record the
+event with `changed: true`, and leave the payload untouched.
 
 Two events with identical numbers can therefore mean opposite things, and the importer must
 not collapse them:
@@ -387,6 +388,7 @@ An importer states which fidelity mode it is running in, and the mode appears in
 | Mode | Condition | Consequence |
 | --- | --- | --- |
 | `native` | Upstream exposes `metrics --json` with IDs and tokens | Exact or declared-estimate classes, native dedup |
+| `native-with-residue` | Native stream, but some mode-carrying harness events (opencode, hermes, pi) cannot prove a realized reduction (schema 1 carries no `mode`) | Those events are `counterfactual`; the residue is reported once per import with a count |
 | `legacy` | Character-only `TrimEvent` JSONL | `estimated-local` only, synthesized dedup |
 
 Running in `legacy` mode is a supported steady state, not a warning. What would be a
