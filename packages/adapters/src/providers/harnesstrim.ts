@@ -43,6 +43,7 @@ import type {
 
 const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
+const HERMES = harnessId('hermes');
 const CODEX = harnessId('codex');
 
 const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
@@ -84,7 +85,7 @@ const OPENCODE = harnessId('opencode');
  */
 const MODE_CARRYING_HARNESSES = new Set<HarnessId>([
   OPENCODE,
-  harnessId('hermes'),
+  HERMES,
   harnessId('pi'),
   harnessId('omp'),
 ]);
@@ -150,6 +151,16 @@ const MANIFEST: ProviderManifest = {
         upstreamVersion: '0.0.5',
       },
     },
+    {
+      capability: 'tool.output.reduce',
+      mode: 'exclusive',
+      harnesses: [HERMES],
+      surfaces: [{ toolFamily: 'tool.result', interceptionPoint: 'transform-tool-result' }],
+      evidence: {
+        sourceReference: 'https://hermes-agent.nousresearch.com/docs/',
+        upstreamVersion: '0.1.0',
+      },
+    },
   ],
   platforms: [
     { os: 'windows', wsl: false, supported: true, limitation: null },
@@ -166,6 +177,11 @@ const MANIFEST: ProviderManifest = {
     {
       harness: CODEX,
       testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
+      verificationTier: 'config-only',
+    },
+    {
+      harness: HERMES,
+      testedVersions: { minimum: '0.1.0', maximum: '0.1.0' },
       verificationTier: 'config-only',
     },
     {
@@ -203,7 +219,7 @@ const MANIFEST: ProviderManifest = {
     // names it is not read. Item 30 readmits it together with the adapter and a matrix row; the
     // registry assertion in `registries.test.ts` refuses a home-relative location that names a
     // harness the registry does not know.
-    locations: ['.harnesstrim/metrics.jsonl'],
+    locations: ['.harnesstrim/metrics.jsonl', '.hermes/harnesstrim-metrics.jsonl'],
   },
   delegatedInstallReview: {
     upstreamVersion: '0.0.7',
@@ -561,7 +577,13 @@ export function harnessesWiredToHarnessTrim(
 ): HarnessId[] {
   const wired = new Set<HarnessId>();
   for (const config of configs) {
-    if (config.commands.some((command) => identifiesCommand(command))) wired.add(config.harnessId);
+    const hermesPlugin =
+      config.harnessId === HERMES &&
+      (config.configPath.toLowerCase().includes('.hermes/plugins/harnesstrim') ||
+        config.commands.some((command) => /hermes plugins enable harnesstrim/i.test(command)));
+    if (hermesPlugin || config.commands.some((command) => identifiesCommand(command))) {
+      wired.add(config.harnessId);
+    }
   }
   return [...wired];
 }
@@ -665,7 +687,10 @@ async function probeExecutable(context: ProviderContext): Promise<{
 
 /** The metrics files this provider might have written, in RFC 0005's declared order. */
 export function metricsLocations(context: ProviderContext): string[] {
-  return [context.fs.join(context.projectRoot, '.harnesstrim', 'metrics.jsonl')];
+  return [
+    context.fs.join(context.projectRoot, '.harnesstrim', 'metrics.jsonl'),
+    context.fs.join(context.paths.home, '.hermes', 'harnesstrim-metrics.jsonl'),
+  ];
 }
 
 async function detect(context: ProviderContext): Promise<ProviderDetection> {
@@ -923,7 +948,10 @@ function toEvent(
       pipelineId: null,
       pipelineOrder: null,
       toolFamily: event.tool === '' ? null : event.tool,
-      capability: event.harness === OPENCODE ? 'tool.output.reduce' : 'shell.output.reduce',
+      capability:
+        event.harness === OPENCODE || event.harness === HERMES
+          ? 'tool.output.reduce'
+          : 'shell.output.reduce',
     },
     measurement: {
       class:
