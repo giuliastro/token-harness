@@ -1,0 +1,39 @@
+{
+  "stage": "drift",
+  "harness": "codex",
+  "provider": "harnesstrim",
+  "observed": {
+    "harnessVersion": "0.142.0",
+    "providerVersion": "0.0.6",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "24.13.0"
+    }
+  },
+  "configuration": {
+    "~/.codex/hooks.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"^Bash$\",\n        \"hooks\": [\n          { \"type\": \"command\", \"command\": \"harnesstrim reduce --mode active --min-length 400\" }\n        ]\n      }\n    ]\n  }\n}"
+    },
+    "~/.codex/config.toml": {
+      "present": false
+    },
+    "~/.codex/skills": {
+      "present": false
+    },
+    "<project>/AGENTS.md": {
+      "present": true,
+      "kind": "file",
+      "contents": "# Project notes\n\n- Keep command output small: pipe noisy logs through `harnesstrim reduce`.\n- Prefer small commits.\n- Changelog is manual."
+    },
+    "<project>/.codex/skills": {
+      "present": false
+    },
+    "<project>/.codex/hooks.json": {
+      "present": false
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "stage": "brownfield",
+  "harness": "opencode",
+  "provider": "rtk",
+  "observed": {
+    "harnessVersion": "1.18.14",
+    "providerVersion": "0.44.0",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "24.13.0"
+    }
+  },
+  "configuration": {
+    "~/.config/opencode/opencode.jsonc": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"model\": \"gpt-5.1\",\n  \"agent\": \"build\",\n  \"plugin\": [\"./plugins/rtk.ts\"]\n}"
+    },
+    "~/.config/opencode/opencode.json": {
+      "present": false
+    },
+    "~/.config/opencode/plugin": {
+      "present": true,
+      "kind": "directory",
+      "entries": []
+    },
+    "~/.config/opencode/plugins": {
+      "present": true,
+      "kind": "directory",
+      "entries": [
+        {
+          "name": "rtk.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    "<project>/opencode.jsonc": {
+      "present": false
+    },
+    "<project>/opencode.json": {
+      "present": false
+    },
+    "<project>/.opencode/plugin": {
+      "present": false
+    },
+    "<project>/.opencode/plugins": {
+      "present": false
+    }
+  }
+}
