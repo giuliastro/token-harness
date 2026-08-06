@@ -94,7 +94,34 @@ export function renderApplyReport(
     lines.push('');
   }
 
-  lines.push((OUTCOME_LINES[command] ?? OUTCOME_LINES['apply'])?.[report.outcome] ?? '');
+  /**
+   * A committed `uninstall` that removed nothing must not say it removed something.
+   *
+   * `remove-owned-change` reports `already-satisfied` for an owned entry it cannot recognise, and
+   * `observeOwnership` reaches that verdict for an *edited* array element on purpose — the comment
+   * there calls a changed element "a removal, not an edit", because the element written is no longer
+   * present in any form the digest matches. The transaction then commits with nothing removed, the
+   * outcome is `committed`, and the closing line claimed the removal anyway.
+   *
+   * Observed on a real machine: with a user hook appended beside the applied one, uninstall left
+   * `rtk hook claude` on disk and printed "Removed what Token Harness owned. Everything else is
+   * untouched." Without the edit the same run reads `applied` and the entry does go.
+   *
+   * Whether that verdict should instead be the `owned-artifact-modified` refusal is a question about
+   * RFC 0004 §Ownership, not about rendering, and is left alone here. What is fixed is the sentence:
+   * a user who is told a removal happened stops looking for the entry that is still there.
+   */
+  const removedNothing =
+    command === 'uninstall' &&
+    report.outcome === 'committed' &&
+    report.results.length > 0 &&
+    report.results.every((result) => result.status !== 'applied');
+
+  lines.push(
+    removedNothing
+      ? 'Removed nothing: no owned entry was recognised. Everything is untouched.'
+      : ((OUTCOME_LINES[command] ?? OUTCOME_LINES['apply'])?.[report.outcome] ?? ''),
+  );
 
   return document(lines);
 }
