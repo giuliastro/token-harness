@@ -93,6 +93,24 @@ const MODE_CARRYING_HARNESSES = new Set<HarnessId>([
 const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])harnesstrim(\.cmd|\.exe)?([\s"']|$)/i;
 
 /**
+ * The plugin module `harnesstrim install opencode` writes.
+ *
+ * A second pattern rather than a looser first one, for the reason the RTK adapter gives about its
+ * own: a hook command is a command line where `harnesstrim` is an executable being invoked, and
+ * what a plugin directory reports is a *file path* where `harnesstrim.ts` is a module name.
+ * `HOOK_COMMAND_PATTERN` does not match it — after `harnesstrim` it requires whitespace, a quote,
+ * an end of string, or a `.cmd`/`.exe` shim, and a `.ts` suffix is none of those.
+ *
+ * Spike 9.1 recorded that "HarnessTrim installs the same way, into `.opencode/plugin/`", and the
+ * same spike taught the OpenCode adapter to read those directories. Without this the paths arrive
+ * at the seam and no provider claims them: an installation whose only form on OpenCode is a plugin
+ * file — the installer says so itself, "OpenCode's `plugin` config can't pass options, so the
+ * adapter is installed as a local plugin file instead" — reads as absent, so adoption cannot see
+ * it, `verify` has nothing to check, and the conflict detector believes the point is free.
+ */
+const PLUGIN_MODULE_PATTERN = /(^|[\\/])harnesstrim\.(ts|js|mjs|cjs|mts|cts)$/i;
+
+/**
  * The surfaces HarnessTrim reduces on, from the source references RFC 0003 cites.
  *
  * Claude and Codex are `Bash` only; OpenCode is every tool result, which is why its surface is the
@@ -203,8 +221,12 @@ const MANIFEST: ProviderManifest = {
 const TESTED_UPSTREAM = '0.0.7';
 const TESTED_VERSIONS = { minimum: '0.0.5', maximum: TESTED_UPSTREAM };
 
+/**
+ * Recognises HarnessTrim's own installation, whether it arrives as a hook command or as the path
+ * of the plugin module the OpenCode installer writes. Both are HarnessTrim occupying a point.
+ */
 function identifiesCommand(command: string): boolean {
-  return HOOK_COMMAND_PATTERN.test(command);
+  return HOOK_COMMAND_PATTERN.test(command) || PLUGIN_MODULE_PATTERN.test(command);
 }
 
 /**
@@ -958,7 +980,11 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   const agents = context.fs.join(context.projectRoot, 'AGENTS.md');
   if ((await context.fs.stat(agents)) !== null) {
     const text = new TextDecoder().decode(await context.fs.readFile(agents));
-    if (identifiesCommand(text)) {
+    // The command pattern alone, not `identifiesCommand`. What is being searched here is prose
+    // containing an invocation, and the plugin-module pattern is a path matcher: running it over a
+    // document would ask whether the file happens to end in `harnesstrim.ts`, which answers a
+    // different question and would be a false positive if it ever answered yes.
+    if (HOOK_COMMAND_PATTERN.test(text)) {
       checks.push({
         id: 'instruction-path-present',
         status: 'info',
