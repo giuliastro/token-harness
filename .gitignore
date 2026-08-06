@@ -10,6 +10,14 @@ coverage/
 .token-harness/
 token-harness.local.yaml
 
+# A HarnessTrim OpenCode install, which is a per-developer choice here rather than part of the
+# product. `harnesstrim install opencode` writes its own `.opencode/.gitignore` covering
+# `node_modules`, `package.json` and `package-lock.json`, but deliberately leaves the generated
+# wrapper trackable so a team can share one reduction setup. This repository does not: contributors
+# pick their own harnesses, and a committed wrapper would hand every one of them a reducer on
+# OpenCode. Drop this entry to share the setup instead.
+.opencode/
+
 # Editors and operating systems
 .DS_Store
 Thumbs.db
