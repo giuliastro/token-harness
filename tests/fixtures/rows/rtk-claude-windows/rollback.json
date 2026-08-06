@@ -1,0 +1,37 @@
+{
+  "stage": "rollback",
+  "harness": "claude",
+  "provider": "rtk",
+  "observed": {
+    "harnessVersion": "2.1.220",
+    "providerVersion": "0.44.0",
+    "platform": {
+      "os": "windows",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "24.13.1"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Write|Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"node C:/Users/dev/scripts/audit-writes.mjs\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"node C:/Users/dev/scripts/log-commands.mjs\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(git status)\"\n    ]\n  }\n}\n"
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    }
+  }
+}
