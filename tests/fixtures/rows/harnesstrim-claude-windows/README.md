@@ -15,7 +15,7 @@ the installer must not create them.
 | `invalidating-update` | **no** | only one HarnessTrim version is installed here |
 | `drift` | yes | a line appended to an applied `SKILL.md` |
 | `rollback` | yes | the seven skill files gone, `my-own-skill` and `CLAUDE.md` intact, the drift gone with them |
-| `uninstall` | **no** | see below |
+| `uninstall` | yes | the six reviewed `SKILL.md` files removed, the user's own skill kept |
 
 ## What the brownfield stage found
 
@@ -29,12 +29,19 @@ That is protective, and worth stating plainly because it is also a limitation: a
 HarnessTrim skill by hand cannot be migrated to the managed install without removing their copy
 first. Nothing here overwrites it for them.
 
-## `uninstall` is missing because it is gated
+## What the uninstall stage found
 
-`uninstall` computes a plan, so the RFC 0009 gate refuses it exactly as it refuses `apply`: the run
-reported `managed-mutation-blocked` for three combinations and removed nothing. The stage becomes
-recordable once a row admits this combination — which is what these fixtures exist to support. The
-`apply` stages got through only via the provisional row of `apply-with-provisional-row.mjs`, and that
-tool drives `apply` alone.
+Recorded after the row shipped, so `uninstall` ran from the plain CLI. Eight actions applied — the
+`settings.json` entry and the seven HarnessTrim artifacts — and afterwards the only `SKILL.md` left
+under `.claude/skills/` was the user's own. That is RFC 0004 §Ownership holding: removed only what it
+owned.
 
-Recording it from the blocked run would have filed the post-apply state under the uninstall name.
+Two things it does not do, neither of them a defect worth calling one. The seven skill *directories*
+stay behind as empty shells, because the removal is per artifact and a directory is not one. And the
+run still reports `managed-mutation-blocked` for `harnesstrim × codex` and `harnesstrim × opencode`:
+`uninstall` computes a plan for every combination, so the two with no row are refused alongside the
+one that succeeds. The transaction commits anyway and the exit code is 0, which is worth knowing
+before reading those errors as a failure of the removal.
+
+I misread this twice while recording it, both times by listing the skill directories instead of the
+files inside them and concluding nothing had been removed.

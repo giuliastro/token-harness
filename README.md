@@ -124,7 +124,7 @@ There are three separate layers. Installing one does not automatically provide t
 | --- | --- | --- |
 | Coding agent (harness) | Claude Code, Codex, OpenCode | You, using the agent's official installer |
 | Token Harness | `token-harness` | You, from npm or this repository |
-| Optimization provider | RTK, HarnessTrim | RTK can be installed by Token Harness; HarnessTrim Claude skills can be installed safely when HarnessTrim 0.0.7 is already available |
+| Optimization provider | RTK, HarnessTrim | Both can be installed by Token Harness where a compatibility row covers the combination; otherwise install them with their own installers and Token Harness detects and measures them |
 
 Token Harness does not install Claude Code, Codex, or OpenCode. Install and run at least one of
 them first so that `token-harness doctor` can detect it.
@@ -132,7 +132,7 @@ them first so that `token-harness doctor` can detect it.
 | Provider | Claude Code | Codex | OpenCode | Installed by Token Harness |
 | --- | --- | --- | --- | --- |
 | RTK | Configure, verify, and measure | Not managed | Detect, adopt, verify, and measure | **Yes**, for the supported Claude Code path |
-| HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **Yes**, when `harnesstrim 0.0.7` is already installed |
+| HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **Yes**, on a covered row — see above |
 
 "Not managed" does not mean the upstream tool cannot support that agent. It means this release
 does not claim ownership of that integration and will not modify it.
@@ -243,9 +243,9 @@ token-harness doctor --provider rtk
 
 ### 3. Install or adopt HarnessTrim
 
-With HarnessTrim `0.0.7` already on `PATH`, `token-harness plan --harness claude` can install its
-Claude skills without creating the competing Bash hook or reduce-pipe instruction. The planned
-upstream invocation is:
+With HarnessTrim on `PATH`, `token-harness plan --harness claude` can install its Claude skills
+without creating the competing Bash hook or reduce-pipe instruction. The invocation it delegates to
+is:
 
 ```sh
 harnesstrim install claude <project> --apply --no-hook --no-instructions
