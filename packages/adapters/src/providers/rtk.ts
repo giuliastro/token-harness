@@ -71,11 +71,12 @@ import { buildRtkPlan } from './rtk-plan.js';
 
 const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
+const OPENCODE = harnessId('opencode');
 
 /**
  * The tested range is what has been observed, not what has been proven by a suite. `0.42.0`
  * is the version whose `--format json` output this adapter parses and whose interception
- * the spike watched.
+ * the Phase 2.5 spike watched; `0.44.0` is the version spike 9.1 watched intercept OpenCode.
  */
 const MANIFEST: ProviderManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -116,9 +117,53 @@ const MANIFEST: ProviderManifest = {
         upstreamVersion: '0.42.0',
       },
     },
+    /**
+     * OpenCode, from spike 9.1.
+     *
+     * Separate entries rather than adding `OPENCODE` to the two above, because the surface is not
+     * the same one: RTK reaches Claude Code through a `PreToolUse` hook matching `Bash`, and
+     * OpenCode through a plugin on `tool.execute.before`. A capability entry names one surface
+     * list, and merging these would claim that RTK serves `Bash/pre-tool-use` on OpenCode — a
+     * point OpenCode does not have.
+     *
+     * `shell.command.rewrite` and `shell.output.reduce` again arrive together, for the reason they
+     * do on Claude Code: the plugin calls `rtk rewrite`, and the rewritten command is what filters
+     * its own output. One interception point, two capabilities.
+     */
+    {
+      capability: 'shell.command.rewrite',
+      mode: 'exclusive',
+      harnesses: [OPENCODE],
+      // `tool.execute` is the family the harness manifest declares as shell-executing. The plugin
+      // narrows to `tool === "bash" || tool === "shell"` inside that family, which is every shell
+      // route OpenCode exposes — unlike Claude Code on Windows, there is no second one to miss.
+      surfaces: [{ toolFamily: 'tool.execute', interceptionPoint: 'tool-execute-before' }],
+      evidence: {
+        sourceReference: 'docs/spikes/9.1-rtk-opencode-observation-log.md',
+        upstreamVersion: '0.44.0',
+      },
+    },
+    {
+      capability: 'shell.output.reduce',
+      mode: 'exclusive',
+      harnesses: [OPENCODE],
+      surfaces: [{ toolFamily: 'tool.execute', interceptionPoint: 'tool-execute-before' }],
+      evidence: {
+        sourceReference: 'docs/spikes/9.1-rtk-opencode-observation-log.md',
+        upstreamVersion: '0.44.0',
+      },
+    },
   ],
   platforms: [
-    { os: 'windows', wsl: false, supported: true, limitation: null },
+    {
+      os: 'windows',
+      wsl: false,
+      supported: true,
+      // Spike 9.1. Named on Windows alone because Windows is where Desktop was run; the same
+      // defect on another platform's Desktop build would be a guess until someone watches it.
+      limitation:
+        "RTK's OpenCode plugin is inert under OpenCode Desktop, which supplies no `$` shell helper to plugins, so the plugin's own guard disables it silently",
+    },
     { os: 'linux', wsl: true, supported: true, limitation: null },
     { os: 'macos', wsl: false, supported: true, limitation: null },
     { os: 'linux', wsl: false, supported: true, limitation: null },
@@ -128,6 +173,31 @@ const MANIFEST: ProviderManifest = {
       harness: CLAUDE,
       testedVersions: { minimum: '2.0.0', maximum: '2.1.212' },
       verificationTier: 'canary',
+    },
+    {
+      harness: OPENCODE,
+      // Spike 9.1 watched interception on the CLI at `1.18.11` and watched it fail on Desktop at
+      // `1.18.14`. The range covers both because both were observed; the failure is a declared
+      // platform limitation below rather than a narrower range, because it is a property of the
+      // host application and not of the OpenCode version — the same 1.18.x plugin loads in both.
+      testedVersions: { minimum: '1.18.11', maximum: '1.18.14' },
+      /**
+       * `config-only`, even though spike 9.1 watched a canary-grade interception here — the counter
+       * moved by exactly the number of shell calls the OpenCode session made.
+       *
+       * A tier is what `verify` can prove on the user's machine, not what a spike proved once on a
+       * clean one. RTK's receipt is its history database, and the `commands` table carries
+       * `timestamp`, token counts, `exec_time_ms`, and `project_path` — no harness column, and no
+       * column standing in for one. The spike could attribute those rows because it ran OpenCode
+       * alone in a scratch directory and read the counter either side; `verify` runs where both
+       * harnesses are wired to the same binary and writing into the same table, and cannot say
+       * which of them a row came from.
+       *
+       * Declaring `canary` here would credit RTK's whole command history to whichever harness the
+       * reader happened to be looking at. Claude Code keeps `canary` because its own hook receipt
+       * is per-harness; this one is provider-wide, and RFC 0007 asks the question per harness.
+       */
+      verificationTier: 'config-only',
     },
   ],
   installationChannels: [
@@ -172,11 +242,26 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReview: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.40.0', maximum: '0.42.0' };
+const TESTED_VERSIONS = { minimum: '0.40.0', maximum: '0.44.0' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */
 const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])rtk(\.exe)?([\s"']|$)/i;
+
+/**
+ * The plugin module `rtk init -g --opencode` writes.
+ *
+ * A second pattern rather than a looser first one, because these recognise different things. A
+ * hook command is a command line, and `rtk` in it is an executable being invoked. What OpenCode
+ * reports is a *file path*, and `rtk.ts` is a module name — `HOOK_COMMAND_PATTERN` does not match
+ * it and should not, or any path merely containing an `rtk` directory would start claiming to be
+ * an installation.
+ *
+ * Anchored at the end so it matches the file and not a directory of the same name, and the
+ * suffixes are the ones OpenCode auto-loads. Spike 9.1 observed the file at
+ * `.config/opencode/plugins/rtk.ts`; the installer refuses to write it anywhere project-local.
+ */
+const PLUGIN_MODULE_PATTERN = /(^|[\\/])rtk\.(ts|js|mjs|cjs|mts|cts)$/i;
 
 function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -231,13 +316,13 @@ export function parseRtkAnalytics(text: string): Analytics | null {
   };
 }
 
-/** Harnesses whose configuration names RTK in a hook command. */
+/** Harnesses whose configuration names RTK, as a hook command or as an installed plugin module. */
 export function harnessesWiredToRtk(
   configs: readonly ProviderContext['harnessConfigs'][number][],
 ): HarnessId[] {
   const wired = new Set<HarnessId>();
   for (const config of configs) {
-    if (config.commands.some((command) => HOOK_COMMAND_PATTERN.test(command))) {
+    if (config.commands.some((command) => identifiesCommand(command))) {
       wired.add(config.harnessId);
     }
   }
@@ -391,9 +476,19 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     versionVerdict: version.verdict,
     configuredHarnesses: configured,
     unmanagedHarnessesConfigured: [],
-    // RFC 0002 §Providers may exceed the managed surface. RTK's manifest covers Claude
-    // Code only, so the qualifier RFC 0006's doctor transcript uses for HarnessTrim does
-    // not apply here.
+    /**
+     * RFC 0002 §Providers may exceed the managed surface.
+     *
+     * The field asks whether this manifest names a harness with no adapter behind it. It names two,
+     * Claude Code and OpenCode, and both are managed — so the qualifier RFC 0006's doctor transcript
+     * uses for HarnessTrim does not apply, and the report says "not configured for any harness"
+     * without hedging.
+     *
+     * `rtk init --agent` separately targets Cursor, Windsurf, Cline, Kilo Code, Antigravity, Kimi,
+     * Pi, Hermes, and Droid. That is RTK exceeding *Token Harness*, not this manifest exceeding the
+     * managed set, and it stays out of the flag: claiming those here would make the resolver
+     * responsible for harnesses this build has no adapter to inspect.
+     */
     supportsUnmanagedHarnesses: false,
     // RFC 0004 §Brownfield adoption: nothing has been applied by Token Harness yet, so
     // every installation it finds is the user's.
@@ -909,13 +1004,16 @@ async function collectMetrics(
 const SOURCE_LABEL = 'rtk history.db (commands)';
 
 /**
- * Recognises RTK's own invocation.
+ * Recognises RTK's own invocation, whether it arrives as a hook command or as the path of the
+ * plugin module RTK installs.
  *
- * The same pattern `harnessesWiredToRtk` uses, exposed so the conflict detector can ask
- * without knowing what an RTK command looks like.
+ * The same patterns `harnessesWiredToRtk` uses, exposed so the conflict detector can ask without
+ * knowing what an RTK installation looks like. Both spellings are RTK claiming an interception
+ * point, and a detector that saw only the command form would report OpenCode as unowned while RTK
+ * was rewriting every shell call on it.
  */
 function identifiesCommand(command: string): boolean {
-  return HOOK_COMMAND_PATTERN.test(command);
+  return HOOK_COMMAND_PATTERN.test(command) || PLUGIN_MODULE_PATTERN.test(command);
 }
 
 /**

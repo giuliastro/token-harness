@@ -95,7 +95,16 @@ describe('OpenCode adapter', () => {
   it('exposes plugin paths through the harness/provider seam without interpreting them', async () => {
     const result = await opencodeAdapter.inspect(context({ [USER_CONFIG]: configured }));
     assert.deepEqual(result.summaries[0]?.commands, ['./.opencode/plugin/harnesstrim.ts']);
-    assert.deepEqual(result.summaries[0]?.interceptionPoints, ['tool-execute-after']);
+    /**
+     * Both points, because a plugin is a module and which hooks it returns is decided when it runs.
+     * RTK takes `tool.execute.before` and HarnessTrim takes `tool.execute.after`, neither declares
+     * it anywhere readable, and narrowing this to one would hide a real conflict whenever the guess
+     * is wrong. Spike 9.1.
+     */
+    assert.deepEqual(result.summaries[0]?.interceptionPoints, [
+      'tool-execute-before',
+      'tool-execute-after',
+    ]);
   });
 
   it('states the config-only tier and never claims a receipt for an adopted wrapper', async () => {
@@ -128,10 +137,14 @@ describe('the tested version range', () => {
      * RFC 0006 §Exit codes: "A supported configuration must be able to exit 0. A declared
      * limitation is not a problem, and reporting it as one is the fastest way to teach users to
      * ignore the exit code."
+     *
+     * A range now rather than a point: spike 9.1 observed the CLI at `1.18.11` and Desktop at
+     * `1.18.14`, both loading plugins from the same directories. Still only versions that were
+     * actually run — the ends are two of the three observations, not a semver span.
      */
     assert.deepEqual(opencodeAdapter.manifest.testedVersions, {
       minimum: '1.18.9',
-      maximum: '1.18.9',
+      maximum: '1.18.14',
     });
   });
 });

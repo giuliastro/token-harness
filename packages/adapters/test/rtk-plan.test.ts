@@ -58,6 +58,36 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   receiptFamily: 'provider-telemetry',
 };
 
+/**
+ * OpenCode, as the harness adapter declares it — a plugin array and two auto-loaded directories,
+ * with no `hooks` document anywhere. Present here only so the guard has something to refuse.
+ */
+const OPENCODE = harnessId('opencode');
+
+const OPENCODE_MANIFEST: HarnessManifest = {
+  schemaVersion: MANIFEST_SCHEMA_VERSION,
+  id: OPENCODE,
+  displayName: 'OpenCode',
+  homepage: 'https://opencode.ai',
+  testedVersions: { minimum: '1.18.9', maximum: '1.18.14' },
+  verificationTier: 'config-only',
+  versionCommand: { executable: 'opencode', args: ['--version'] },
+  interceptionPoints: [
+    { scopeId: 'tool-execute-before', eventName: 'tool.execute.before' },
+    { scopeId: 'tool-execute-after', eventName: 'tool.execute.after' },
+  ],
+  configFiles: [
+    { path: '.config/opencode/opencode.jsonc', scope: 'user', parser: 'jsonc', primary: true },
+    { path: '.config/opencode/plugins', scope: 'user', parser: 'markers', primary: false },
+  ],
+  toolFamilies: [
+    { id: 'tool.execute', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+  ],
+  requiresEnablement: false,
+  enablementNote: null,
+  receiptFamily: 'none',
+};
+
 const SETTINGS = 'C:\\Users\\dev\\.claude\\settings.json';
 
 const CHANNELS = [
@@ -479,6 +509,40 @@ describe('scopes with nowhere to go', () => {
 
   it('plans nothing when no scope was assigned', () => {
     const result = plan({ installed: true, request: request({ ownership: [] }) });
+    assert.deepEqual(result.actions, []);
+  });
+
+  it('plans nothing for a harness whose configuration is not a hook list', () => {
+    /**
+     * RTK claims OpenCode as of spike 9.1, so the resolver can hand this an OpenCode scope. What
+     * this file builds is a `{matcher, hooks:[…]}` object appended at `hooks.<eventName>`, which
+     * is Claude Code's schema and nothing else's — OpenCode has no `hooks` document, and RTK
+     * reaches it by dropping a plugin module into `.config/opencode/plugins/`.
+     *
+     * Without the guard the loop finds an interception point and a primary config file, and
+     * appends a Claude-shaped hook to `opencode.jsonc`: a valid-looking diff writing a key
+     * OpenCode never reads. The empty compatibility-row table stops that from running today, but
+     * that is a gate on when the plan may run, not on whether it is right.
+     */
+    const result = plan({
+      installed: true,
+      request: request({
+        harnesses: [OPENCODE_MANIFEST],
+        ownership: [
+          {
+            scope: {
+              harness: OPENCODE,
+              toolFamily: 'tool.execute',
+              interceptionPoint: 'tool-execute-before',
+              capability: 'shell.command.rewrite',
+            },
+            owner: RTK,
+            mode: 'exclusive',
+            order: 0,
+          },
+        ],
+      }),
+    });
     assert.deepEqual(result.actions, []);
   });
 });

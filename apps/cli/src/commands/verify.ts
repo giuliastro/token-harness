@@ -147,11 +147,27 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
           presentHarnesses;
 
     for (const harnessId of harnesses) {
+      /**
+       * The tier the manifest declares for *this* harness, not the provider's overall one.
+       *
+       * The comment above says a tier is "per harness, per version, and per tool family", and the
+       * loop existed to honour that — but every row still carried one provider-wide tier, which
+       * made the per-harness field in the manifest decorative. It went unnoticed while every
+       * provider declared the same tier on every harness it supported.
+       *
+       * RTK is the first that does not: its receipt is per-harness on Claude Code and provider-wide
+       * on OpenCode, so it declares `canary` on one and `config-only` on the other. Reading the
+       * provider-wide value here would print `canary` against OpenCode — the overclaim the
+       * per-harness declaration exists to prevent.
+       */
+      const declaredTier =
+        adapter.manifest.harnesses.find((entry) => entry.harness === harnessId)?.verificationTier ??
+        verification.declaredTier;
       results.push({
         providerId: adapter.manifest.id,
         harnessId: harnessId as VerificationResult['harnessId'],
-        status: statusFor(verification.achievedTier, verification.declaredTier),
-        declaredTier: verification.declaredTier,
+        status: statusFor(verification.achievedTier, declaredTier),
+        declaredTier,
         managedByTokenHarness: MANAGED_PROVIDERS.includes(adapter.manifest.id),
         checks: verification.checks,
       });
