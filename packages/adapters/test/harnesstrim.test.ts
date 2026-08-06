@@ -338,6 +338,38 @@ describe('detection', () => {
     );
     assert.deepEqual(harnessesWiredToHarnessTrim([wired('claude', 'rtk hook claude')]), []);
   });
+
+  it('recognises the plugin module the OpenCode installer writes', () => {
+    // The only form HarnessTrim takes on OpenCode. Its installer says why: "OpenCode's `plugin`
+    // config can't pass options, so the adapter is installed as a local plugin file instead."
+    // Spike 9.1 taught the OpenCode adapter to read those directories, so the path now arrives at
+    // the seam — and before this, no provider claimed it, leaving a real installation invisible to
+    // adoption, to `verify`, and to the conflict detector.
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([
+        wired('opencode', 'C:\\work\\demo\\.opencode\\plugin\\harnesstrim.ts'),
+      ]),
+      ['opencode'],
+    );
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([wired('opencode', './.opencode/plugin/harnesstrim.ts')]),
+      ['opencode'],
+    );
+  });
+
+  it('does not claim a rival plugin module, or a directory of its own name', () => {
+    // RTK's module is the neighbour in the same directories, and it is not this provider's.
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([wired('opencode', '/home/dev/.config/opencode/plugins/rtk.ts')]),
+      [],
+    );
+    // Anchored at the file, so a path merely containing a `harnesstrim` directory is not an
+    // installation — otherwise every module under `.harnesstrim/` would claim to be one.
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([wired('opencode', '/home/dev/harnesstrim/plugin/other.ts')]),
+      [],
+    );
+  });
 });
 
 /** A mutable parse of the agreement declaration, for the drift tests to mutate from. */
