@@ -695,7 +695,7 @@ describe('native events (PLAN §15 item 43d)', () => {
     assert.equal(result.mode, 'native');
   });
 
-  for (const harness of ['opencode', 'hermes', 'pi']) {
+  for (const harness of ['opencode', 'hermes', 'pi', 'omp']) {
     it(`files a char-only native ${harness} event as counterfactual, not estimated`, async () => {
       const target = store();
       const result = await harnesstrimAdapter.collectMetrics(
@@ -707,9 +707,9 @@ describe('native events (PLAN §15 item 43d)', () => {
       // This is the regression PLAN §15 item 43d must not reintroduce: the schema 1 envelope no
       // longer carries `mode`, and every mode-carrying adapter records a dryrun identically to
       // its active one — OpenCode emits the reduced line unchanged, Hermes writes its metric
-      // before the dryrun return, Pi writes "a receipt with the would-be counts" — so a char-only
-      // native line from them can never be proven realized. It is counterfactual — excluded from
-      // every realized total — and only the residual is reported, once.
+      // before the dryrun return, Pi and OMP write "a receipt with the would-be counts" — so a
+      // char-only native line from them can never be proven realized. It is counterfactual —
+      // excluded from every realized total — and only the residual is reported, once.
       assert.equal(event.measurement.class, 'counterfactual');
       assert.equal(event.outcome.changed, false);
       assert.equal(event.outcome.bypassReason, 'mode-unresolved');
