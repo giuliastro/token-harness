@@ -695,30 +695,34 @@ describe('native events (PLAN §15 item 43d)', () => {
     assert.equal(result.mode, 'native');
   });
 
-  it('files an opencode char-only native event as counterfactual, not estimated', async () => {
-    const target = store();
-    const result = await harnesstrimAdapter.collectMetrics(
-      context({ files: { [METRICS]: `${nativeTrimEvent()}\n` } }),
-      target,
-    );
-    const event = target.events[0];
-    assert.ok(event);
-    // This is the regression PLAN §15 item 43d must not reintroduce: the schema 1 envelope no
-    // longer carries `mode`, and OpenCode's dryrun branch emits a line identical to its active one,
-    // so a char-only native OpenCode line can never be proven realized. It is counterfactual —
-    // excluded from every realized total — and only the residual is reported, once.
-    assert.equal(event.measurement.class, 'counterfactual');
-    assert.equal(event.outcome.changed, false);
-    assert.equal(event.outcome.bypassReason, 'mode-unresolved');
-    // The stream is natively read, but a part of it could not be classed as realized.
-    assert.equal(result.mode, 'native-with-residue');
-    const unresolved = result.diagnostics.find(
-      (entry) => entry.code === 'provider-metrics-mode-unresolved',
-    );
-    assert.ok(unresolved);
-    assert.equal(unresolved.severity, 'info');
-    assert.match(unresolved.message, /1 native opencode event/);
-  });
+  for (const harness of ['opencode', 'hermes', 'pi']) {
+    it(`files a char-only native ${harness} event as counterfactual, not estimated`, async () => {
+      const target = store();
+      const result = await harnesstrimAdapter.collectMetrics(
+        context({ files: { [METRICS]: `${nativeTrimEvent({ harness })}\n` } }),
+        target,
+      );
+      const event = target.events[0];
+      assert.ok(event);
+      // This is the regression PLAN §15 item 43d must not reintroduce: the schema 1 envelope no
+      // longer carries `mode`, and every mode-carrying adapter records a dryrun identically to
+      // its active one — OpenCode emits the reduced line unchanged, Hermes writes its metric
+      // before the dryrun return, Pi writes "a receipt with the would-be counts" — so a char-only
+      // native line from them can never be proven realized. It is counterfactual — excluded from
+      // every realized total — and only the residual is reported, once.
+      assert.equal(event.measurement.class, 'counterfactual');
+      assert.equal(event.outcome.changed, false);
+      assert.equal(event.outcome.bypassReason, 'mode-unresolved');
+      // The stream is natively read, but a part of it could not be classed as realized.
+      assert.equal(result.mode, 'native-with-residue');
+      const unresolved = result.diagnostics.find(
+        (entry) => entry.code === 'provider-metrics-mode-unresolved',
+      );
+      assert.ok(unresolved);
+      assert.equal(unresolved.severity, 'info');
+      assert.match(unresolved.message, /1 native event from a mode-carrying harness/);
+    });
+  }
 
   it('reports the unresolved-mode count once per import, not once per event', async () => {
     const target = store();
@@ -741,7 +745,7 @@ describe('native events (PLAN §15 item 43d)', () => {
     const unresolved = result.diagnostics.find(
       (entry) => entry.code === 'provider-metrics-mode-unresolved',
     );
-    assert.match(unresolved?.message ?? '', /2 native opencode events/);
+    assert.match(unresolved?.message ?? '', /2 native events from a mode-carrying harness/);
   });
 
   it('leaves a token-counting native event exact even on opencode', async () => {

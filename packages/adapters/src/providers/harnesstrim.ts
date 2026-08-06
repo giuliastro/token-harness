@@ -63,6 +63,24 @@ const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
 };
 const OPENCODE = harnessId('opencode');
 
+/**
+ * The harnesses this build knows whose adapters expose a reduction-mode flag, and therefore a
+ * possible `dryrun` run that the schema 1 envelope can no longer record.
+ *
+ * OpenCode's adapter has `--mode active|dryrun|off` and defaults to `active` (`config.ts`).
+ * Hermes' has `--mode` too and defaults to `dryrun` (`DEFAULT_HERMES_ADAPTER_CONFIG`), and its
+ * dryrun branch *also* writes the reduced `afterChars` with `changed: true` (the plugin's
+ * `_write_metric` records before the dryrun return). Pi's follows `env.HARNESSTRIM_MODE` with
+ * fallback to baked mode, defaulting to `dryrun`, and its dryrun branch explicitly writes "a
+ * receipt with the would-be counts — dryrun's value is proof it WOULD reduce". All three strip
+ * the mode out of the line the importer sees.
+ */
+const MODE_CARRYING_HARNESSES = new Set<HarnessId>([
+  OPENCODE,
+  harnessId('hermes'),
+  harnessId('pi'),
+]);
+
 /** Recognises HarnessTrim's own invocation, including the Windows batch shim. */
 const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])harnesstrim(\.cmd|\.exe)?([\s"']|$)/i;
 
@@ -745,12 +763,13 @@ export function synthesizeEventId(sourceId: string, ordinal: number, line: strin
  * that did *not* occur".
  *
  * One rule is new with schema 1, and it is the native shape's one real loss versus the legacy
- * line: the envelope dropped the `mode` field when OpenCode's adapter went to running without it in
+ * line: the envelope dropped the `mode` field when the adapters went to running without it in
  * `0.1.0`. A schema 1 line therefore cannot say whether the adapter that wrote it was in
- * `active` or `dryrun`, and OpenCode's dryrun branch emits an event identical to the applied
- * one — reduced `afterChars`, `changed: true`, no mode. Such a native line cannot be *proven* to
- * describe a realized saving, so it is filed `counterfactual` unless the mode can be read, and
- * the importer reports the residual ambiguity once per file with a count rather than per event.
+ * `active` or `dryrun`, and the mode-carrying adapters (`opencode`, `hermes`, `pi`) each record
+ * a dryrun identically to an applied one — reduced `afterChars`, `changed: true`, no mode. Such
+ * a native line cannot be *proven* to describe a realized saving, so it is filed
+ * `counterfactual` unless the mode can be read, and the importer reports the residual ambiguity
+ * once per file with a count rather than per event.
  */
 function toEvent(
   event: TrimEvent,
@@ -774,19 +793,22 @@ function toEvent(
   const hasTokens = native && event.beforeTokens !== null && event.afterTokens !== null;
 
   /**
-   * OpenCode is the only harness whose adapter can run in `dryrun`, and the schema 1 envelope
-   * dropped the `mode` field that carried that decision on the legacy line. Its dryrun branch
-   * emits an event identical to its active one — same producer id, same reduced `afterChars`,
-   * `changed: true` — so a char-only native OpenCode line cannot be *proven* to describe a
-   * saving the model saw. RFC 0005 §A measured reduction is not always a realized one: the
-   * event may not be realized, so it is never classed as one here. The importer reports the
-   * residual ambiguity once per file with a count; reading the effective adapter mode is what
-   * will turn it into a warning instead of the info today (PLAN §15 item 43a).
+   * The mode-carrying harnesses (`opencode`, `hermes`, `pi`) each have an adapter that can run
+   * in `dryrun`, and the schema 1 envelope dropped the `mode` field that carried that decision
+   * on the legacy line. Worse, all three record a dryrun identically to an applied reduction:
+   * OpenCode's dryrun branch emits the reduced event unchanged, Hermes' `_write_metric` writes
+   * before its dryrun return, and Pi's dryrun writes "a receipt with the would-be counts" —
+   * same producer id, same reduced `afterChars`, `changed: true`. A char-only native line from
+   * any of them therefore cannot be *proven* to describe a saving the model saw, so it is never
+   * classed as one here (RFC 0005 §A measured reduction is not always a realized one). The
+   * importer reports the residual ambiguity once per file with a count; reading the effective
+   * adapter mode is what will turn it into a warning instead of the info today (PLAN §15 item 43a).
    *
    * Token-counting emission paths (the `reduce` pipe and the MCP server) run as separate
    * processes, so they cannot be in a dryrun at all, and their events stay exact.
    */
-  const hasUnprovenMode = native && event.harness === OPENCODE && !hasTokens && !passThrough;
+  const hasUnprovenMode =
+    native && MODE_CARRYING_HARNESSES.has(event.harness as HarnessId) && !hasTokens && !passThrough;
 
   return {
     schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
@@ -1139,15 +1161,17 @@ async function collectMetrics(
   // counterfactual where their mode could not be proven; this is the residual ambiguity the
   // envelope left behind, reported at `info` rather than defensively repeated per event. When
   // the effective adapter mode can be read (PLAN §15 item 43a), the residue it still cannot
-  // explain becomes a warning.
+  // explain becomes a warning — for OpenCode only: its baked plugin option wins over the env, so
+  // the configured mode is knowable; hermes and pi let `HARNESSTRIM_MODE` override the baked
+  // value at runtime, so their residue stays an info.
   if (unprovableModeEvents > 0) {
     diagnostics.push(
       diagnostic({
         severity: 'info',
         code: 'provider-metrics-mode-unresolved',
-        message: `${String(unprovableModeEvents)} native opencode event${unprovableModeEvents === 1 ? '' : 's'} could not be classed as realized: schema 1 carries no reduction mode`,
+        message: `${String(unprovableModeEvents)} native event${unprovableModeEvents === 1 ? '' : 's'} from a mode-carrying harness could not be classed as realized: schema 1 carries no reduction mode`,
         remediation:
-          'Read the effective OpenCode adapter mode before importing, or treat these figures as counterfactual',
+          'Treat these figures as counterfactual; only OpenCode can later prove its mode from the configured plugin option',
       }),
     );
   }
@@ -1158,10 +1182,10 @@ async function collectMetrics(
     // file carried schema 1 events with producer IDs, `legacy` when it only had the character
     // stream. Legacy inside a native run is not a problem — those lines are older files.
     //
-    // A native stream whose OpenCode lines cannot prove a realized reduction (no tokens, no
-    // pass-through) is `native-with-residue`: the import is native, but a part of it could not
-    // be classed as realized, and the count above qualifies exactly how much. A bare `native`
-    // must keep meaning "everything was classed".
+    // A native stream whose mode-carrying harness lines cannot prove a realized reduction (no
+    // tokens, no pass-through) is `native-with-residue`: the import is native, but a part of it
+    // could not be classed as realized, and the count above qualifies exactly how much. A bare
+    // `native` must keep meaning "everything was classed".
     mode:
       sawNative && unprovableModeEvents > 0
         ? 'native-with-residue'

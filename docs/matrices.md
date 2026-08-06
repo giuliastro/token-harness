@@ -103,14 +103,17 @@ is exactly the drift generating the tables above exists to prevent.
   per-command saving at zero, so its total is a sum of clamped values while Token Harness reports
   the true net. On the development machine the two differ by about 3,100 tokens over 3,813 commands,
   and the inflated count is printed so the difference is reconcilable rather than mysterious.
-- **A schema-1 OpenCode event carries no reduction mode.** The `0.1.0` envelope dropped the `mode`
-  field the legacy line carried, and the dryrun adapter writes an event identical to its active
-  one, so the importer cannot prove such an event realized. It is filed `counterfactual` — never
-  merged into a realized total — and the residual ambiguity is reported once per import with a
-  count instead of either guessing or repeating a line for every event. The import's mode then
-  reads `native-with-residue`, never a bare `native`, so a stream with unclassifiable events is
-  never presented as fully classed. Reading the effective adapter mode (item 43a) later turns
-  that note into a warning.
+- **A schema-1 event carries no reduction mode.** The `0.1.0` envelope dropped the `mode` field
+  the legacy line carried, and every mode-carrying adapter (opencode, hermes, pi) records a
+  dryrun identically to an applied one — reduced `afterChars`, `changed: true` — so the importer
+  cannot prove such an event realized. It is filed `counterfactual` — never merged into a
+  realized total — and the residual ambiguity is reported once per import with a count instead
+  of either guessing or repeating a line for every event. The import's mode then reads
+  `native-with-residue`, never a bare `native`, so a stream with unclassifiable events is never
+  presented as fully classed. Reading the effective adapter mode (item 43a) can later turn that
+  note into a warning for OpenCode only: its baked plugin option wins over the env, so the
+  configured mode is knowable. Hermes and pi let `HARNESSTRIM_MODE` override the baked value at
+  runtime, so for them the note stays an info.
 
 ### Installation and updates
 
