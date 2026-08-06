@@ -51,10 +51,11 @@ const RTK_HARNESSTRIM_SHELL_OVERLAP: CompatibilityRule = {
   // for different reasons. Listing them individually would imply a fourth harness is exempt.
   harnesses: '*',
   capabilities: ['shell.output.reduce'],
-  outcome: 'conflict',
-  testedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' },
+  outcome: 'narrowed',
+  retains: RTK,
+  testedVersions: { rtk: '0.44.0', harnesstrim: '0.1.0' },
   rationale:
-    'HarnessTrim 0.0.5 reduces the same command output RTK already reduced, and no configuration narrows it: its Claude and Codex adapters match Bash only, and its OpenCode plugin reduces every tool result. Reducing an already reduced payload loses signal and counts the saving twice.',
+    'RTK keeps shell output reduction: it rewrites the command, so the output arriving at any later point is already reduced, and reducing it again loses signal and counts the saving twice. HarnessTrim 0.1.0 no longer has to be excluded whole for that — `--no-hook` and `--no-instructions` produce a Claude install that adds skills and reduces nothing, and `--tools` confines its OpenCode reduction to a chosen tool family. So it is narrowed to the form that leaves this channel alone, rather than refused. At 0.0.5 no flag produced any of those states, which is why this rule read `conflict` and said no configuration narrows it.',
   fixtures: ['docs/rfcs/0003-capabilities-and-conflicts.md#the-table-is-an-intent'],
 };
 

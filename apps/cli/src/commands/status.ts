@@ -35,9 +35,6 @@ import {
 
 import type { CommandContext } from './context.js';
 
-/** Kept in step with `plan.ts`; the comment there says why this is not a manifest field. */
-const ASSIGNABLE_PROVIDERS: readonly string[] = ['rtk'];
-
 export async function runStatus(context: CommandContext): Promise<CommandResult<StatusReport>> {
   const report: StatusReport = {
     platform: context.platform,
@@ -81,11 +78,6 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
   }
 
   const providerAdapters = listProviderAdapters();
-  const providers: ResolverProvider[] = providerAdapters.map((adapter) => ({
-    id: adapter.manifest.id,
-    capabilities: adapter.manifest.capabilities,
-    assignable: ASSIGNABLE_PROVIDERS.includes(adapter.manifest.id),
-  }));
 
   /**
    * `status` probes provider versions because the resolution it already performs now depends on
@@ -96,6 +88,7 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
    * from a rule of unknown validity would be reporting a conclusion it cannot support.
    */
   const observedVersions: Record<string, string | null> = {};
+  const providers: ResolverProvider[] = [];
   for (const adapter of providerAdapters) {
     const detection = await adapter.detect({
       ...detectionContext,
@@ -105,6 +98,14 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
       projectIdFor: context.adapters.projectIdFor,
     });
     observedVersions[adapter.manifest.id] = detection.version;
+    // Same probe, two answers: the version the rules are checked against, and whether this build
+    // can be asked for the state a rule would assign. `plan.ts` says why the second is not a
+    // constant, and `status` must resolve identically or it reports a different tool's conclusion.
+    providers.push({
+      id: adapter.manifest.id,
+      capabilities: adapter.manifest.capabilities,
+      assignable: detection.assignable,
+    });
   }
 
   const resolution = resolveOwnership({

@@ -39,6 +39,19 @@ export interface ProviderDetection {
   supportsUnmanagedHarnesses: boolean;
   /** RFC 0004 §Brownfield adoption: installed by the user, not by us. */
   managedByTokenHarness: boolean;
+  /**
+   * Whether Token Harness can bring an ownership assignment about for *this* installed build —
+   * RFC 0003 §Resolution, "a capability the provider has but cannot be asked for is not an
+   * assignable capability".
+   *
+   * The adapter answers it, for the reason `identifiesCommand` lives on the adapter too: only the
+   * provider's own adapter knows what its installer can be asked for, and the answer depends on the
+   * build in front of it rather than on the manifest. HarnessTrim is why it moved here (PLAN §15
+   * item 46): at `0.0.5` no narrowed state was producible, and at `0.1.0` the installer grew the
+   * flags that produce them. A constant list in the planner answered that question once, for every
+   * version, and was wrong as soon as the installer changed underneath it.
+   */
+  assignable: boolean;
   evidence: Evidence[];
   warnings: Diagnostic[];
 }

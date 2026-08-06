@@ -414,6 +414,32 @@ function formatSurface(surface: CapabilitySurface): string {
 }
 
 /**
+ * Whether the installed build can be asked for the narrowed states — PLAN §15 item 46.
+ *
+ * RFC 0003 §Resolution at 0.1.0 excluded HarnessTrim because "its installer cannot produce this in
+ * isolation": at `0.0.5` there was no flag that produced a narrowed install, so the capability was
+ * real and unassignable. `0.1.0` publishes `--no-hook`, `--no-instructions`, `--mode`,
+ * `--min-length` and `--tools`, and publishes *that it has them* in the `narrowing` list item 43a
+ * already reads. So the question is answered from the build rather than from a constant.
+ *
+ * Every managed harness must declare at least one flag, not merely one of them. The verdict is
+ * provider-wide because `ResolverProvider.assignable` is, and a build that had lost the flags for
+ * one managed harness would otherwise be treated as narrowable there on the strength of another
+ * harness's. Per-surface narrowing — assigning a tool-family subset — is the rest of item 46.
+ *
+ * `undefined` covers the build that could not be asked. It keeps the `0.0.5` verdict, which is the
+ * conservative direction: a provider that cannot be asked is exactly the one RFC 0003 excludes.
+ */
+function narrowable(capabilities: HarnessTrimCapabilities | null | undefined): boolean {
+  if (capabilities === null || capabilities === undefined) return false;
+  const managed = MANIFEST.harnesses.map((entry) => entry.harness);
+  return managed.every((harness) => {
+    const observed = capabilities.harnesses[harness];
+    return observed !== undefined && observed.narrowing.length > 0;
+  });
+}
+
+/**
  * Compares the manifest declaration against the installed build's machine-readable declaration.
  *
  * PLAN §15 item 43a: "Read it at detection, compare it against the manifest declaration, and
@@ -675,6 +701,10 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // circumstantial: PLAN §11 says Token Harness never installs it, so every installation it ever
     // sees is the user's.
     managedByTokenHarness: false,
+    // PLAN §15 item 46. Decided by the build in front of us, not by the manifest: a build that
+    // declares narrowing flags for every managed harness can be asked for the narrowed states
+    // §6.1 recorded as unproducible, and one that cannot answer keeps the `0.0.5` verdict.
+    assignable: observed?.capabilities === null ? false : narrowable(observed?.capabilities),
     evidence: evidenceItems,
     warnings,
   };

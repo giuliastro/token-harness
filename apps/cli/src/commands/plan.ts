@@ -54,19 +54,6 @@ import type { CommandContext } from './context.js';
 const DEFAULT_PROFILE: ProfileId = 'safe';
 
 /**
- * Which providers Token Harness can actually bring an assignment about for.
- *
- * RFC 0003 §Resolution at 0.1.0 checked each installer at `0.0.5` and found no narrowed state
- * producible for HarnessTrim on any MVP harness, so under `safe` it "is not installed by Token
- * Harness at all" — detected, adopted, reconciled, and measured, but never an owner.
- *
- * A list here rather than a manifest field, because it is a fact about *our* installer support
- * rather than about the provider: a provider adapter that gains an installation plan becomes
- * assignable without its upstream tool changing at all.
- */
-const ASSIGNABLE_PROVIDERS: readonly string[] = ['rtk'];
-
-/**
  * What `plan` computes, shared with `apply`.
  *
  * Extracted rather than duplicated because RFC 0006's staleness rules compare a stored plan
@@ -153,12 +140,6 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     }
   }
 
-  const providers: ResolverProvider[] = providerAdapters.map((adapter) => ({
-    id: adapter.manifest.id,
-    capabilities: adapter.manifest.capabilities,
-    assignable: ASSIGNABLE_PROVIDERS.includes(adapter.manifest.id),
-  }));
-
   /**
    * Every provider is detected before anything is resolved, not only the ones that end up owning
    * a scope.
@@ -182,13 +163,31 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           projectIdFor: context.adapters.projectIdFor,
         };
 
+  /**
+   * Assignability comes from detection, so it is built here rather than above.
+   *
+   * PLAN §15 item 46: it used to be a constant list naming `rtk`, which answered "can this
+   * provider's installer be asked for a narrowed state" once for every version of every provider.
+   * HarnessTrim made that wrong — `0.0.5` could not be asked and `0.1.0` can — so the adapter
+   * answers it from the build it just probed. A provider that could not be detected at all keeps
+   * the conservative answer, because there is no build to have asked.
+   */
+  const assignable = new Map<string, boolean>();
+
   if (providerContext !== null) {
     for (const adapter of providerAdapters) {
       const detection = await adapter.detect(providerContext);
       // Recorded even when null, for the reason the harness loop above records its own nulls.
       versions.providers[adapter.manifest.id] = detection.version;
+      assignable.set(adapter.manifest.id, detection.assignable);
     }
   }
+
+  const providers: ResolverProvider[] = providerAdapters.map((adapter) => ({
+    id: adapter.manifest.id,
+    capabilities: adapter.manifest.capabilities,
+    assignable: assignable.get(adapter.manifest.id) ?? false,
+  }));
 
   const resolution = resolveOwnership({
     profile,

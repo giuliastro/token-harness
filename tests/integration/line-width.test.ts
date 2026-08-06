@@ -120,6 +120,7 @@ describe('nothing renders wider than a terminal', () => {
           unmanagedHarnessesConfigured: [],
           supportsUnmanagedHarnesses: true,
           managedByTokenHarness: false,
+          assignable: false,
           evidence: [],
           warnings: [],
         },
