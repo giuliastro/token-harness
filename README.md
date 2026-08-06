@@ -107,11 +107,16 @@ them first so that `token-harness doctor` can detect it.
 
 | Provider | Claude Code | Codex | OpenCode | Installed by Token Harness |
 | --- | --- | --- | --- | --- |
-| RTK | Configure, verify, and measure | Not managed | Not managed | **Yes**, for the supported Claude Code path |
+| RTK | Configure, verify, and measure | Not managed | Detect, adopt, verify, and measure | **Yes**, for the supported Claude Code path |
 | HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **Yes**, when `harnesstrim 0.0.7` is already installed |
 
 "Not managed" does not mean the upstream tool cannot support that agent. It means this release
 does not claim ownership of that integration and will not modify it.
+
+RTK on OpenCode is detected and verified, not written: `rtk init -g --opencode` installs a plugin
+module at `~/.config/opencode/plugins/rtk.ts`, and Token Harness reads that file rather than
+producing it. Note that the plugin is inert under OpenCode Desktop — see
+[docs/matrices.md](docs/matrices.md) for what was measured.
 
 The generated compatibility tables, tested version ranges, platform coverage, and known
 limitations are in [docs/matrices.md](docs/matrices.md).
@@ -521,8 +526,10 @@ Run `token-harness doctor`. The usual causes are:
 - an existing user-managed integration already satisfies the target state;
 - the safe profile excluded an overlapping provider.
 
-RTK is managed only for Claude Code in 0.1.0. A Codex-only or OpenCode-only machine therefore does
-not produce an RTK installation action.
+RTK is written only for Claude Code in 0.1.0. It claims OpenCode too, but the plan builder appends
+a `hooks` entry, which is Claude Code's schema — OpenCode's integration is a plugin module, so an
+OpenCode scope produces no action and the existing installation is adopted instead. A Codex-only
+machine produces no RTK action at all.
 
 ### The plan is blocked by `exclusive-scope-contested`
 

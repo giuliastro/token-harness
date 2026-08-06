@@ -43,20 +43,47 @@ const MANIFEST: HarnessManifest = {
    * configuration must be able to exit 0. A declared limitation is not a problem, and reporting
    * it as one is the fastest way to teach users to ignore the exit code."
    *
-   * A single point rather than a range, matching the Codex adapter: one version was observed, so
-   * one version is claimed. An older 1.x reports `unknown-older`, which is a warning and not a
+   * A range now, because spike 9.1 observed two more: the CLI at `1.18.11` and OpenCode Desktop at
+   * `1.18.14`, both loading plugins from the same directories. The span is what was watched, not a
+   * guess that every 1.18.x behaves alike — and the two ends differ in a way that matters, which is
+   * exactly why both are named. An older 1.x reports `unknown-older`, which is a warning and not a
    * problem, and a newer one reports `unknown-newer` — which is then a true statement.
    */
-  testedVersions: { minimum: '1.18.9', maximum: '1.18.9' },
+  testedVersions: { minimum: '1.18.9', maximum: '1.18.14' },
   // RFC 0007: a managed provider can emit a receipt, but an adopted generated wrapper
   // has no externally observable receipt. The harness adapter alone therefore declares
   // the achievable baseline, not a promise about a provider it does not own.
   verificationTier: 'config-only',
   versionCommand: { executable: 'opencode', args: ['--version'] },
-  interceptionPoints: [{ scopeId: 'tool-execute-after', eventName: 'tool.execute.after' }],
+  interceptionPoints: [
+    { scopeId: 'tool-execute-before', eventName: 'tool.execute.before' },
+    { scopeId: 'tool-execute-after', eventName: 'tool.execute.after' },
+  ],
+  /**
+   * Two kinds of entry, because OpenCode has two ways to register a plugin and only one of them is
+   * a document.
+   *
+   * The `opencode.jsonc` files carry a `plugin` string array. The directories are auto-loaded: any
+   * module dropped in one is registered without being named anywhere, which is how both real
+   * integrations install — `rtk init -g --opencode` writes `.config/opencode/plugins/rtk.ts` and
+   * touches no JSON at all, and HarnessTrim's generated wrapper says in its own header not to
+   * reference it from `opencode.json`. An adapter that read only the array would report every such
+   * installation as absent, which is the state this file was in before spike 9.1.
+   *
+   * Both spellings are listed because both load. Spike 9.1 put a probe in each and one run fired
+   * both; the upstream documentation names the plural, the binary carries both strings, and the two
+   * shipped integrations disagree with each other about which to use.
+   *
+   * `markers` is the parser because there is nothing to parse: the presence of a file is the
+   * configuration, and its contents are a plugin module rather than a document this build reads.
+   */
   configFiles: [
     { path: '.config/opencode/opencode.jsonc', scope: 'user', parser: 'jsonc', primary: true },
     { path: 'opencode.jsonc', scope: 'project', parser: 'jsonc', primary: false },
+    { path: '.config/opencode/plugins', scope: 'user', parser: 'markers', primary: false },
+    { path: '.config/opencode/plugin', scope: 'user', parser: 'markers', primary: false },
+    { path: '.opencode/plugins', scope: 'project', parser: 'markers', primary: false },
+    { path: '.opencode/plugin', scope: 'project', parser: 'markers', primary: false },
   ],
   toolFamilies: [
     { id: 'tool.execute', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
@@ -75,10 +102,65 @@ function pluginEntries(document: JsonValue): string[] {
   return document['plugin'].filter((item): item is string => typeof item === 'string');
 }
 
+/** Module suffixes OpenCode will auto-load from a plugin directory. */
+const PLUGIN_MODULE_PATTERN = /\.(ts|js|mjs|cjs|mts|cts)$/i;
+
+/**
+ * Every interception point a registered plugin could be using.
+ *
+ * A plugin is a module, and which hooks it returns is decided when it runs. Nothing short of
+ * executing it says whether it took `tool.execute.before`, `tool.execute.after`, or both — RTK
+ * takes the first, HarnessTrim the second, and neither declares it anywhere readable. Reporting
+ * both is the claim that the point is occupied, which is what the resolver needs to see a contest;
+ * narrowing it to one would be a guess that hides a real conflict whenever the guess is wrong.
+ */
+const PLUGIN_POINTS = ['tool-execute-before', 'tool-execute-after'];
+
+/**
+ * A plugin directory: its entries are the configuration.
+ *
+ * The discovered module paths go into `commands` verbatim, which is the seam a provider adapter
+ * recognises itself in. That is the only way an integration installed as a file — every real one —
+ * can be attributed to the provider that installed it.
+ */
+async function resolvePluginDirectory(
+  declaration: HarnessManifest['configFiles'][number],
+  context: HarnessContext,
+): Promise<ResolvedHarnessConfig> {
+  const path = resolveConfigPath(declaration, context);
+  const stat = await context.fs.stat(path);
+  if (stat === null || stat.kind !== 'directory') {
+    return {
+      declaration,
+      path,
+      exists: false,
+      parsed: false,
+      configuredPoints: [],
+      matchers: [],
+      commands: [],
+    };
+  }
+  const modules = (await context.fs.readDirectory(path)).filter((entry) =>
+    PLUGIN_MODULE_PATTERN.test(entry),
+  );
+  return {
+    declaration,
+    path,
+    exists: true,
+    // A directory listing cannot fail to parse. `markers` declares that there is nothing to read.
+    parsed: true,
+    configuredPoints: modules.length > 0 ? [...PLUGIN_POINTS] : [],
+    // The plugin API sees every tool result; this is not a shell matcher.
+    matchers: modules.length > 0 ? ['tool.execute'] : [],
+    commands: modules.map((entry) => context.fs.join(path, entry)),
+  };
+}
+
 async function resolveConfig(
   declaration: HarnessManifest['configFiles'][number],
   context: HarnessContext,
 ): Promise<ResolvedHarnessConfig> {
+  if (declaration.parser === 'markers') return resolvePluginDirectory(declaration, context);
   const path = resolveConfigPath(declaration, context);
   const stat = await context.fs.stat(path);
   if (stat === null || stat.kind !== 'file') {
@@ -110,7 +192,9 @@ async function resolveConfig(
     path,
     exists: true,
     parsed: true,
-    configuredPoints: plugins.length > 0 ? ['tool-execute-after'] : [],
+    // A `plugin` array entry is the same kind of thing as a module in a plugin directory: a
+    // registration whose hooks are only known once it runs. Same claim, same reason.
+    configuredPoints: plugins.length > 0 ? [...PLUGIN_POINTS] : [],
     // The plugin API sees every tool result; this is not a shell matcher.
     matchers: plugins.length > 0 ? ['tool.execute'] : [],
     commands: plugins,

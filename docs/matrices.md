@@ -15,6 +15,7 @@ version outside it is reported as such and treated conservatively rather than re
 | Provider | Harness | Tested harness versions | Capabilities claimed |
 | --- | --- | --- | --- |
 | rtk | claude | 2.0.0–2.1.212 | `shell.command.rewrite`, `shell.output.reduce` |
+| rtk | opencode | 1.18.11–1.18.14 | `shell.command.rewrite`, `shell.output.reduce` |
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
 | harnesstrim | opencode | 1.18.9–1.18.9 | `tool.output.reduce` |
@@ -25,7 +26,7 @@ version outside it is reported as such and treated conservatively rather than re
 | --- | --- | --- | --- | --- | --- |
 | claude | 2.0.0–2.1.212 | canary | `Bash`, `PowerShell` | provider-telemetry | no |
 | codex | 0.146.0–0.146.0 | config-only | `Bash` | harness-event-stream | yes |
-| opencode | 1.18.9–1.18.9 | config-only | `tool.execute` | none | no |
+| opencode | 1.18.9–1.18.14 | config-only | `tool.execute` | none | no |
 
 ## Verification tiers
 
@@ -36,6 +37,7 @@ correct and that nothing available can show it ran.
 | Provider | Harness | Declared tier | Harness ceiling | Gap |
 | --- | --- | --- | --- | --- |
 | rtk | claude | canary | canary | at the harness ceiling |
+| rtk | opencode | config-only | config-only | at the harness ceiling |
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
 | harnesstrim | opencode | config-only | config-only | at the harness ceiling |
@@ -44,7 +46,7 @@ correct and that nothing available can show it ran.
 
 | Provider | Platform | Support | Stated limitation |
 | --- | --- | --- | --- |
-| rtk | windows | supported | — |
+| rtk | windows | supported | RTK's OpenCode plugin is inert under OpenCode Desktop, which supplies no `$` shell helper to plugins, so the plugin's own guard disables it silently |
 | rtk | linux (WSL) | supported | — |
 | rtk | macos | supported | — |
 | rtk | linux | supported | — |
@@ -77,8 +79,15 @@ is exactly the drift generating the tables above exists to prevent.
   was measured on a real machine, not inferred: the identical command bypassed the pipeline
   entirely. `doctor` reports the uncovered family, and it is the one problem the shipped
   configuration on that machine reports.
-- **RTK claims Claude Code only.** Its manifest declares one harness, so on Codex and OpenCode
-  there is nothing for it to own. That is a declaration, not a gap in the resolver.
+- **RTK claims Claude Code and OpenCode.** On Codex there is nothing for it to own. That is a
+  declaration, not a gap in the resolver.
+- **RTK's OpenCode plugin is inert under OpenCode Desktop.** Spike 9.1 ran the same plugin, from the
+  same global directory, under both hosts: the CLI rewrote the command and RTK's counter moved, and
+  Desktop ran it unrewritten with the counter flat. Desktop supplies plugins an `input.$` that is
+  `undefined` where the CLI supplies a function, so the `which rtk` guard RTK's plugin opens with
+  throws and the plugin returns an empty hook set. It disables itself without saying so. This is an
+  upstream defect rather than a configuration Token Harness could write differently, and it is
+  stated on Windows alone because Windows is where Desktop was watched.
 
 ### What "installed" does not prove
 
