@@ -32,6 +32,8 @@ neither installed nor configured by Token Harness.
 | [LiteLLM](https://github.com/BerriAI/litellm) | Model routing, fallbacks, budgets, and usage telemetry | Not active — candidate |
 | [RouteLLM](https://github.com/lm-sys/RouteLLM) | Route simpler requests to less expensive models | Not active — candidate |
 | [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Route by task, complexity, tools, and deployment locality | Not active — candidate |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) | Route coding-agent requests across models and providers with effort-based rules and fallback chains | Not active — candidate · high priority |
+| [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | Select the model by task complexity, cost, and quality across routing strategies | Not active — candidate · high priority |
 | [Headroom](https://github.com/headroomlabs-ai/headroom) | Compress tool, MCP, file, and RAG payloads | Not active — candidate |
 | [Context Mode](https://github.com/mksglu/context-mode) | Keep raw tool results outside model context | Not active — candidate |
 | [LLMLingua](https://github.com/microsoft/LLMLingua) | Compress long prompts and context | Not active — candidate |
@@ -40,7 +42,9 @@ neither installed nor configured by Token Harness.
 Candidate status means only that the project has identified a useful optimization layer. A tool
 becomes active only after its installation, conflicts, rollback behavior, verification, and
 metrics attribution have been implemented and tested. Token Harness never installs a candidate
-merely because it is present on the machine.
+merely because it is present on the machine. Rows marked `high priority` are the next intended
+intake; the admission gates each one carries are recorded in
+[docs/provider-landscape.md](docs/provider-landscape.md).
 
 ## Quick start
 

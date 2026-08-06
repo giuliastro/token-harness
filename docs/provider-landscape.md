@@ -1,6 +1,7 @@
 # Provider and harness landscape
 
-Research snapshot: **2026-07-31**. Harness section added **2026-08-03**.
+Research snapshot: **2026-07-31**. Harness section added **2026-08-03**. Routing section updated
+**2026-08-06**.
 
 This document is the researched intake queue for Token Harness providers and harnesses. It is
 not a support matrix: only adapters in `packages/adapters/src/providers` and
@@ -16,12 +17,14 @@ RTK and HarnessTrim:
 2. **Lazy MCP** for MCP schema loading on demand;
 3. **repowise** for bounded, task-specific repository retrieval;
 4. **LiteLLM** as the common gateway and telemetry seam for model routing;
-5. **one routing policy owner**, initially evaluated between RouteLLM and vLLM Semantic
-   Router;
-6. **one broad context owner**, evaluated between Headroom and Context Mode;
-7. **LLMLingua** as a compression engine only after a provider supplies the harness
+5. **Claude Code Router** as the agent-native routing surface, and **LLMRouter** as the
+   effort-aware routing engine — both high-priority additions, gated in the routing table below;
+6. **one routing-policy owner**, initially evaluated between RouteLLM, vLLM Semantic Router,
+   and LLMRouter;
+7. **one broad context owner**, evaluated between Headroom and Context Mode;
+8. **LLMLingua** as a compression engine only after a provider supplies the harness
    lifecycle around it;
-8. **Caveman** as an explicit, opt-in output policy.
+9. **Caveman** as an explicit, opt-in output policy.
 
 This order does not mean that every earlier item can be enabled together. The capability
 resolver still fails closed until the exact provider pair, order, versions, and fixture
@@ -68,7 +71,9 @@ measurements for both paths.
 | System | License | Role | Why it adds value | Admission gates |
 | --- | --- | --- | --- | --- |
 | [LiteLLM](https://github.com/BerriAI/litellm) | MIT outside `enterprise/` | Gateway and telemetry substrate | Provides one self-hosted OpenAI-compatible surface for 100+ providers, with load balancing, retries/fallbacks, spend tracking, budgets, and usage logs. It is the most practical common seam beneath a routing policy. | Do not label load balancing as intelligent routing. Add credential redaction, endpoint ownership, per-request model receipts, uninstall/restore, and a hosted-egress warning. |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) | MIT | Agent-native model gateway for coding agents | One local endpoint for Claude Code, Codex, OpenCode, and other agents, with effort- and request-conditioned routing rules, ordered fallback chains, and request logs carrying the resolved route, latency, tokens, and estimated cost. It speaks to exactly the harnesses Token Harness manages and is distributed as an npm CLI, so it shares the platform and packaging expectations of this project. **High priority.** | It rewrites the same agent configuration surfaces Token Harness owns and holds credentials, so endpoint and profile ownership must be resolved before mutation. Confirm detection of a user-run instance on `127.0.0.1:3456`, a read-only adoption path for its routing rules and logs, credential redaction, and that routing outcomes stay out of the token-saving totals. Requires the model-routing RFC below before a manifest. |
 | [RouteLLM](https://github.com/lm-sys/RouteLLM) | Apache-2.0 | Learned strong/weak model router | Ships trained routers and an OpenAI-compatible server; upstream reports up to 85% cost reduction while retaining 95% GPT-4 performance on general benchmarks and already uses LiteLLM for model access. | Recalibrate on coding-agent turns, tool calls, and long sessions; record the chosen model per operation; A/B task success; treat the generic benchmark as insufficient for a default coding profile. |
+| [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | MIT | Effort-aware routing library and server | Selects the model per query by task complexity, cost, and quality across 16+ strategies (KNN, MLP, graph, Elo, multi-round, personalized), with training and data-generation pipelines plus an OpenAI-compatible serving surface. It is the most direct implementation of the "escalate only when the task needs it" tier model. **High priority.** | Evaluate as the effort-aware routing-policy owner against RouteLLM, not as a second router in the same request path. Verify the inference-server footprint and that routing decisions are observable per request without prompt egress; Python research stack needs a versioned, documented serving mode before plan/apply/verify can be built on it. |
 | [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Apache-2.0 | Self-hosted mixture-of-models router | Actively targets model, reasoning, and tool selection plus semantic caching across heterogeneous local/private/cloud inference. It is the better fit for teams already running vLLM infrastructure. | Heavy deployment footprint; separate desktop and fleet support; prove cache identity and privacy; make it an alternative owner to RouteLLM, not a second router in the same request path. |
 
 ### Required architecture work before any router adapter
@@ -86,6 +91,10 @@ such as `model.request.route` and defines:
 - A/B task-success gates for coding sessions;
 - credential, prompt-egress, and data-residency diagnostics;
 - plan, apply, verification, rollback, and brownfield adoption for endpoint changes.
+
+Claude Code Router and LLMRouter are the first local candidates evaluated under this RFC;
+neither is admitted before the `model.request.route` capability and its cost/quality
+attribution class exist.
 
 Hosted routers such as [Not Diamond](https://docs.notdiamond.ai/docs/what-is-model-routing)
 and [OpenRouter Auto](https://openrouter.ai/openrouter/auto) remain later opt-in candidates.
@@ -149,7 +158,9 @@ Primary upstream sources reviewed for this snapshot:
 - [LLMLingua README and papers](https://github.com/microsoft/LLMLingua)
 - [Caveman README](https://github.com/JuliusBrussee/caveman)
 - [LiteLLM README and license](https://github.com/BerriAI/litellm)
+- [Claude Code Router README and license](https://github.com/musistudio/claude-code-router)
 - [RouteLLM README](https://github.com/lm-sys/RouteLLM)
+- [LLMRouter README and license](https://github.com/ulab-uiuc/LLMRouter)
 - [vLLM Semantic Router README](https://github.com/vllm-project/semantic-router)
 
 For the harness section:

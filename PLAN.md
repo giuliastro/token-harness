@@ -863,8 +863,9 @@ The researched intake queue, evidence, licenses, and admission gates live in
 1. Dejavu for repeated-output deltas;
 2. Lazy MCP for on-demand MCP schemas;
 3. Repowise for bounded repository retrieval;
-4. LiteLLM as the gateway and telemetry seam for routing;
-5. one routing-policy owner, evaluated between RouteLLM and vLLM Semantic Router;
+4. LiteLLM as the gateway and telemetry seam for routing; Claude Code Router is evaluated
+   at the same seam as the agent-native routing surface;
+5. one routing-policy owner, evaluated between RouteLLM, vLLM Semantic Router, and LLMRouter;
 6. one broad context owner, evaluated between Headroom and Context Mode;
 7. LLMLingua behind a provider that supplies the missing harness lifecycle;
 8. Caveman as an opt-in output policy.
@@ -926,8 +927,10 @@ forbids; LLMLingua is an engine with no lifecycle; and the routers need the capa
 attribution-class RFC named below before a manifest can honestly describe them.
 
 LiteLLM is a gateway substrate, not by itself evidence of intelligent routing or token
-savings. RouteLLM and vLLM Semantic Router remain alternative owners of a model request.
-Before either can be admitted, a new RFC must define the model-routing capability and a
+savings. Claude Code Router is called "router" but is first an agent-native gateway; its
+routing rules and logs make it independently adoptable once the capability exists. RouteLLM,
+vLLM Semantic Router, and LLMRouter remain alternative owners of a model request.
+Before any of them can be admitted, a new RFC must define the model-routing capability and a
 cost/quality attribution class: routing a request to a cheaper model is never folded into
 RFC 0005's exact or estimated token-saving totals.
 
