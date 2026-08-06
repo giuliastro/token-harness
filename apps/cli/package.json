@@ -1,6 +1,6 @@
 {
   "name": "token-harness",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "One control plane for token-efficient coding agents.",
   "private": true,
   "type": "module",
