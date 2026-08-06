@@ -538,24 +538,22 @@ describe('the metrics importer', () => {
     assert.equal(target.events[0]?.outcome.bypassReason, 'no-reduction-applied');
   });
 
-  it('reads the declared location and ignores a home path naming an unregistered harness', async () => {
+  it('reads both the project and Hermes home metrics locations', async () => {
     const target = store();
     const result = await harnesstrimAdapter.collectMetrics(
       context({
         files: {
           [METRICS]: `${trimEvent()}\n`,
-          // A Hermes file can exist on the machine without Hermes being in the registry: it is
-          // present, and it is not read. PLAN §15 item 25 removes the location until item 30 admits
-          // the harness; the registry assertion in `registries.test.ts` refuses to reintroduce it.
+          // Hermes telemetry is a user-home source admitted only because the Hermes adapter is registered.
           [HERMES_METRICS]: `${trimEvent({ harness: 'hermes' })}\n`,
         },
       }),
       target,
     );
-    assert.equal(result.imported, 1);
+    assert.equal(result.imported, 2);
     assert.deepEqual(
       target.events.map((event) => event.context.harnessId),
-      ['claude'],
+      ['claude', 'hermes'],
     );
   });
 

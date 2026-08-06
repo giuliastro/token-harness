@@ -26,6 +26,7 @@ version outside it is reported as such and treated conservatively rather than re
 | --- | --- | --- | --- | --- | --- |
 | claude | 2.0.0–2.1.212 | canary | `Bash`, `PowerShell` | provider-telemetry | no |
 | codex | 0.146.0–0.146.0 | config-only | `Bash` | harness-event-stream | yes |
+| hermes | 0.1.0–0.1.0 | config-only | `tool.result` | provider-telemetry | yes |
 | opencode | 1.18.9–1.18.14 | config-only | `tool.execute` | none | no |
 
 ## Verification tiers
@@ -63,7 +64,7 @@ RFC 0005 §Importer degradation policy: an importer states the fidelity mode it 
 | Provider | Metrics source | Importer mode | Default locations |
 | --- | --- | --- | --- |
 | rtk | local-database | native | `<user data directory>/rtk/history.db` |
-| harnesstrim | jsonl | native | `.harnesstrim/metrics.jsonl` |
+| harnesstrim | jsonl | native | `.harnesstrim/metrics.jsonl`, `.hermes/harnesstrim-metrics.jsonl` |
 
 ## Known limitations
 
@@ -126,6 +127,7 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Installation and updates
 
+- **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Two compatibility rows ship, both on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
   `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
   (`config-only`). Each names a recording under `tests/fixtures/rows/`. macOS and Linux have no row:

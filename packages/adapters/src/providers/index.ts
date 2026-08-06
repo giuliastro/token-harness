@@ -16,10 +16,8 @@ export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 export {
   compareCapabilities,
   harnesstrimAdapter,
-  compareCapabilities,
   harnessesWiredToHarnessTrim,
   metricsLocations,
-  parseCapabilities,
   synthesizeEventId,
   type HarnessTrimCapabilities,
   type HarnessTrimHarnessCapabilities,

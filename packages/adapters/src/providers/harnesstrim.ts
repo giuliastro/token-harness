@@ -151,16 +151,6 @@ const MANIFEST: ProviderManifest = {
         upstreamVersion: '0.0.5',
       },
     },
-    {
-      capability: 'tool.output.reduce',
-      mode: 'exclusive',
-      harnesses: [HERMES],
-      surfaces: [{ toolFamily: 'tool.result', interceptionPoint: 'transform-tool-result' }],
-      evidence: {
-        sourceReference: 'https://hermes-agent.nousresearch.com/docs/',
-        upstreamVersion: '0.1.0',
-      },
-    },
   ],
   platforms: [
     { os: 'windows', wsl: false, supported: true, limitation: null },
@@ -177,11 +167,6 @@ const MANIFEST: ProviderManifest = {
     {
       harness: CODEX,
       testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
-      verificationTier: 'config-only',
-    },
-    {
-      harness: HERMES,
-      testedVersions: { minimum: '0.1.0', maximum: '0.1.0' },
       verificationTier: 'config-only',
     },
     {
