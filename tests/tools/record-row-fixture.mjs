@@ -115,32 +115,41 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * Names to try for one executable, in order.
+ *
+ * Windows installs these tools as `.cmd` shims, and `execFileSync` runs an image directly — it
+ * cannot execute a batch file. The first version of this used `shell: true` on win32, which worked
+ * and earned a Node deprecation warning about unescaped argument concatenation. Naming the shim
+ * extensions explicitly is both quieter and narrower: no shell is involved, so there is nothing to
+ * escape.
+ *
+ * The bare name stays last so a POSIX machine, and a Windows one with a real executable, both work.
+ */
+function candidates(executable) {
+  return process.platform === 'win32'
+    ? [`${executable}.cmd`, `${executable}.exe`, executable]
+    : [executable];
+}
+
 function versionOf(command) {
-  try {
-    const [executable, ...rest] = command;
-    const stdout = execFileSync(executable, rest, {
-      encoding: 'utf8',
-      timeout: 20_000,
-      /**
-       * Windows installs these as `.cmd` shims, and `execFileSync` runs an image directly — it
-       * cannot execute a batch file, so every Windows recording came back with two null versions
-       * while both tools answered fine at a prompt. A null version is the reason a row cannot be
-       * written, so silently producing one on the primary development platform would have made the
-       * recorder useless in exactly the place PLAN §1.1 puts first.
-       *
-       * The command arrays here are constants in this file, so the shell gets nothing a caller
-       * chose.
-       */
-      shell: process.platform === 'win32',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const match = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/.exec(stdout);
-    return match?.[1] ?? null;
-  } catch {
-    // Not installed, or a build that rejects the flag. Both are facts about the machine, and a
-    // recording that invented a version would be the one thing a row must never contain.
-    return null;
+  const [executable, ...rest] = command;
+  for (const candidate of candidates(executable)) {
+    try {
+      const stdout = execFileSync(candidate, rest, {
+        encoding: 'utf8',
+        timeout: 20_000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      const match = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/.exec(stdout);
+      if (match?.[1] !== undefined) return match[1];
+    } catch {
+      // This spelling is not the one installed here. Try the next.
+    }
   }
+  // Not installed, or a build that rejects the flag. Both are facts about the machine, and a
+  // recording that invented a version would be the one thing a row must never contain.
+  return null;
 }
 
 /** A file or directory as the fixture records it: contents for a file, a listing for a directory. */
@@ -200,7 +209,18 @@ function main() {
     );
   }
 
-  const home = os.homedir();
+  /**
+   * `--home` records against an isolated home instead of the operator's own.
+   *
+   * It has to match whatever `apply-with-provisional-row.mjs` was given, because that is where the
+   * post-apply state exists. Without it this reads the operator's real `~/.claude/settings.json`
+   * and files their own configuration as the fixture for a state they never entered.
+   *
+   * Note for whoever picks the directory: RFC 0004 refuses a state root inside the system temporary
+   * directory, so an isolated home under `/tmp` or `%TEMP%` will not resolve. That refusal is
+   * correct, and it is how the first attempt here failed.
+   */
+  const home = args.home ?? os.homedir();
   const projectRoot = path.resolve(project);
 
   const captured = {};
