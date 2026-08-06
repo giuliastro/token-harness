@@ -136,40 +136,35 @@ function parseArgs(argv) {
 }
 
 /**
- * Names to try for one executable, in order.
+ * Reads one tool's version, through a shell, as a single command string.
  *
- * Windows installs these tools as `.cmd` shims, and `execFileSync` runs an image directly — it
- * cannot execute a batch file. The first version of this used `shell: true` on win32, which worked
- * and earned a Node deprecation warning about unescaped argument concatenation. Naming the shim
- * extensions explicitly is both quieter and narrower: no shell is involved, so there is nothing to
- * escape.
+ * Three shapes were tried here and only this one works everywhere. `execFileSync(name, args)` runs
+ * an image directly and cannot execute the `.cmd` shims npm and pnpm install, so every Windows
+ * reading came back null. Naming the shim explicitly — `harnesstrim.cmd` — does not help either:
+ * Node refuses a batch file without a shell and returns `EINVAL`. That second attempt shipped and
+ * silently broke `harnesstrim` again, and it went unnoticed because the combination re-tested after
+ * the change used `rtk`, which is a real `.exe`.
  *
- * The bare name stays last so a POSIX machine, and a Windows one with a real executable, both work.
+ * So: a shell, with the flag inside the command string rather than in an args array. The array form
+ * with `shell: true` is what earns Node's DEP0190 warning about unescaped concatenation, and there
+ * is nothing to escape here anyway — every command in this file is a constant, and none of it comes
+ * from a caller.
  */
-function candidates(executable) {
-  return process.platform === 'win32'
-    ? [`${executable}.cmd`, `${executable}.exe`, executable]
-    : [executable];
-}
-
 function versionOf(command) {
-  const [executable, ...rest] = command;
-  for (const candidate of candidates(executable)) {
-    try {
-      const stdout = execFileSync(candidate, rest, {
-        encoding: 'utf8',
-        timeout: 20_000,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      const match = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/.exec(stdout);
-      if (match?.[1] !== undefined) return match[1];
-    } catch {
-      // This spelling is not the one installed here. Try the next.
-    }
+  try {
+    const stdout = execFileSync(command.join(' '), {
+      encoding: 'utf8',
+      timeout: 20_000,
+      shell: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const match = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/.exec(stdout);
+    return match?.[1] ?? null;
+  } catch {
+    // Not installed, or a build that rejects the flag. Both are facts about the machine, and a
+    // recording that invented a version would be the one thing a row must never contain.
+    return null;
   }
-  // Not installed, or a build that rejects the flag. Both are facts about the machine, and a
-  // recording that invented a version would be the one thing a row must never contain.
-  return null;
 }
 
 /** A file or directory as the fixture records it: contents for a file, a listing for a directory. */

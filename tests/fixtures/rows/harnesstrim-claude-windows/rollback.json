@@ -1,0 +1,44 @@
+{
+  "stage": "rollback",
+  "harness": "claude",
+  "provider": "harnesstrim",
+  "observed": {
+    "harnessVersion": "2.1.220",
+    "providerVersion": "0.1.0",
+    "platform": {
+      "os": "windows",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "24.13.1"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": false
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": true,
+      "kind": "file",
+      "contents": "# Project\n\nMy own notes.\n"
+    },
+    "<project>/.claude/skills": {
+      "present": true,
+      "kind": "directory",
+      "entries": [
+        {
+          "name": "my-own-skill",
+          "kind": "directory"
+        }
+      ]
+    }
+  }
+}

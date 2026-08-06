@@ -90,11 +90,31 @@ HarnessTrim, or a coding agent.
 ### Managed compatibility rows
 
 Token Harness changes a harness configuration only when a reviewed compatibility row covers the
-exact provider version, harness version, platform, and configuration schema. The current
-development build deliberately ships no managed rows while the cross-platform fixtures are being
-completed. In that state, `doctor` can still detect and report an existing setup, but `plan` and
-`apply` refuse an uncovered managed mutation with exit 9; install or configure the provider by
-hand until a matching row is released.
+exact provider version, harness version, platform, and configuration schema. Two rows ship, and each
+names the recording it stands on:
+
+| Provider | Harness | Platform | Tested versions | Tier |
+| --- | --- | --- | --- | --- |
+| RTK | Claude Code | Windows | rtk 0.44.0, Claude Code 2.1.220 | `canary` |
+| HarnessTrim | Claude Code | Windows | harnesstrim 0.1.0, Claude Code 2.1.220 | `config-only` |
+
+Everything else is refused, and that is the design rather than a gap: `doctor` detects and reports on
+every supported platform, and only the *mutation* is narrower. An uncovered combination exits 9 and
+the diagnostic names what is missing — the reviewed fixture, or the nearest row it does have.
+
+What is not covered today, and why:
+
+- **macOS and Linux.** No row on either. The recordings a row needs are states of a real machine, and
+  a fixture cannot be written from a machine nobody ran. On those platforms `plan` and `apply` refuse;
+  install the provider with its own installer and Token Harness will detect, verify, and measure it.
+- **Codex and OpenCode.** Both providers are detected and adopted there, and neither is written:
+  RTK's plan builder produces a Claude-shaped hook list, and HarnessTrim's reviewed write set covers
+  Claude only. A row would admit a mutation that nothing proposes.
+- **A newer Claude Code.** The range is a single observed version. `2.1.221` reads `unknown-newer` and
+  refuses rather than assuming it behaves like `2.1.220`.
+
+The recordings are under `tests/fixtures/rows/`, one directory per row, each with a README stating
+which stages exist and which do not.
 
 ## How the components fit together
 

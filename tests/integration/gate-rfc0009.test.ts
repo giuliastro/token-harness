@@ -135,8 +135,20 @@ describe('plan with the shipped (empty) row table', () => {
       blocked,
       `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
     );
-    assert.match(blocked.message, /config schema and fixture/);
-    assert.match(blocked.message, /rtk on claude/);
+    /**
+     * Which of the two refusals applies depends on the platform, so the assertion is on what any of
+     * them must say rather than on one wording.
+     *
+     * The shipped table now holds a Windows `rtk × claude` row. On a Windows runner the fake Claude
+     * version therefore lands *outside a row that exists* and the diagnostic names the nearest
+     * recording — "a provider fixture covering rtk at 24.13.1 (the nearest row's fixture is …)". On
+     * Linux and macOS no row matches the platform at all and the wording is the original "a reviewed
+     * config schema and fixture for rtk on claude". Pinning either one would make this test pass on
+     * one third of the matrix.
+     */
+    assert.match(blocked.message, /rtk/);
+    assert.match(blocked.message, /claude/);
+    assert.match(blocked.message, /fixture/);
     // RFC 0006: an `error` diagnostic empties `data` — the refusal has no report to carry.
     assert.equal(data, null);
   });
@@ -250,7 +262,11 @@ describe('doctor and the row table', () => {
       warning,
       `expected a no-compatibility-row warning, got ${JSON.stringify(rtk.warnings)}`,
     );
-    assert.match(warning.message, /config schema and fixture/);
+    // Same platform dependency as the refusal above: with a Windows `rtk × claude` row shipped, a
+    // Windows runner gets the nearest-fixture wording and the other two get the original. What the
+    // warning must do either way is name the provider and say a fixture is what is missing.
+    assert.match(warning.message, /rtk/);
+    assert.match(warning.message, /fixture/);
   });
 
   it('reports without counting: problemCount is the same with a covering row', async () => {
