@@ -393,6 +393,11 @@ The report keeps measurement types and units separate:
 Token counts are never added to character counts, and estimated or counterfactual values are never
 silently merged into an exact total.
 
+The report covers one project: the one `--project` names, or the current directory. An operation a
+provider recorded without a directory belongs to no project and is excluded, with a count reported
+so the difference is reconcilable. When no project identity can be established the report says so
+rather than presenting every project's events as one project's figures.
+
 ## Undoing changes
 
 Choose the command based on what you want to undo:

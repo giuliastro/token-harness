@@ -16,12 +16,13 @@ import { after, before, describe, it } from 'node:test';
 
 import {
   JsonlStore,
+  UNATTRIBUTED_PROJECT_ID,
   type CliEnvelope,
   type MetricsReport,
   type OptimizationEvent,
   type PlatformFacts,
 } from '@token-harness/core';
-import { NodeFileSystem } from '@token-harness/platform';
+import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
 const FACTS: PlatformFacts = {
@@ -51,6 +52,7 @@ function event(overrides: {
   beforeTokens?: number;
   afterTokens?: number;
   changed?: boolean;
+  projectId?: string;
 }): OptimizationEvent {
   const beforeTokens = overrides.beforeTokens ?? 100;
   const afterTokens = overrides.afterTokens ?? 40;
@@ -60,7 +62,7 @@ function event(overrides: {
     timestamp: overrides.timestamp,
     provider: { id: 'rtk', version: '0.42.0' },
     context: {
-      projectId: 'p_1',
+      projectId: overrides.projectId ?? 'p_1',
       harnessId: 'claude',
       sessionId: null,
       operationId: overrides.id,
@@ -132,6 +134,127 @@ async function runMetrics(
   const exitCode = await run(options);
   return { exitCode, stdout, stderr };
 }
+
+/**
+ * The same run, but with adapters present, which is what makes the report project-scoped.
+ *
+ * `adapters` carries `projectIdFor`, and without it there is no project identity to filter on.
+ * Nothing resolves on `PATH` here, so every importer reads as not installed and imports nothing:
+ * the report still covers exactly the seeded events, and the only difference from `runMetrics` is
+ * that a scope exists.
+ */
+async function runScopedMetrics(
+  argv: readonly string[],
+  seed: readonly OptimizationEvent[],
+  projectId: string,
+): Promise<{ report: MetricsReport; codes: string[] }> {
+  counter += 1;
+  const stateRoot = join(sandbox, `state-${String(counter)}`);
+  const fs = new NodeFileSystem(FACTS);
+  const store = new JsonlStore({ fs, stateRoot, now: () => NOW });
+  if (seed.length > 0) await store.appendEvents([...seed]);
+
+  let stdout = '';
+  const options: RunOptions = {
+    argv,
+    streams: {
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => {},
+    },
+    platform: FACTS,
+    cwd: sandbox,
+    home: sandbox,
+    stateRoot,
+    adapters: {
+      fs,
+      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: () => null }),
+      paths: {
+        home: sandbox,
+        config: join(sandbox, 'config'),
+        data: join(sandbox, 'data'),
+        state: stateRoot,
+        cache: join(sandbox, 'cache'),
+      },
+      localDatabase: null,
+      projectIdFor: () => projectId,
+    },
+    metrics: store,
+    now: () => NOW,
+  };
+  await run(options);
+  const envelope = JSON.parse(stdout) as CliEnvelope<MetricsReport>;
+  assert.ok(envelope.data);
+  return { report: envelope.data, codes: envelope.diagnostics.map((entry) => entry.code) };
+}
+
+describe('the project scope', () => {
+  const timestamp = '2026-07-30T10:00:00.000Z';
+
+  it('reports only the events belonging to the project asked about', async () => {
+    // The regression: the store filters on `projectId` and the filter was never passed, so every
+    // report was the sum of every project the store had seen. On the development machine a
+    // freshly created empty directory reported 621,206 characters saved across 50 other projects,
+    // and each of those projects reported that same figure.
+    const { report } = await runScopedMetrics(
+      ['metrics', '--json', '--since', '7d'],
+      [
+        event({ id: 'mine', timestamp, projectId: 'p_mine' }),
+        event({ id: 'theirs-1', timestamp, projectId: 'p_theirs' }),
+        event({ id: 'theirs-2', timestamp, projectId: 'p_theirs' }),
+      ],
+      'p_mine',
+    );
+
+    const provider = report.providers.find((row) => row.providerId === 'rtk');
+    assert.ok(provider);
+    assert.equal(provider.operations, 1);
+  });
+
+  it('reports nothing for a project the store has never seen', async () => {
+    const { report } = await runScopedMetrics(
+      ['metrics', '--json', '--since', '7d'],
+      [event({ id: 'theirs', timestamp, projectId: 'p_theirs' })],
+      'p_fresh',
+    );
+
+    assert.deepEqual(report.providers, []);
+    for (const row of report.classes) {
+      assert.equal(row.saved, null);
+    }
+  });
+
+  it('excludes an operation that names no project, and says how many', async () => {
+    // RTK records a `project_path` that can be empty. Such an operation belongs to no project,
+    // and it used to be added to whichever project was asked about. Counted, not dropped silently.
+    const { report, codes } = await runScopedMetrics(
+      ['metrics', '--json', '--since', '7d'],
+      [
+        event({ id: 'mine', timestamp, projectId: 'p_mine' }),
+        event({ id: 'nowhere', timestamp, projectId: UNATTRIBUTED_PROJECT_ID }),
+      ],
+      'p_mine',
+    );
+
+    const provider = report.providers.find((row) => row.providerId === 'rtk');
+    assert.ok(provider);
+    assert.equal(provider.operations, 1);
+    assert.ok(codes.includes('metrics-unattributed-excluded'));
+  });
+
+  it('says so when there is no project identity to scope by', async () => {
+    // `runMetrics` passes no adapters, which is the host with a store and no machine behind it.
+    // The unscoped read is still the only thing available there, so it is stated rather than
+    // presented as a project's figures.
+    const { stdout } = await runMetrics(
+      ['metrics', '--json', '--since', '7d'],
+      [event({ id: 'any', timestamp, projectId: 'p_theirs' })],
+    );
+    const envelope = JSON.parse(stdout) as CliEnvelope<MetricsReport>;
+    assert.ok(envelope.diagnostics.some((entry) => entry.code === 'metrics-not-project-scoped'));
+  });
+});
 
 describe('the window', () => {
   const events = [

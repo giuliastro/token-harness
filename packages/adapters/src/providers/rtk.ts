@@ -42,6 +42,7 @@ import {
   OPTIMIZATION_EVENT_SCHEMA_VERSION,
   providerId,
   stringAt,
+  UNATTRIBUTED_PROJECT_ID,
   type Diagnostic,
   type Evidence,
   type HarnessId,
@@ -657,7 +658,7 @@ function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationE
       // the directory `metrics` happens to run in would invent an attribution.
       projectId:
         projectPath === null || projectPath === ''
-          ? 'p_unattributed'
+          ? UNATTRIBUTED_PROJECT_ID
           : context.projectIdFor(projectPath),
       // RTK proxies commands for whichever harness invoked it and does not record which.
       // The hook that wires it is per harness, but a *row* carries no harness, and reading

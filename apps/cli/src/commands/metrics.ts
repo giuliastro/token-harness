@@ -20,6 +20,7 @@
 
 import {
   EXIT_CODES,
+  UNATTRIBUTED_PROJECT_ID,
   aggregateEvents,
   commandResult,
   diagnostic,
@@ -140,13 +141,65 @@ export async function runMetrics(
     }
   }
 
+  /**
+   * The project this report is about — RFC 0006 §Flags: `--project` names "the project whose
+   * records you expect".
+   *
+   * Scoped at the query rather than in the aggregation, because the store already filters on
+   * `projectId` and the filter was simply never passed. Unscoped, every report was the sum of
+   * every project the store had ever seen: on the development machine a freshly created empty
+   * directory reported 621,206 characters saved across 50 other projects, and each of those
+   * projects reported the same figure, so the number answered no question anyone had asked.
+   *
+   * Null when no adapters were available. The id is a salted hash the adapter layer owns, so
+   * there is nothing to compare against without it, and the scope is reported as absent rather
+   * than quietly reinstating the unscoped read.
+   */
+  const projectId =
+    context.adapters === null ? null : context.adapters.projectIdFor(context.projectRoot);
+
   const events: OptimizationEvent[] = [];
   for await (const event of store.query({
     since: window.sinceInstant,
     until: window.untilInstant,
+    ...(projectId === null ? {} : { projectId }),
     ...(context.provider === null ? {} : { providerIds: [context.provider] }),
   })) {
     events.push(event);
+  }
+
+  if (projectId === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'metrics-not-project-scoped',
+        message: 'This report covers every project in the store: no project identity was available',
+        remediation: null,
+      }),
+    );
+  } else {
+    // Excluded by the scope above, and counted rather than dropped in silence: an operation RTK
+    // recorded without a directory belongs to no project, and the same figure used to be added
+    // to every project's total. One line with the count keeps the difference reconcilable.
+    let unattributed = 0;
+    for await (const _event of store.query({
+      since: window.sinceInstant,
+      until: window.untilInstant,
+      projectId: UNATTRIBUTED_PROJECT_ID,
+      ...(context.provider === null ? {} : { providerIds: [context.provider] }),
+    })) {
+      unattributed += 1;
+    }
+    if (unattributed > 0) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'metrics-unattributed-excluded',
+          message: `${String(unattributed)} operation${unattributed === 1 ? '' : 's'} named no project and are excluded from this report`,
+          remediation: null,
+        }),
+      );
+    }
   }
 
   const report = aggregateEvents({
