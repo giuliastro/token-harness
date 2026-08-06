@@ -740,9 +740,17 @@ export function synthesizeEventId(sourceId: string, ordinal: number, line: strin
  * they are, with the class `exact-local` — never derived from characters.
  *
  * The rules that carried the legacy mapping still carry it: tokens stay `null` because `0.0.5`
- * records characters and "never derived silently", and a `dryrun` event is `counterfactual`
+ * records characters and "never derives silently", and a `dryrun` event is `counterfactual`
  * with `changed: false` because "the bytes stayed in context, and the figure describes a saving
  * that did *not* occur".
+ *
+ * One rule is new with schema 1, and it is the native shape's one real loss versus the legacy
+ * line: the envelope dropped the `mode` field when OpenCode's adapter went to running without it in
+ * `0.1.0`. A schema 1 line therefore cannot say whether the adapter that wrote it was in
+ * `active` or `dryrun`, and OpenCode's dryrun branch emits an event identical to the applied
+ * one — reduced `afterChars`, `changed: true`, no mode. Such a native line cannot be *proven* to
+ * describe a realized saving, so it is filed `counterfactual` unless the mode can be read, and
+ * the importer reports the residual ambiguity once per file with a count rather than per event.
  */
 function toEvent(
   event: TrimEvent,
@@ -755,15 +763,30 @@ function toEvent(
   if (Number.isNaN(instant.getTime())) return null;
 
   const native = event.schemaVersion === 1;
-  const dryrun = event.mode === 'dryrun' && !native;
+  const dryrun = event.mode === 'dryrun';
   const eventId = native ? (event.eventId as string) : synthesizeEventId(sourceId, ordinal, line);
-  // A recorded pass-through and an unchanged interception are the same thing with a native
-  // signal behind the first: the reducer ran in active mode and changed nothing. A dryrun is
-  // not one of these — nothing was attempted — so it stays counterfactual.
+  // A recorded pass-through and an unchanged native event are the same thing with a native
+  // signal behind the first: a file in active mode ran and changed nothing. A dryrun is not one
+  // of these — nothing was attempted — so it stays counterfactual.
   const passThrough = native && event.changed === false;
   // Both figures, or neither: the producer emits token counts only where the emitting path has
   // a tokenizer, and a half figure would be a token count that cannot be summed.
   const hasTokens = native && event.beforeTokens !== null && event.afterTokens !== null;
+
+  /**
+   * OpenCode is the only harness whose adapter can run in `dryrun`, and the schema 1 envelope
+   * dropped the `mode` field that carried that decision on the legacy line. Its dryrun branch
+   * emits an event identical to its active one — same producer id, same reduced `afterChars`,
+   * `changed: true` — so a char-only native OpenCode line cannot be *proven* to describe a
+   * saving the model saw. RFC 0005 §A measured reduction is not always a realized one: the
+   * event may not be realized, so it is never classed as one here. The importer reports the
+   * residual ambiguity once per file with a count; reading the effective adapter mode is what
+   * will turn it into a warning instead of the info today (PLAN §15 item 43a).
+   *
+   * Token-counting emission paths (the `reduce` pipe and the MCP server) run as separate
+   * processes, so they cannot be in a dryrun at all, and their events stay exact.
+   */
+  const hasUnprovenMode = native && event.harness === OPENCODE && !hasTokens && !passThrough;
 
   return {
     schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
@@ -783,7 +806,12 @@ function toEvent(
       capability: event.harness === OPENCODE ? 'tool.output.reduce' : 'shell.output.reduce',
     },
     measurement: {
-      class: dryrun ? 'counterfactual' : hasTokens ? 'exact-local' : 'estimated-local',
+      class:
+        dryrun || hasUnprovenMode
+          ? 'counterfactual'
+          : hasTokens
+            ? 'exact-local'
+            : 'estimated-local',
       beforeChars: event.beforeChars,
       afterChars: event.afterChars,
       // RFC 0005: "never derived silently". `0.0.5` counts characters and nothing else; the
@@ -797,21 +825,28 @@ function toEvent(
     },
     outcome: {
       // A dryrun leaves `output.output` untouched; a native line states whether its attempt
-      // actually changed the output.
-      changed: dryrun
-        ? false
-        : native
-          ? (event.changed ?? true)
-          : event.afterChars !== event.beforeChars,
+      // actually changed the output. A native line whose mode the envelope cannot carry is
+      // deliberately not asserted as a change: the figure may describe a dryrun, and reporting
+      // `changed: true` would claim the model received fewer bytes than it did.
+      changed:
+        dryrun || hasUnprovenMode
+          ? false
+          : native
+            ? (event.changed ?? true)
+            : event.afterChars !== event.beforeChars,
       bypassReason: dryrun
         ? 'dryrun'
-        : native
-          ? passThrough
-            ? 'pass-through'
-            : null
-          : event.afterChars === event.beforeChars
-            ? 'no-reduction-applied'
-            : null,
+        : // Same reason value as the diagnostic code for the residual ambiguity: nothing refutes a
+          // dryrun, and nothing proves one, so the bypass is the envelope's own silence.
+          hasUnprovenMode
+          ? 'mode-unresolved'
+          : native
+            ? passThrough
+              ? 'pass-through'
+              : null
+            : event.afterChars === event.beforeChars
+              ? 'no-reduction-applied'
+              : null,
       originalReference: null,
       latencyMs: null,
       errorCode: null,
@@ -958,6 +993,10 @@ async function collectMetrics(
   // lines alone stays `legacy`. The classes the two shapes produce still never merge, which is
   // the rule regardless of the mode.
   let sawNative = false;
+  // One aggregated counter for the events whose mode the envelope can no longer carry. The
+  // diagnostic is one line per import with the count — never one line per event, which on a
+  // thousand-line file would destroy the human output and overflow the 78-character budget.
+  let unprovableModeEvents = 0;
 
   for (const path of metricsLocations(context)) {
     const stat = await context.fs.stat(path);
@@ -1032,6 +1071,7 @@ async function collectMetrics(
         continue;
       }
       if (parsed.schemaVersion === 1) sawNative = true;
+      if (event.outcome.bypassReason === 'mode-unresolved') unprovableModeEvents += 1;
       events.push(event);
       lastLine = trimmed;
       ordinal += 1;
@@ -1095,12 +1135,39 @@ async function collectMetrics(
     };
   }
 
+  // One line per import, carrying only the count. The events themselves were already filed
+  // counterfactual where their mode could not be proven; this is the residual ambiguity the
+  // envelope left behind, reported at `info` rather than defensively repeated per event. When
+  // the effective adapter mode can be read (PLAN §15 item 43a), the residue it still cannot
+  // explain becomes a warning.
+  if (unprovableModeEvents > 0) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'provider-metrics-mode-unresolved',
+        message: `${String(unprovableModeEvents)} native opencode event${unprovableModeEvents === 1 ? '' : 's'} could not be classed as realized: schema 1 carries no reduction mode`,
+        remediation:
+          'Read the effective OpenCode adapter mode before importing, or treat these figures as counterfactual',
+      }),
+    );
+  }
+
   return {
     providerId: HARNESSTRIM,
     // RFC 0005 §Importer degradation policy, decided by what this run read: `native` when the
     // file carried schema 1 events with producer IDs, `legacy` when it only had the character
     // stream. Legacy inside a native run is not a problem — those lines are older files.
-    mode: sawNative ? 'native' : 'legacy',
+    //
+    // A native stream whose OpenCode lines cannot prove a realized reduction (no tokens, no
+    // pass-through) is `native-with-residue`: the import is native, but a part of it could not
+    // be classed as realized, and the count above qualifies exactly how much. A bare `native`
+    // must keep meaning "everything was classed".
+    mode:
+      sawNative && unprovableModeEvents > 0
+        ? 'native-with-residue'
+        : sawNative
+          ? 'native'
+          : 'legacy',
     source: `harnesstrim TrimEvent JSONL (schema 0 and schema 1)`,
     imported,
     skipped,

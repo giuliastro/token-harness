@@ -644,7 +644,7 @@ describe('native events (PLAN §15 item 43d)', () => {
       context({ files: { [METRICS]: `${nativeTrimEvent()}\n` } }),
       target,
     );
-    assert.equal(result.mode, 'native');
+    assert.equal(result.mode, 'native-with-residue');
     const event = target.events[0];
     assert.ok(event);
     // The identity is the producer's, everywhere an identity appears: the dedup id, the native
@@ -671,19 +671,95 @@ describe('native events (PLAN §15 item 43d)', () => {
     assert.equal(event.measurement.afterTokens, 31);
   });
 
-  it('stays estimated-local when the emitting path has no tokenizer', async () => {
+  it('stays estimated-local for a native char event on a harness that cannot dryrun', async () => {
     const target = store();
-    await harnesstrimAdapter.collectMetrics(
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: {
+          // A codex event: the fixture's adapter list gives that harness no `--mode` flag, so a
+          // char-only native line from it can only describe an applied reduction.
+          [METRICS]: `${nativeTrimEvent({ harness: 'codex' })}\n`,
+        },
+      }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // No tokenizer here, so the class is the character estimate — exactly as for a legacy line.
+    assert.equal(event.measurement.class, 'estimated-local');
+    assert.equal(event.measurement.beforeTokens, null);
+    assert.equal(event.measurement.afterTokens, null);
+    // And, being provably applied, it is not flagged as an unresolved mode.
+    assert.equal(event.outcome.bypassReason, null);
+    // With nothing unresolved, the native mode needs no residue qualification.
+    assert.equal(result.mode, 'native');
+  });
+
+  it('files an opencode char-only native event as counterfactual, not estimated', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
       context({ files: { [METRICS]: `${nativeTrimEvent()}\n` } }),
       target,
     );
     const event = target.events[0];
     assert.ok(event);
-    // Token counts are null upstream, so nothing may be derived: the class is the character
-    // estimate, exactly as for a legacy line.
-    assert.equal(event.measurement.class, 'estimated-local');
-    assert.equal(event.measurement.beforeTokens, null);
-    assert.equal(event.measurement.afterTokens, null);
+    // This is the regression PLAN §15 item 43d must not reintroduce: the schema 1 envelope no
+    // longer carries `mode`, and OpenCode's dryrun branch emits a line identical to its active one,
+    // so a char-only native OpenCode line can never be proven realized. It is counterfactual —
+    // excluded from every realized total — and only the residual is reported, once.
+    assert.equal(event.measurement.class, 'counterfactual');
+    assert.equal(event.outcome.changed, false);
+    assert.equal(event.outcome.bypassReason, 'mode-unresolved');
+    // The stream is natively read, but a part of it could not be classed as realized.
+    assert.equal(result.mode, 'native-with-residue');
+    const unresolved = result.diagnostics.find(
+      (entry) => entry.code === 'provider-metrics-mode-unresolved',
+    );
+    assert.ok(unresolved);
+    assert.equal(unresolved.severity, 'info');
+    assert.match(unresolved.message, /1 native opencode event/);
+  });
+
+  it('reports the unresolved-mode count once per import, not once per event', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: { [METRICS]: `${nativeTrimEvent()}\n${nativeTrimEvent({}, 'id-2')}\n` },
+      }),
+      target,
+    );
+    assert.equal(target.events.length, 2);
+    // The mode plainly states the residue rather than a bare `native`.
+    assert.equal(result.mode, 'native-with-residue');
+    // One aggregated line for the whole import — the 78-character budget and a thousand-line
+    // file make a per-event diagnostic the failure mode line-width.test.ts exists to catch.
+    assert.equal(
+      result.diagnostics.filter((entry) => entry.code === 'provider-metrics-mode-unresolved')
+        .length,
+      1,
+    );
+    const unresolved = result.diagnostics.find(
+      (entry) => entry.code === 'provider-metrics-mode-unresolved',
+    );
+    assert.match(unresolved?.message ?? '', /2 native opencode events/);
+  });
+
+  it('leaves a token-counting native event exact even on opencode', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: { [METRICS]: `${nativeTrimEvent({ beforeTokens: 320, afterTokens: 31 })}\n` },
+      }),
+      target,
+    );
+    const event = target.events[0];
+    assert.ok(event);
+    // A token count reaches the line from a reduce-pipe or MCP run, which is a separate process
+    // and cannot be dryrun; it is exact.
+    assert.equal(event.measurement.class, 'exact-local');
+    assert.equal(event.outcome.changed, true);
+    // Everything was classed, so there is no residue to qualify the native mode.
+    assert.equal(result.mode, 'native');
   });
 
   it('files a recorded pass-through as a bypass, not as a saving', async () => {
@@ -708,7 +784,8 @@ describe('native events (PLAN §15 item 43d)', () => {
       context({ files: { [METRICS]: `${trimEvent()}\n${nativeTrimEvent()}\n` } }),
       target,
     );
-    assert.equal(result.mode, 'native');
+    // The stream is natively read, but its OpenCode line cannot prove a realized reduction.
+    assert.equal(result.mode, 'native-with-residue');
     assert.equal(target.events.length, 2);
     const [legacy, native] = target.events;
     assert.ok(legacy && native);

@@ -387,6 +387,7 @@ An importer states which fidelity mode it is running in, and the mode appears in
 | Mode | Condition | Consequence |
 | --- | --- | --- |
 | `native` | Upstream exposes `metrics --json` with IDs and tokens | Exact or declared-estimate classes, native dedup |
+| `native-with-residue` | Native stream, but some OpenCode events cannot prove a realized reduction (schema 1 carries no `mode`) | Those events are `counterfactual`; the residue is reported once per import with a count |
 | `legacy` | Character-only `TrimEvent` JSONL | `estimated-local` only, synthesized dedup |
 
 Running in `legacy` mode is a supported steady state, not a warning. What would be a

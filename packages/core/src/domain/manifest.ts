@@ -85,7 +85,7 @@ export interface MetricsDeclaration {
   /** `none` is an explicit, supported declaration, not a gap. */
   source: 'cli-json' | 'jsonl' | 'local-database' | 'harness-events' | 'none';
   /** The fidelity mode the importer runs in; surfaced by `status`. */
-  mode: 'native' | 'legacy' | 'unavailable';
+  mode: 'native' | 'native-with-residue' | 'legacy' | 'unavailable';
   /** Default on-disk locations, when the source is file-based. */
   locations: string[];
 }
