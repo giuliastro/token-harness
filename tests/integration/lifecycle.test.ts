@@ -134,6 +134,49 @@ async function invoke<T>(
   return { exitCode, data: envelope.data, envelope };
 }
 
+/**
+ * The same run without `--json`, for the one assertion that is about the closing sentence.
+ *
+ * `invoke` appends `--json` so its callers can read the envelope, which means nothing here could
+ * ever see the human rendering — and the defect below lives entirely in that sentence.
+ */
+async function invokeHuman(argv: readonly string[], place: World): Promise<string> {
+  clock += 1;
+  const now = new Date(Date.UTC(2026, 6, 31, 12, 0, clock)).toISOString();
+  const fs = new NodeFileSystem(FACTS);
+  let stdout = '';
+  await run({
+    argv,
+    streams: {
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+    },
+    platform: FACTS,
+    cwd: place.project,
+    home: place.home,
+    stateRoot: place.state,
+    adapters: {
+      fs,
+      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      paths: {
+        home: place.home,
+        config: join(place.home, 'config'),
+        data: join(place.home, 'data'),
+        state: place.state,
+        cache: join(place.home, 'cache'),
+      },
+      localDatabase: null,
+      projectIdFor: (path) => deriveProjectId(path, SALT, FACTS.os === 'windows'),
+    },
+    compatibilityRows: nodeVersionRows(FACTS),
+    metrics: null,
+    now: () => now,
+  });
+  return stdout;
+}
+
 function matchers(place: World): string[] {
   const parsed = JSON.parse(readFileSync(place.settings, 'utf8')) as {
     hooks: { PreToolUse: { matcher: string }[] };
@@ -154,6 +197,37 @@ describe('uninstall', () => {
     // The whole point of criterion 7's "without damaging unrelated configuration": the user's own
     // entry is still there, and only ours is gone.
     assert.deepEqual(matchers(place), ['Edit']);
+  });
+
+  it('does not claim a removal when it recognised nothing to remove', async () => {
+    /**
+     * Observed on a real machine before this: with a user hook appended beside the applied one,
+     * uninstall left `rtk hook claude` on disk and still printed "Removed what Token Harness owned.
+     * Everything else is untouched."
+     *
+     * `observeOwnership` reaches `already-satisfied` for an edited array element on purpose — a
+     * changed element is "a removal, not an edit", because what was written is not there in any form
+     * the digest matches. Whether that should be the `owned-artifact-modified` refusal instead is an
+     * RFC 0004 §Ownership question and is not what this asserts. This asserts that a user who is
+     * told a removal happened is not left looking for an entry still in the file.
+     */
+    const place = world();
+    await invoke(['apply', '--yes'], place);
+
+    const before = JSON.parse(readFileSync(place.settings, 'utf8')) as {
+      hooks: { PreToolUse: { matcher: string; hooks: { type: string; command: string }[] }[] };
+    };
+    const owned = before.hooks.PreToolUse.find((entry) => entry.matcher === 'Bash');
+    assert.ok(owned);
+    owned.hooks.push({ type: 'command', command: 'node my-own-hook.mjs' });
+    writeFileSync(place.settings, `${JSON.stringify(before, null, 2)}\n`);
+
+    const stdout = await invokeHuman(['uninstall', '--yes'], place);
+
+    // Still there, which is the behaviour. The sentence must agree with the file.
+    assert.match(readFileSync(place.settings, 'utf8'), /rtk/);
+    assert.doesNotMatch(stdout, /Removed what Token Harness owned/);
+    assert.match(stdout, /Removed nothing: no owned entry was recognised/);
   });
 
   it('refuses without --yes', async () => {
