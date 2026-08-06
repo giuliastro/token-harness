@@ -175,8 +175,8 @@ describe('distribution', () => {
     );
     assert.deepEqual(
       listHarnessAdapters().map((adapter) => adapter.manifest.id),
-      ['claude', 'codex', 'opencode'],
-      'PLAN §16 requires three harnesses for 0.1.0',
+      ['claude', 'codex', 'hermes', 'opencode'],
+      'PLAN §16 requires four harnesses for 0.1.0',
     );
 
     // Every command the workflow needs. `update` is not part of the 0.1.0 gate.

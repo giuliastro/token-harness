@@ -59,7 +59,7 @@ export const TOKEN_HARNESS_OWNER = 'token-harness' as ProviderId;
 export const UNATTRIBUTED_PROJECT_ID = 'p_unattributed';
 
 /** Harnesses managed at 0.1.0 — PLAN §8.1. */
-export const MANAGED_HARNESS_IDS = ['claude', 'codex', 'opencode'] as const;
+export const MANAGED_HARNESS_IDS = ['claude', 'codex', 'hermes', 'opencode'] as const;
 
 /** Providers in the 0.1.0 MVP — RFC 0001 §Initial provider strategy. */
 export const MVP_PROVIDER_IDS = ['rtk', 'harnesstrim'] as const;

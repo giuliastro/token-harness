@@ -18,7 +18,7 @@ describe('adapter registries', () => {
     // the spike before the adapters to avoid.
     assert.deepEqual(
       listHarnessAdapters().map((adapter) => adapter.manifest.id),
-      ['claude', 'codex', 'opencode'],
+      ['claude', 'codex', 'hermes', 'opencode'],
     );
   });
 
@@ -35,9 +35,7 @@ describe('adapter registries', () => {
     assert.notEqual(findHarnessAdapter('claude' as HarnessId), null);
     assert.notEqual(findHarnessAdapter('codex' as HarnessId), null);
     assert.notEqual(findHarnessAdapter('opencode' as HarnessId), null);
-    // The three PLAN §2 criterion 1 names. `hermes` and `pi` are in the managed set and have
-    // no adapter, which is what keeps this assertion about what ships rather than what exists.
-    assert.equal(findHarnessAdapter('hermes' as HarnessId), null);
+    assert.notEqual(findHarnessAdapter('hermes' as HarnessId), null);
     assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);
     assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);
     assert.equal(findProviderAdapter('dejavu' as ProviderId), null);

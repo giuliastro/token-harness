@@ -9,12 +9,14 @@ import type { HarnessId } from '@token-harness/core';
 
 import { claudeAdapter } from './claude.js';
 import { codexAdapter } from './codex.js';
+import { hermesAdapter } from './hermes.js';
 import { opencodeAdapter } from './opencode.js';
 import type { HarnessAdapter } from './contract.js';
 
 export * from './contract.js';
 export { claudeAdapter } from './claude.js';
 export { codexAdapter } from './codex.js';
+export { hermesAdapter } from './hermes.js';
 export { opencodeAdapter } from './opencode.js';
 export { matcherCoversFamily } from './claude.js';
 
@@ -30,7 +32,12 @@ export { matcherCoversFamily } from './claude.js';
  * can actually reach is the point — PLAN §2 criterion 1 asks that all three be *detected*,
  * not that all three be provable.
  */
-const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [claudeAdapter, codexAdapter, opencodeAdapter];
+const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
+  claudeAdapter,
+  codexAdapter,
+  hermesAdapter,
+  opencodeAdapter,
+];
 
 export function listHarnessAdapters(): readonly HarnessAdapter[] {
   return HARNESS_ADAPTERS;
