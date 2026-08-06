@@ -675,7 +675,22 @@ async function scanTree(
   return entries;
 }
 
+/**
+ * Whether a path is in the same state on both sides of a delegated install.
+ *
+ * Absent on both sides counts as equal, and that is the whole point of this comment. It used to
+ * require both entries to be defined, which made a path that never existed read as *changed* — and
+ * the protected-path check below is a `find` over exactly such paths. HarnessTrim's skills-only
+ * install names `.claude/settings.json` and `CLAUDE.md` as protected precisely because the installer
+ * must not create them, so the check failed every time the installer behaved correctly. The
+ * flagship delegated install could not succeed on any machine at any version; the exact-version gate
+ * in the provider kept anyone from reaching it and finding out.
+ *
+ * The other caller iterates the union of the before and after keys, so at least one side is defined
+ * there and this case cannot arise — which is why the fix belongs here rather than at one call site.
+ */
 function equalTreeEntry(left: TreeEntry | undefined, right: TreeEntry | undefined): boolean {
+  if (left === undefined && right === undefined) return true;
   return (
     left !== undefined &&
     right !== undefined &&

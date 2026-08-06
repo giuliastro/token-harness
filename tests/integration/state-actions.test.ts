@@ -1211,6 +1211,70 @@ describe('delegated-provider-install', () => {
     claim('delegated-provider-install', 'apply', 'idempotency', 'rollback');
   });
 
+  it('does not read a protected path that never existed as a change', async () => {
+    /**
+     * The case the shipped provider is built on, and the one every existing test here missed by
+     * passing `protectedPaths: []`.
+     *
+     * HarnessTrim's skills-only install names `.claude/settings.json` and `CLAUDE.md` as protected
+     * *because* the installer must not create them. `equalTreeEntry` required both sides to be
+     * defined, so a path absent before and absent after read as changed and the action failed every
+     * time the installer behaved correctly. Verified on a real machine: the delegated install now
+     * applies and writes exactly its seven skill files, and before this it could not succeed at any
+     * version.
+     */
+    const h = harness();
+    const boundary = join(h.project, '.claude');
+    const skills = join(boundary, 'skills');
+    const runner: ProcessRunner = {
+      async run() {
+        mkdirSync(join(skills, 'delta-response'), { recursive: true });
+        writeFileSync(join(skills, 'delta-response', 'SKILL.md'), 'skill\n');
+        return {
+          displayCommand: 'harnesstrim install claude --no-hook',
+          interpreter: 'direct',
+          executablePath: '/fake/harnesstrim',
+          exitCode: 0,
+          signal: null,
+          stdout: '',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+    const action: DelegatedProviderInstallAction = {
+      ...BASE,
+      id: 'delegate-protected',
+      kind: 'delegated-provider-install',
+      riskClass: 'delegated',
+      rollbackData: 'directory-snapshot',
+      affectedPaths: [join(skills, 'delta-response', 'SKILL.md')],
+      affectedProcesses: ['harnesstrim'],
+      executable: 'harnesstrim',
+      args: ['install', 'claude', '--apply', '--no-hook', '--no-instructions'],
+      containmentBoundary: [boundary],
+      expectedArtifacts: [
+        { path: join(skills, 'delta-response', 'SKILL.md'), digest: digestText('skill\n') },
+      ],
+      // Never created by this installer, which is exactly why they are named here.
+      protectedPaths: [join(boundary, 'settings.json'), join(h.project, 'CLAUDE.md')],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1024,
+      upstreamUninstallAvailable: true,
+    };
+
+    const outcome = await applyAction(action, { ...h.context, runner, cwd: h.project });
+
+    assert.equal(outcome.status, 'applied');
+    assert.equal(readFileSync(join(skills, 'delta-response', 'SKILL.md'), 'utf8'), 'skill\n');
+    // And still absent, so nothing was created to make the check pass.
+    assert.equal(statSync(join(boundary, 'settings.json'), { throwIfNoEntry: false }), undefined);
+  });
+
   it('rejects undeclared creations and deletions, then restores both directions', async () => {
     const h = harness();
     const boundary = join(h.project, '.claude');
