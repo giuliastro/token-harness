@@ -77,15 +77,17 @@
       ".harnesstrim/metrics.jsonl"
     ]
   },
-  "delegatedInstallReview": {
-    "upstreamVersion": "0.0.5",
-    "reviewedWriteSet": [
-      ".opencode/plugin/harnesstrim.ts",
-      "AGENTS.md"
-    ],
-    "containmentBoundary": [
-      ".opencode"
-    ],
-    "upstreamUninstallAvailable": false
+  "delegatedInstallReviews": {
+    "claude": {
+      "upstreamVersion": "0.0.5",
+      "reviewedWriteSet": [
+        ".opencode/plugin/harnesstrim.ts",
+        "AGENTS.md"
+      ],
+      "containmentBoundary": [
+        ".opencode"
+      ],
+      "upstreamUninstallAvailable": false
+    }
   }
 }
