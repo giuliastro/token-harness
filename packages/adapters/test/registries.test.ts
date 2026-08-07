@@ -18,7 +18,7 @@ describe('adapter registries', () => {
     // the spike before the adapters to avoid.
     assert.deepEqual(
       listHarnessAdapters().map((adapter) => adapter.manifest.id),
-      ['claude', 'codex', 'hermes', 'opencode'],
+      ['claude', 'codex', 'hermes', 'opencode', 'pi'],
     );
   });
 
@@ -36,6 +36,7 @@ describe('adapter registries', () => {
     assert.notEqual(findHarnessAdapter('codex' as HarnessId), null);
     assert.notEqual(findHarnessAdapter('opencode' as HarnessId), null);
     assert.notEqual(findHarnessAdapter('hermes' as HarnessId), null);
+    assert.notEqual(findHarnessAdapter('pi' as HarnessId), null);
     assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);
     assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);
     assert.equal(findProviderAdapter('dejavu' as ProviderId), null);

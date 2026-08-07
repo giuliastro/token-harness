@@ -166,7 +166,7 @@ describe('distribution', () => {
     assert.match(version, /^0\.\d+\.\d+$/);
     if (version === '0.0.0' || version.startsWith('0.0.')) return;
 
-    // Two providers and three harnesses, by id rather than by count, so adding a fourth of
+    // Two providers and five harnesses, by id rather than by count, so adding a sixth of
     // something does not silently satisfy the gate.
     assert.deepEqual(
       listProviderAdapters().map((adapter) => adapter.manifest.id),
@@ -175,8 +175,8 @@ describe('distribution', () => {
     );
     assert.deepEqual(
       listHarnessAdapters().map((adapter) => adapter.manifest.id),
-      ['claude', 'codex', 'hermes', 'opencode'],
-      'PLAN §16 requires four harnesses for 0.1.0',
+      ['claude', 'codex', 'hermes', 'opencode', 'pi'],
+      'PLAN §16 requires five harnesses for 0.1.0',
     );
 
     // Every command the workflow needs. `update` is not part of the 0.1.0 gate.

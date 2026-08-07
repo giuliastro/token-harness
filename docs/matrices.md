@@ -28,6 +28,7 @@ version outside it is reported as such and treated conservatively rather than re
 | codex | 0.146.0–0.146.0 | config-only | `Bash` | harness-event-stream | yes |
 | hermes | 0.1.0–0.1.0 | config-only | `tool.result` | provider-telemetry | yes |
 | opencode | 1.18.9–1.18.14 | config-only | `tool.execute` | none | no |
+| pi | 0.83.0–0.83.0 | config-only | `tool.result` | none | no |
 
 ## Verification tiers
 
@@ -128,6 +129,7 @@ is exactly the drift generating the tables above exists to prevent.
 ### Installation and updates
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
+- **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
 - **Two compatibility rows ship, both on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
   `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
   (`config-only`). Each names a recording under `tests/fixtures/rows/`. macOS and Linux have no row:
