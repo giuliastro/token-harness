@@ -11,6 +11,7 @@ import { claudeAdapter } from './claude.js';
 import { codexAdapter } from './codex.js';
 import { hermesAdapter } from './hermes.js';
 import { opencodeAdapter } from './opencode.js';
+import { piAdapter } from './pi.js';
 import type { HarnessAdapter } from './contract.js';
 
 export * from './contract.js';
@@ -18,6 +19,7 @@ export { claudeAdapter } from './claude.js';
 export { codexAdapter } from './codex.js';
 export { hermesAdapter } from './hermes.js';
 export { opencodeAdapter } from './opencode.js';
+export { piAdapter } from './pi.js';
 export { matcherCoversFamily } from './claude.js';
 
 /**
@@ -31,12 +33,17 @@ export { matcherCoversFamily } from './claude.js';
  * generated wrapper with no externally observable receipt. Registering them at the tier they
  * can actually reach is the point — PLAN §2 criterion 1 asks that all three be *detected*,
  * not that all three be provable.
+ *
+ * Hermes and Pi close out the read-only adapters: both are config-only because neither hook
+ * exposes a receipt, and both are adoption-only — Token Harness finds the plugin and reads
+ * whether it is enabled, and enabling it stays the user's command.
  */
 const HARNESS_ADAPTERS: readonly HarnessAdapter[] = [
   claudeAdapter,
   codexAdapter,
   hermesAdapter,
   opencodeAdapter,
+  piAdapter,
 ];
 
 export function listHarnessAdapters(): readonly HarnessAdapter[] {

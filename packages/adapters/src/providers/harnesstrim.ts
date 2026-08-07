@@ -45,6 +45,7 @@ const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
 const HERMES = harnessId('hermes');
 const CODEX = harnessId('codex');
+const PI = harnessId('pi');
 
 const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'compact-handoff/SKILL.md':
@@ -110,6 +111,13 @@ const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])harnesstrim(\.cmd|\.exe)?([\s"']|$)/i
  * it, `verify` has nothing to check, and the conflict detector believes the point is free.
  */
 const PLUGIN_MODULE_PATTERN = /(^|[\\/])harnesstrim\.(ts|js|mjs|cjs|mts|cts)$/i;
+
+/**
+ * The Pi extension directory, in either of the two roots Pi auto-loads and under either
+ * separator. Wired on the directory rather than the filename because the user-scope module is
+ * `index.ts` — the directory is what names HarnessTrim, not the file.
+ */
+const PI_EXTENSION_PATTERN = /(^|[\\/])\.pi[\\/](agent[\\/])?extensions[\\/]harnesstrim[\\/]/i;
 
 /**
  * The surfaces HarnessTrim reduces on, from the source references RFC 0003 cites.
@@ -566,7 +574,20 @@ export function harnessesWiredToHarnessTrim(
       config.harnessId === HERMES &&
       (config.configPath.toLowerCase().includes('.hermes/plugins/harnesstrim') ||
         config.commands.some((command) => /hermes plugins enable harnesstrim/i.test(command)));
-    if (hermesPlugin || config.commands.some((command) => identifiesCommand(command))) {
+    /**
+     * Pi's wiring is its installed extension module, in either of the two directories Pi
+     * auto-loads. The project-scope module happens to be named `harnesstrim.ts` and would match
+     * `PLUGIN_MODULE_PATTERN` if it ever reached the command list — but the Pi adapter emits no
+     * commands, because Pi has no enable command: presence in the directory is the whole
+     * configuration. The path check is what keeps a real installation visible to `doctor`, to
+     * `verify`, and to the conflict detector, exactly as the Hermes plugin path does.
+     */
+    const piExtension = config.harnessId === PI && PI_EXTENSION_PATTERN.test(config.configPath);
+    if (
+      piExtension ||
+      hermesPlugin ||
+      config.commands.some((command) => identifiesCommand(command))
+    ) {
       wired.add(config.harnessId);
     }
   }
@@ -934,7 +955,7 @@ function toEvent(
       pipelineOrder: null,
       toolFamily: event.tool === '' ? null : event.tool,
       capability:
-        event.harness === OPENCODE || event.harness === HERMES
+        event.harness === OPENCODE || event.harness === HERMES || event.harness === PI
           ? 'tool.output.reduce'
           : 'shell.output.reduce',
     },

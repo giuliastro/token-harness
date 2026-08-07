@@ -50,7 +50,7 @@ describe('identifiers', () => {
   });
 
   it('names the 0.1.0 managed set', () => {
-    assert.deepEqual([...MANAGED_HARNESS_IDS], ['claude', 'codex', 'hermes', 'opencode']);
+    assert.deepEqual([...MANAGED_HARNESS_IDS], ['claude', 'codex', 'hermes', 'opencode', 'pi']);
     assert.deepEqual([...MVP_PROVIDER_IDS], ['rtk', 'harnesstrim']);
   });
 });

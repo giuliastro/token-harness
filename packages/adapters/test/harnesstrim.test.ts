@@ -329,6 +329,51 @@ describe('detection', () => {
     assert.deepEqual(detection.unmanagedHarnessesConfigured, ['hermes']);
   });
 
+  it('reports a wired Pi extension it does not manage, and leaves it alone', async () => {
+    const detection = await harnesstrimAdapter.detect(
+      context({
+        configs: [
+          {
+            harnessId: 'pi' as HarnessConfigSummary['harnessId'],
+            configPath: `${HOME}\\.pi\\agent\\extensions\\harnesstrim\\index.ts`,
+            scope: 'user',
+            interceptionPoints: ['tool-result'],
+            matchers: ['tool.result'],
+            commands: [],
+          },
+        ],
+      }),
+    );
+    // Pi's extension has no enable command, so the wiring is the installed module path alone.
+    assert.deepEqual(detection.unmanagedHarnessesConfigured, ['pi']);
+  });
+
+  it('recognises the Pi extension module path as wiring in either directory', () => {
+    const summary = (configPath: string): HarnessConfigSummary => ({
+      harnessId: 'pi' as HarnessConfigSummary['harnessId'],
+      configPath,
+      scope: configPath.includes('\\agent\\') ? 'user' : 'project',
+      interceptionPoints: ['tool-result'],
+      matchers: ['tool.result'],
+      commands: [],
+    });
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([
+        summary(`${HOME}\\.pi\\agent\\extensions\\harnesstrim\\index.ts`),
+      ]),
+      ['pi'],
+    );
+    assert.deepEqual(
+      harnessesWiredToHarnessTrim([
+        summary(`${PROJECT}\\.pi\\extensions\\harnesstrim\\harnesstrim.ts`),
+      ]),
+      ['pi'],
+    );
+    // A path that merely contains `harnesstrim` is not an installation; the directory the
+    // extension lives in is what names it.
+    assert.deepEqual(harnessesWiredToHarnessTrim([summary(`${HOME}\\harnesstrim\\other.ts`)]), []);
+  });
+
   it('recognises the Windows batch shim by name', () => {
     assert.deepEqual(
       harnessesWiredToHarnessTrim([
@@ -743,6 +788,12 @@ describe('native events (PLAN §15 item 43d)', () => {
       assert.equal(event.measurement.class, 'counterfactual');
       assert.equal(event.outcome.changed, false);
       assert.equal(event.outcome.bypassReason, 'mode-unresolved');
+      // Pi reduces tool results like OpenCode and Hermes, so its events are `tool.output.reduce`;
+      // OMP's hook line has no such read, matching the shell-only default.
+      assert.equal(
+        event.context.capability,
+        harness === 'omp' ? 'shell.output.reduce' : 'tool.output.reduce',
+      );
       // The stream is natively read, but a part of it could not be classed as realized.
       assert.equal(result.mode, 'native-with-residue');
       const unresolved = result.diagnostics.find(
