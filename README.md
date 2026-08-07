@@ -90,7 +90,7 @@ HarnessTrim, or a coding agent.
 ### Managed compatibility rows
 
 Token Harness changes a harness configuration only when a reviewed compatibility row covers the
-exact provider version, harness version, platform, and configuration schema. Two rows ship, and each
+exact provider version, harness version, platform, and configuration schema. Three rows ship, and each
 names the recording it stands on:
 
 | Provider | Harness | Platform | Tested versions | Tier |
@@ -108,18 +108,18 @@ What is not covered today, and why:
 - **macOS and Linux.** No row on either. The recordings a row needs are states of a real machine, and
   a fixture cannot be written from a machine nobody ran. On those platforms `plan` and `apply` refuse;
   install the provider with its own installer and Token Harness will detect, verify, and measure it.
-- **OpenCode.** Both providers are detected and adopted there, and neither is written. RTK's plan
-  builder produces a Claude-shaped hook list; HarnessTrim's OpenCode installer writes a plugin
-  wrapper *and runs an npm install*, so its containment boundary would hold a `node_modules` tree —
-  a snapshot and rollback question that has to be settled before a row can admit it.
+- **OpenCode, and permanently rather than pending.** Both providers are detected, adopted, verified
+  and measured there, and neither is written. RTK reaches OpenCode through a plugin module its own
+  installer places globally, which this build has no action for. HarnessTrim's OpenCode installer
+  writes a plugin wrapper *and runs an npm install*, so a containment boundary covering what it wrote
+  would hold a `node_modules` tree — and that is not a decision deferred for want of a fixture. A
+  dependency tree is not configuration, so it cannot be a reviewed write set; snapshotting it on
+  every apply to keep the rollback honest would be slow and would be restoring upstream's install
+  rather than our change; and excluding it would leave a transaction claiming a reversibility it does
+  not have. So the assignment is not producible, and RFC 0003 is explicit about what that means: a
+  capability the provider has but cannot be asked for is not an assignable capability. OpenCode stays
+  adoption-only by decision.
 - **RTK on Codex.** Not managed, and no row: RTK writes a Claude-shaped hook list and nothing else.
-
-  While OpenCode is uncovered, HarnessTrim's installs need the harness named:
-  `token-harness apply --yes --harness codex`. A provider plan refused on *any* combination is
-  dropped whole — the gate would rather propose nothing than half of a mutation no row admitted — so
-  a bare `apply` reaches RTK on Claude Code and reports the OpenCode refusal as a warning, leaving
-  HarnessTrim's covered installs untouched. Naming the harness narrows the resolution and the plan
-  goes through.
 - **A newer Claude Code.** The range is a single observed version. `2.1.221` reads `unknown-newer` and
   refuses rather than assuming it behaves like `2.1.220`.
 

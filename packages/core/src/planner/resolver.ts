@@ -60,12 +60,22 @@ export interface ResolverProvider {
   id: ProviderId;
   capabilities: readonly CapabilityDeclaration[];
   /**
-   * Whether Token Harness can actually bring about the assignment — RFC 0003 §Resolution at
-   * 0.1.0. HarnessTrim `0.0.5` is the case: it has the capability and its installer cannot be
-   * asked for a narrowed state, so under `safe` it "is not installed by Token Harness at
-   * all". It is still detected, adopted, reconciled, and measured; it is simply not an owner.
+   * The harnesses Token Harness can actually bring the assignment about on — RFC 0003 §Resolution
+   * at 0.1.0: a capability the provider has but cannot be asked for "is not an assignable
+   * capability". HarnessTrim `0.0.5` was the original case, on every harness at once.
+   *
+   * Per harness rather than provider-wide, because that is the granularity the fact has. HarnessTrim
+   * `0.1.0` has a reviewed skills-only install on Claude Code and on Codex and none on OpenCode,
+   * whose installer runs an npm install into the project — so the OpenCode assignment cannot be
+   * produced at all. Held provider-wide, it was produced anyway: the resolver assigned the scope,
+   * the plan reached the RFC 0009 gate with an OpenCode combination no row admits, and a provider
+   * plan refused on any combination is dropped whole. The Claude Code and Codex installs
+   * disappeared because of a third harness nobody had asked about.
+   *
+   * A provider is still detected, adopted, reconciled against the owner, and measured everywhere.
+   * It is simply not an owner where the assignment cannot be produced.
    */
-  assignable: boolean;
+  assignableHarnesses: ReadonlySet<HarnessId>;
 }
 
 /** What a `custom` profile assigned explicitly. */
@@ -241,7 +251,7 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
 
           // Gate two: RFC 0003 §Resolution at 0.1.0. A capability that cannot be asked for
           // is not assignable.
-          if (!provider.assignable) {
+          if (!provider.assignableHarnesses.has(harness.id)) {
             // PLAN §15 item 46: the version is named because the statement is only true of a
             // version. Saying "its installer cannot produce this in isolation" about `0.0.5` while
             // the reader is running `0.1.0`, whose installer grew the flags that produce it, is a
@@ -253,8 +263,8 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
               retained: null,
               reason: [
                 observed === null
-                  ? `${provider.id} implements ${capability} but no installer state this build could observe produces it in isolation`
-                  : `${provider.id} ${observed} implements ${capability} but no installer state at that version produces it in isolation`,
+                  ? `${provider.id} implements ${capability} on ${harness.id} but no installer state this build could observe produces it there`
+                  : `${provider.id} ${observed} implements ${capability} on ${harness.id} but no installer state at that version produces it there`,
                 'RFC 0003: a capability the provider has but cannot be asked for is not an assignable capability',
                 'It is still detected, adopted, reconciled against the owner, and measured',
               ],
