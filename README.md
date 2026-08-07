@@ -122,20 +122,26 @@ There are three separate layers. Installing one does not automatically provide t
 
 | Layer | Examples | Who installs it? |
 | --- | --- | --- |
-| Coding agent (harness) | Claude Code, Codex, OpenCode | You, using the agent's official installer |
+| Coding agent (harness) | Claude Code, Codex, OpenCode, Hermes | You, using the agent's official installer |
 | Token Harness | `token-harness` | You, from npm or this repository |
 | Optimization provider | RTK, HarnessTrim | Both can be installed by Token Harness where a compatibility row covers the combination; otherwise install them with their own installers and Token Harness detects and measures them |
 
-Token Harness does not install Claude Code, Codex, or OpenCode. Install and run at least one of
+Token Harness does not install Claude Code, Codex, OpenCode, or Hermes. Install and run at least one of
 them first so that `token-harness doctor` can detect it.
 
-| Provider | Claude Code | Codex | OpenCode | Installed by Token Harness |
-| --- | --- | --- | --- | --- |
-| RTK | Configure, verify, and measure | Not managed | Detect, adopt, verify, and measure | **Yes**, for the supported Claude Code path |
-| HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | **Yes**, on a covered row — see above |
+| Provider | Claude Code | Codex | OpenCode | Hermes | Installed by Token Harness |
+| --- | --- | --- | --- | --- | --- |
+| RTK | Configure, verify, and measure | Not managed | Detect, adopt, verify, and measure | Not managed | **Yes**, for the supported Claude Code path |
+| HarnessTrim | Claude skills only; no reducer hook or reduce-pipe instruction | Detect, adopt, verify, and measure | Detect, adopt, verify, and measure | Detect, verify, and measure | **Yes**, on a covered row — see above |
 
 "Not managed" does not mean the upstream tool cannot support that agent. It means this release
 does not claim ownership of that integration and will not modify it.
+
+Hermes is read-only in both directions: the adapter finds the HarnessTrim plugin, reads whether it
+is enabled, and imports the telemetry it writes to `~/.hermes/harnesstrim-metrics.jsonl`, but nothing
+here enables the plugin or restarts the gateway. Enabling it is
+`hermes plugins enable harnesstrim`, and that stays your command to run. No compatibility row ships
+for Hermes because a row is the precondition for a *mutation*, and none is proposed.
 
 RTK on OpenCode is detected and verified, not written: `rtk init -g --opencode` installs a plugin
 module at `~/.config/opencode/plugins/rtk.ts`, and Token Harness reads that file rather than
