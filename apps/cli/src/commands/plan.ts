@@ -173,21 +173,21 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
    * answers it from the build it just probed. A provider that could not be detected at all keeps
    * the conservative answer, because there is no build to have asked.
    */
-  const assignable = new Map<string, boolean>();
+  const assignable = new Map<string, ReadonlySet<HarnessId>>();
 
   if (providerContext !== null) {
     for (const adapter of providerAdapters) {
       const detection = await adapter.detect(providerContext);
       // Recorded even when null, for the reason the harness loop above records its own nulls.
       versions.providers[adapter.manifest.id] = detection.version;
-      assignable.set(adapter.manifest.id, detection.assignable);
+      assignable.set(adapter.manifest.id, new Set(detection.assignableHarnesses));
     }
   }
 
   const providers: ResolverProvider[] = providerAdapters.map((adapter) => ({
     id: adapter.manifest.id,
     capabilities: adapter.manifest.capabilities,
-    assignable: assignable.get(adapter.manifest.id) ?? false,
+    assignableHarnesses: assignable.get(adapter.manifest.id) ?? new Set<HarnessId>(),
   }));
 
   const resolution = resolveOwnership({

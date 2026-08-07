@@ -91,7 +91,7 @@ function provider(
   capabilities: CapabilityDeclaration[],
   assignable = true,
 ): ResolverProvider {
-  return { id, capabilities, assignable };
+  return { id, capabilities, assignableHarnesses: assignable ? new Set([CLAUDE]) : new Set() };
 }
 
 /**

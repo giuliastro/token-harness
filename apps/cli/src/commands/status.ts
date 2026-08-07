@@ -104,7 +104,7 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
     providers.push({
       id: adapter.manifest.id,
       capabilities: adapter.manifest.capabilities,
-      assignable: detection.assignable,
+      assignableHarnesses: new Set(detection.assignableHarnesses),
     });
   }
 

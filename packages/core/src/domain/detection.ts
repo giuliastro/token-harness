@@ -51,7 +51,8 @@ export interface ProviderDetection {
    * flags that produce them. A constant list in the planner answered that question once, for every
    * version, and was wrong as soon as the installer changed underneath it.
    */
-  assignable: boolean;
+  /** Per harness, because that is the granularity the fact has. */
+  assignableHarnesses: HarnessId[];
   evidence: Evidence[];
   warnings: Diagnostic[];
 }

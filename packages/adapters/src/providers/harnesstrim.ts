@@ -494,13 +494,22 @@ function formatSurface(surface: CapabilitySurface): string {
  * `undefined` covers the build that could not be asked. It keeps the `0.0.5` verdict, which is the
  * conservative direction: a provider that cannot be asked is exactly the one RFC 0003 excludes.
  */
-function narrowable(capabilities: HarnessTrimCapabilities | null | undefined): boolean {
-  if (capabilities === null || capabilities === undefined) return false;
-  const managed = MANIFEST.harnesses.map((entry) => entry.harness);
-  return managed.every((harness) => {
-    const observed = capabilities.harnesses[harness];
-    return observed !== undefined && observed.narrowing.length > 0;
-  });
+function assignableOn(capabilities: HarnessTrimCapabilities | null): HarnessId[] {
+  if (capabilities === null) return [];
+  const reviews = MANIFEST.delegatedInstallReviews ?? {};
+  return Object.keys(reviews)
+    .filter((harness) => {
+      const observed = capabilities.harnesses[harness];
+      // Two conditions, and both are about producibility. The build must declare a narrowing flag
+      // for this harness — RFC 0003's "cannot be asked for" is exactly the absence of one — and its
+      // declared write set must still be the one the review covers.
+      return (
+        observed !== undefined &&
+        observed.narrowing.length > 0 &&
+        writeSetStillReviewed(capabilities, harnessId(harness))
+      );
+    })
+    .map((harness) => harnessId(harness));
 }
 
 /**
@@ -826,10 +835,9 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // circumstantial: PLAN §11 says Token Harness never installs it, so every installation it ever
     // sees is the user's.
     managedByTokenHarness: false,
-    // PLAN §15 item 46. Decided by the build in front of us, not by the manifest: a build that
-    // declares narrowing flags for every managed harness can be asked for the narrowed states
-    // §6.1 recorded as unproducible, and one that cannot answer keeps the `0.0.5` verdict.
-    assignable: observed?.capabilities === null ? false : narrowable(observed?.capabilities),
+    // PLAN §15 item 46, per harness. Decided by the build in front of us and by which harnesses
+    // carry a reviewed write set: those are the two things that make the assignment producible.
+    assignableHarnesses: assignableOn(observed?.capabilities ?? null),
     evidence: evidenceItems,
     warnings,
   };

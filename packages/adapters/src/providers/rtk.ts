@@ -494,14 +494,20 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // every installation it finds is the user's.
     managedByTokenHarness: false,
     /**
-     * Always, and independent of the observed version.
+     * Claude Code alone, and independent of the observed version.
      *
-     * RTK's assignment is produced by this build writing the hook itself — `rtk-plan.ts` appends
-     * the entry — so nothing about the installed `rtk` decides whether the state is reachable.
-     * That is the difference from HarnessTrim, whose assignment is produced by *its* installer and
-     * therefore depends on which flags that installer has.
+     * RTK's assignment is produced by this build writing the hook itself — `rtk-plan.ts` appends the
+     * entry — so nothing about the installed `rtk` decides whether the state is reachable. What does
+     * decide it is which harness schema that builder knows, and it knows one: `HOOK_LIST_HARNESSES`
+     * holds `claude` and the builder refuses anything else, because a `{matcher, hooks:[…]}` object
+     * at `hooks.<event>` is Claude Code's schema and nothing else's.
+     *
+     * RTK claims OpenCode too, from spike 9.1, and that claim is real — detected, adopted, verified
+     * and measured there. It is simply not *written* there: its OpenCode integration is a plugin
+     * module `rtk init -g --opencode` installs globally, which this build has no action for. Saying
+     * so here is what stops the resolver assigning a scope nothing can produce.
      */
-    assignable: true,
+    assignableHarnesses: [CLAUDE],
     evidence: evidenceItems,
     warnings,
   };
