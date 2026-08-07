@@ -27,7 +27,7 @@ neither installed nor configured by Token Harness.
 | [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and command-output reduction | **Active — integrated** |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP reduction | **Active — integrated** |
 | [Dejavu](https://github.com/Salnika/dejavu) | Emit only the delta when command output repeats | Not active — candidate |
-| [Lazy MCP](https://github.com/voicetreelab/lazy-mcp) | Load MCP tool schemas only when needed | Not active — candidate |
+| [Lazy MCP](https://gitlab.com/gitlab-org/ai/lazy-mcp) | Load MCP tool schemas only when needed | Not active — candidate |
 | [repowise](https://github.com/repowise-dev/repowise) | Retrieve task-specific repository context | Not active — candidate |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Model routing, fallbacks, budgets, and usage telemetry | Not active — candidate |
 | [RouteLLM](https://github.com/lm-sys/RouteLLM) | Route simpler requests to less expensive models | Not active — candidate |

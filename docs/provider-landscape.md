@@ -39,7 +39,7 @@ entry high on this list can carry an unresolved admission gate, and one lower do
 | System | License | Intended capability | Why it adds value | Admission gates |
 | --- | --- | --- | --- | --- |
 | [Dejavu](https://github.com/Salnika/dejavu) | MIT | `shell.output.deduplicate` | Always runs the real command, preserves its exit code, and replaces unchanged or near-unchanged reruns with a recoverable delta. Upstream reports 52-55% less intercepted output in real sessions and 87% in repeated rerun loops. | Determine whether deduplication sees raw or RTK-reduced output; prove stage attribution and full-output recovery; native Windows is currently unsupported. |
-| [Lazy MCP](https://github.com/voicetreelab/lazy-mcp) | MIT | `mcp.schema.lazy` | Exposes a small discovery surface and loads tool definitions on demand. Its published example avoided 34,000 tokens, 17% of a Claude Code context, by hiding two unused MCP tools. | Verify Windows packaging, recursive discovery, schema byte accounting, restoration of the original MCP registry, and brownfield proxy adoption. |
+| [Lazy MCP](https://gitlab.com/gitlab-org/ai/lazy-mcp) | MIT | `mcp.schema.lazy` | A client-agnostic proxy that aggregates downstream MCP servers behind meta-tools and loads definitions on demand. Its README claims ~90% initial context reduction, ~16K tokens to ~1.5K. That figure is upstream's and is not yet measured here. | Measure the schema bytes actually avoided rather than repeating the claim; recursive discovery; restoration of the original MCP registry; brownfield proxy adoption. |
 | [repowise](https://github.com/repowise-dev/repowise) | AGPL-3.0 | `repo.context.retrieve` | Serves task-shaped repository context over MCP instead of repeated search and file reads. Upstream reports a paired 2,391-vs-64,039-token context-loading result at answer parity. | External-only distribution; cap response size; verify index staleness and offline/local modes; add a quality and attribution fixture before composing with a general context provider. |
 | [Headroom](https://github.com/headroomlabs-ai/headroom) | Apache-2.0 | `tool.output.reduce`, `conversation.compact`, `model.output.terse`, `reasoning.effort.route` | Offers a library, OpenAI-compatible proxy, MCP server, and wrappers for Claude Code, Codex, OpenCode, and other agents. Upstream reports 15-20% fewer tokens for coding agents and 60-95% for JSON. | Establish which features can be independently disabled; test proxy and hook ownership; do not co-enable payload compression with RTK, HarnessTrim, or Context Mode without pair-specific fixtures. |
 | [Context Mode](https://github.com/mksglu/context-mode) | Elastic-2.0, source-available | `mcp.result.sandbox`, `tool.output.reduce`, `conversation.compact` | Sandboxes raw tool/MCP payloads, exposes search/extraction tools, and persists compact session memory across many coding agents. Upstream reports about 98% reduction with hooks and 60% without them. | Licensing review; treat Headroom as an alternative; verify secret redaction, raw-data retention/deletion, hook enablement, and exact behavior on all three managed harnesses. |
@@ -146,12 +146,39 @@ schemas, or verification surfaces, and no row above may be written for them from
 - no provider claims the harness until that provider's fixture on it passes;
 - `metrics` never imports from a harness path the registry does not know.
 
+### Which Lazy MCP
+
+Three unrelated projects publish under that name, and this table pointed at a fourth. The entry
+originally cited `github.com/voicetreelab/lazy-mcp` and carried its published example — 34,000 tokens
+avoided, 17% of a Claude Code context. That project exists and is maintained, but it is written in Go
+and its install is `make build` followed by `claude mcp add` against the compiled binary: no packaged
+distribution. §Admission gates makes Windows packaging a gate rather than a follow-up, and building
+from source on Windows is that gate unresolved.
+
+Meanwhile `npm install lazy-mcp` resolves to the GitLab project, which is a different tool with a
+different configuration surface. `@lazy-mcp/cli` and `@rover3930/lazy-mcp` are two more, from two more
+repositories. An adapter written against whichever one npm happened to install would have carried this
+table's evidence while describing something the table never evaluated.
+
+So the candidate is now the GitLab project explicitly, chosen because it clears the packaging gate
+rather than defers it: Homebrew, `cargo`, `uvx`, and npm all install it, and it is MIT and actively
+maintained. The 34,000-token example does not move with the name — it belonged to the other project
+and has been replaced with upstream's own claim, marked as unmeasured.
+
+Observed here at `2.7.2`, installed from npm: `--version` reports `2.7.2`; the CLI accepts `--config`,
+`--port` and `--transport`; and it reads and writes `servers.json`, `tokens.json` and
+`client-info.json` under a `lazy-mcp/` configuration directory that honours `XDG_CONFIG_HOME` and
+otherwise defaults to `~/.config/lazy-mcp/`. The harness-side change it asks for is one aggregated
+entry replacing the downstream servers, which is why "restoration of the original MCP registry" is the
+gate that matters most.
+
 ## Source notes
 
 Primary upstream sources reviewed for this snapshot:
 
 - [Dejavu README and limitations](https://github.com/Salnika/dejavu)
-- [Lazy MCP README](https://github.com/voicetreelab/lazy-mcp)
+- [Lazy MCP README](https://gitlab.com/gitlab-org/ai/lazy-mcp) — the GitLab project, published to npm as
+  `lazy-mcp`. See §Which Lazy MCP.
 - [repowise MCP guide](https://www.repowise.dev/guides/ai-context-mcp)
 - [Headroom README](https://github.com/headroomlabs-ai/headroom)
 - [Context Mode README and platform matrix](https://github.com/mksglu/context-mode)
