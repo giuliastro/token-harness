@@ -112,6 +112,19 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     fixture: 'tests/fixtures/rows/harnesstrim-claude-windows',
     verificationTier: 'config-only',
   },
+  {
+    harness: 'codex' as HarnessId,
+    harnessVersion: { minimum: '0.146.0', maximum: '0.146.0' },
+    provider: 'harnesstrim' as ProviderId,
+    providerVersion: '0.1.0',
+    platform: { os: 'windows', wsl: false, supported: true, limitation: null },
+    // The same shape as the Claude skills row, and for the same reason: the install writes skill
+    // files rather than a document this build parses, so the schema it depends on is the directory
+    // layout. A separate id because the directory is `.codex/skills` and the protected paths differ.
+    configSchema: 'codex-skills-directory',
+    fixture: 'tests/fixtures/rows/harnesstrim-codex-windows',
+    verificationTier: 'config-only',
+  },
 ];
 
 export type RowHarnessVerdict = 'in-row' | 'unknown-newer' | 'unknown-older' | 'below-range';

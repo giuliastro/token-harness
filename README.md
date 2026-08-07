@@ -97,6 +97,7 @@ names the recording it stands on:
 | --- | --- | --- | --- | --- |
 | RTK | Claude Code | Windows | rtk 0.44.0, Claude Code 2.1.220 | `canary` |
 | HarnessTrim | Claude Code | Windows | harnesstrim 0.1.0, Claude Code 2.1.220 | `config-only` |
+| HarnessTrim | Codex | Windows | harnesstrim 0.1.0, Codex 0.146.0 | `config-only` |
 
 Everything else is refused, and that is the design rather than a gap: `doctor` detects and reports on
 every supported platform, and only the *mutation* is narrower. An uncovered combination exits 9 and
@@ -107,9 +108,18 @@ What is not covered today, and why:
 - **macOS and Linux.** No row on either. The recordings a row needs are states of a real machine, and
   a fixture cannot be written from a machine nobody ran. On those platforms `plan` and `apply` refuse;
   install the provider with its own installer and Token Harness will detect, verify, and measure it.
-- **Codex and OpenCode.** Both providers are detected and adopted there, and neither is written:
-  RTK's plan builder produces a Claude-shaped hook list, and HarnessTrim's reviewed write set covers
-  Claude only. A row would admit a mutation that nothing proposes.
+- **OpenCode.** Both providers are detected and adopted there, and neither is written. RTK's plan
+  builder produces a Claude-shaped hook list; HarnessTrim's OpenCode installer writes a plugin
+  wrapper *and runs an npm install*, so its containment boundary would hold a `node_modules` tree —
+  a snapshot and rollback question that has to be settled before a row can admit it.
+- **RTK on Codex.** Not managed, and no row: RTK writes a Claude-shaped hook list and nothing else.
+
+  While OpenCode is uncovered, HarnessTrim's installs need the harness named:
+  `token-harness apply --yes --harness codex`. A provider plan refused on *any* combination is
+  dropped whole — the gate would rather propose nothing than half of a mutation no row admitted — so
+  a bare `apply` reaches RTK on Claude Code and reports the OpenCode refusal as a warning, leaving
+  HarnessTrim's covered installs untouched. Naming the harness narrows the resolution and the plan
+  goes through.
 - **A newer Claude Code.** The range is a single observed version. `2.1.221` reads `unknown-newer` and
   refuses rather than assuming it behaves like `2.1.220`.
 
