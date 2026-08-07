@@ -102,6 +102,20 @@ export interface DelegatedInstallReview {
   upstreamUninstallAvailable: boolean;
 }
 
+/**
+ * The reviews a provider carries, keyed by the harness each was performed against.
+ *
+ * One review per harness rather than one per provider, because a write set is about a harness: the
+ * same HarnessTrim release writes `.claude/skills/` on Claude Code and `.codex/skills/` on Codex,
+ * inside different containment boundaries, and protects different files from being touched. A
+ * single review could only ever describe one of them, which is why HarnessTrim planned nothing on
+ * Codex while its capability was assigned there.
+ *
+ * A harness absent from the map has no reviewed write set, and RFC 0002 §What this cannot detect
+ * makes that the end of the matter: a delegated install without one is not proposed.
+ */
+export type DelegatedInstallReviews = Readonly<Record<string, DelegatedInstallReview>>;
+
 export interface ProviderManifest {
   schemaVersion: typeof MANIFEST_SCHEMA_VERSION;
   id: ProviderId;
@@ -115,7 +129,7 @@ export interface ProviderManifest {
   harnesses: HarnessSupport[];
   installationChannels: InstallationChannel[];
   metrics: MetricsDeclaration;
-  delegatedInstallReview: DelegatedInstallReview | null;
+  delegatedInstallReviews: DelegatedInstallReviews | null;
 }
 
 /**

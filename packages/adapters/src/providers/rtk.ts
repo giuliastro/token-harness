@@ -239,7 +239,7 @@ const MANIFEST: ProviderManifest = {
     // location differs per platform; `rtkDatabasePath` is the single derivation.
     locations: ['<user data directory>/rtk/history.db'],
   },
-  delegatedInstallReview: null,
+  delegatedInstallReviews: null,
 };
 
 const TESTED_VERSIONS = { minimum: '0.40.0', maximum: '0.44.0' };

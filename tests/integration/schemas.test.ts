@@ -52,7 +52,8 @@ describe('schema fixtures', () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     assert.equal(parsed.value.id, 'rtk');
-    assert.equal(parsed.value.delegatedInstallReview, null);
+    // RTK carries no delegated install at all, so the map itself is null rather than empty.
+    assert.equal(parsed.value.delegatedInstallReviews, null);
   });
 
   it('harnesstrim provider manifest carries its delegated-install review', () => {
@@ -62,8 +63,11 @@ describe('schema fixtures', () => {
     if (!parsed.ok) return;
     // RFC 0002 §What this cannot detect: the review is recorded with the
     // upstream version it was performed against.
-    assert.equal(parsed.value.delegatedInstallReview?.upstreamVersion, '0.0.5');
-    assert.equal(parsed.value.delegatedInstallReview?.upstreamUninstallAvailable, false);
+    assert.equal(parsed.value.delegatedInstallReviews?.['claude']?.upstreamVersion, '0.0.5');
+    assert.equal(
+      parsed.value.delegatedInstallReviews?.['claude']?.upstreamUninstallAvailable,
+      false,
+    );
   });
 
   it('a manifest from a future build is refused, not partially read', () => {

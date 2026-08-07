@@ -46,7 +46,15 @@ const CLAUDE = harnessId('claude');
 const HERMES = harnessId('hermes');
 const CODEX = harnessId('codex');
 
-const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
+/**
+ * The release whose skills-only install was reviewed on Claude Code and on Codex.
+ *
+ * One constant for both, because it is one release and one set of files: the Codex install writes
+ * the same seven artifacts with the same digests into a different directory.
+ */
+const SKILLS_UPSTREAM = '0.0.7';
+
+const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'compact-handoff/SKILL.md':
     'sha256:0efbf35581c559359e755b204778b64a289dab4d20dadc1cba3d5b5c995b5f01',
   'debug-log-slim/SKILL.md':
@@ -62,6 +70,10 @@ const CLAUDE_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'scaffold-fast/SKILL.md':
     'sha256:1a18d52c4d335fbd3f74e2559bc20d6346193a40eef7b85149f51f44f697d182',
 };
+
+/** The seven artifacts, in the order the digest table lists them. */
+const SKILL_ARTIFACTS = Object.keys(SKILL_ARTIFACT_DIGESTS);
+
 const OPENCODE = harnessId('opencode');
 
 /**
@@ -206,13 +218,56 @@ const MANIFEST: ProviderManifest = {
     // harness the registry does not know.
     locations: ['.harnesstrim/metrics.jsonl', '.hermes/harnesstrim-metrics.jsonl'],
   },
-  delegatedInstallReview: {
-    upstreamVersion: '0.0.7',
-    reviewedWriteSet: [
-      ...Object.keys(CLAUDE_ARTIFACT_DIGESTS).map((path) => `.claude/skills/${path}`),
-    ],
-    containmentBoundary: ['.claude', 'CLAUDE.md'],
-    upstreamUninstallAvailable: true,
+  /**
+   * One review per harness — PLAN §15 item 46b.
+   *
+   * Codex was observed at `0.1.0`: `harnesstrim install codex <dir> --apply --no-instructions`
+   * writes the same seven skill artifacts as the Claude invocation, byte for byte — the digests
+   * below are shared because the files are the same files — under `.codex/skills/` instead, and
+   * skips `AGENTS.md` exactly as the Claude one skips `CLAUDE.md`. What differs is the boundary and
+   * the protected paths, which is precisely why one review could not describe both.
+   *
+   * OpenCode is absent on purpose. Its installer writes `.opencode/plugin/harnesstrim.ts` and
+   * `.opencode/package.json` *and runs an npm install*, so the containment boundary would hold a
+   * `node_modules` tree: a snapshot question, not another entry in this map.
+   */
+  delegatedInstallReviews: {
+    claude: {
+      upstreamVersion: SKILLS_UPSTREAM,
+      reviewedWriteSet: SKILL_ARTIFACTS.map((path) => `.claude/skills/${path}`),
+      containmentBoundary: ['.claude', 'CLAUDE.md'],
+      upstreamUninstallAvailable: true,
+    },
+    codex: {
+      upstreamVersion: SKILLS_UPSTREAM,
+      reviewedWriteSet: SKILL_ARTIFACTS.map((path) => `.codex/skills/${path}`),
+      containmentBoundary: ['.codex', 'AGENTS.md'],
+      upstreamUninstallAvailable: true,
+    },
+  },
+};
+
+/**
+ * Where each harness's skills-only install writes, and what it must not touch.
+ *
+ * The flags differ by harness and both were read from `harnesstrim --help`: Claude's hook is opt-out
+ * (`--no-hook`), Codex's is opt-in (`--hook`), so the Codex invocation omits it rather than negating
+ * it. The protected paths are the two files each installer reports skipping.
+ */
+const SKILLS_INSTALL: Readonly<
+  Record<string, { directory: string; instructions: string; hook: string; args: string[] }>
+> = {
+  claude: {
+    directory: '.claude',
+    instructions: 'CLAUDE.md',
+    hook: 'settings.json',
+    args: ['--no-hook', '--no-instructions'],
+  },
+  codex: {
+    directory: '.codex',
+    instructions: 'AGENTS.md',
+    hook: 'hooks.json',
+    args: ['--no-instructions'],
   },
 };
 
@@ -461,8 +516,8 @@ function writeSetStillReviewed(
   capabilities: HarnessTrimCapabilities | null,
   harness: HarnessId,
 ): boolean {
-  const review = MANIFEST.delegatedInstallReview;
-  if (review === null || capabilities === null) return false;
+  const review = MANIFEST.delegatedInstallReviews?.[harness];
+  if (review === undefined || capabilities === null) return false;
   const observed = capabilities.harnesses[harness];
   if (observed === undefined) return false;
 
@@ -528,30 +583,32 @@ export function compareCapabilities(
     }
   }
 
-  const review = manifest.delegatedInstallReview;
-  if (review === null) return warnings;
-  const claude = capabilities.harnesses['claude'];
-  if (claude === undefined) return warnings;
+  // Every harness with a reviewed write set, not Claude alone: the check is about whether a review
+  // still describes what the installed build writes, and there is now more than one review.
+  for (const [harness, review] of Object.entries(manifest.delegatedInstallReviews ?? {})) {
+    const observed = capabilities.harnesses[harness];
+    if (observed === undefined) continue;
 
-  const declared = claude.writeSet.map(writeSetPath);
-  for (const reviewed of review.reviewedWriteSet) {
-    if (declared.some((entry) => coveredBy(reviewed, entry))) continue;
-    warnings.push(
-      driftWarning(
-        `the reviewed write set records ${reviewed} at ${review.upstreamVersion}, but \`harnesstrim capabilities\` (${capabilities.version}) declares nothing covering it (${declared.length === 0 ? 'nothing' : declared.join(', ')})`,
-        `Re-review the write set at the installed version before delegating another install`,
-      ),
-    );
-  }
-  const boundary = review.containmentBoundary.map(writeSetPath);
-  for (const entry of declared) {
-    if (boundary.some((prefix) => coveredBy(entry, prefix))) continue;
-    warnings.push(
-      driftWarning(
-        `\`harnesstrim capabilities\` (${capabilities.version}) declares ${entry} for claude, which sits outside the containment boundary recorded at ${review.upstreamVersion} (${boundary.join(', ')})`,
-        'Re-review the write set: rollback restores the boundary, and a path it does not cover would survive a rollback',
-      ),
-    );
+    const declared = observed.writeSet.map(writeSetPath);
+    for (const reviewed of review.reviewedWriteSet) {
+      if (declared.some((entry) => coveredBy(reviewed, entry))) continue;
+      warnings.push(
+        driftWarning(
+          `the reviewed ${harness} write set records ${reviewed} at ${review.upstreamVersion}, but \`harnesstrim capabilities\` (${capabilities.version}) declares nothing covering it (${declared.length === 0 ? 'nothing' : declared.join(', ')})`,
+          `Re-review the write set at the installed version before delegating another install`,
+        ),
+      );
+    }
+    const boundary = review.containmentBoundary.map(writeSetPath);
+    for (const entry of declared) {
+      if (boundary.some((prefix) => coveredBy(entry, prefix))) continue;
+      warnings.push(
+        driftWarning(
+          `\`harnesstrim capabilities\` (${capabilities.version}) declares ${entry} for ${harness}, which sits outside the containment boundary recorded at ${review.upstreamVersion} (${boundary.join(', ')})`,
+          'Re-review the write set: rollback restores the boundary, and a path it does not cover would survive a rollback',
+        ),
+      );
+    }
   }
   return warnings;
 }
@@ -1320,35 +1377,68 @@ async function collectMetrics(
  * Claude skills while skipping both output-reduction paths. The reviewed files are exact, and the
  * executor rejects any hook or instruction change before restoring its snapshot.
  */
-async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
-  const claudeDirectory = context.fs.join(context.projectRoot, '.claude');
-  const skillsDirectory = context.fs.join(claudeDirectory, 'skills');
-  const expectedArtifacts = Object.entries(CLAUDE_ARTIFACT_DIGESTS).map(([path, digest]) => ({
-    path: context.fs.join(skillsDirectory, ...path.split('/')),
+/** The artifacts the skills-only install writes for one harness, with their reviewed digests. */
+function skillArtifacts(
+  context: ProviderContext,
+  harness: string,
+): { path: string; digest: string }[] {
+  const install = SKILLS_INSTALL[harness];
+  if (install === undefined) return [];
+  const skills = context.fs.join(context.projectRoot, install.directory, 'skills');
+  return Object.entries(SKILL_ARTIFACT_DIGESTS).map(([path, digest]) => ({
+    path: context.fs.join(skills, ...path.split('/')),
     digest,
   }));
+}
 
-  if (!request.harnesses.some((harness) => harness.id === CLAUDE)) {
+/**
+ * One delegated install per harness with a reviewed write set — PLAN §15 item 46b.
+ *
+ * This used to be Claude alone, hard-coded from the directory up. HarnessTrim's capability is
+ * assigned on Codex too, and the plan answered with nothing: not because the install was unsafe but
+ * because the function had one harness written into it. Now the reviews decide, and a harness
+ * without one is simply not a target.
+ *
+ * The reviewed state is asked of the build, per harness: a declared write set that still sits inside
+ * the reviewed boundary and still covers every reviewed path is one the review speaks for. A build
+ * that cannot answer falls back to the exact reviewed version, which is the conservative direction.
+ */
+async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
+  const reviews = MANIFEST.delegatedInstallReviews ?? {};
+  const targets = request.harnesses
+    .map((harness) => harness.id)
+    .filter((harness) => reviews[harness] !== undefined && SKILLS_INSTALL[harness] !== undefined);
+
+  if (targets.length === 0) {
     return { providerId: HARNESSTRIM, desiredState: request.desiredState, actions: [] };
   }
 
   if (request.desiredState === 'absent') {
-    const actions: RemoveOwnedChangeAction[] = expectedArtifacts.map((artifact) => ({
-      kind: 'remove-owned-change',
-      id: `harnesstrim-claude-skill-remove-${digestText(artifact.path).slice(7, 15)}`,
-      riskClass: 'reversible',
-      requiresNetwork: false,
-      requiresElevation: false,
-      affectedPaths: [artifact.path],
-      affectedProcesses: [],
-      preconditions: ['the HarnessTrim skill still matches the reviewed 0.0.7 artifact'],
-      postconditions: ['the owned HarnessTrim skill is absent'],
-      rollbackData: 'file-snapshot',
-      explanation: `Remove the owned HarnessTrim Claude skill ${context.fs.basename(context.fs.dirname(artifact.path))}`,
-      path: artifact.path,
-      reverses: `harnesstrim-claude-skills-${digestText(context.projectRoot).slice(7, 15)}`,
-      target: { kind: 'owned-file', path: artifact.path, digest: artifact.digest, mode: null },
-    }));
+    const actions: RemoveOwnedChangeAction[] = targets.flatMap((harness) =>
+      skillArtifacts(context, harness).map((artifact) => ({
+        kind: 'remove-owned-change' as const,
+        id: `harnesstrim-${harness}-skill-remove-${digestText(artifact.path).slice(7, 15)}`,
+        riskClass: 'reversible' as const,
+        requiresNetwork: false,
+        requiresElevation: false,
+        affectedPaths: [artifact.path],
+        affectedProcesses: [],
+        preconditions: [
+          `the HarnessTrim skill still matches the reviewed ${SKILLS_UPSTREAM} artifact`,
+        ],
+        postconditions: ['the owned HarnessTrim skill is absent'],
+        rollbackData: 'file-snapshot' as const,
+        explanation: `Remove the owned HarnessTrim ${harness} skill ${context.fs.basename(context.fs.dirname(artifact.path))}`,
+        path: artifact.path,
+        reverses: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
+        target: {
+          kind: 'owned-file' as const,
+          path: artifact.path,
+          digest: artifact.digest,
+          mode: null,
+        },
+      })),
+    );
     return { providerId: HARNESSTRIM, desiredState: 'absent', actions };
   }
 
@@ -1357,56 +1447,57 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
   }
 
-  /**
-   * Ask the build what it writes; fall back to the version string when it cannot answer.
-   *
-   * `writeSetStillReviewed` says why the question moved: the review is about paths, and the exact
-   * `0.0.7` equality made every later build plan nothing without saying so.
-   */
   const observed = await probeCapabilities(context);
-  const reviewed =
-    observed.capabilities === null
-      ? installed.version === TESTED_UPSTREAM
-      : writeSetStillReviewed(observed.capabilities, CLAUDE);
-  if (!reviewed) {
-    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
-  }
-  const review = MANIFEST.delegatedInstallReview;
-  if (review === null) throw new Error('HarnessTrim delegated-install review is missing');
+  const actions: DelegatedProviderInstallAction[] = [];
 
-  const action: DelegatedProviderInstallAction = {
-    kind: 'delegated-provider-install',
-    id: `harnesstrim-claude-skills-${digestText(context.projectRoot).slice(7, 15)}`,
-    riskClass: 'delegated',
-    requiresNetwork: false,
-    requiresElevation: false,
-    affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
-    affectedProcesses: ['harnesstrim'],
-    preconditions: [
-      'harnesstrim 0.0.7 is installed and on PATH',
-      'the reviewed installer writes only the declared Claude skill artifacts',
-    ],
-    postconditions: [
-      'HarnessTrim Claude skills match the reviewed 0.0.7 artifacts',
-      'no HarnessTrim hook or reduce-pipe instruction was added',
-    ],
-    rollbackData: 'directory-snapshot',
-    explanation: 'Install HarnessTrim Claude skills without a hook or reduce-pipe instruction',
-    executable: 'harnesstrim',
-    args: ['install', 'claude', context.projectRoot, '--apply', '--no-hook', '--no-instructions'],
-    containmentBoundary: review.containmentBoundary.map((path) =>
-      context.fs.join(context.projectRoot, path),
-    ),
-    expectedArtifacts,
-    protectedPaths: [
-      context.fs.join(claudeDirectory, 'settings.json'),
-      context.fs.join(context.projectRoot, 'CLAUDE.md'),
-    ],
-    rollbackStrategy: 'restore-snapshot',
-    snapshotSizeCapBytes: 1_048_576,
-    upstreamUninstallAvailable: review.upstreamUninstallAvailable,
-  };
-  return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [action] };
+  for (const harness of targets) {
+    const review = reviews[harness];
+    const install = SKILLS_INSTALL[harness];
+    if (review === undefined || install === undefined) continue;
+
+    const reviewed =
+      observed.capabilities === null
+        ? installed.version === review.upstreamVersion
+        : writeSetStillReviewed(observed.capabilities, harnessId(harness));
+    if (!reviewed) continue;
+
+    const expectedArtifacts = skillArtifacts(context, harness);
+    actions.push({
+      kind: 'delegated-provider-install',
+      id: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
+      riskClass: 'delegated',
+      requiresNetwork: false,
+      requiresElevation: false,
+      affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
+      affectedProcesses: ['harnesstrim'],
+      preconditions: [
+        'harnesstrim is installed, on PATH, and declares the reviewed write set',
+        `the reviewed installer writes only the declared ${harness} skill artifacts`,
+      ],
+      postconditions: [
+        `HarnessTrim ${harness} skills match the reviewed ${review.upstreamVersion} artifacts`,
+        'no HarnessTrim hook or reduce-pipe instruction was added',
+      ],
+      rollbackData: 'directory-snapshot',
+      explanation: `Install HarnessTrim ${harness} skills without a hook or reduce-pipe instruction`,
+      executable: 'harnesstrim',
+      args: ['install', harness, context.projectRoot, '--apply', ...install.args],
+      containmentBoundary: review.containmentBoundary.map((path) =>
+        context.fs.join(context.projectRoot, path),
+      ),
+      expectedArtifacts,
+      // The two files each installer reports skipping. Named here because they must not appear.
+      protectedPaths: [
+        context.fs.join(context.projectRoot, install.directory, install.hook),
+        context.fs.join(context.projectRoot, install.instructions),
+      ],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1_048_576,
+      upstreamUninstallAvailable: review.upstreamUninstallAvailable,
+    });
+  }
+
+  return { providerId: HARNESSTRIM, desiredState: 'configured', actions };
 }
 
 export const harnesstrimAdapter: ProviderAdapter = {

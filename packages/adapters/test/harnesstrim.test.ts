@@ -440,7 +440,7 @@ describe('the machine-readable capability declaration (item 43a)', () => {
       'CLAUDE.md (marker-guarded snippet)',
     ];
     const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
-    const warning = warnings.find((entry) => /reviewed write set/.test(entry.message));
+    const warning = warnings.find((entry) => /reviewed claude write set/.test(entry.message));
     assert.ok(warning);
     assert.match(warning.message, /\.claude\/skills\/compact-handoff\/SKILL\.md/);
     assert.match(

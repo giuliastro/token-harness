@@ -84,7 +84,7 @@ describe('the harnesstrim capabilities fixture', () => {
   });
 
   it('declares a claude write set that covers every reviewed path and sits in the boundary', () => {
-    const review = harnesstrimAdapter.manifest.delegatedInstallReview;
+    const review = harnesstrimAdapter.manifest.delegatedInstallReviews?.['claude'];
     assert.ok(review);
     const claude = FIXTURE.harnesses['claude'];
     assert.ok(claude);
@@ -115,7 +115,7 @@ describe('the harnesstrim capabilities fixture', () => {
     // The skills-only invocation writes exactly the reviewed write set. The fixture is the
     // machine-readable version of that declaration at the recorded upstream version, so the two
     // must name the same paths — "declaration against what an apply actually wrote".
-    const review = harnesstrimAdapter.manifest.delegatedInstallReview;
+    const review = harnesstrimAdapter.manifest.delegatedInstallReviews?.['claude'];
     assert.ok(review);
 
     const runner = new FakeProcessRunner()
