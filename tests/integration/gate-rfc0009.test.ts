@@ -29,7 +29,7 @@ import type {
 import { EXIT_CODES } from '@token-harness/core';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { fakeResolve, nodeVersionRows, rowFor, NODE_VERSION } from '@token-harness/tests';
-import { run } from 'token-harness';
+import { planExitCode, run } from 'token-harness';
 
 const FACTS: PlatformFacts = {
   os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
@@ -285,6 +285,41 @@ describe('doctor and the row table', () => {
         ?.warnings.some((entry) => entry.code === 'no-compatibility-row'),
       false,
       'a covering row must silence the warning',
+    );
+  });
+});
+
+describe('the exit code when only part of the machine is covered', () => {
+  /**
+   * The mixed case cannot be built in the harness above: it needs two installed providers, one
+   * admitted with actions and one refused, and `fakeResolve` resolves `rtk` and `claude` alone. So
+   * the decision is tested where it lives.
+   *
+   * On the development machine both directions were run for real. With an isolated home:
+   * `plan` produced one action and two refusals and exited 0 with the refusals as warnings; in the
+   * project, with nothing to install, the same two refusals exited 9 as errors.
+   */
+  it('refuses only when the refusal is the whole answer', () => {
+    // Nothing else to offer: the refusal is the outcome.
+    assert.equal(
+      planExitCode({ blocked: 2, actions: 0, conflicts: 0 }),
+      EXIT_CODES['unsupported-environment'],
+    );
+    // A real plan beside an uncovered combination. RFC 0006: "A supported configuration must be
+    // able to exit 0."
+    assert.equal(planExitCode({ blocked: 2, actions: 1, conflicts: 0 }), EXIT_CODES.ok);
+  });
+
+  it('keeps a hard conflict distinct from a refusal', () => {
+    assert.equal(
+      planExitCode({ blocked: 0, actions: 0, conflicts: 1 }),
+      EXIT_CODES['blocked-by-conflict'],
+    );
+    // A refusal that empties the plan outranks a conflict: "cannot do this safely" is not a
+    // dispute the user can resolve by editing configuration.
+    assert.equal(
+      planExitCode({ blocked: 1, actions: 0, conflicts: 1 }),
+      EXIT_CODES['unsupported-environment'],
     );
   });
 });

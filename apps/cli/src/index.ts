@@ -22,6 +22,6 @@ export { usageText } from './usage.js';
 export { TOOL_VERSION } from './version.js';
 export type { CommandContext } from './commands/context.js';
 export { runDoctor } from './commands/doctor.js';
-export { runPlan } from './commands/plan.js';
+export { runPlan, planExitCode } from './commands/plan.js';
 export { runStatus } from './commands/status.js';
 export * from './render/index.js';

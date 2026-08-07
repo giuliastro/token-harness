@@ -43,6 +43,7 @@ import {
   type ProfileId,
   type ProviderId,
   type RecordedVersions,
+  type ExitCode,
   type ResolverProvider,
 } from '@token-harness/core';
 
@@ -337,13 +338,30 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
+  /**
+   * A refusal is only an error when it is the whole answer.
+   *
+   * RFC 0006 §Exit codes: "A supported configuration must be able to exit 0. A declared limitation
+   * is not a problem, and reporting it as one is the fastest way to teach users to ignore the exit
+   * code." Until rows shipped, every blocked combination *was* the whole answer — the comment on the
+   * exit code below still said "both leave the plan empty", and it was true. It stopped being true
+   * with the first row: a machine can now have RTK and HarnessTrim installable on Claude Code and
+   * uncovered on Codex and OpenCode at the same time.
+   *
+   * On this development machine that meant `plan` exiting 9 with two refusals while holding a plan
+   * that installs both providers — the covered combination unreachable because two nobody asked for
+   * are not covered. So a refusal alongside actions is a warning: the plan is real, and what it
+   * cannot reach is named. With no actions the refusal is the outcome, and it stays an error.
+   */
+  const refusalIsTheOutcome = actions.length === 0;
+
   for (const entry of blocked) {
     // RFC 0009 §Compatibility matrix: a provider/harness/version combination with no row is
     // refused by plan, which must name the missing config schema or provider fixture. The
     // verdict tells the reader how far the observed version sits from the nearest row.
     diagnostics.push(
       diagnostic({
-        severity: 'error',
+        severity: refusalIsTheOutcome ? 'error' : 'warning',
         code: 'managed-mutation-blocked',
         message:
           `plan refuses managed mutation of ${entry.harness} by ${entry.provider}` +
@@ -413,17 +431,11 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
   const persisted = await persist(context, computed);
   const report: PlanReport = { ...computed.report, persisted };
 
-  // RFC 0006 §Exit codes: 4 is "planning succeeded but a hard conflict prevents apply";
-  // 9 (unsupported-environment) is the refused managed mutation — the combination a row has
-  // not admitted, RFC 0009. Both leave the plan empty, but they are not the same outcome:
-  // "cannot do this safely" is an admission the tooling does not cover, not a dispute between
-  // scopes a user can resolve by editing configuration.
-  const exitCode =
-    computed.blocked.length > 0
-      ? EXIT_CODES['unsupported-environment']
-      : report.conflicts.length > 0
-        ? EXIT_CODES['blocked-by-conflict']
-        : EXIT_CODES.ok;
+  const exitCode = planExitCode({
+    blocked: computed.blocked.length,
+    actions: report.actions.length,
+    conflicts: report.conflicts.length,
+  });
 
   return commandResult<PlanReport>({
     command: 'plan',
@@ -431,6 +443,35 @@ export async function runPlan(context: CommandContext): Promise<CommandResult<Pl
     data: report,
     diagnostics: computed.diagnostics,
   });
+}
+
+/**
+ * The exit code a computed plan deserves — RFC 0006 §Exit codes.
+ *
+ * 4 is "planning succeeded but a hard conflict prevents apply"; 9 (unsupported-environment) is the
+ * refused managed mutation, the combination a row has not admitted (RFC 0009). They are not the same
+ * outcome: "cannot do this safely" is an admission the tooling does not cover, not a dispute between
+ * scopes a user can resolve by editing configuration.
+ *
+ * The 9 is conditional on the plan having nothing else to offer. It used to fire on any refusal,
+ * which was right while the row table was empty and every refusal emptied the plan. With rows
+ * shipped a plan can hold actions *and* refusals at once — on the development machine, an install
+ * of both providers on Claude Code beside two uncovered combinations on Codex and OpenCode — and
+ * exiting 9 there reports a working install as an unsupported environment. RFC 0006 names that
+ * failure directly: "A supported configuration must be able to exit 0. A declared limitation is not
+ * a problem, and reporting it as one is the fastest way to teach users to ignore the exit code."
+ *
+ * Extracted rather than left inline because the mixed case needs two installed providers to
+ * reproduce, and the integration harness resolves one.
+ */
+export function planExitCode(counts: {
+  blocked: number;
+  actions: number;
+  conflicts: number;
+}): ExitCode {
+  if (counts.blocked > 0 && counts.actions === 0) return EXIT_CODES['unsupported-environment'];
+  if (counts.conflicts > 0) return EXIT_CODES['blocked-by-conflict'];
+  return EXIT_CODES.ok;
 }
 
 /** The versions a plan was computed against, for `apply`'s revalidation. */

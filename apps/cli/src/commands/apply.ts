@@ -140,11 +140,20 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
   const computed = await computePlan(context);
   diagnostics.push(...computed.diagnostics);
 
-  if (computed.blocked.length > 0) {
-    // RFC 0009: a refused managed mutation is "cannot do this safely", not "nothing to do".
-    // Checked before `--plan` loads or executes stored actions: an uncovered combination must
-    // not silently drop a recomputed plan (exit 0) or run an approved one whose environment no
-    // row has ever admitted.
+  if (computed.blocked.length > 0 && computed.report.actions.length === 0) {
+    /**
+     * RFC 0009: a refused managed mutation is "cannot do this safely", not "nothing to do".
+     * Checked before `--plan` loads or executes stored actions: an uncovered combination must not
+     * silently drop a recomputed plan (exit 0) or run an approved one whose environment no row has
+     * ever admitted.
+     *
+     * The refusal is now conditional on there being nothing else to apply, matching `plan`. It used
+     * to fire on any blocked combination, and with rows shipped that made a covered install
+     * unreachable because an unrelated one is not covered: `plan` would show the actions and
+     * `apply` would refuse them. Nothing is loosened — a blocked combination still produces no
+     * action, so applying what remains applies exactly what the plan displayed and nothing a row
+     * has not admitted.
+     */
     return finish(
       'rejected',
       EXIT_CODES['unsupported-environment'],
