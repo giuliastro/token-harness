@@ -130,9 +130,12 @@ is exactly the drift generating the tables above exists to prevent.
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
-- **Two compatibility rows ship, both on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
+- **Three compatibility rows ship, all on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
   `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
-  (`config-only`). Each names a recording under `tests/fixtures/rows/`. macOS and Linux have no row:
+  (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` / Codex `0.146.0` (`config-only`).
+  Each names a recording under `tests/fixtures/rows/`. The Codex row is reachable only with
+  `--harness codex`: HarnessTrim's OpenCode combination has no row, and a provider plan refused on
+  any combination is dropped whole, so a bare `apply` leaves its covered installs alone. macOS and Linux have no row:
   a row is a state of a real machine and no such machine was available, so `plan` and `apply` refuse
   there while detection, verification, and measurement continue to work. Codex and OpenCode have no
   row either, for a different reason — nothing proposes a mutation on them, because RTK's plan
