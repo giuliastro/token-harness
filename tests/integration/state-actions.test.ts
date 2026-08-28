@@ -925,6 +925,81 @@ describe('remove-owned-change', () => {
     assert.deepEqual(readFileSync(target), original);
   });
 
+  it('removes only the YAML array entry Token Harness owns', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    const original =
+      'theme: dark\r\nplugins:\r\n  enabled:\r\n    - security-guidance\r\n';
+    writeFileSync(target, original);
+
+    const applied = await applyAction(
+      {
+        ...BASE,
+        id: 'y1',
+        kind: 'merge-yaml',
+        affectedPaths: [target],
+        path: target,
+        ownedPointers: ['plugins.enabled'],
+        operations: [
+          {
+            kind: 'append-string',
+            pointer: 'plugins.enabled',
+            value: 'harnesstrim',
+            expectedValueDigest: null,
+            expectedLineDigest: null,
+          },
+        ],
+        createIfMissing: false,
+      },
+      h.context,
+    );
+    const owned = applied.ownership[0];
+    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+
+    const outcome = await applyAction(removal(owned), h.context);
+    assert.equal(outcome.status, 'applied');
+    assert.deepEqual(readFileSync(target, 'utf8'), original);
+  });
+
+  it('refuses to remove an owned YAML entry after the user edits its line', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, 'plugins:\n  enabled:\n');
+
+    const applied = await applyAction(
+      {
+        ...BASE,
+        id: 'y1',
+        kind: 'merge-yaml',
+        affectedPaths: [target],
+        path: target,
+        ownedPointers: ['plugins.enabled'],
+        operations: [
+          {
+            kind: 'append-string',
+            pointer: 'plugins.enabled',
+            value: 'harnesstrim',
+            expectedValueDigest: null,
+            expectedLineDigest: null,
+          },
+        ],
+        createIfMissing: false,
+      },
+      h.context,
+    );
+    const owned = applied.ownership[0];
+    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+    writeFileSync(
+      target,
+      readFileSync(target, 'utf8').replace('    - harnesstrim', '    - harnesstrim # user'),
+    );
+
+    const outcome = await applyAction(removal(owned), h.context);
+    assert.equal(outcome.status, 'refused');
+    assert.equal(outcome.diagnostics[0]?.code, 'owned-artifact-modified');
+    assert.ok(readFileSync(target, 'utf8').includes('# user'));
+  });
+
   it('refuses to remove an owned JSON entry the user edited', async () => {
     const h = harness();
     const target = join(h.project, 'settings.json');
