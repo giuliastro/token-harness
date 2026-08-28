@@ -15,6 +15,13 @@ export interface YamlStringArrayAppendOperation {
    * Present for parity with persisted-plan preconditions even though the initial consumer only adds.
    */
   readonly expectedValueDigest: string | null;
+  /**
+   * Exact rendered-line digest recorded by the previous ownership receipt.
+   *
+   * Null when no owned entry is expected. This catches a user adding a YAML comment or changing
+   * indentation even when the scalar value itself is unchanged.
+   */
+  readonly expectedLineDigest: string | null;
 }
 
 export type YamlMergeOperation = YamlStringArrayAppendOperation;
