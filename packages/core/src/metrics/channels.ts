@@ -128,7 +128,10 @@ function operationCount(events: readonly OptimizationEvent[]): number {
   return new Set(events.map((event) => event.context.operationId)).size;
 }
 
-function sameOwners(events: readonly OptimizationEvent[], expected: readonly ProviderId[]): boolean {
+function sameOwners(
+  events: readonly OptimizationEvent[],
+  expected: readonly ProviderId[],
+): boolean {
   const observed = new Set(events.map((event) => event.provider.id));
   const wanted = new Set<string>(expected);
   if (observed.size !== wanted.size) return false;
