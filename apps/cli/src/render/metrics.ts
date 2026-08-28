@@ -80,6 +80,39 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
   lines.push(...renderClassRows(report));
   lines.push('');
 
+  if (report.channels !== undefined) {
+    lines.push('By channel (raw to final)');
+    if (report.channels.length === 0) {
+      lines.push('  no applied pipeline channels');
+    } else {
+      for (const channel of report.channels) {
+        lines.push(
+          `  ${channel.harness} ${channel.toolFamily} ${channel.capability}`,
+        );
+        const owners = channel.owners.join(' -> ');
+        if (channel.status === 'measured') {
+          lines.push(`    ${owners} - measured`);
+          for (const measurement of channel.classes) {
+            if (measurement.saved === null || measurement.unit === null) continue;
+            lines.push(
+              `    ${CLASS_LABELS[measurement.class]}: saved ${formatCount(measurement.saved)} ` +
+                `${measurement.unit} across ${formatCount(measurement.operations)} operation` +
+                `${measurement.operations === 1 ? '' : 's'}`,
+            );
+          }
+          if (channel.note !== null) lines.push(`    note: ${channel.note}`);
+        } else {
+          lines.push(`    ${owners} - ${channel.status}`);
+          if (channel.note !== null) lines.push(`    ${channel.note}`);
+          if (channel.incomparableReasons.length > 0) {
+            lines.push(`    reasons: ${channel.incomparableReasons.join(', ')}`);
+          }
+        }
+      }
+    }
+    lines.push('');
+  }
+
   lines.push('By provider (marginal)');
   if (report.providers.length === 0) {
     lines.push('  no provider reported a measurable saving in this window');
