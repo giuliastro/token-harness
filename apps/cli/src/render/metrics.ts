@@ -141,12 +141,7 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
         ),
       );
     } else {
-      lines.push(
-        ...wrap(
-          `${report.pipelineTotal.status} - ${report.pipelineTotal.note}`,
-          2,
-        ),
-      );
+      lines.push(...wrap(`${report.pipelineTotal.status} - ${report.pipelineTotal.note}`, 2));
       if (report.pipelineTotal.reason !== null) {
         lines.push(...wrap(`reason: ${report.pipelineTotal.reason}`, 2));
       }
