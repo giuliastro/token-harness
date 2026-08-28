@@ -96,7 +96,12 @@ export interface ProviderUpdateRow {
     /** Nothing to update: `update` does not install what was never there. */
     | 'not-installed'
     /** The provider declares no channel for this platform. */
-    | 'no-channel';
+    | 'no-channel'
+    /**
+     * A newer version exists, but this provider is managed by Token Harness on at least one
+     * harness and no compatibility row admits that target version there.
+     */
+    | 'blocked-unreviewed';
   /** The version the pin names, when `verdict` is `pinned`. */
   pin: string | null;
 }
