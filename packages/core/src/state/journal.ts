@@ -25,6 +25,7 @@ import type { PlannedActionKind } from '../domain/actions.js';
 import type { HarnessId, ProviderId } from '../domain/ids.js';
 import type { Diagnostic } from '../domain/diagnostics.js';
 import type { FileSnapshot, OwnedArtifact } from '../domain/ownership.js';
+import type { ResolvedCapability } from '../domain/capabilities.js';
 
 import type { FileSystemPort } from './filesystem.js';
 import type { ActionStatus } from './actions.js';
@@ -46,6 +47,18 @@ export const JOURNAL_RETENTION_COUNT = 20;
 export interface ManagedIntegration {
   providerId: ProviderId;
   harnessId: HarnessId;
+}
+
+/**
+ * The resolved pipeline an apply committed.
+ *
+ * This belongs in the receipt rather than only in a stored plan: direct `apply --yes` computes a
+ * plan in memory and is not required to persist that plan file. Status still needs an immutable
+ * record of what was actually applied.
+ */
+export interface AppliedPipelineSnapshot {
+  pipelineId: string;
+  owners: ResolvedCapability[];
 }
 
 export type TransactionOutcomeKind =
@@ -95,6 +108,11 @@ export interface TransactionJournal {
    * never as evidence that a configured provider is managed.
    */
   managedIntegrations?: ManagedIntegration[];
+  /**
+   * Pipeline state committed by this transaction. Optional for pre-0.2 journals and for mutations
+   * such as update/uninstall that do not establish a new pipeline topology.
+   */
+  appliedPipeline?: AppliedPipelineSnapshot;
   /** RFC 0004 §Backup policy: a pinned transaction is exempt from both retention limits. */
   pinned: boolean;
   diagnostics: Diagnostic[];
