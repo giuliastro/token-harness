@@ -329,7 +329,9 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
 
   const operations = realized + bypassed;
   const channels =
-    input.channels === undefined ? undefined : aggregateChannelMetrics(input.channels, input.events);
+    input.channels === undefined
+      ? undefined
+      : aggregateChannelMetrics(input.channels, input.events);
 
   return {
     windowStart: input.windowStart,
