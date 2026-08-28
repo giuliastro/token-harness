@@ -313,6 +313,14 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     projectRoot: context.projectRoot,
     actions,
     managedIntegrations: computed.managedIntegrations,
+    ...(computed.report.pipelineId === null
+      ? {}
+      : {
+          appliedPipeline: {
+            pipelineId: computed.report.pipelineId,
+            owners: computed.report.ownership,
+          },
+        }),
     fs,
     snapshots: creation.store,
     journal,
