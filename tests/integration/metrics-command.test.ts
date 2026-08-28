@@ -53,6 +53,7 @@ function event(overrides: {
   afterTokens?: number;
   changed?: boolean;
   projectId?: string;
+  harness?: string;
 }): OptimizationEvent {
   const beforeTokens = overrides.beforeTokens ?? 100;
   const afterTokens = overrides.afterTokens ?? 40;
@@ -63,7 +64,7 @@ function event(overrides: {
     provider: { id: 'rtk', version: '0.42.0' },
     context: {
       projectId: overrides.projectId ?? 'p_1',
-      harnessId: 'claude',
+      harnessId: overrides.harness ?? 'claude',
       sessionId: null,
       operationId: overrides.id,
       pipelineId: null,
@@ -253,6 +254,26 @@ describe('the project scope', () => {
     );
     const envelope = JSON.parse(stdout) as CliEnvelope<MetricsReport>;
     assert.ok(envelope.diagnostics.some((entry) => entry.code === 'metrics-not-project-scoped'));
+  });
+});
+
+describe('the harness scope', () => {
+  const timestamp = '2026-07-30T10:00:00.000Z';
+
+  it('passes --harness through to the metrics store query', async () => {
+    const { report } = await runScopedMetrics(
+      ['metrics', '--json', '--since', '7d', '--harness', 'claude'],
+      [
+        event({ id: 'claude-event', timestamp, projectId: 'p_mine', harness: 'claude' }),
+        event({ id: 'codex-event', timestamp, projectId: 'p_mine', harness: 'codex' }),
+      ],
+      'p_mine',
+    );
+
+    const provider = report.providers.find((row) => row.providerId === 'rtk');
+    assert.ok(provider);
+    assert.equal(provider.operations, 1);
+    assert.deepEqual(provider.harnesses, ['claude']);
   });
 });
 
