@@ -104,6 +104,7 @@ function world(
     pins?: unknown;
     projectPins?: unknown;
     managedIntegrations?: Array<{ providerId: string; harnessId: string }>;
+    legacyOwnedState?: boolean;
   } = {},
 ): World {
   counter += 1;
@@ -129,6 +130,34 @@ function world(
     writeFileSync(
       join(project, '.token-harness', 'pins.json'),
       JSON.stringify(options.projectPins),
+    );
+  }
+  if (options.legacyOwnedState === true) {
+    const journals = join(state, 'journals');
+    mkdirSync(journals, { recursive: true });
+    writeFileSync(
+      join(journals, 'legacy-owned.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        transactionId: 'legacy-owned',
+        planId: 'legacy-plan',
+        projectId: 'p_test',
+        projectRoot: project,
+        startedAt: '2026-08-01T07:00:00.000Z',
+        finishedAt: '2026-08-01T07:00:01.000Z',
+        outcome: 'committed',
+        entries: [],
+        ownership: [
+          {
+            kind: 'owned-file',
+            path: join(project, '.legacy-managed'),
+            digest: 'sha256:legacy',
+            mode: null,
+          },
+        ],
+        pinned: false,
+        diagnostics: [],
+      }),
     );
   }
   if (options.managedIntegrations !== undefined) {
@@ -435,6 +464,25 @@ describe('update', () => {
      * they are up to date on the strength of an answer nobody could read.
      */
     assert.notEqual(row(result.data, 'rtk')?.verdict, 'current');
+  });
+
+  it('fails closed for a legacy managed journal whose provider cannot be attributed', async () => {
+    const result = await invoke(
+      ['update', '--provider', 'rtk', '--yes'],
+      world({ legacyOwnedState: true }),
+      {
+        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
+        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+      },
+    );
+
+    assert.equal(result.exitCode, EXIT_CODES['unsupported-environment']);
+    assert.ok(result.codes.includes('managed-update-blocked'));
+    assert.equal(
+      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
+      false,
+      JSON.stringify(result.asked),
+    );
   });
 
   it('refuses a managed provider update when the target version has no reviewed row', async () => {
