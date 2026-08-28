@@ -18,6 +18,7 @@ import {
   EXIT_CODES,
   deriveProjectId,
   type CliEnvelope,
+  type CompatibilityRow,
   type PlatformFacts,
   type ProcessOutcome,
   type ProcessRequest,
@@ -98,7 +99,13 @@ interface World {
   project: string;
 }
 
-function world(options: { pins?: unknown; projectPins?: unknown } = {}): World {
+function world(
+  options: {
+    pins?: unknown;
+    projectPins?: unknown;
+    managedIntegrations?: Array<{ providerId: string; harnessId: string }>;
+  } = {},
+): World {
   counter += 1;
   const root = join(sandbox, `w-${String(counter)}`);
   const home = join(root, 'home');
@@ -124,6 +131,28 @@ function world(options: { pins?: unknown; projectPins?: unknown } = {}): World {
       JSON.stringify(options.projectPins),
     );
   }
+  if (options.managedIntegrations !== undefined) {
+    const journals = join(state, 'journals');
+    mkdirSync(journals, { recursive: true });
+    writeFileSync(
+      join(journals, 'managed.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        transactionId: 'managed',
+        planId: 'deadbeef',
+        projectId: 'p_test',
+        projectRoot: project,
+        startedAt: '2026-08-01T08:00:00.000Z',
+        finishedAt: '2026-08-01T08:00:01.000Z',
+        outcome: 'committed',
+        entries: [],
+        ownership: [],
+        managedIntegrations: options.managedIntegrations,
+        pinned: false,
+        diagnostics: [],
+      }),
+    );
+  }
   return { home, state, project };
 }
 
@@ -136,6 +165,8 @@ interface FakeChannel {
   inventoryStdout?: Readonly<Record<string, string>>;
   /** Exit code the install invocation returns. */
   installExitCode?: number;
+  /** Compatibility rows supplied to the command instead of the shipped table. */
+  compatibilityRows?: readonly CompatibilityRow[];
 }
 
 /**
@@ -404,6 +435,59 @@ describe('update', () => {
      * they are up to date on the strength of an answer nobody could read.
      */
     assert.notEqual(row(result.data, 'rtk')?.verdict, 'current');
+  });
+
+  it('refuses a managed provider update when the target version has no reviewed row', async () => {
+    const result = await invoke(
+      ['update', '--provider', 'rtk', '--yes'],
+      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
+      {
+        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
+        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+        // An explicit empty table proves the refusal comes from the target-version gate rather
+        // than from whatever rows happen to ship on the platform running this test.
+        compatibilityRows: [],
+      },
+    );
+
+    assert.equal(result.exitCode, EXIT_CODES['unsupported-environment']);
+    assert.ok(result.codes.includes('managed-update-blocked'));
+    assert.equal(
+      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
+      false,
+      JSON.stringify(result.asked),
+    );
+  });
+
+  it('updates a managed provider only when a row admits the target version', async () => {
+    const admitted: CompatibilityRow = {
+      harness: 'claude' as CompatibilityRow['harness'],
+      harnessVersion: { minimum: '2.1.220', maximum: '2.1.220' },
+      provider: 'rtk' as CompatibilityRow['provider'],
+      providerVersion: '0.44.0',
+      platform: { os: FACTS.os, wsl: FACTS.isWsl, supported: true, limitation: null },
+      configSchema: 'test-claude-settings',
+      fixture: 'tests/fixtures/update-target-reviewed',
+      verificationTier: 'canary',
+    };
+    const result = await invoke(
+      ['update', '--provider', 'rtk', '--yes'],
+      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
+      {
+        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
+        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+        compatibilityRows: [admitted],
+      },
+    );
+
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
+      ),
+      JSON.stringify(result.asked),
+    );
   });
 
   it('installs the exact version the dry run showed, when confirmed', async () => {
