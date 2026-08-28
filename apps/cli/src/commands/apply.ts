@@ -312,6 +312,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     projectId: computed.report.projectId,
     projectRoot: context.projectRoot,
     actions,
+    managedIntegrations: computed.managedIntegrations,
     fs,
     snapshots: creation.store,
     journal,
