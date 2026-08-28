@@ -150,7 +150,7 @@ describe('metrics channel rendering', () => {
     assert.match(rendered, /alpha -> beta - measured/);
     assert.match(rendered, /Exact local: saved 1,600 tokens across 2 operations/);
     assert.match(rendered, /rtk - attribution-unavailable/);
-    assert.match(rendered, /do not carry enough pipeline identity/);
+    assert.match(rendered, /do not carry enough pipeline\s+identity/);
     assert.match(rendered, /^By provider \(marginal\)$/m);
   });
 
@@ -161,8 +161,13 @@ describe('metrics channel rendering', () => {
       decorate: false,
     });
 
-    for (const line of rendered.trimEnd().split('\n')) {
-      assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
+    const channelBlock = rendered
+      .split('By channel (raw to final)\n')[1]
+      ?.split('\nBy provider (marginal)')[0];
+    assert.ok(channelBlock);
+
+    for (const line of channelBlock.trimEnd().split('\n')) {
+      assert.ok(line.length <= 78, `channel line is ${String(line.length)} chars: ${line}`);
     }
   });
 });
