@@ -1439,7 +1439,12 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     .filter((harness) => reviews[harness] !== undefined && SKILLS_INSTALL[harness] !== undefined);
 
   if (targets.length === 0) {
-    return { providerId: HARNESSTRIM, desiredState: request.desiredState, actions: [] };
+    return {
+      providerId: HARNESSTRIM,
+      desiredState: request.desiredState,
+      actions: [],
+      targetHarnesses: [],
+    };
   }
 
   if (request.desiredState === 'absent') {
@@ -1468,16 +1473,27 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
         },
       })),
     );
-    return { providerId: HARNESSTRIM, desiredState: 'absent', actions };
+    return {
+      providerId: HARNESSTRIM,
+      desiredState: 'absent',
+      actions,
+      targetHarnesses: actions.length === 0 ? [] : targets.map((harness) => harnessId(harness)),
+    };
   }
 
   const installed = await probeExecutable(context);
   if (!installed.installed) {
-    return { providerId: HARNESSTRIM, desiredState: 'configured', actions: [] };
+    return {
+      providerId: HARNESSTRIM,
+      desiredState: 'configured',
+      actions: [],
+      targetHarnesses: [],
+    };
   }
 
   const observed = await probeCapabilities(context);
   const actions: DelegatedProviderInstallAction[] = [];
+  const plannedHarnesses: HarnessId[] = [];
 
   for (const harness of targets) {
     const review = reviews[harness];
@@ -1524,9 +1540,15 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
       snapshotSizeCapBytes: 1_048_576,
       upstreamUninstallAvailable: review.upstreamUninstallAvailable,
     });
+    plannedHarnesses.push(harnessId(harness));
   }
 
-  return { providerId: HARNESSTRIM, desiredState: 'configured', actions };
+  return {
+    providerId: HARNESSTRIM,
+    desiredState: 'configured',
+    actions,
+    targetHarnesses: plannedHarnesses,
+  };
 }
 
 export const harnesstrimAdapter: ProviderAdapter = {

@@ -22,6 +22,7 @@
  */
 
 import type { PlannedActionKind } from '../domain/actions.js';
+import type { HarnessId, ProviderId } from '../domain/ids.js';
 import type { Diagnostic } from '../domain/diagnostics.js';
 import type { FileSnapshot, OwnedArtifact } from '../domain/ownership.js';
 
@@ -34,6 +35,18 @@ export const JOURNAL_SCHEMA_VERSION = 1;
 /** RFC 0006 §Expiry: "Transaction journals | 90 days | 20 most recent | pinning exempts". */
 export const JOURNAL_RETENTION_DAYS = 90;
 export const JOURNAL_RETENTION_COUNT = 20;
+
+/**
+ * One provider × harness relationship Token Harness deliberately managed in this transaction.
+ *
+ * Kept separate from file ownership: an integration is a product-level relationship, while an
+ * OwnedArtifact is the byte-level proof that permits removal. Update policy needs the former so
+ * an adopted provider is not accidentally treated as managed merely because it is configured.
+ */
+export interface ManagedIntegration {
+  providerId: ProviderId;
+  harnessId: HarnessId;
+}
 
 export type TransactionOutcomeKind =
   /** Written before the first action, and left behind by a process that died mid-apply. */
@@ -75,6 +88,13 @@ export interface TransactionJournal {
   entries: TransactionJournalEntry[];
   /** Everything Token Harness owns as a result. Empty after a verified rollback. */
   ownership: OwnedArtifact[];
+  /**
+   * Provider × harness integrations this transaction took responsibility for.
+   *
+   * Optional for journals written before 0.2 work began; readers must treat absence as unknown,
+   * never as evidence that a configured provider is managed.
+   */
+  managedIntegrations?: ManagedIntegration[];
   /** RFC 0004 §Backup policy: a pinned transaction is exempt from both retention limits. */
   pinned: boolean;
   diagnostics: Diagnostic[];

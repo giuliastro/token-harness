@@ -19,7 +19,7 @@
  * stored plan when "a recorded precondition digest no longer matches".
  */
 
-import type { ProviderId } from './ids.js';
+import type { HarnessId, ProviderId } from './ids.js';
 import type { JsonMergeOperation } from './json.js';
 import type { OwnedArtifact } from './ownership.js';
 
@@ -260,4 +260,12 @@ export interface ProviderPlan {
   providerId: ProviderId;
   desiredState: 'configured' | 'absent';
   actions: PlannedAction[];
+  /**
+   * Harnesses the actions in this plan actually mutate.
+   *
+   * Optional for third-party/older adapters, with the planner retaining its conservative fallback.
+   * Built-in adapters populate it so the transaction journal can distinguish a managed integration
+   * from a brownfield installation that merely happens to be configured.
+   */
+  targetHarnesses?: HarnessId[];
 }

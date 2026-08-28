@@ -38,6 +38,7 @@ import {
   type HarnessConfigSummary,
   type HarnessId,
   type HarnessManifest,
+  type ManagedIntegration,
   type PlanReport,
   type PlannedAction,
   type ProfileId,
@@ -70,6 +71,13 @@ export interface ComputedPlan {
   present: HarnessManifest[];
   /** What the harness adapters found on disk, for a brownfield-aware provider plan. */
   harnessConfigs: HarnessConfigSummary[];
+  /**
+   * Provider × harness relationships the admitted actions would make Token Harness manage.
+   *
+   * Kept beside actions rather than reconstructed later: non-intercepting integrations such as
+   * HarnessTrim skills deliberately have no resolver ownership entry.
+   */
+  managedIntegrations: ManagedIntegration[];
   /**
    * RFC 0009 §Compatibility matrix — managed mutations the gate refused, each with the missing
    * config schema or provider fixture named. Present actions were dropped; the plan is empty and
@@ -204,6 +212,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
    * to a separate, non-intercepting install; it must not use that path to claim an exclusive scope.
    */
   const actions: PlannedAction[] = [];
+  const managedIntegrations: ManagedIntegration[] = [];
   const blocked: BlockedManagedMutation[] = [];
   if (providerContext !== null) {
     const rows = context.compatibilityRows ?? COMPATIBILITY_ROWS;
@@ -227,8 +236,13 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
        * planned. A plan refused on any combination is dropped whole — proposing half of a
        * mutation a row has not admitted is how a reviewer learns to trust the gate.
        */
-      const touched = [...new Set(owned.map((entry) => entry.scope.harness))];
-      if (touched.length === 0) touched.push(...present.map((harness) => harness.id));
+      const touched =
+        providerPlan.targetHarnesses !== undefined
+          ? [...new Set(providerPlan.targetHarnesses)]
+          : [...new Set(owned.map((entry) => entry.scope.harness))];
+      if (touched.length === 0 && providerPlan.targetHarnesses === undefined) {
+        touched.push(...present.map((harness) => harness.id));
+      }
       let admitted = true;
       for (const harness of touched) {
         const admission = admitManagedMutation(rows, {
@@ -251,7 +265,18 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           });
         }
       }
-      if (admitted) actions.push(...providerPlan.actions);
+      if (admitted) {
+        actions.push(...providerPlan.actions);
+        for (const harness of touched) {
+          if (
+            !managedIntegrations.some(
+              (entry) => entry.providerId === adapter.manifest.id && entry.harnessId === harness,
+            )
+          ) {
+            managedIntegrations.push({ providerId: adapter.manifest.id, harnessId: harness });
+          }
+        }
+      }
     }
   }
 
@@ -384,7 +409,15 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
-  return { report, versions, diagnostics, present, harnessConfigs, blocked };
+  return {
+    report,
+    versions,
+    diagnostics,
+    present,
+    harnessConfigs,
+    managedIntegrations,
+    blocked,
+  };
 }
 
 /**
