@@ -44,6 +44,11 @@ RFC 0005's pipeline attribution report. Its state values are `measured`, `unmeas
 field; newer consumers must not reinterpret an absent `channels` field as zero savings or as an
 empty applied pipeline.
 
+The same report may include optional `data.pipelineTotal`. Its `status` is `measured`,
+`unavailable`, or `incomparable`; consumers MUST inspect that status before reading a numeric
+saving. In particular, `saved: null` under `incomparable` is an explicit refusal to manufacture a
+mixed total, not missing JSON data that a consumer may reconstruct from provider or channel rows.
+
 `plan --json` is deliberately not in this seam. It is operationally read-only with respect to
 harness configuration, but RFC 0006 persists a stored plan in Token Harness state. A remote status
 reader has no reason to create an executable artifact merely to inspect the machine.

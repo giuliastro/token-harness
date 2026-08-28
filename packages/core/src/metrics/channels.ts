@@ -55,6 +55,30 @@ export interface ChannelMetricsRow extends MetricsChannelExpectation {
   note: string | null;
 }
 
+export type PipelineMetricTotalStatus = 'measured' | 'unavailable' | 'incomparable';
+
+export type PipelineMetricTotalReason =
+  | 'no-applied-channels'
+  | 'channel-unmeasured'
+  | 'channel-attribution-unavailable'
+  | 'channel-incomparable'
+  | 'channel-residue'
+  | 'cross-channel-comparability-unproven'
+  | 'measurement-class-or-unit-mismatch'
+  | 'measurement-missing';
+
+export interface PipelineMetricTotal {
+  status: PipelineMetricTotalStatus;
+  reason: PipelineMetricTotalReason | null;
+  class: MeasurementClass | null;
+  unit: 'tokens' | 'chars' | null;
+  before: number | null;
+  after: number | null;
+  saved: number | null;
+  channels: number;
+  note: string;
+}
+
 interface ChannelClassTotal {
   class: MeasurementClass;
   unit: 'tokens' | 'chars';
@@ -166,7 +190,188 @@ function couldBelongToChannel(
   if (event.context.harnessId !== 'unknown' && event.context.harnessId !== channel.harness) {
     return false;
   }
+  if (event.context.toolFamily !== null && event.context.toolFamily !== channel.toolFamily) {
+    return false;
+  }
   return !directlyAttributed(event, channel);
+}
+
+/**
+ * A top-level pipeline number is a stronger claim than a channel number.
+ *
+ * At 0.2 the report has no cross-channel operation graph, so two independently measured channels
+ * are not presumed additive. This deliberately refuses a mixed total until shared operation
+ * identity proves that the channels do not count the same payload twice.
+ */
+export function summarizePipelineTotal(rows: readonly ChannelMetricsRow[]): PipelineMetricTotal {
+  if (rows.length === 0) {
+    return {
+      status: 'unavailable',
+      reason: 'no-applied-channels',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 0,
+      note: 'no applied pipeline channels are available for a raw-to-final total',
+    };
+  }
+
+  if (rows.some((row) => row.status === 'incomparable')) {
+    return {
+      status: 'incomparable',
+      reason: 'channel-incomparable',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: rows.length,
+      note: 'at least one channel has attributed events that cannot form a comparable total',
+    };
+  }
+
+  if (rows.some((row) => row.incomparableOperations > 0 || row.unattributedOperations > 0)) {
+    return {
+      status: 'unavailable',
+      reason: 'channel-residue',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: rows.length,
+      note: 'some channel operations are incomparable or lack safe pipeline attribution',
+    };
+  }
+
+  if (rows.some((row) => row.status === 'attribution-unavailable')) {
+    return {
+      status: 'unavailable',
+      reason: 'channel-attribution-unavailable',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: rows.length,
+      note: 'at least one channel has provider telemetry but no safe pipeline attribution',
+    };
+  }
+
+  if (rows.some((row) => row.status === 'unmeasured')) {
+    return {
+      status: 'unavailable',
+      reason: 'channel-unmeasured',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: rows.length,
+      note: 'at least one applied channel has no attributable measurement in this window',
+    };
+  }
+
+  if (rows.length > 1) {
+    return {
+      status: 'incomparable',
+      reason: 'cross-channel-comparability-unproven',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: rows.length,
+      note: 'multiple channels are measured independently, but cross-channel operation overlap is not proven absent',
+    };
+  }
+
+  const row = rows[0];
+  if (row === undefined) {
+    return {
+      status: 'unavailable',
+      reason: 'measurement-missing',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 0,
+      note: 'no channel measurement is available',
+    };
+  }
+
+  const measured = row.classes.filter(
+    (entry) =>
+      entry.before !== null &&
+      entry.after !== null &&
+      entry.saved !== null &&
+      entry.unit !== null &&
+      entry.operations > 0,
+  );
+
+  if (measured.length === 0) {
+    return {
+      status: 'unavailable',
+      reason: 'measurement-missing',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 1,
+      note: 'the measured channel exposes no comparable measurement class',
+    };
+  }
+
+  if (measured.length > 1) {
+    return {
+      status: 'incomparable',
+      reason: 'measurement-class-or-unit-mismatch',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 1,
+      note: 'the channel contains multiple measurement classes or units that are not one total',
+    };
+  }
+
+  const measurement = measured[0];
+  if (
+    measurement === undefined ||
+    measurement.before === null ||
+    measurement.after === null ||
+    measurement.saved === null ||
+    measurement.unit === null
+  ) {
+    return {
+      status: 'unavailable',
+      reason: 'measurement-missing',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 1,
+      note: 'the channel measurement is incomplete',
+    };
+  }
+
+  return {
+    status: 'measured',
+    reason: null,
+    class: measurement.class,
+    unit: measurement.unit,
+    before: measurement.before,
+    after: measurement.after,
+    saved: measurement.saved,
+    channels: 1,
+    note: 'raw-to-final total for the single applied channel in this report',
+  };
 }
 
 export function aggregateChannelMetrics(

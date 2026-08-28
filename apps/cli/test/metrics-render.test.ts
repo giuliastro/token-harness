@@ -130,6 +130,17 @@ function report(): MetricsReport {
         note: '4118 provider operations may belong here but do not carry enough pipeline identity to attribute safely',
       },
     ],
+    pipelineTotal: {
+      status: 'unavailable',
+      reason: 'channel-residue',
+      class: null,
+      unit: null,
+      before: null,
+      after: null,
+      saved: null,
+      channels: 2,
+      note: 'some channel operations are incomparable or lack safe pipeline attribution',
+    },
     coveragePercent: null,
     bypassed: 0,
     inflatedOperations: 0,
@@ -146,11 +157,15 @@ describe('metrics channel rendering', () => {
       decorate: false,
     });
 
+    assert.match(rendered, /^Observed by measurement class \(provider events\)$/m);
     assert.match(rendered, /^By channel \(raw to final\)$/m);
     assert.match(rendered, /alpha -> beta - measured/);
     assert.match(rendered, /Exact local: saved 1,600 tokens across 2 operations/);
     assert.match(rendered, /rtk - attribution-unavailable/);
     assert.match(rendered, /do not carry enough pipeline\s+identity/);
+    assert.match(rendered, /^Pipeline total$/m);
+    assert.match(rendered, /unavailable - some channel operations are incomparable/);
+    assert.match(rendered, /reason: channel-residue/);
     assert.match(rendered, /^By provider \(marginal\)$/m);
   });
 

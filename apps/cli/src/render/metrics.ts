@@ -85,6 +85,9 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
   lines.push(header.join(' — '));
   lines.push('');
 
+  if (report.pipelineTotal !== undefined) {
+    lines.push('Observed by measurement class (provider events)');
+  }
   lines.push(...renderClassRows(report));
   lines.push('');
 
@@ -117,6 +120,30 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
             lines.push(...wrap(`reasons: ${channel.incomparableReasons.join(', ')}`, 4));
           }
         }
+      }
+    }
+    lines.push('');
+  }
+
+  if (report.pipelineTotal !== undefined) {
+    lines.push('Pipeline total');
+    if (
+      report.pipelineTotal.status === 'measured' &&
+      report.pipelineTotal.saved !== null &&
+      report.pipelineTotal.unit !== null &&
+      report.pipelineTotal.class !== null
+    ) {
+      lines.push(
+        ...wrap(
+          `${CLASS_LABELS[report.pipelineTotal.class]}: saved ` +
+            `${formatCount(report.pipelineTotal.saved)} ${report.pipelineTotal.unit}`,
+          2,
+        ),
+      );
+    } else {
+      lines.push(...wrap(`${report.pipelineTotal.status} - ${report.pipelineTotal.note}`, 2));
+      if (report.pipelineTotal.reason !== null) {
+        lines.push(...wrap(`reason: ${report.pipelineTotal.reason}`, 2));
       }
     }
     lines.push('');
