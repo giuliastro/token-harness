@@ -53,6 +53,8 @@ function detail(row: ProviderUpdateRow): string {
       return `${String(row.channel)} answered without a version this build can read`;
     case 'unavailable':
       return `${String(row.channel)} could not be asked`;
+    case 'blocked-unreviewed':
+      return `${String(row.installed)} → ${String(row.available)} lacks reviewed compatibility`;
   }
 }
 
