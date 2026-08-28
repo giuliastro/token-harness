@@ -87,11 +87,22 @@ function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
  * be user-owned or Token-Harness-owned. Journals written before this field existed simply provide
  * no evidence here; they are never upgraded into ownership by inference.
  */
-async function managedIntegrations(context: CommandContext): Promise<ManagedIntegration[]> {
-  if (context.adapters === null || context.stateRoot === null) return [];
+interface ManagedState {
+  integrations: ManagedIntegration[];
+  /**
+   * A pre-attribution journal owns configuration but cannot say which provider × harness it
+   * belongs to. Update must fail closed rather than silently reclassify that old managed state as
+   * adopted.
+   */
+  legacyOwnershipUnknown: boolean;
+}
+
+async function managedIntegrations(context: CommandContext): Promise<ManagedState> {
+  const empty: ManagedState = { integrations: [], legacyOwnershipUnknown: false };
+  if (context.adapters === null || context.stateRoot === null) return empty;
 
   const journalRoot = context.adapters.fs.join(context.stateRoot, 'journals');
-  if ((await context.adapters.fs.stat(journalRoot)) === null) return [];
+  if ((await context.adapters.fs.stat(journalRoot)) === null) return empty;
 
   const store = new FileJournalStore({
     fs: context.adapters.fs,
@@ -100,8 +111,12 @@ async function managedIntegrations(context: CommandContext): Promise<ManagedInte
   });
   const seen = new Set<string>();
   const result: ManagedIntegration[] = [];
+  let legacyOwnershipUnknown = false;
   for (const journal of await store.list()) {
     if (journal.outcome !== 'committed') continue;
+    if (journal.managedIntegrations === undefined && journal.ownership.length > 0) {
+      legacyOwnershipUnknown = true;
+    }
     for (const integration of journal.managedIntegrations ?? []) {
       const key = `${integration.providerId}\0${integration.harnessId}`;
       if (seen.has(key)) continue;
@@ -109,7 +124,7 @@ async function managedIntegrations(context: CommandContext): Promise<ManagedInte
       result.push(integration);
     }
   }
-  return result;
+  return { integrations: result, legacyOwnershipUnknown };
 }
 
 function upgradeAction(input: {
@@ -187,7 +202,8 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     (adapter) => context.provider === null || adapter.manifest.id === context.provider,
   );
 
-  const managed = await managedIntegrations(context);
+  const managedState = await managedIntegrations(context);
+  const managed = managedState.integrations;
   const managedHarnessIds = new Set(managed.map((entry) => entry.harnessId));
   const harnessVersions = new Map<string, string | null>();
   if (managedHarnessIds.size > 0) {
@@ -314,7 +330,16 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     }
 
     const managedHarnesses = managed.filter((entry) => entry.providerId === adapter.manifest.id);
-    let updateAdmitted = true;
+    let updateAdmitted = !managedState.legacyOwnershipUnknown;
+    if (managedState.legacyOwnershipUnknown) {
+      blockedUpdates.push({
+        providerId: adapter.manifest.id,
+        target: query.version,
+        harnessId: 'legacy-owned-state',
+        missing:
+          'a committed pre-attribution journal owns configuration but does not identify its provider and harness',
+      });
+    }
     for (const integration of managedHarnesses) {
       const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
         provider: adapter.manifest.id,
