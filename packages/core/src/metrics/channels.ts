@@ -190,6 +190,9 @@ function couldBelongToChannel(
   if (event.context.harnessId !== 'unknown' && event.context.harnessId !== channel.harness) {
     return false;
   }
+  if (event.context.toolFamily !== null && event.context.toolFamily !== channel.toolFamily) {
+    return false;
+  }
   return !directlyAttributed(event, channel);
 }
 
