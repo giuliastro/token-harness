@@ -1355,20 +1355,23 @@ rather than continuing to present it as merely pending.
     recorded orders fail closed. #77/#79 make `status` lead with the applied pipeline ID, channels,
     ordered owners, declared tiers and drift, sourced from the receipt plus live configuration.
 
-40. **Per-channel metrics over five providers (§9.5). Partially done — #82, #83.** #82 makes
-    raw-to-final accounting executable rather than aspirational: ordered stages are measured once,
-    and missing identity, mixed classes/units, broken boundaries, counterfactuals and overlapping
-    baselines fail closed. #83 adds the actual per-channel report from the same live applied-pipeline
-    inventory as `status`, with explicit `measured`, `unmeasured`,
+40. **Per-channel metrics over five providers (§9.5). Partially done — #82, #83, #85.**
+    #82 makes raw-to-final accounting executable rather than aspirational: ordered stages are
+    measured once, and missing identity, mixed classes/units, broken boundaries, counterfactuals
+    and overlapping baselines fail closed. #83 adds the actual per-channel report from the same
+    live applied-pipeline inventory as `status`, with explicit `measured`, `unmeasured`,
     `attribution-unavailable` and `incomparable` states while keeping provider rows marginal.
+    #85 closes the provider-neutral mixed-total gap: `pipelineTotal` is numeric only for one fully
+    comparable applied channel; unattributed/incomparable residue refuses a partial total, and
+    independently measured channels return `cross-channel-comparability-unproven` instead of being
+    added without evidence. The same PR fixed channel attribution so a known different
+    `toolFamily` cannot become residue for another channel.
 
-    The remaining work is evidence breadth, not permission to infer it. RTK history and current
-    HarnessTrim telemetry still import with `pipelineId` / `pipelineOrder` null, so their existing
-    historical rows correctly report attribution unavailable rather than being assigned to today's
-    configuration. Item 40 closes only after the admitted provider set can emit or otherwise prove
-    shared operation/pipeline identity across real chains, the five-provider fixtures exercise it,
-    and a mixed pipeline's top-level total is explicitly refused when its channels are not mutually
-    comparable.
+    What remains is evidence breadth, not aggregation semantics. RTK history and current HarnessTrim
+    telemetry still import with `pipelineId` / `pipelineOrder` null, so their historical rows
+    correctly report attribution unavailable rather than being assigned to today's configuration.
+    Item 40 closes after the admitted provider set can emit or otherwise prove shared
+    operation/pipeline identity across real chains and the five-provider fixtures exercise it.
 
 41. **RFC 0010, the read-only status seam (§9.4). Done.** `docs/rfcs/0010-read-only-status-seam.md`
     fixes the consumed JSON envelopes, schema-version compatibility policy, canonical state-root
@@ -1377,8 +1380,8 @@ rather than continuing to present it as merely pending.
 42. **`0.2.0` release gates (§16). Partially done.** #75 closes the build-provenance part of
     §8.3: the tag workflow packs the exact publishable tarball, attests SLSA provenance and the
     shipped CycloneDX SBOM against it, and retains the attested artifact without publishing it.
-    #82/#83 ship the provider-neutral per-channel accounting and report. The A/B benchmark matrix,
-    five-provider attribution evidence, explicit mixed-pipeline total refusal and regenerated
+    #82/#83/#85 ship the provider-neutral per-channel accounting, report and explicit mixed-pipeline
+    total refusal. The A/B benchmark matrix, five-provider attribution evidence and regenerated
     matrices remain.
 
 43. **Consume HarnessTrim's machine-readable surfaces. Done — #45, #46/#47, #73.**
@@ -1478,11 +1481,11 @@ Claude/Codex part of item 46. The remaining dependency order is therefore:
    write set the real machine proves.
 3. **35**, then the remaining provider work in **36** and **37** — add Lazy MCP on an unowned
    channel, then Caveman and Dejavu. The generic marker-region conflict prerequisite of 36 is done.
-4. **38**, then **40** — goal-based profiles and per-channel metrics. Pipeline-level
-   lifecycle/status is complete in #77/#79/#80; these remaining two pieces finish the pipeline
-   product semantics rather than its mutation boundary.
-5. **42** — finish the A/B matrix, per-channel report and regenerated matrices. RFC 0010, pipeline
-   lifecycle and build provenance are already shipped.
+4. **38**, then finish **40** — goal-based profiles and the remaining five-provider
+   attribution evidence. Pipeline-level lifecycle/status is complete in #77/#79/#80, and the
+   provider-neutral per-channel accounting/report/mixed-total refusal is complete in #82/#83/#85.
+5. **42** — finish the A/B matrix and regenerated matrices. RFC 0010, pipeline lifecycle,
+   provider-neutral channel metrics and build provenance are already shipped.
 
 OpenCode managed installation is not in this sequence while the current dependency-tree installer
 remains incompatible with the transactional rollback contract.
