@@ -40,7 +40,7 @@ import type {
   TransactionJournal,
   TransactionJournalEntry,
   TransactionOutcomeKind,
-  type ManagedIntegration,
+  ManagedIntegration,
 } from './journal.js';
 import { JOURNAL_SCHEMA_VERSION } from './journal.js';
 import type { SnapshotStore } from './snapshots.js';
