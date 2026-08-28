@@ -40,6 +40,7 @@ import type {
   TransactionJournal,
   TransactionJournalEntry,
   TransactionOutcomeKind,
+  type ManagedIntegration,
 } from './journal.js';
 import { JOURNAL_SCHEMA_VERSION } from './journal.js';
 import type { SnapshotStore } from './snapshots.js';
@@ -64,6 +65,11 @@ export interface TransactionRequest {
   projectId: string | null;
   projectRoot: string;
   actions: readonly PlannedAction[];
+  /**
+   * Product-level ownership established by these actions. Optional so older callers and tests keep
+   * their exact journal shape; when present it is persisted before the first mutation.
+   */
+  managedIntegrations?: readonly ManagedIntegration[];
   fs: FileSystemPort;
   snapshots: SnapshotStore;
   journal: JournalStore;
@@ -195,6 +201,9 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
     outcome: 'in-progress',
     entries,
     ownership: [],
+    ...(request.managedIntegrations !== undefined && request.managedIntegrations.length > 0
+      ? { managedIntegrations: [...request.managedIntegrations] }
+      : {}),
     pinned: false,
     diagnostics,
   };
