@@ -127,8 +127,7 @@ function report(): MetricsReport {
         unattributedOperations: 4118,
         incomparableReasons: [],
         classes: [...EMPTY_CLASSES],
-        note:
-          '4118 provider operations may belong here but do not carry enough pipeline identity to attribute safely',
+        note: '4118 provider operations may belong here but do not carry enough pipeline identity to attribute safely',
       },
     ],
     coveragePercent: null,
