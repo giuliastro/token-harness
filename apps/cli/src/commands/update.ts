@@ -313,9 +313,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       continue;
     }
 
-    const managedHarnesses = managed.filter(
-      (entry) => entry.providerId === adapter.manifest.id,
-    );
+    const managedHarnesses = managed.filter((entry) => entry.providerId === adapter.manifest.id);
     let updateAdmitted = true;
     for (const integration of managedHarnesses) {
       const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
@@ -365,7 +363,8 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       diagnostic({
         severity: blockedIsOutcome ? 'error' : 'warning',
         code: 'managed-update-blocked',
-        message: `update refuses ${blocked.providerId} ${blocked.target} on managed ${blocked.harnessId}: ${blocked.missing}`,
+        message:
+          `update refuses ${blocked.providerId} ${blocked.target} on managed ${blocked.harnessId}: ${blocked.missing}`,
         remediation:
           'Record a compatibility row and fixture for the target version before updating this managed integration',
       }),
