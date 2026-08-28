@@ -325,6 +325,7 @@ async function invoke(
       projectIdFor: (path) => deriveProjectId(path, SALT, FACTS.os === 'windows'),
     },
     metrics: null,
+    compatibilityRows: config.compatibilityRows,
     now: () => '2026-08-01T09:00:00.000Z',
   };
 
