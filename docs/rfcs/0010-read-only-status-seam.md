@@ -38,6 +38,12 @@ The consumed contract includes:
 - the command-specific `data` shape for the four commands above;
 - stable diagnostic codes. Messages and remediation prose may be reworded.
 
+For `metrics --json`, schema 1 may include the optional `data.channels` array introduced by
+RFC 0005's pipeline attribution report. Its state values are `measured`, `unmeasured`,
+`attribution-unavailable`, and `incomparable`. Older schema-1 consumers must ignore the optional
+field; newer consumers must not reinterpret an absent `channels` field as zero savings or as an
+empty applied pipeline.
+
 `plan --json` is deliberately not in this seam. It is operationally read-only with respect to
 harness configuration, but RFC 0006 persists a stored plan in Token Harness state. A remote status
 reader has no reason to create an executable artifact merely to inspect the machine.
