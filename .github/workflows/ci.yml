@@ -48,6 +48,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Show pipeline total formatting diff
+        run: |
+          pnpm exec prettier --write apps/cli/src/render/metrics.ts packages/core/src/metrics/channels.ts packages/core/src/metrics/report.ts packages/core/test/channel-metrics.test.ts
+          git diff -- apps/cli/src/render/metrics.ts packages/core/src/metrics/channels.ts packages/core/src/metrics/report.ts packages/core/test/channel-metrics.test.ts
+          git checkout -- apps/cli/src/render/metrics.ts packages/core/src/metrics/channels.ts packages/core/src/metrics/report.ts packages/core/test/channel-metrics.test.ts
+
       - name: Format check
         run: pnpm format:check
 
