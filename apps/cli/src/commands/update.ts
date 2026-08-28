@@ -90,9 +90,12 @@ function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
 async function managedIntegrations(context: CommandContext): Promise<ManagedIntegration[]> {
   if (context.adapters === null || context.stateRoot === null) return [];
 
+  const journalRoot = context.adapters.fs.join(context.stateRoot, 'journals');
+  if ((await context.adapters.fs.stat(journalRoot)) === null) return [];
+
   const store = new FileJournalStore({
     fs: context.adapters.fs,
-    journalRoot: context.adapters.fs.join(context.stateRoot, 'journals'),
+    journalRoot,
     backupRoot: context.adapters.fs.join(context.stateRoot, 'backups'),
   });
   const seen = new Set<string>();
