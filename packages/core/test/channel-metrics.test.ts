@@ -187,6 +187,23 @@ describe('channel metrics', () => {
     assert.equal(row.classes.find((entry) => entry.class === 'estimated-local')?.saved, 650);
   });
 
+  it('does not treat a known different tool family as unattributed residue', () => {
+    const rows = aggregateChannelMetrics(
+      [CHANNEL],
+      [
+        stage({
+          id: 'powershell',
+          provider: 'alpha',
+          toolFamily: 'PowerShell',
+          order: 0,
+        }),
+      ],
+    );
+
+    assert.equal(rows[0]?.status, 'unmeasured');
+    assert.equal(rows[0]?.unattributedOperations, 0);
+  });
+
   it('does not assign events from a different pipeline to this channel', () => {
     const rows = aggregateChannelMetrics(
       [CHANNEL],
