@@ -23,6 +23,7 @@ import {
   type CliEnvelope,
   type PlatformFacts,
   type ResolvedExecutable,
+  type StatusReport,
   type VerifyReport,
 } from '@token-harness/core';
 import { nodeVersionRows } from '@token-harness/tests';
@@ -183,6 +184,36 @@ function matchers(place: World): string[] {
   };
   return parsed.hooks.PreToolUse.map((entry) => entry.matcher);
 }
+
+describe('status after apply', () => {
+  it('reports the applied pipeline from the committed receipt', async () => {
+    const place = world();
+    const applied = await invoke<ApplyReport>(['apply', '--yes'], place);
+    assert.equal(applied.data?.outcome, 'committed');
+
+    const status = await invoke<StatusReport>(['status'], place);
+
+    assert.equal(status.exitCode, 0);
+    assert.equal(status.data?.pipelines.length, 1);
+    const pipeline = status.data?.pipelines[0];
+    assert.ok(pipeline);
+    assert.equal(pipeline.harness, 'claude');
+    assert.equal(pipeline.receiptId, applied.data?.transactionId);
+    assert.ok(pipeline.pipelineId.length > 0);
+    assert.ok(pipeline.owners.some((entry) => entry.owner === 'rtk'));
+  });
+
+  it('does not report a historical apply as active after uninstall', async () => {
+    const place = world();
+    await invoke(['apply', '--yes'], place);
+    await invoke(['uninstall', '--yes'], place);
+
+    const status = await invoke<StatusReport>(['status'], place);
+
+    assert.equal(status.exitCode, 0);
+    assert.deepEqual(status.data?.pipelines, []);
+  });
+});
 
 describe('uninstall', () => {
   it('removes only what Token Harness owns', async () => {
