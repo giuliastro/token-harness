@@ -32,9 +32,11 @@
  */
 
 import {
+  COMPATIBILITY_ROWS,
   EXIT_CODES,
   FileJournalStore,
   TransactionSnapshotStore,
+  admitManagedMutation,
   channelCanReportInventory,
   commandResult,
   compareVersions,
@@ -52,10 +54,11 @@ import {
   type ExitCode,
   type PackageManagerInstallAction,
   type InstallationChannel,
+  type ManagedIntegration,
   type ProviderUpdateRow,
   type UpdateReport,
 } from '@token-harness/core';
-import { listProviderAdapters } from '@token-harness/adapters';
+import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
 
@@ -75,6 +78,35 @@ function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
     unrestored: [],
     receiptId: null,
   };
+}
+
+/**
+ * Reads only explicit product-level ownership from committed journals.
+ *
+ * A configured provider is not enough: RFC 0004 brownfield adoption means the same live hook can
+ * be user-owned or Token-Harness-owned. Journals written before this field existed simply provide
+ * no evidence here; they are never upgraded into ownership by inference.
+ */
+async function managedIntegrations(context: CommandContext): Promise<ManagedIntegration[]> {
+  if (context.adapters === null || context.stateRoot === null) return [];
+
+  const store = new FileJournalStore({
+    fs: context.adapters.fs,
+    journalRoot: context.adapters.fs.join(context.stateRoot, 'journals'),
+    backupRoot: context.adapters.fs.join(context.stateRoot, 'backups'),
+  });
+  const seen = new Set<string>();
+  const result: ManagedIntegration[] = [];
+  for (const journal of await store.list()) {
+    if (journal.outcome !== 'committed') continue;
+    for (const integration of journal.managedIntegrations ?? []) {
+      const key = `${integration.providerId}\0${integration.harnessId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(integration);
+    }
+  }
+  return result;
 }
 
 function upgradeAction(input: {
@@ -152,6 +184,24 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     (adapter) => context.provider === null || adapter.manifest.id === context.provider,
   );
 
+  const managed = await managedIntegrations(context);
+  const managedHarnessIds = new Set(managed.map((entry) => entry.harnessId));
+  const harnessVersions = new Map<string, string | null>();
+  if (managedHarnessIds.size > 0) {
+    const harnessContext = {
+      fs: adapters.fs,
+      runner: adapters.runner,
+      facts: context.platform,
+      paths: adapters.paths,
+      projectRoot: context.projectRoot,
+    };
+    for (const harness of listHarnessAdapters()) {
+      if (!managedHarnessIds.has(harness.manifest.id)) continue;
+      const detection = await harness.detect(harnessContext);
+      harnessVersions.set(harness.manifest.id, detection.version);
+    }
+  }
+
   const pins =
     context.stateRoot === null
       ? { pins: new Map<string, string>(), unhonoredProjectPinPath: null, diagnostics: [] }
@@ -175,6 +225,12 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
   };
 
   const actions: PackageManagerInstallAction[] = [];
+  const blockedUpdates: Array<{
+    providerId: string;
+    target: string;
+    harnessId: string;
+    missing: string;
+  }> = [];
   const destinations = new Set<string>();
 
   for (const adapter of providerAdapters) {
@@ -254,6 +310,35 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       continue;
     }
 
+    const managedHarnesses = managed.filter(
+      (entry) => entry.providerId === adapter.manifest.id,
+    );
+    let updateAdmitted = true;
+    for (const integration of managedHarnesses) {
+      const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
+        provider: adapter.manifest.id,
+        providerVersion: query.version,
+        harness: integration.harnessId,
+        harnessVersion: harnessVersions.get(integration.harnessId) ?? null,
+        os: context.platform.os,
+        wsl: context.platform.isWsl,
+      });
+      if (admission.state === 'admitted') continue;
+      updateAdmitted = false;
+      blockedUpdates.push({
+        providerId: adapter.manifest.id,
+        target: query.version,
+        harnessId: integration.harnessId,
+        missing: admission.missing,
+      });
+    }
+
+    if (!updateAdmitted) {
+      row.verdict = 'blocked-unreviewed';
+      report.providers.push(row);
+      continue;
+    }
+
     row.verdict = 'upgradable';
     report.providers.push(row);
     actions.push(
@@ -271,9 +356,27 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
   report.network = [...destinations].sort();
 
+  const blockedIsOutcome = blockedUpdates.length > 0 && actions.length === 0;
+  for (const blocked of blockedUpdates) {
+    diagnostics.push(
+      diagnostic({
+        severity: blockedIsOutcome ? 'error' : 'warning',
+        code: 'managed-update-blocked',
+        message: `update refuses ${blocked.providerId} ${blocked.target} on managed ${blocked.harnessId}: ${blocked.missing}`,
+        remediation:
+          'Record a compatibility row and fixture for the target version before updating this managed integration',
+      }),
+    );
+  }
+
   if (pins.unhonoredProjectPinPath !== null) {
     // Already carried as a diagnostic by `readPins`; nothing more to add here, and adding a
     // second one would make the same fact look like two findings.
+  }
+
+  if (actions.length === 0 && blockedUpdates.length > 0) {
+    report.execution = emptyExecution('rejected');
+    return finish(EXIT_CODES['unsupported-environment'], report);
   }
 
   if (actions.length === 0) {
