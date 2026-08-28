@@ -7,7 +7,11 @@
  */
 
 import type { HarnessId, ProviderId } from '../domain/ids.js';
-import { aggregateChannelMetrics, type ChannelMetricsRow, type MetricsChannelExpectation } from './channels.js';
+import {
+  aggregateChannelMetrics,
+  type ChannelMetricsRow,
+  type MetricsChannelExpectation,
+} from './channels.js';
 import { MEASUREMENT_CLASSES, type MeasurementClass, type OptimizationEvent } from './events.js';
 
 export type SavingsUnit = 'tokens' | 'chars';
