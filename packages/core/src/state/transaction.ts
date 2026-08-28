@@ -40,6 +40,7 @@ import type {
   TransactionJournal,
   TransactionJournalEntry,
   TransactionOutcomeKind,
+  AppliedPipelineSnapshot,
   ManagedIntegration,
 } from './journal.js';
 import { JOURNAL_SCHEMA_VERSION } from './journal.js';
@@ -70,6 +71,8 @@ export interface TransactionRequest {
    * their exact journal shape; when present it is persisted before the first mutation.
    */
   managedIntegrations?: readonly ManagedIntegration[];
+  /** Resolved pipeline this transaction establishes, when the caller is an apply. */
+  appliedPipeline?: AppliedPipelineSnapshot;
   fs: FileSystemPort;
   snapshots: SnapshotStore;
   journal: JournalStore;
@@ -203,6 +206,14 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
     ownership: [],
     ...(request.managedIntegrations !== undefined && request.managedIntegrations.length > 0
       ? { managedIntegrations: [...request.managedIntegrations] }
+      : {}),
+    ...(request.appliedPipeline !== undefined
+      ? {
+          appliedPipeline: {
+            pipelineId: request.appliedPipeline.pipelineId,
+            owners: [...request.appliedPipeline.owners],
+          },
+        }
       : {}),
     pinned: false,
     diagnostics,
