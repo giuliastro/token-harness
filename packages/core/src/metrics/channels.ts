@@ -281,8 +281,7 @@ export function summarizePipelineTotal(rows: readonly ChannelMetricsRow[]): Pipe
       after: null,
       saved: null,
       channels: rows.length,
-      note:
-        'multiple channels are measured independently, but cross-channel operation overlap is not proven absent',
+      note: 'multiple channels are measured independently, but cross-channel operation overlap is not proven absent',
     };
   }
 
