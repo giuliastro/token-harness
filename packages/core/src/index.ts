@@ -33,6 +33,7 @@ export * from './envelope/parse.js';
 
 export * from './planner/drift.js';
 export * from './planner/resolver.js';
+export * from './planner/removal-order.js';
 export * from './planner/rules.js';
 export * from './planner/stored-plan.js';
 

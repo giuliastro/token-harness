@@ -26,6 +26,7 @@ import {
   committedOwnership,
   diagnostic,
   executeTransaction,
+  providerRemovalOrder,
   rollbackTransaction,
   statusForExitCode,
   type ApplyReport,
@@ -34,6 +35,9 @@ import {
   type ExitCode,
   type OwnedArtifact,
   type PlannedAction,
+  type ProviderId,
+  type ResolvedCapability,
+  type TransactionJournal,
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
@@ -54,6 +58,35 @@ function ownershipKey(artifact: OwnedArtifact): string {
     return `marker ${artifact.path} ${artifact.markerBegin} ${artifact.bodyDigest}`;
   }
   return `file ${artifact.path} ${artifact.digest}`;
+}
+
+/**
+ * The newest applied topology for each harness.
+ *
+ * Journals are newest-first. One later harness-scoped apply must replace the older topology for
+ * that harness without erasing the still-relevant topology of another harness from an earlier
+ * all-harness apply. Historical uninstall/update journals carry no `appliedPipeline` and are
+ * intentionally skipped.
+ */
+function latestAppliedOwnership(journals: readonly TransactionJournal[]): ResolvedCapability[] {
+  const seenHarnesses = new Set<string>();
+  const ownership: ResolvedCapability[] = [];
+
+  for (const journal of journals) {
+    if (journal.outcome !== 'committed' || journal.appliedPipeline === undefined) continue;
+    const harnesses = [
+      ...new Set(journal.appliedPipeline.owners.map((owner) => owner.scope.harness)),
+    ];
+    for (const harness of harnesses) {
+      if (seenHarnesses.has(harness)) continue;
+      ownership.push(
+        ...journal.appliedPipeline.owners.filter((owner) => owner.scope.harness === harness),
+      );
+      seenHarnesses.add(harness);
+    }
+  }
+
+  return ownership;
 }
 
 function empty(outcome: ApplyReport['outcome']): ApplyReport {
@@ -310,13 +343,14 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     journalRoot: fsPort.join(context.stateRoot, 'journals'),
     backupRoot: fsPort.join(context.stateRoot, 'backups'),
   });
+  const journalHistory = await journals.list();
   const owned = new Set(
-    (await journals.list())
+    journalHistory
       .flatMap((journal) => committedOwnership(journal))
       .map((artifact) => ownershipKey(artifact)),
   );
 
-  const actions: PlannedAction[] = [];
+  const actionsByProvider = new Map<ProviderId, PlannedAction[]>();
   for (const adapter of listProviderAdapters()) {
     if (context.provider !== null && adapter.manifest.id !== context.provider) continue;
     /**
@@ -347,9 +381,34 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
         );
         continue;
       }
-      actions.push(action);
+      const accepted = actionsByProvider.get(adapter.manifest.id) ?? [];
+      accepted.push(action);
+      actionsByProvider.set(adapter.manifest.id, accepted);
     }
   }
+
+  const removalOrder = providerRemovalOrder(latestAppliedOwnership(journalHistory), [
+    ...actionsByProvider.keys(),
+  ]);
+  if (!removalOrder.ok) {
+    const providers = removalOrder.providers.join(', ');
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'pipeline-removal-order-conflict',
+        message:
+          removalOrder.reason === 'dependency-cycle'
+            ? `The applied pipeline records contradictory removal dependencies between ${providers}`
+            : `The applied pipeline records an ambiguous chain position for ${providers}`,
+        remediation:
+          'Inspect the applied pipeline receipt and remove the conflicting providers manually; ' +
+          'Token Harness will not guess a dependency order',
+      }),
+    );
+    return finish(EXIT_CODES['blocked-by-conflict'], 'uninstall', empty('rejected'), diagnostics);
+  }
+
+  const actions = removalOrder.order.flatMap((provider) => actionsByProvider.get(provider) ?? []);
 
   if (actions.length === 0) {
     diagnostics.push(
