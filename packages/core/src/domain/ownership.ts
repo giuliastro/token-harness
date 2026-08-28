@@ -70,7 +70,27 @@ export interface OwnedJsonEntryRecord {
   valueDigest: string;
 }
 
-export type OwnedArtifact = OwnedFileRecord | OwnedMarkerBlockRecord | OwnedJsonEntryRecord;
+/**
+ * One scalar element Token Harness added to a YAML block sequence.
+ *
+ * YAML syntax can carry user meaning in comments and formatting around a scalar. Keeping both the
+ * semantic value digest and the exact line digest means a user adding a comment or reformatting our
+ * line blocks automatic removal rather than losing that edit.
+ */
+export interface OwnedYamlEntryRecord {
+  kind: 'owned-yaml-entry';
+  path: string;
+  pointer: string;
+  placement: 'array-element';
+  valueDigest: string;
+  lineDigest: string;
+}
+
+export type OwnedArtifact =
+  | OwnedFileRecord
+  | OwnedMarkerBlockRecord
+  | OwnedJsonEntryRecord
+  | OwnedYamlEntryRecord;
 
 /**
  * What a live artifact turned out to be.
@@ -125,6 +145,12 @@ export function verifyOwnership(
     if (digestsMatch(live, record.valueDigest)) return 'owned-unchanged';
     // A value at the pointer that does not match is an edit; nothing at the pointer is
     // a removal. The document itself was never ours, so neither is `unowned`.
+    return observed.entryPresent === true ? 'owned-modified' : 'missing';
+  }
+
+  if (record.kind === 'owned-yaml-entry') {
+    const liveLine = observed.entryDigest ?? null;
+    if (digestsMatch(liveLine, record.lineDigest)) return 'owned-unchanged';
     return observed.entryPresent === true ? 'owned-modified' : 'missing';
   }
 
