@@ -10,7 +10,8 @@
 import type { HarnessDetection, ProviderDetection } from './detection.js';
 import type { HarnessId, ProviderId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
-import type { ResolvedCapability } from './capabilities.js';
+import type { CapabilityId, ResolvedCapability } from './capabilities.js';
+import type { VerificationTier } from './detection.js';
 
 export interface DoctorReport {
   platform: PlatformFacts;
@@ -36,6 +37,23 @@ export interface DriftFinding {
   remediation: string | null;
 }
 
+export interface PipelineChannelStatus {
+  /**
+   * RFC 0003's payload channel drops the interception point: providers at different points can
+   * still transform the same payload.
+   */
+  toolFamily: string;
+  capability: CapabilityId;
+  /** Ordered exactly as the applied owner snapshot runs them. */
+  owners: ProviderId[];
+}
+
+export interface PipelineTierStatus {
+  providerId: ProviderId;
+  /** The tier declared for this provider on this harness, not a claim about a live canary run. */
+  declaredTier: VerificationTier;
+}
+
 export interface PipelineStatus {
   /** RFC 0003 §Scope of the resolver: derived from the ordered owner list. */
   pipelineId: string;
@@ -43,6 +61,12 @@ export interface PipelineStatus {
   receiptId: string | null;
   appliedAt: string | null;
   owners: ResolvedCapability[];
+  /**
+   * Additive RFC 0010 schema-1 fields. Optional so older producers/fixtures remain structurally
+   * valid while new status output can lead with the pipeline's actual payload channels.
+   */
+  channels?: PipelineChannelStatus[];
+  tiers?: PipelineTierStatus[];
 }
 
 /** RFC 0005 §Importer degradation policy: "the mode appears in `status` output". */
