@@ -1353,8 +1353,9 @@ rather than continuing to present it as merely pending.
     measurement classes structurally apart, overlapping stages counted once, and a refusal rather than
     an approximation where a mixed pipeline has no comparable total.
 
-41. **RFC 0010, the read-only status seam (§9.4).** Documentation only, no dependency in either
-    direction, and best written before `harness-remote` starts parsing envelopes rather than after.
+41. **RFC 0010, the read-only status seam (§9.4). Done.** `docs/rfcs/0010-read-only-status-seam.md`
+    fixes the consumed JSON envelopes, schema-version compatibility policy, canonical state-root
+    locations, privacy boundary, and the prohibition on remote mutation without a separate trust RFC.
 
 42. **`0.2.0` release gates (§16).** The A/B benchmark matrix across the scenarios §8.2 deferred, the
     per-channel savings report, regenerated matrices, and the build provenance attestation §8.3 still
