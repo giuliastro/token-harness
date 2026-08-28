@@ -48,12 +48,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Show rollback formatting diff
-        run: |
-          pnpm exec prettier --write apps/cli/src/commands/rollback.ts
-          git diff -- apps/cli/src/commands/rollback.ts
-          git checkout -- apps/cli/src/commands/rollback.ts
-
       - name: Format check
         run: pnpm format:check
 
