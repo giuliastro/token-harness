@@ -10,10 +10,7 @@ import type { CapabilityId } from '../domain/capabilities.js';
 import type { HarnessId, ProviderId } from '../domain/ids.js';
 
 import { MEASUREMENT_CLASSES, type MeasurementClass, type OptimizationEvent } from './events.js';
-import {
-  measurePipelineOperation,
-  type PipelineOperationIncomparableReason,
-} from './pipeline.js';
+import { measurePipelineOperation, type PipelineOperationIncomparableReason } from './pipeline.js';
 
 export type ChannelMetricStatus =
   | 'measured'
@@ -141,10 +138,7 @@ function sameOwners(
   return true;
 }
 
-function directlyAttributed(
-  event: OptimizationEvent,
-  channel: MetricsChannelExpectation,
-): boolean {
+function directlyAttributed(event: OptimizationEvent, channel: MetricsChannelExpectation): boolean {
   return (
     event.context.pipelineId === channel.pipelineId &&
     event.context.harnessId === channel.harness &&
