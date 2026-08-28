@@ -1,4 +1,4 @@
-# Publishes `token-harness` after the release gates pass — PLAN §8.3.
+# Builds and attests the exact publishable `token-harness` artifact after release gates pass — PLAN §8.3.
 name: Release
 
 on:
@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -50,3 +53,27 @@ jobs:
 
       - name: Refuse a tag that does not match the staged version
         run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+
+      - name: Pack the exact release artifact
+        run: |
+          mkdir -p dist/release
+          npm pack ./dist/package --pack-destination dist/release --loglevel error
+          test "$(find dist/release -maxdepth 1 -name '*.tgz' -type f | wc -l)" -eq 1
+
+      - name: Attest release provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/release/*.tgz
+
+      - name: Attest the shipped SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/release/*.tgz
+          sbom-path: dist/package/sbom.json
+
+      - name: Keep the attested tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: token-harness-${{ github.ref_name }}
+          path: dist/release/*.tgz
+          if-no-files-found: error
