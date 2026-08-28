@@ -270,8 +270,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         for (const harness of touched) {
           if (
             !managedIntegrations.some(
-              (entry) =>
-                entry.providerId === adapter.manifest.id && entry.harnessId === harness,
+              (entry) => entry.providerId === adapter.manifest.id && entry.harnessId === harness,
             )
           ) {
             managedIntegrations.push({ providerId: adapter.manifest.id, harnessId: harness });
