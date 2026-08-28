@@ -573,6 +573,31 @@ async function applyMergeYaml(
       );
     }
 
+    if (operation.expectedValueDigest !== null) {
+      const live = findYamlStringArrayEntry({
+        text,
+        pointer: operation.pointer,
+        valueDigest: operation.expectedValueDigest,
+      });
+      if (live.state !== 'found') {
+        return drift(
+          action,
+          action.path,
+          `${operation.pointer}: the owned YAML entry is no longer present in the stored-plan shape`,
+        );
+      }
+      if (
+        operation.expectedLineDigest !== null &&
+        live.lineDigest !== operation.expectedLineDigest
+      ) {
+        return drift(
+          action,
+          action.path,
+          `${operation.pointer}: the owned YAML line has been edited since the plan was computed`,
+        );
+      }
+    }
+
     const merged = mergeYamlStringArrayEntry({
       text,
       pointer: operation.pointer,
