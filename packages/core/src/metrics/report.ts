@@ -9,8 +9,10 @@
 import type { HarnessId, ProviderId } from '../domain/ids.js';
 import {
   aggregateChannelMetrics,
+  summarizePipelineTotal,
   type ChannelMetricsRow,
   type MetricsChannelExpectation,
+  type PipelineMetricTotal,
 } from './channels.js';
 import { MEASUREMENT_CLASSES, type MeasurementClass, type OptimizationEvent } from './events.js';
 
@@ -58,6 +60,12 @@ export interface MetricsReport {
    * Optional for compatibility with reports produced without an applied pipeline inventory.
    */
   channels?: ChannelMetricsRow[];
+  /**
+   * A single raw-to-final number only when the applied pipeline is fully comparable.
+   *
+   * Optional when no applied pipeline inventory was supplied to aggregation.
+   */
+  pipelineTotal?: PipelineMetricTotal;
   /**
    * Share of operations in which the optimization actually changed the payload.
    *
@@ -320,6 +328,8 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
     }));
 
   const operations = realized + bypassed;
+  const channels =
+    input.channels === undefined ? undefined : aggregateChannelMetrics(input.channels, input.events);
 
   return {
     windowStart: input.windowStart,
@@ -327,9 +337,9 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
     pipelineId: pipelineIsAmbiguous ? null : pipelineId,
     classes,
     providers,
-    ...(input.channels === undefined
+    ...(channels === undefined
       ? {}
-      : { channels: aggregateChannelMetrics(input.channels, input.events) }),
+      : { channels, pipelineTotal: summarizePipelineTotal(channels) }),
     coveragePercent: operations === 0 ? null : Math.round((realized / operations) * 100),
     bypassed,
     inflatedOperations: inflated,
