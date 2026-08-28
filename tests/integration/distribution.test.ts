@@ -131,6 +131,37 @@ describe('distribution', () => {
     );
   });
 
+  it('attests the exact tagged tarball without publishing it', () => {
+    assert.match(
+      RELEASE_CONFIG,
+      /npm pack \.\/dist\/package/,
+      'release does not create a publishable tarball',
+    );
+    assert.match(RELEASE_CONFIG, /actions\/attest@v4/, 'release creates no GitHub attestation');
+    assert.match(
+      RELEASE_CONFIG,
+      /subject-path:\s+dist\/release\/\*\.tgz/,
+      'provenance is not bound to the release tarball',
+    );
+    assert.match(
+      RELEASE_CONFIG,
+      /sbom-path:\s+dist\/package\/sbom\.json/,
+      'the shipped SBOM is not attached as an attestation',
+    );
+    assert.match(
+      RELEASE_CONFIG,
+      /actions\/upload-artifact@v4/,
+      'the attested tarball is not retained by the release run',
+    );
+    for (const permission of [
+      'id-token: write',
+      'attestations: write',
+      'artifact-metadata: write',
+    ]) {
+      assert.ok(RELEASE_CONFIG.includes(permission), `release lacks ${permission}`);
+    }
+  });
+
   it('validates release tags without publishing packages', () => {
     assert.match(
       RELEASE_CONFIG,
