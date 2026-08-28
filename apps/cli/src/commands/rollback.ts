@@ -387,10 +387,9 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     }
   }
 
-  const removalOrder = providerRemovalOrder(
-    latestAppliedOwnership(journalHistory),
-    [...actionsByProvider.keys()],
-  );
+  const removalOrder = providerRemovalOrder(latestAppliedOwnership(journalHistory), [
+    ...actionsByProvider.keys(),
+  ]);
   if (!removalOrder.ok) {
     const providers = removalOrder.providers.join(', ');
     diagnostics.push(
@@ -406,12 +405,7 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
           'Token Harness will not guess a dependency order',
       }),
     );
-    return finish(
-      EXIT_CODES['blocked-by-conflict'],
-      'uninstall',
-      empty('rejected'),
-      diagnostics,
-    );
+    return finish(EXIT_CODES['blocked-by-conflict'], 'uninstall', empty('rejected'), diagnostics);
   }
 
   const actions = removalOrder.order.flatMap((provider) => actionsByProvider.get(provider) ?? []);
