@@ -8,7 +8,8 @@
  * A historical journal alone is not enough — after uninstall it remains history and must not become
  * a ghost pipeline in status.
  *
- * Conflict detection can also run without a receipt. RFC 0003 §Continuous conflict detection exists precisely because
+ * Conflict detection can also run without a receipt. RFC 0003 §Continuous conflict detection
+ * exists precisely because
  * "every harness in scope runs all matching hooks rather than only the first" — so an unowned
  * entry on an exclusive scope is a real, present-tense conflict whether or not Token Harness
  * installed anything. Waiting for a receipt to report it would mean the one machine that cannot
@@ -155,8 +156,9 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
           const stillConfigured = owners.every((owner) => {
             if (owner.owner === TOKEN_HARNESS_OWNER) return true;
             return (
-              providerDetections.get(owner.owner)?.configuredHarnesses.includes(owner.scope.harness) ??
-              false
+              providerDetections
+                .get(owner.owner)
+                ?.configuredHarnesses.includes(owner.scope.harness) ?? false
             );
           });
           if (!stillConfigured) continue;
