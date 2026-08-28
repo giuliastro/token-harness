@@ -1136,6 +1136,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'write-owned-file',
   'patch-marker-block',
   'merge-json',
+  'merge-yaml',
   'remove-owned-change',
   'package-manager-install',
   'delegated-provider-install',
