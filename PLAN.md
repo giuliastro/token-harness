@@ -1278,10 +1278,17 @@ rather than continuing to present it as merely pending.
     extension in Pi's auto-loaded extension directories and verifies the configuration. Pi remains
     read-only from Token Harness today; managed installation is item 33.
 
-32. **OMP: adapter or a recorded refusal. [second machine]** A control bridge is not an interception
-    point. If item 26 found one, this is an adapter; if it did not, this item is the paragraph in
-    `docs/provider-landscape.md` §Harness landscape saying so with the evidence, and OMP stays
-    detection-only or absent. Either outcome closes the item; a silent omission does not.
+32. **OMP adapter admission. [second machine]** Item 26 observed OMP 17.2.4's post-hook surface but
+    HarnessTrim 0.0.6 had no OMP installer, so the original queue allowed either an adapter or a
+    recorded refusal. That premise is stale: HarnessTrim main now ships `adapter-omp`,
+    `install omp`, `uninstall omp`, a machine-readable OMP write set, and baked
+    mode/min-length/metrics configuration.
+
+    This reopens OMP as a real managed-harness candidate, but it does **not** create a compatibility
+    row by documentation. Re-run the second-machine observation against the current HarnessTrim
+    build, prove the exact hook/config artifacts and whether an attributed metrics receipt is
+    observable, then add the adapter/row at the tier the machine proves. Until that fixture exists,
+    Token Harness must continue to make no OMP mutation.
 
 33. **HarnessTrim as a managed provider on Hermes and Pi. [second machine]** The first managed
     HarnessTrim installation, and the reason it is first: RTK declares Claude Code alone, so nothing
@@ -1372,12 +1379,19 @@ rather than continuing to present it as merely pending.
        remove the review; it turns it into a fixture that compares declaration against what an apply
        actually wrote. Cheap, repeatable, and it fails when upstream changes what it writes.
 
-    b. **`--json` on `doctor` and `metrics` replaces prose parsing** in the detection path.
+    b. **Closed by architecture — no prose parser remains.** Token Harness does not consume
+       `harnesstrim doctor` or `harnesstrim metrics` prose. Detection asks `--version` and
+       consumes the machine-readable `capabilities` document; metrics import reads the native JSONL
+       stream directly. Calling the upstream summary commands would add a second, less precise source
+       of truth, so there is nothing to replace here.
 
-    c. **`uninstall` makes removal more than restore-only.** `harnesstrim uninstall <harness>` is
-       dry-run by default and removes only what install wrote. `upstreamUninstallAvailable` is
-       already a manifest field and already true; the executor may now call it, with the snapshot
-       restore kept as the fallback rather than deleted.
+    c. **Closed by ownership policy — keep Token Harness' surgical uninstall.** The shipped
+       `uninstall` is no longer restore-only: it plans `remove-owned-change` from committed journal
+       ownership, verifies the live digest/marker, and executes the removals transactionally. Although
+       HarnessTrim now ships `uninstall <harness> --apply`, delegating removal would introduce a
+       second implementation of ownership and weaken the invariant that Token Harness removes only
+       artifacts it can prove it wrote. `upstreamUninstallAvailable` remains capability metadata;
+       it is not a reason to bypass the journal-owned removal path.
 
     d. **Done — #46/#47: the importer consumes native event identity and token counts.** `TrimEvent` now carries `schemaVersion`, a producer
        `eventId` from `randomUUID`, `beforeTokens`/`afterTokens` — null where the emitting path has
@@ -1439,14 +1453,13 @@ Claude/Codex part of item 46. The remaining dependency order is therefore:
 
 1. **45** — refuse a managed update whose target version is outside reviewed compatibility/write-set
    evidence. This is the safety prerequisite for calling the provider lifecycle managed.
-2. **43b and 43c** — consume HarnessTrim's JSON doctor/metrics surfaces and its upstream uninstall.
-3. **33** — manage HarnessTrim on Hermes and Pi, using the adapters already shipped in #62/#66.
-4. **32** — close OMP explicitly from the spike evidence: either a reviewed path appears or the
-   refusal remains a documented product boundary.
-5. **35**, then **36** and **37** — add Lazy MCP on an unowned channel, then Caveman and Dejavu.
-6. **38**, **39**, **40** — goal-based profiles, pipeline-level lifecycle verbs, and per-channel
+2. **33** — manage HarnessTrim on Hermes and Pi, using the adapters already shipped in #62/#66.
+3. **32** — re-observe OMP against HarnessTrim's new OMP installer, then admit only the tier and
+   write set the real machine proves. 43b/43c need no implementation after the decisions above.
+4. **35**, then **36** and **37** — add Lazy MCP on an unowned channel, then Caveman and Dejavu.
+5. **38**, **39**, **40** — goal-based profiles, pipeline-level lifecycle verbs, and per-channel
    metrics. These are what turn a collection of managed providers into one pipeline product.
-7. **41**, **42** — publish the read-only status seam and discharge the 0.2.0 release gates.
+6. **41**, **42** — publish the read-only status seam and discharge the 0.2.0 release gates.
 
 OpenCode managed installation is not in this sequence while the current dependency-tree installer
 remains incompatible with the transactional rollback contract.
