@@ -1355,9 +1355,20 @@ rather than continuing to present it as merely pending.
     recorded orders fail closed. #77/#79 make `status` lead with the applied pipeline ID, channels,
     ordered owners, declared tiers and drift, sourced from the receipt plus live configuration.
 
-40. **Per-channel metrics over five providers (§9.5).** Reports per channel and per provider with the
-    measurement classes structurally apart, overlapping stages counted once, and a refusal rather than
-    an approximation where a mixed pipeline has no comparable total.
+40. **Per-channel metrics over five providers (§9.5). Partially done — #82, #83.** #82 makes
+    raw-to-final accounting executable rather than aspirational: ordered stages are measured once,
+    and missing identity, mixed classes/units, broken boundaries, counterfactuals and overlapping
+    baselines fail closed. #83 adds the actual per-channel report from the same live applied-pipeline
+    inventory as `status`, with explicit `measured`, `unmeasured`,
+    `attribution-unavailable` and `incomparable` states while keeping provider rows marginal.
+
+    The remaining work is evidence breadth, not permission to infer it. RTK history and current
+    HarnessTrim telemetry still import with `pipelineId` / `pipelineOrder` null, so their existing
+    historical rows correctly report attribution unavailable rather than being assigned to today's
+    configuration. Item 40 closes only after the admitted provider set can emit or otherwise prove
+    shared operation/pipeline identity across real chains, the five-provider fixtures exercise it,
+    and a mixed pipeline's top-level total is explicitly refused when its channels are not mutually
+    comparable.
 
 41. **RFC 0010, the read-only status seam (§9.4). Done.** `docs/rfcs/0010-read-only-status-seam.md`
     fixes the consumed JSON envelopes, schema-version compatibility policy, canonical state-root
@@ -1366,8 +1377,9 @@ rather than continuing to present it as merely pending.
 42. **`0.2.0` release gates (§16). Partially done.** #75 closes the build-provenance part of
     §8.3: the tag workflow packs the exact publishable tarball, attests SLSA provenance and the
     shipped CycloneDX SBOM against it, and retains the attested artifact without publishing it.
-    The A/B benchmark matrix across the scenarios §8.2 deferred, the per-channel savings report and
-    regenerated matrices remain.
+    #82/#83 ship the provider-neutral per-channel accounting and report. The A/B benchmark matrix,
+    five-provider attribution evidence, explicit mixed-pipeline total refusal and regenerated
+    matrices remain.
 
 43. **Consume HarnessTrim's machine-readable surfaces. Done — #45, #46/#47, #73.**
     43a consumes the capability/write-set declaration and 43d consumes native event identity/token
