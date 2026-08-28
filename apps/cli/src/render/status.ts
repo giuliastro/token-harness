@@ -37,9 +37,28 @@ export function renderStatusReport(report: StatusReport, context: RenderContext)
   } else {
     for (const pipeline of report.pipelines) {
       lines.push(`  ${pipeline.harness} — pipeline ${pipeline.pipelineId}`);
+
+      if ((pipeline.channels ?? []).length > 0) {
+        lines.push('    channels');
+        for (const channel of pipeline.channels ?? []) {
+          lines.push(
+            `      ${channel.toolFamily}/${channel.capability} — ${channel.owners.join(' → ')}`,
+          );
+        }
+      }
+
+      if ((pipeline.tiers ?? []).length > 0) {
+        lines.push(
+          `    tiers — ${(pipeline.tiers ?? [])
+            .map((tier) => `${tier.providerId}: ${tier.declaredTier}`)
+            .join(', ')}`,
+        );
+      }
+
+      lines.push('    owners');
       for (const owner of pipeline.owners) {
         lines.push(
-          `    ${column(formatCapabilityScope(owner.scope), OWNER_SCOPE_WIDTH)}${owner.owner}`,
+          `      ${column(formatCapabilityScope(owner.scope), OWNER_SCOPE_WIDTH)}${owner.owner}`,
         );
       }
     }
