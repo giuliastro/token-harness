@@ -458,6 +458,18 @@ measurement would manufacture an incomparability that the user created with the 
 `metrics --harness <id>` scopes the metrics-store query itself, so provider and channel sections
 refer to the same harness rather than filtering only one presentation layer.
 
+The optional `pipelineTotal` is deliberately stricter than every row above it. It is numeric only
+when the report contains exactly one applied channel, every operation in that channel is safely
+attributed/comparable, and exactly one measurement class/unit is present. A multi-channel report is
+currently `incomparable` with reason `cross-channel-comparability-unproven`: without a
+cross-channel operation graph, adding independently valid channel savings would assume that no
+payload was counted in two channels. Missing measurements or unattributed residue make the total
+`unavailable`, not zero and not a partial total.
+
+This is intentionally conservative. A later provider set can relax the multi-channel refusal only
+after its events prove shared operation identity across channels; adding numbers first and evidence
+later is not an allowed migration path.
+
 ## Benchmark standard
 
 ### Release gating
