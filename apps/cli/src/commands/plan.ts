@@ -29,6 +29,7 @@ import {
   isProfileId,
   buildStoredPlan,
   derivePlanId,
+  findMarkerRegionConflicts,
   planRequiresElevation,
   planRequiresNetwork,
   resolveOwnership,
@@ -39,6 +40,7 @@ import {
   type HarnessId,
   type HarnessManifest,
   type ManagedIntegration,
+  type HardConflict,
   type PlanReport,
   type PlannedAction,
   type ProfileId,
@@ -212,6 +214,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
    * to a separate, non-intercepting install; it must not use that path to claim an exclusive scope.
    */
   const actions: PlannedAction[] = [];
+  const attributedActions: Array<{ providerId: ProviderId; action: PlannedAction }> = [];
   const managedIntegrations: ManagedIntegration[] = [];
   const blocked: BlockedManagedMutation[] = [];
   if (providerContext !== null) {
@@ -267,6 +270,12 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       }
       if (admitted) {
         actions.push(...providerPlan.actions);
+        attributedActions.push(
+          ...providerPlan.actions.map((action) => ({
+            providerId: adapter.manifest.id,
+            action,
+          })),
+        );
         for (const harness of touched) {
           if (
             !managedIntegrations.some(
@@ -279,6 +288,21 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       }
     }
   }
+
+  const markerConflicts: HardConflict[] = findMarkerRegionConflicts(attributedActions).map(
+    (conflict) => ({
+      code: 'marker-region-contested',
+      scope: `${conflict.path}#${conflict.markerBegin}..${conflict.markerEnd}`,
+      claimants: conflict.claimants,
+      detail: [
+        `Multiple providers claim the same marker-fenced region in ${conflict.path}`,
+        `Claimants: ${conflict.claimants.join(', ')}`,
+      ],
+      remediation:
+        'Give each provider a distinct marker pair, or disable one of the providers for this instruction region',
+    }),
+  );
+  const conflicts = [...resolution.conflicts, ...markerConflicts];
 
   const report: PlanReport = {
     // RFC 0006 §Plan persistence: "a digest over the plan's normalized content, so identical
@@ -302,7 +326,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     ownership: resolution.ownership,
     exclusions: resolution.exclusions,
     actions,
-    conflicts: resolution.conflicts,
+    conflicts,
     // Derived from the actions rather than declared, so the summary line cannot disagree with
     // what the plan would do. RFC 0006's transcript prints all three.
     network: planRequiresNetwork(actions) ? ['provider installation channel'] : [],
@@ -398,7 +422,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     );
   }
 
-  for (const conflict of resolution.conflicts) {
+  for (const conflict of conflicts) {
     diagnostics.push(
       diagnostic({
         severity: 'error',
