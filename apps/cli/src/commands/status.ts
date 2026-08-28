@@ -165,7 +165,11 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
 
           const channels = new Map<
             string,
-            { toolFamily: string; capability: (typeof owners)[number]['scope']['capability']; owners: ProviderId[] }
+            {
+              toolFamily: string;
+              capability: (typeof owners)[number]['scope']['capability'];
+              owners: ProviderId[];
+            }
           >();
           for (const owner of [...owners].sort((left, right) => left.order - right.order)) {
             const key = `${owner.scope.toolFamily}\0${owner.scope.capability}`;
