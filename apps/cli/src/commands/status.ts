@@ -163,12 +163,42 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
           });
           if (!stillConfigured) continue;
 
+          const channels = new Map<
+            string,
+            {
+              toolFamily: string;
+              capability: (typeof owners)[number]['scope']['capability'];
+              owners: ProviderId[];
+            }
+          >();
+          for (const owner of [...owners].sort((left, right) => left.order - right.order)) {
+            const key = `${owner.scope.toolFamily}\0${owner.scope.capability}`;
+            const channel = channels.get(key) ?? {
+              toolFamily: owner.scope.toolFamily,
+              capability: owner.scope.capability,
+              owners: [],
+            };
+            if (!channel.owners.includes(owner.owner)) channel.owners.push(owner.owner);
+            channels.set(key, channel);
+          }
+
+          const tierProviders = [...new Set(owners.map((owner) => owner.owner))];
+          const tiers = tierProviders.flatMap((providerId) => {
+            const adapter = providerAdapters.find((entry) => entry.manifest.id === providerId);
+            const support = adapter?.manifest.harnesses.find((entry) => entry.harness === harness);
+            return support === undefined
+              ? []
+              : [{ providerId, declaredTier: support.verificationTier }];
+          });
+
           report.pipelines.push({
             pipelineId: journal.appliedPipeline.pipelineId,
             harness: owners[0]?.scope.harness ?? (harness as HarnessManifest['id']),
             receiptId: journal.transactionId,
             appliedAt: journal.finishedAt ?? journal.startedAt,
             owners: [...owners],
+            channels: [...channels.values()],
+            tiers,
           });
           reportedHarnesses.add(harness);
         }
