@@ -215,7 +215,6 @@ describe('channel metrics', () => {
   });
 });
 
-
 describe('pipeline metric total', () => {
   it('measures the one fully comparable channel without re-summing provider rows', () => {
     const rows = aggregateChannelMetrics(
