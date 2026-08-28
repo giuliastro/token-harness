@@ -5,6 +5,7 @@ import {
   aggregateChannelMetrics,
   harnessId,
   providerId,
+  summarizePipelineTotal,
   type MetricsChannelExpectation,
   type OptimizationEvent,
 } from '../src/index.js';
@@ -211,5 +212,164 @@ describe('channel metrics', () => {
     assert.equal(row.status, 'measured');
     assert.equal(row.operations, 1);
     assert.equal(row.classes.find((entry) => entry.class === 'exact-local')?.saved, 800);
+  });
+});
+
+
+describe('pipeline metric total', () => {
+  it('measures the one fully comparable channel without re-summing provider rows', () => {
+    const rows = aggregateChannelMetrics(
+      [CHANNEL],
+      [
+        stage({ id: 'a', provider: 'alpha', order: 0, before: 1000, after: 300 }),
+        stage({ id: 'b', provider: 'beta', order: 1, before: 300, after: 200 }),
+      ],
+    );
+
+    const total = summarizePipelineTotal(rows);
+    assert.deepEqual(total, {
+      status: 'measured',
+      reason: null,
+      class: 'exact-local',
+      unit: 'tokens',
+      before: 1000,
+      after: 200,
+      saved: 800,
+      channels: 1,
+      note: 'raw-to-final total for the single applied channel in this report',
+    });
+  });
+
+  it('refuses to add two independently measured channels without cross-channel proof', () => {
+    const second: MetricsChannelExpectation = {
+      ...CHANNEL,
+      toolFamily: 'PowerShell',
+    };
+    const rows = aggregateChannelMetrics(
+      [CHANNEL, second],
+      [
+        stage({
+          id: 'a-bash',
+          provider: 'alpha',
+          operation: 'bash',
+          order: 0,
+          before: 1000,
+          after: 300,
+        }),
+        stage({
+          id: 'b-bash',
+          provider: 'beta',
+          operation: 'bash',
+          order: 1,
+          before: 300,
+          after: 200,
+        }),
+        stage({
+          id: 'a-powershell',
+          provider: 'alpha',
+          operation: 'powershell',
+          order: 0,
+          before: 500,
+          after: 250,
+          toolFamily: 'PowerShell',
+        }),
+        stage({
+          id: 'b-powershell',
+          provider: 'beta',
+          operation: 'powershell',
+          order: 1,
+          before: 250,
+          after: 100,
+          toolFamily: 'PowerShell',
+        }),
+      ],
+    );
+
+    const total = summarizePipelineTotal(rows);
+    assert.equal(total.status, 'incomparable');
+    assert.equal(total.reason, 'cross-channel-comparability-unproven');
+    assert.equal(total.saved, null);
+  });
+
+  it('refuses a single channel whose window contains multiple measurement classes', () => {
+    const rows = aggregateChannelMetrics(
+      [CHANNEL],
+      [
+        stage({
+          id: 'a1',
+          provider: 'alpha',
+          operation: 'exact',
+          order: 0,
+          before: 1000,
+          after: 300,
+        }),
+        stage({
+          id: 'b1',
+          provider: 'beta',
+          operation: 'exact',
+          order: 1,
+          before: 300,
+          after: 200,
+        }),
+        stage({
+          id: 'a2',
+          provider: 'alpha',
+          operation: 'estimated',
+          order: 0,
+          before: 800,
+          after: 400,
+          unit: 'chars',
+          measurementClass: 'estimated-local',
+        }),
+        stage({
+          id: 'b2',
+          provider: 'beta',
+          operation: 'estimated',
+          order: 1,
+          before: 400,
+          after: 300,
+          unit: 'chars',
+          measurementClass: 'estimated-local',
+        }),
+      ],
+    );
+
+    const total = summarizePipelineTotal(rows);
+    assert.equal(total.status, 'incomparable');
+    assert.equal(total.reason, 'measurement-class-or-unit-mismatch');
+    assert.equal(total.saved, null);
+  });
+
+  it('does not call a partial measured window a pipeline total when unattributed residue exists', () => {
+    const rows = aggregateChannelMetrics(
+      [CHANNEL],
+      [
+        stage({ id: 'a', provider: 'alpha', order: 0, before: 1000, after: 300 }),
+        stage({ id: 'b', provider: 'beta', order: 1, before: 300, after: 200 }),
+        stage({
+          id: 'legacy',
+          provider: 'alpha',
+          operation: 'legacy',
+          pipelineId: null,
+          order: null,
+          harness: 'unknown',
+          toolFamily: null,
+        }),
+      ],
+    );
+
+    assert.equal(rows[0]?.status, 'measured');
+    assert.equal(rows[0]?.unattributedOperations, 1);
+    const total = summarizePipelineTotal(rows);
+    assert.equal(total.status, 'unavailable');
+    assert.equal(total.reason, 'channel-residue');
+    assert.equal(total.saved, null);
+  });
+
+  it('reports an empty applied-channel inventory as unavailable rather than zero', () => {
+    const total = summarizePipelineTotal([]);
+    assert.equal(total.status, 'unavailable');
+    assert.equal(total.reason, 'no-applied-channels');
+    assert.equal(total.saved, null);
   });
 });
