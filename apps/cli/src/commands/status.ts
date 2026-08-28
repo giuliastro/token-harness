@@ -3,10 +3,12 @@
  *
  * Two jobs, and only one of them needs a receipt.
  *
- * Reporting applied pipelines does: RFC 0004 §Post-apply drift compares a receipt against the
- * live environment, and there is no `apply` yet, so `pipelines` stays empty and honest.
+ * Reporting applied pipelines needs both sides of the claim: the committed receipt says what Token
+ * Harness applied, and live provider detection says whether that integration is still configured.
+ * A historical journal alone is not enough — after uninstall it remains history and must not become
+ * a ghost pipeline in status.
  *
- * Conflict detection does not. RFC 0003 §Continuous conflict detection exists precisely because
+ * Conflict detection can also run without a receipt. RFC 0003 §Continuous conflict detection exists precisely because
  * "every harness in scope runs all matching hooks rather than only the first" — so an unowned
  * entry on an exclusive scope is a real, present-tense conflict whether or not Token Harness
  * installed anything. Waiting for a receipt to report it would mean the one machine that cannot
@@ -21,6 +23,8 @@ import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapte
 import {
   COMPATIBILITY_RULES,
   EXIT_CODES,
+  FileJournalStore,
+  TOKEN_HARNESS_OWNER,
   commandResult,
   detectUnownedEntries,
   resolveOwnership,
@@ -28,6 +32,7 @@ import {
   type CommandResult,
   type HarnessConfigSummary,
   type HarnessManifest,
+  type ProviderDetection,
   type ProviderId,
   type ResolverProvider,
   type StatusReport,
@@ -38,9 +43,6 @@ import type { CommandContext } from './context.js';
 export async function runStatus(context: CommandContext): Promise<CommandResult<StatusReport>> {
   const report: StatusReport = {
     platform: context.platform,
-    // RFC 0004 §Post-apply drift: a pipeline is something a receipt records, and there are no
-    // receipts until `apply` exists. Reporting resolved ownership here as though it had been
-    // applied would be the one claim `status` must never make.
     pipelines: [],
     drift: [],
     importers: [],
@@ -88,6 +90,7 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
    * from a rule of unknown validity would be reporting a conclusion it cannot support.
    */
   const observedVersions: Record<string, string | null> = {};
+  const providerDetections = new Map<ProviderId, ProviderDetection>();
   const providers: ResolverProvider[] = [];
   for (const adapter of providerAdapters) {
     const detection = await adapter.detect({
@@ -98,6 +101,7 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
       projectIdFor: context.adapters.projectIdFor,
     });
     observedVersions[adapter.manifest.id] = detection.version;
+    providerDetections.set(adapter.manifest.id, detection);
     // Same probe, two answers: the version the rules are checked against, and whether this build
     // can be asked for the state a rule would assign. `plan.ts` says why the second is not a
     // constant, and `status` must resolve identically or it reports a different tool's conclusion.
@@ -118,6 +122,59 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
   });
 
   /**
+   * Applied pipeline state comes from committed journals, never from "what the resolver would do
+   * now". The second test is live: every recorded owner for a harness must still report itself
+   * configured there. That makes an uninstall disappear from status without deleting history.
+   *
+   * Newest journal wins per harness. Older schema-1 journals without `appliedPipeline` stay
+   * readable but cannot support this stronger claim, so they are skipped rather than guessed.
+   */
+  if (context.stateRoot !== null) {
+    const journalRoot = context.adapters.fs.join(context.stateRoot, 'journals');
+    if ((await context.adapters.fs.stat(journalRoot)) !== null) {
+      const journals = new FileJournalStore({
+        fs: context.adapters.fs,
+        journalRoot,
+        backupRoot: context.adapters.fs.join(context.stateRoot, 'backups'),
+      });
+      const reportedHarnesses = new Set<string>();
+
+      for (const journal of await journals.list()) {
+        if (journal.outcome !== 'committed' || journal.appliedPipeline === undefined) continue;
+
+        const byHarness = new Map<string, typeof journal.appliedPipeline.owners>();
+        for (const owner of journal.appliedPipeline.owners) {
+          const current = byHarness.get(owner.scope.harness) ?? [];
+          byHarness.set(owner.scope.harness, [...current, owner]);
+        }
+
+        for (const [harness, owners] of byHarness) {
+          if (reportedHarnesses.has(harness)) continue;
+          if (context.harness !== null && harness !== context.harness) continue;
+
+          const stillConfigured = owners.every((owner) => {
+            if (owner.owner === TOKEN_HARNESS_OWNER) return true;
+            return (
+              providerDetections.get(owner.owner)?.configuredHarnesses.includes(owner.scope.harness) ??
+              false
+            );
+          });
+          if (!stillConfigured) continue;
+
+          report.pipelines.push({
+            pipelineId: journal.appliedPipeline.pipelineId,
+            harness: owners[0]?.scope.harness ?? (harness as HarnessManifest['id']),
+            receiptId: journal.transactionId,
+            appliedAt: journal.finishedAt ?? journal.startedAt,
+            owners: [...owners],
+          });
+          reportedHarnesses.add(harness);
+        }
+      }
+    }
+  }
+
+  /**
    * Recognising a command as a provider's own.
    *
    * Delegated to the provider adapters, the same seam RFC 0002 uses for detection: a provider
@@ -132,7 +189,12 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
     return null;
   };
 
-  const findings = detectUnownedEntries({ ownership: resolution.ownership, configs, identify });
+  const appliedOwnership = report.pipelines.flatMap((pipeline) => pipeline.owners);
+  const findings = detectUnownedEntries({
+    ownership: appliedOwnership.length > 0 ? appliedOwnership : resolution.ownership,
+    configs,
+    identify,
+  });
   report.drift = findings.map(toReportedDrift);
 
   // RFC 0003: "the finding is actionable, so the command exits with the problems-found code
