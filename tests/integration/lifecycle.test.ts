@@ -203,6 +203,8 @@ describe('status after apply', () => {
     assert.equal(pipeline.receiptId, applied.data?.transactionId);
     assert.ok(pipeline.pipelineId.length > 0);
     assert.ok(pipeline.owners.some((entry) => entry.owner === 'rtk'));
+    assert.ok(pipeline.channels?.some((entry) => entry.owners.includes('rtk')));
+    assert.ok(pipeline.tiers?.some((entry) => entry.providerId === 'rtk'));
   });
 
   it('does not report a historical apply as active after uninstall', async () => {
