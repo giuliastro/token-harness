@@ -414,9 +414,7 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     );
   }
 
-  const actions = removalOrder.order.flatMap(
-    (provider) => actionsByProvider.get(provider) ?? [],
-  );
+  const actions = removalOrder.order.flatMap((provider) => actionsByProvider.get(provider) ?? []);
 
   if (actions.length === 0) {
     diagnostics.push(
