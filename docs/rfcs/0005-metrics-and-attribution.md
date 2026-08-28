@@ -125,8 +125,23 @@ It is not:
 Events in a chain share `operationId` and `pipelineId`, and use monotonically increasing
 `pipelineOrder`. The aggregator calculates raw-to-final totals once.
 
-If the chain cannot expose stage boundaries, Token Harness reports only pipeline-level
-savings and marks per-provider attribution unavailable.
+A raw-to-final total is accepted only when the observed stages are actually comparable:
+
+- every stage names the same pipeline and operation;
+- multiple stages have distinct `pipelineOrder` values;
+- every stage uses the same measurement class and the same unit;
+- a stage's `after` figure equals the next stage's `before` figure;
+- counterfactual, failed, missing-measurement, or unrealized stages do not enter a realized total.
+
+A violation is an **incomparable measurement**, not permission to add the stage savings anyway. In
+particular, if provider B reports the original raw baseline again rather than the output of provider
+A, the boundary mismatch is the evidence that summing A and B would double-count part of the
+saving.
+
+If the chain cannot expose comparable stage boundaries, Token Harness refuses the derived
+raw-to-final figure rather than approximating it. A later report may still show independently valid
+marginal provider measurements under their own classes; their existence does not make the pipeline
+total comparable.
 
 ## Storage
 
