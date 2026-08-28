@@ -1346,9 +1346,14 @@ rather than continuing to present it as merely pending.
     `balanced` and `max` are neither absent nor aliases of `safe`; `plan` explains every selection and
     every rejection; a missing provider narrows the pipeline instead of co-enabling two claimants.
 
-39. **Pipeline-level `update`, `uninstall`, `rollback`, and `status` (§9.5).** One transaction and one
-    receipt over the whole set; reverse dependency order on removal; `status` leading with the
-    pipeline ID, its channels, owners, tiers and drift.
+39. **Pipeline-level `update`, `uninstall`, `rollback`, and `status` (§9.5). Done — #77, #79, #80.**
+    The mutating lifecycle already executes the whole selected provider set through one transaction
+    and one receipt: `update` accumulates all admitted upgrades before its single
+    `executeTransaction`, `uninstall` does the same for owned removals, and `rollback` reverses
+    one committed transaction as a unit. #80 adds the missing dependency rule: an applied ordered
+    chain is removed in reverse `ResolvedCapability.order`, while contradictory or ambiguous
+    recorded orders fail closed. #77/#79 make `status` lead with the applied pipeline ID, channels,
+    ordered owners, declared tiers and drift, sourced from the receipt plus live configuration.
 
 40. **Per-channel metrics over five providers (§9.5).** Reports per channel and per provider with the
     measurement classes structurally apart, overlapping stages counted once, and a refusal rather than
@@ -1461,10 +1466,11 @@ Claude/Codex part of item 46. The remaining dependency order is therefore:
    write set the real machine proves.
 3. **35**, then the remaining provider work in **36** and **37** — add Lazy MCP on an unowned
    channel, then Caveman and Dejavu. The generic marker-region conflict prerequisite of 36 is done.
-4. **38**, **39**, **40** — goal-based profiles, pipeline-level lifecycle/status, and per-channel
-   metrics. These are what turn a collection of managed providers into one pipeline product.
-5. **42** — finish the A/B matrix, per-channel report and regenerated matrices. RFC 0010 and build
-   provenance are already shipped.
+4. **38**, then **40** — goal-based profiles and per-channel metrics. Pipeline-level
+   lifecycle/status is complete in #77/#79/#80; these remaining two pieces finish the pipeline
+   product semantics rather than its mutation boundary.
+5. **42** — finish the A/B matrix, per-channel report and regenerated matrices. RFC 0010, pipeline
+   lifecycle and build provenance are already shipped.
 
 OpenCode managed installation is not in this sequence while the current dependency-tree installer
 remains incompatible with the transactional rollback contract.
