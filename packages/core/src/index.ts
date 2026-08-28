@@ -7,6 +7,7 @@
  */
 
 export * from './domain/actions.js';
+export * from './domain/action-conflicts.js';
 export * from './domain/capabilities.js';
 export * from './domain/compatibility-rows.js';
 export * from './domain/compatibility.js';
