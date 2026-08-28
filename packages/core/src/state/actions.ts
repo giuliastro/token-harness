@@ -16,9 +16,10 @@
  * planning, an owned block the user edited, a marker fence somebody removed. The
  * outcome is `precondition-drift`, which the CLI reports as exit 5 — never a write.
  *
- * Seven action families are implemented: the four that touch files without a parser (PLAN §15
- * issue 6), `merge-json` (issue 7), `package-manager-install`, and the containment-bounded
- * `delegated-provider-install`. The rest report `action-not-implemented` rather than silently
+ * Eight action families are implemented: the four that touch files without a parser (PLAN §15
+ * issue 6), `merge-json`, the deliberately narrow `merge-yaml`, `package-manager-install`,
+ * and the containment-bounded `delegated-provider-install`. The rest report
+ * `action-not-implemented` rather than silently
  * succeeding.
  */
 
@@ -32,6 +33,7 @@ import type {
   CreateDirectoryAction,
   DelegatedProviderInstallAction,
   MergeJsonAction,
+  MergeYamlAction,
   PackageManagerInstallAction,
   PatchMarkerBlockAction,
   PlannedAction,
@@ -60,6 +62,11 @@ import {
   resolveJsonPointer,
 } from './json-merge.js';
 import { findMarkerBlock, removeMarkerBlock, upsertMarkerBlock } from './marker-block.js';
+import {
+  findYamlStringArrayEntry,
+  mergeYamlStringArrayEntry,
+  removeYamlStringArrayEntry,
+} from './yaml-array.js';
 import type { SnapshotStore } from './snapshots.js';
 
 export interface ActionContext {
@@ -507,6 +514,110 @@ async function applyMergeJson(
   return outcome(action, 'applied', { snapshots: [snapshot], ownership, diagnostics });
 }
 
+/**
+ * `merge-yaml`, intentionally limited to owned string entries in block sequences.
+ *
+ * The pure editor refuses YAML it cannot preserve safely. Unlike a general parser/serializer it
+ * never rewrites unrelated keys or comments, which is the important property for a shared harness
+ * config file.
+ */
+async function applyMergeYaml(
+  action: MergeYamlAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  const { fs } = context;
+  const declared = new Set(action.ownedPointers);
+  const undeclared = action.operations
+    .map((operation) => operation.pointer)
+    .filter((pointer) => !declared.has(pointer));
+  if (undeclared.length > 0) {
+    return refusal(
+      action,
+      'action-claims-undeclared-pointer',
+      action.path,
+      `This action edits ${undeclared.join(', ')}, which it does not declare in ownedPointers`,
+      'Recompute the plan; an action may only touch what it declares',
+    );
+  }
+
+  const stat = await fs.stat(action.path);
+  if (stat !== null && stat.kind !== 'file') {
+    return refusal(
+      action,
+      'path-is-not-a-file',
+      action.path,
+      'A directory exists where Token Harness needs to merge a YAML document',
+      'Move or remove the directory, then run the command again',
+    );
+  }
+  if (stat === null && !action.createIfMissing) {
+    return drift(
+      action,
+      action.path,
+      'The YAML document this plan merges into no longer exists, and the plan does not permit creating it',
+    );
+  }
+
+  let text = stat === null ? '' : await readText(fs, action.path);
+  const ownership: OwnedArtifact[] = [];
+  let changed = false;
+
+  for (const operation of action.operations) {
+    if (operation.kind !== 'append-string') {
+      return refusal(
+        action,
+        'yaml-operation-unsupported',
+        action.path,
+        `This build cannot execute YAML operation ${JSON.stringify(operation.kind)}`,
+        'Recompute the plan with a supported Token Harness build',
+      );
+    }
+
+    const merged = mergeYamlStringArrayEntry({
+      text,
+      pointer: operation.pointer,
+      value: operation.value,
+    });
+    if (merged.state === 'unmergeable') {
+      return refusal(
+        action,
+        'yaml-shape-unsupported',
+        action.path,
+        `${operation.pointer}: ${merged.reason}`,
+        'Keep this YAML entry in block-sequence form, or configure the integration by hand',
+      );
+    }
+
+    if (
+      operation.expectedValueDigest !== null &&
+      merged.entry.valueDigest !== operation.expectedValueDigest
+    ) {
+      return drift(
+        action,
+        action.path,
+        `${operation.pointer}: the owned YAML value no longer matches the stored plan`,
+      );
+    }
+
+    text = merged.text;
+    changed ||= merged.changed;
+    ownership.push({
+      kind: 'owned-yaml-entry',
+      path: action.path,
+      pointer: merged.entry.pointer,
+      placement: 'array-element',
+      valueDigest: merged.entry.valueDigest,
+      lineDigest: merged.entry.lineDigest,
+    });
+  }
+
+  if (!changed) return outcome(action, 'already-satisfied', { ownership });
+
+  const snapshot = await context.snapshots.capture(action.path);
+  await fs.writeFile(action.path, UTF8.encode(text), stat?.mode ?? null);
+  return outcome(action, 'applied', { snapshots: [snapshot], ownership });
+}
+
 /** Reads back enough of the live file to judge an ownership claim. */
 async function observeOwnership(
   target: OwnedArtifact,
@@ -547,6 +658,19 @@ async function observeOwnership(
       entryDigest:
         lookup.found && lookup.value !== undefined ? jsonValueDigest(lookup.value) : null,
       entryPresent: lookup.found,
+    });
+  }
+  if (target.kind === 'owned-yaml-entry') {
+    const lookup = findYamlStringArrayEntry({
+      text: await readText(fs, target.path),
+      pointer: target.pointer,
+      valueDigest: target.valueDigest,
+    });
+    if (lookup.state === 'unmergeable') return 'unowned';
+    return verifyOwnership(target, {
+      exists: true,
+      entryDigest: lookup.state === 'found' ? lookup.lineDigest : null,
+      entryPresent: lookup.state === 'found',
     });
   }
   const lookup = findMarkerBlock(await readText(fs, target.path), {
@@ -631,6 +755,28 @@ async function applyRemoveOwnedChange(
       UTF8.encode(formatJsonDocument(removal.document, parsed.formatting)),
       null,
     );
+    return outcome(action, 'applied', { snapshots: [snapshot] });
+  }
+
+  if (action.target.kind === 'owned-yaml-entry') {
+    const removal = removeYamlStringArrayEntry({
+      text: await readText(fs, action.target.path),
+      pointer: action.target.pointer,
+      valueDigest: action.target.valueDigest,
+      lineDigest: action.target.lineDigest,
+    });
+    if (removal.state !== 'removed') {
+      return refusal(
+        action,
+        removal.state === 'unmergeable' ? 'yaml-shape-unsupported' : 'owned-artifact-modified',
+        action.target.path,
+        removal.state === 'unmergeable'
+          ? `The owned YAML entry could not be removed safely: ${removal.reason}`
+          : `The owned YAML entry \`${action.target.pointer}\` is ${removal.state}`,
+        'Review the entry and remove it by hand',
+      );
+    }
+    await fs.writeFile(action.target.path, UTF8.encode(removal.text), null);
     return outcome(action, 'applied', { snapshots: [snapshot] });
   }
 
@@ -895,6 +1041,8 @@ export async function applyAction(
       return applyRemoveOwnedChange(action, context);
     case 'merge-json':
       return applyMergeJson(action, context);
+    case 'merge-yaml':
+      return applyMergeYaml(action, context);
     case 'package-manager-install':
       return applyPackageManagerInstall(action, context);
     case 'delegated-provider-install':
@@ -902,7 +1050,6 @@ export async function applyAction(
     case 'download-artifact':
     case 'run-installer-command':
     case 'merge-toml':
-    case 'merge-yaml':
     case 'register-mcp-server':
     case 'register-hook':
       return notImplemented(action);
