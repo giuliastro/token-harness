@@ -20,6 +20,7 @@
 
 import {
   EXIT_CODES,
+  TOKEN_HARNESS_OWNER,
   UNATTRIBUTED_PROJECT_ID,
   aggregateEvents,
   commandResult,
@@ -27,12 +28,15 @@ import {
   resolveMetricsWindow,
   type CommandResult,
   type Diagnostic,
+  type MetricsChannelExpectation,
   type MetricsReport,
   type OptimizationEvent,
+  type ProviderId,
 } from '@token-harness/core';
 import { listProviderAdapters, type ProviderContext } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
+import { runStatus } from './status.js';
 
 export async function runMetrics(
   context: CommandContext,
@@ -164,6 +168,7 @@ export async function runMetrics(
     until: window.untilInstant,
     ...(projectId === null ? {} : { projectId }),
     ...(context.provider === null ? {} : { providerIds: [context.provider] }),
+    ...(context.harness === null ? {} : { harnessIds: [context.harness] }),
   })) {
     events.push(event);
   }
@@ -187,6 +192,7 @@ export async function runMetrics(
       until: window.untilInstant,
       projectId: UNATTRIBUTED_PROJECT_ID,
       ...(context.provider === null ? {} : { providerIds: [context.provider] }),
+      ...(context.harness === null ? {} : { harnessIds: [context.harness] }),
     })) {
       unattributed += 1;
     }
@@ -202,16 +208,52 @@ export async function runMetrics(
     }
   }
 
+  /**
+   * The applied pipeline inventory is the same one `status` reports.
+   *
+   * Do not re-derive it from today's resolver: a receipt says what was actually applied, while
+   * live detection inside `status` removes historical pipelines that have since been uninstalled
+   * or manually disconnected. Metrics needs that exact present-tense inventory before it can claim
+   * a channel total.
+   */
+  let channelExpectations: MetricsChannelExpectation[] | undefined;
+  let managedProviders: ProviderId[] = [];
+  if (context.adapters !== null) {
+    const status = await runStatus(context);
+    const pipelines = status.data?.pipelines ?? [];
+    managedProviders = [
+      ...new Set(
+        pipelines.flatMap((pipeline) =>
+          pipeline.owners
+            .map((owner) => owner.owner)
+            .filter((owner): owner is ProviderId => owner !== TOKEN_HARNESS_OWNER),
+        ),
+      ),
+    ];
+
+    // A provider-filtered stream is intentionally partial. Computing a raw-to-final pipeline total
+    // from it would turn the missing stages created by the flag into an "incomparable pipeline".
+    // Provider rows still render normally; channel totals are omitted under that filter.
+    if (context.provider === null) {
+      channelExpectations = pipelines.flatMap((pipeline) =>
+        (pipeline.channels ?? []).map((channel) => ({
+          pipelineId: pipeline.pipelineId,
+          harness: pipeline.harness,
+          toolFamily: channel.toolFamily,
+          capability: channel.capability,
+          owners: channel.owners,
+        })),
+      );
+    }
+  }
+
   const report = aggregateEvents({
     events,
     windowStart: window.windowStart,
     windowEnd: window.windowEnd,
-    // RFC 0004 §Brownfield adoption: nothing has been applied by Token Harness yet, so every
-    // installation it can measure is the user's own. When `apply` exists this comes from the
-    // receipts, and until then claiming otherwise would be the one thing worse than saying
-    // "adopted, not managed" about something we did install.
-    managedProviders: [],
+    managedProviders,
     adapterModes,
+    ...(channelExpectations === undefined ? {} : { channels: channelExpectations }),
   });
 
   // Exit 0 whatever the figures say. RFC 0006 §Exit codes reserves 3 for a verification below
