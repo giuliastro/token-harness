@@ -41,6 +41,7 @@ export * from './metrics/attribution.js';
 export * from './metrics/events.js';
 export * from './metrics/local-database.js';
 export * from './metrics/report.js';
+export * from './metrics/pipeline.js';
 export * from './metrics/store.js';
 export * from './metrics/window.js';
 
