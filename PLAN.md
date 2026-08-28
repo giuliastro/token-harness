@@ -1319,11 +1319,12 @@ rather than continuing to present it as merely pending.
     have avoided are measured, not asserted; a hand-configured proxy is adopted rather than
     overwritten.
 
-36. **Caveman provider, and instruction-file region ownership (§9.3).** `model.output.terse`, opt-in,
-    with the instruction overhead inside the break-even figure. The second half is the part that is
-    not about Caveman: two providers writing marker-fenced blocks into one instruction file contest a
-    file region rather than an interception point, and nothing detects a collision on the *same*
-    block today. Model it, or Caveman waits.
+36. **Caveman provider, and instruction-file region ownership (§9.3). Partially done.**
+    `model.output.terse` remains to be admitted as an opt-in provider, with the instruction overhead
+    inside the break-even figure. The provider-neutral prerequisite is done in #76:
+    `patch-marker-block` actions are attributed while planning, distinct regions in one instruction
+    file may coexist, and two providers claiming the same file + marker pair produce the hard
+    `marker-region-contested` conflict before apply.
 
     Acceptance: two providers with distinct owned blocks in one `AGENTS.md` both apply and both roll
     back independently; two providers claiming the same marker block are a conflict reported before
@@ -1357,14 +1358,17 @@ rather than continuing to present it as merely pending.
     fixes the consumed JSON envelopes, schema-version compatibility policy, canonical state-root
     locations, privacy boundary, and the prohibition on remote mutation without a separate trust RFC.
 
-42. **`0.2.0` release gates (§16).** The A/B benchmark matrix across the scenarios §8.2 deferred, the
-    per-channel savings report, regenerated matrices, and the build provenance attestation §8.3 still
-    lacks.
+42. **`0.2.0` release gates (§16). Partially done.** #75 closes the build-provenance part of
+    §8.3: the tag workflow packs the exact publishable tarball, attests SLSA provenance and the
+    shipped CycloneDX SBOM against it, and retains the attested artifact without publishing it.
+    The A/B benchmark matrix across the scenarios §8.2 deferred, the per-channel savings report and
+    regenerated matrices remain.
 
-43. **Consume HarnessTrim's machine-readable surfaces. Partially done.** HarnessTrim `0.1.0`
-    ships the upstream refinements §6.3 was waiting for. **43a is done in #45; 43d is done in
-    #46/#47. 43b and 43c remain.** The remaining work should replace prose parsing and restore-only
-    removal without reopening the capability or metrics work already shipped:
+43. **Consume HarnessTrim's machine-readable surfaces. Done — #45, #46/#47, #73.**
+    43a consumes the capability/write-set declaration and 43d consumes native event identity/token
+    counts. #73 closed 43b and 43c after verifying that their original premises no longer exist:
+    Token Harness has no HarnessTrim prose parser to replace, and its journal-owned surgical
+    uninstall is stronger than delegating removal to a second ownership implementation:
 
     a. **Done — #45: `capabilities` supplements the statically declared capability set.** `harnesstrim capabilities`
        emits JSON: per harness, the adapter, the surfaces, the *narrowing flags with what each
@@ -1414,7 +1418,7 @@ rather than continuing to present it as merely pending.
     per §9.1 and RFC 0009 — not editing a constant. Where a version cannot be exercised, the range
     stays and the note stays, because the note is true.
 
-45. **An update that outdates reviewed data is refused, not performed.** This is the gap between
+45. **An update that outdates reviewed data is refused, not performed. Done — #72.** This is the gap between
     "Token Harness can update a provider" — which item 21 built — and "Token Harness can be trusted
     to update it". `update` resolves an exact version from the channel and installs it; nothing then
     checks whether the manifest's reviewed write set, the compatibility rule's tested versions, or a
@@ -1452,15 +1456,15 @@ rather than continuing to present it as merely pending.
 The shipped baseline has already completed 43a, 43d, the Hermes/Pi adapters, and the reversible
 Claude/Codex part of item 46. The remaining dependency order is therefore:
 
-1. **45** — refuse a managed update whose target version is outside reviewed compatibility/write-set
-   evidence. This is the safety prerequisite for calling the provider lifecycle managed.
-2. **33** — manage HarnessTrim on Hermes and Pi, using the adapters already shipped in #62/#66.
-3. **32** — re-observe OMP against HarnessTrim's new OMP installer, then admit only the tier and
-   write set the real machine proves. 43b/43c need no implementation after the decisions above.
-4. **35**, then **36** and **37** — add Lazy MCP on an unowned channel, then Caveman and Dejavu.
-5. **38**, **39**, **40** — goal-based profiles, pipeline-level lifecycle verbs, and per-channel
+1. **33** — manage HarnessTrim on Hermes and Pi, using the adapters already shipped in #62/#66.
+2. **32** — re-observe OMP against HarnessTrim's new OMP installer, then admit only the tier and
+   write set the real machine proves.
+3. **35**, then the remaining provider work in **36** and **37** — add Lazy MCP on an unowned
+   channel, then Caveman and Dejavu. The generic marker-region conflict prerequisite of 36 is done.
+4. **38**, **39**, **40** — goal-based profiles, pipeline-level lifecycle/status, and per-channel
    metrics. These are what turn a collection of managed providers into one pipeline product.
-6. **41**, **42** — publish the read-only status seam and discharge the 0.2.0 release gates.
+5. **42** — finish the A/B matrix, per-channel report and regenerated matrices. RFC 0010 and build
+   provenance are already shipped.
 
 OpenCode managed installation is not in this sequence while the current dependency-tree installer
 remains incompatible with the transactional rollback contract.
