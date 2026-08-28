@@ -394,16 +394,18 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     [...actionsByProvider.keys()],
   );
   if (!removalOrder.ok) {
+    const providers = removalOrder.providers.join(', ');
     diagnostics.push(
       diagnostic({
         severity: 'error',
         code: 'pipeline-removal-order-conflict',
         message:
           removalOrder.reason === 'dependency-cycle'
-            ? `The applied pipeline records contradictory removal dependencies between ${removalOrder.providers.join(', ')}`
-            : `The applied pipeline records an ambiguous chain position for ${removalOrder.providers.join(', ')}`,
+            ? `The applied pipeline records contradictory removal dependencies between ${providers}`
+            : `The applied pipeline records an ambiguous chain position for ${providers}`,
         remediation:
-          'Inspect the applied pipeline receipt and remove the conflicting providers manually; Token Harness will not guess a dependency order',
+          'Inspect the applied pipeline receipt and remove the conflicting providers manually; ' +
+          'Token Harness will not guess a dependency order',
       }),
     );
     return finish(
