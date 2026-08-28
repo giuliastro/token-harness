@@ -438,6 +438,26 @@ Human reports show:
 - added latency;
 - errors and full-output retrieval rate.
 
+When an applied pipeline is known, `metrics` also reports each payload channel from the same
+present-tense pipeline inventory as `status`. A channel row has one of four states:
+
+- `measured`: at least one operation has a comparable raw-to-final chain; every measurement class
+  remains on its own line;
+- `unmeasured`: no attributable operation was recorded in the requested window; this is not zero
+  saving;
+- `attribution-unavailable`: provider telemetry exists that may belong to the channel, but its
+  source does not carry enough pipeline identity to assign it safely;
+- `incomparable`: events are attributed to the pipeline/channel, but a raw-to-final total cannot
+  be formed without violating the comparability rules above.
+
+Provider rows remain marginal measurements and continue to render even when channel attribution is
+unavailable. `metrics --provider <id>` deliberately omits raw-to-final channel totals: the filter
+removes other pipeline stages by request, so treating the resulting partial stream as a pipeline
+measurement would manufacture an incomparability that the user created with the flag.
+
+`metrics --harness <id>` scopes the metrics-store query itself, so provider and channel sections
+refer to the same harness rather than filtering only one presentation layer.
+
 ## Benchmark standard
 
 ### Release gating

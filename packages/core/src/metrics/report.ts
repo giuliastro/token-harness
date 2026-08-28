@@ -7,6 +7,11 @@
  */
 
 import type { HarnessId, ProviderId } from '../domain/ids.js';
+import {
+  aggregateChannelMetrics,
+  type ChannelMetricsRow,
+  type MetricsChannelExpectation,
+} from './channels.js';
 import { MEASUREMENT_CLASSES, type MeasurementClass, type OptimizationEvent } from './events.js';
 
 export type SavingsUnit = 'tokens' | 'chars';
@@ -47,6 +52,12 @@ export interface MetricsReport {
   /** One row per measurement class, always all four, in RFC order. */
   classes: MeasurementClassRow[];
   providers: ProviderSavingsRow[];
+  /**
+   * Raw-to-final measurements for the channels in the applied pipeline.
+   *
+   * Optional for compatibility with reports produced without an applied pipeline inventory.
+   */
+  channels?: ChannelMetricsRow[];
   /**
    * Share of operations in which the optimization actually changed the payload.
    *
@@ -128,6 +139,8 @@ export interface AggregateInput {
   managedProviders?: readonly string[];
   /** The mode each importer ran in, for the note beside that provider's figure. */
   adapterModes?: Readonly<Record<string, string | null>>;
+  /** Applied pipeline channels whose raw-to-final savings may be attributable in this window. */
+  channels?: readonly MetricsChannelExpectation[];
 }
 
 interface ClassTotal {
@@ -314,6 +327,9 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
     pipelineId: pipelineIsAmbiguous ? null : pipelineId,
     classes,
     providers,
+    ...(input.channels === undefined
+      ? {}
+      : { channels: aggregateChannelMetrics(input.channels, input.events) }),
     coveragePercent: operations === 0 ? null : Math.round((realized / operations) * 100),
     bypassed,
     inflatedOperations: inflated,
