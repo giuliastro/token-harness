@@ -16,7 +16,15 @@ import {
   type MetricsReport,
 } from '@token-harness/core';
 
-import { column, document, formatCount, rightAlign, row, type RenderContext } from './layout.js';
+import {
+  column,
+  document,
+  formatCount,
+  rightAlign,
+  row,
+  wrap,
+  type RenderContext,
+} from './layout.js';
 
 const CLASS_LABEL_WIDTH = 23;
 const FIGURE_BLOCK_GUTTER = 4;
@@ -86,26 +94,27 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
       lines.push('  no applied pipeline channels');
     } else {
       for (const channel of report.channels) {
-        lines.push(
-          `  ${channel.harness} ${channel.toolFamily} ${channel.capability}`,
-        );
+        lines.push(...wrap(`${channel.harness} ${channel.toolFamily} ${channel.capability}`, 2));
         const owners = channel.owners.join(' -> ');
         if (channel.status === 'measured') {
-          lines.push(`    ${owners} - measured`);
+          lines.push(...wrap(`${owners} - measured`, 4));
           for (const measurement of channel.classes) {
             if (measurement.saved === null || measurement.unit === null) continue;
             lines.push(
-              `    ${CLASS_LABELS[measurement.class]}: saved ${formatCount(measurement.saved)} ` +
-                `${measurement.unit} across ${formatCount(measurement.operations)} operation` +
-                `${measurement.operations === 1 ? '' : 's'}`,
+              ...wrap(
+                `${CLASS_LABELS[measurement.class]}: saved ${formatCount(measurement.saved)} ` +
+                  `${measurement.unit} across ${formatCount(measurement.operations)} operation` +
+                  `${measurement.operations === 1 ? '' : 's'}`,
+                4,
+              ),
             );
           }
-          if (channel.note !== null) lines.push(`    note: ${channel.note}`);
+          if (channel.note !== null) lines.push(...wrap(`note: ${channel.note}`, 4));
         } else {
-          lines.push(`    ${owners} - ${channel.status}`);
-          if (channel.note !== null) lines.push(`    ${channel.note}`);
+          lines.push(...wrap(`${owners} - ${channel.status}`, 4));
+          if (channel.note !== null) lines.push(...wrap(channel.note, 4));
           if (channel.incomparableReasons.length > 0) {
-            lines.push(`    reasons: ${channel.incomparableReasons.join(', ')}`);
+            lines.push(...wrap(`reasons: ${channel.incomparableReasons.join(', ')}`, 4));
           }
         }
       }
