@@ -68,9 +68,7 @@ function ownershipKey(artifact: OwnedArtifact): string {
  * all-harness apply. Historical uninstall/update journals carry no `appliedPipeline` and are
  * intentionally skipped.
  */
-function latestAppliedOwnership(
-  journals: readonly TransactionJournal[],
-): ResolvedCapability[] {
+function latestAppliedOwnership(journals: readonly TransactionJournal[]): ResolvedCapability[] {
   const seenHarnesses = new Set<string>();
   const ownership: ResolvedCapability[] = [];
 
