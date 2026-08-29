@@ -528,6 +528,18 @@ function writeSetPath(entry: string): string {
   return entry.replace(/\s*\([^)]*\)\s*$/, '').replaceAll('\\', '/');
 }
 
+/**
+ * Upstream uses one deliberately machine-readable alternative form for scoped installs:
+ * `.pi/extensions/... or .pi/agent/extensions/...`. Expand that exact separator before
+ * containment checks so each possible write is reviewed independently.
+ */
+function writeSetPaths(entry: string): string[] {
+  return writeSetPath(entry)
+    .split(/\s+or\s+/)
+    .map((path) => path.trim())
+    .filter((path) => path !== '');
+}
+
 /** Whether `path` sits at or under `declared`, both normalised and separator-free. */
 function coveredBy(path: string, declared: string): boolean {
   const base = declared.endsWith('/') ? declared : `${declared}/`;
@@ -633,7 +645,7 @@ function writeSetStillReviewed(
   const observed = capabilities.harnesses[harness];
   if (observed === undefined) return false;
 
-  const declared = observed.writeSet.map(writeSetPath);
+  const declared = observed.writeSet.flatMap(writeSetPaths);
   const boundary = review.containmentBoundary.map(writeSetPath);
   const everyDeclaredPathContained = declared.every((entry) =>
     boundary.some((prefix) => coveredBy(entry, prefix)),
@@ -701,7 +713,7 @@ export function compareCapabilities(
     const observed = capabilities.harnesses[harness];
     if (observed === undefined) continue;
 
-    const declared = observed.writeSet.map(writeSetPath);
+    const declared = observed.writeSet.flatMap(writeSetPaths);
     for (const reviewed of review.reviewedWriteSet) {
       if (declared.some((entry) => coveredBy(reviewed, entry))) continue;
       warnings.push(
