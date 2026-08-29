@@ -111,7 +111,8 @@ function capabilities(harness: 'hermes' | 'pi'): string {
               { flag: '--metrics <path>', produces: 'write TrimEvent JSONL' },
             ],
             writeSet: [
-              '.pi/extensions/harnesstrim/ or .pi/agent/extensions/harnesstrim/ (incl. .installed marker + config.json)',
+              '.pi/extensions/harnesstrim/ or .pi/agent/extensions/harnesstrim/ ' +
+                '(incl. .installed marker + config.json)',
             ],
           },
         };
@@ -229,22 +230,25 @@ describe('HarnessTrim managed gate for item 33', () => {
       );
     });
 
-    it(`admits the exact synthetic ${harness} combination only when a row is injected`, async () => {
-      const result = await invoke(harness, [row(harness)]);
-      assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.ok(result.envelope.data);
+    it(
+      `admits the exact synthetic ${harness} combination only when a row is injected`,
+      async () => {
+        const result = await invoke(harness, [row(harness)]);
+        assert.equal(result.exitCode, EXIT_CODES.ok);
+        assert.ok(result.envelope.data);
 
-      if (harness === 'hermes') {
-        assert.deepEqual(
-          result.envelope.data.actions.map((action) => action.kind),
-          ['delegated-provider-install', 'merge-yaml'],
-        );
-      } else {
-        assert.deepEqual(
-          result.envelope.data.actions.map((action) => action.kind),
-          ['delegated-provider-install'],
-        );
-      }
-    });
+        if (harness === 'hermes') {
+          assert.deepEqual(
+            result.envelope.data.actions.map((action) => action.kind),
+            ['delegated-provider-install', 'merge-yaml'],
+          );
+        } else {
+          assert.deepEqual(
+            result.envelope.data.actions.map((action) => action.kind),
+            ['delegated-provider-install'],
+          );
+        }
+      },
+    );
   }
 });
