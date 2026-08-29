@@ -134,14 +134,45 @@ function defaultCapabilities(): string {
       hermes: {
         adapter: '@harnesstrim/adapter-hermes',
         surfaces: ['transform_tool_result — deterministic reduction'],
-        narrowing: [],
-        writeSet: ['.hermes/plugins/harnesstrim/'],
+        narrowing: [
+          {
+            flag: '--mode active|dryrun|off',
+            produces: 'bake the reduction mode into config.json',
+          },
+          {
+            flag: '--min-length <n>',
+            produces: 'bake the minimum threshold into config.json',
+          },
+          {
+            flag: '--no-enable',
+            produces: 'copy the plugin bundle without editing config.yaml',
+          },
+        ],
+        writeSet: [
+          '.hermes/plugins/harnesstrim/ (incl. .installed marker + config.json)',
+          '.hermes/config.yaml (plugins.enabled entry; skipped with --no-enable)',
+        ],
       },
       pi: {
         adapter: '@harnesstrim/adapter-pi',
         surfaces: ['tool_result — deterministic reduction'],
-        narrowing: [],
-        writeSet: ['.pi/extensions/harnesstrim/'],
+        narrowing: [
+          {
+            flag: '--mode active|dryrun|off',
+            produces: 'bake the reduction mode into config.json',
+          },
+          {
+            flag: '--min-length <n>',
+            produces: 'bake the minimum threshold into config.json',
+          },
+          {
+            flag: '--metrics <path>',
+            produces: 'write a TrimEvent JSONL receipt per reduction',
+          },
+        ],
+        writeSet: [
+          '.pi/extensions/harnesstrim/ (or .pi/agent/extensions/harnesstrim/, incl. .installed marker + config.json)',
+        ],
       },
     },
   });
