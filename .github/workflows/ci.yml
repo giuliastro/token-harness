@@ -42,13 +42,6 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Show exact managed-gate Prettier diff
-        if: runner.os == 'Linux'
-        run: |
-          pnpm exec prettier --write tests/integration/harnesstrim-managed-gate.test.ts
-          git diff -- tests/integration/harnesstrim-managed-gate.test.ts
-          exit 1
-
       - name: Typecheck
         run: pnpm typecheck
 
