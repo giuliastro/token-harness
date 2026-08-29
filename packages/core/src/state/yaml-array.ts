@@ -105,9 +105,7 @@ function validateDocument(lines: readonly string[]): string | null {
     lines.some((line) => {
       const trimmed = line.trimStart();
       return (
-        trimmed.startsWith('---') ||
-        trimmed.startsWith('...') ||
-        /(^|\s)[&*!][^\s]*/.test(trimmed)
+        trimmed.startsWith('---') || trimmed.startsWith('...') || /(^|\s)[&*!][^\s]*/.test(trimmed)
       );
     })
   ) {
