@@ -129,6 +129,15 @@ describe('managed YAML string-array entries', () => {
     });
   });
 
+  it('does not claim an existing user-formatted matching value as ownership', () => {
+    const merged = mergeYamlStringArrayEntry({
+      text: 'plugins:\n  enabled:\n    - harnesstrim # user owns this\n',
+      pointer: 'plugins.enabled',
+      value: 'harnesstrim',
+    });
+    assert.equal(merged.state, 'unmergeable');
+  });
+
   it('treats a comment added to the owned line as a modification', () => {
     const merged = mergeYamlStringArrayEntry({
       text: 'plugins:\n  enabled:\n',
