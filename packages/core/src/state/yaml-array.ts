@@ -72,7 +72,7 @@ function splitText(text: string): {
   const eol = body.includes('\r\n') ? '\r\n' : '\n';
   const normalized = body.replace(/\r\n/g, '\n');
   const trailingNewline = normalized.endsWith('\n');
-  const lines = normalized.split('\n');
+  const lines = normalized === '' ? [] : normalized.split('\n');
   if (trailingNewline) lines.pop();
   return { lines, eol, trailingNewline, bom };
 }
@@ -197,7 +197,8 @@ function locatePath(
 
 function parseScalar(text: string): string | null {
   const trimmed = text.trim();
-  if (/^[A-Za-z0-9_.@/+:-]+$/.test(trimmed)) return trimmed;
+  const plain = /^([A-Za-z0-9_.@/+:-]+)(?:\s+#.*)?$/.exec(trimmed);
+  if (plain !== null) return plain[1] ?? '';
   const single = /^'([^']*)'$/.exec(trimmed);
   if (single !== null) return single[1] ?? '';
   const double = /^"([^"\\]*)"$/.exec(trimmed);
@@ -277,6 +278,14 @@ export function mergeYamlStringArrayEntry(input: {
       (item) => item.value !== null && yamlStringDigest(item.value) === digest,
     );
     if (existing !== undefined) {
+      const exactLine = `${' '.repeat(existing.indent)}- ${input.value}`;
+      if (existing.lineDigest !== lineDigest(exactLine)) {
+        return {
+          state: 'unmergeable',
+          reason:
+            'the target sequence already contains the requested value with user formatting or a comment',
+        };
+      }
       return {
         state: 'merged',
         text: input.text,
