@@ -1171,10 +1171,7 @@ describe('planning', () => {
     const delegated = result.actions[0];
     assert.ok(delegated !== undefined && delegated.kind === 'delegated-provider-install');
     assert.deepEqual(delegated.args, ['install', 'pi', PROJECT, '--apply', '--mode', 'active']);
-    assert.equal(
-      delegated.containmentBoundary[0],
-      `${PROJECT}\\.pi\\extensions\\harnesstrim`,
-    );
+    assert.equal(delegated.containmentBoundary[0], `${PROJECT}\\.pi\\extensions\\harnesstrim`);
     assert.equal(delegated.expectedArtifacts.length, 3);
   });
 
@@ -1193,7 +1190,10 @@ describe('planning', () => {
       },
     );
     assert.equal(result.actions.length, 5);
-    assert.equal(result.actions.slice(0, 4).every((action) => action.kind === 'remove-owned-change'), true);
+    assert.equal(
+      result.actions.slice(0, 4).every((action) => action.kind === 'remove-owned-change'),
+      true,
+    );
     const last = result.actions[4];
     assert.ok(last !== undefined && last.kind === 'remove-owned-change');
     assert.equal(last.target.kind, 'owned-yaml-entry');
