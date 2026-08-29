@@ -64,23 +64,16 @@ const HERMES_ENTRY_VALUE_DIGEST = digestText(`yaml-string:${HERMES_ENTRY_VALUE}`
 const HERMES_ENTRY_LINE_DIGEST = digestText(`yaml-line:    - ${HERMES_ENTRY_VALUE}`);
 
 const HERMES_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
-  '__init__.py':
-    'sha256:b59d7c610cc5cd28d67a313dce11ba3d202385a945ccc54bb8ad13a3e3c4f82e',
-  'plugin.yaml':
-    'sha256:002c5685314d5edcc9b987230d2a075df3158583390fe6c0ab6b990702a473e6',
-  '.installed':
-    'sha256:ef56bcfe8dce38f71ecbc0fc7eacff9adc58ecb1ca8910d9c7083bd3c3769840',
-  'config.json':
-    'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
+  '__init__.py': 'sha256:b59d7c610cc5cd28d67a313dce11ba3d202385a945ccc54bb8ad13a3e3c4f82e',
+  'plugin.yaml': 'sha256:002c5685314d5edcc9b987230d2a075df3158583390fe6c0ab6b990702a473e6',
+  '.installed': 'sha256:ef56bcfe8dce38f71ecbc0fc7eacff9adc58ecb1ca8910d9c7083bd3c3769840',
+  'config.json': 'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
 };
 
 const PI_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
-  'index.ts':
-    'sha256:1e20c85ff23644a01b9f5cd2050332bb79b3ca9095ad6b2d736cdf6f8eb93d91',
-  '.installed':
-    'sha256:a792738d5b37de9549b776a07b2861413382316cebe2bfcd9904a3a3fdedcf02',
-  'config.json':
-    'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
+  'index.ts': 'sha256:1e20c85ff23644a01b9f5cd2050332bb79b3ca9095ad6b2d736cdf6f8eb93d91',
+  '.installed': 'sha256:a792738d5b37de9549b776a07b2861413382316cebe2bfcd9904a3a3fdedcf02',
+  'config.json': 'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
 };
 
 const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
@@ -325,10 +318,7 @@ const MANIFEST: ProviderManifest = {
       ),
       // The machine-readable capability declaration also names the user-scope alternative.
       // The delegated action below is deliberately project-scope only.
-      containmentBoundary: [
-        '.pi/extensions/harnesstrim',
-        '.pi/agent/extensions/harnesstrim',
-      ],
+      containmentBoundary: ['.pi/extensions/harnesstrim', '.pi/agent/extensions/harnesstrim'],
       upstreamUninstallAvailable: true,
     },
   },
@@ -1586,7 +1576,7 @@ function hermesEnableRemoval(context: ProviderContext): RemoveOwnedChangeAction 
     preconditions: ['the exact managed plugins.enabled line still matches the ownership receipt'],
     postconditions: ['the owned harnesstrim entry is absent from plugins.enabled'],
     rollbackData: 'file-snapshot',
-    explanation: 'Remove only Token Harness\' owned harnesstrim entry from Hermes plugins.enabled',
+    explanation: "Remove only Token Harness' owned harnesstrim entry from Hermes plugins.enabled",
     path,
     reverses: `harnesstrim-hermes-enable-${digestText(path).slice(7, 15)}`,
     target: {
@@ -1673,12 +1663,7 @@ function managedInstallAction(
   }
 
   if (harness === PI) {
-    const extensionRoot = context.fs.join(
-      context.projectRoot,
-      '.pi',
-      'extensions',
-      'harnesstrim',
-    );
+    const extensionRoot = context.fs.join(context.projectRoot, '.pi', 'extensions', 'harnesstrim');
     return {
       kind: 'delegated-provider-install',
       id: `harnesstrim-pi-extension-${digestText(extensionRoot).slice(7, 15)}`,
@@ -1687,9 +1672,7 @@ function managedInstallAction(
       requiresElevation: false,
       affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
       affectedProcesses: ['harnesstrim'],
-      preconditions: [
-        'harnesstrim 0.1.0 is installed and declares the reviewed Pi write set',
-      ],
+      preconditions: ['harnesstrim 0.1.0 is installed and declares the reviewed Pi write set'],
       postconditions: ['the Pi extension matches the reviewed 0.1.0 artifacts in active mode'],
       rollbackData: 'directory-snapshot',
       explanation: 'Install the project-scoped HarnessTrim Pi tool_result extension',
