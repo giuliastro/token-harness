@@ -199,7 +199,9 @@ const MANIFEST: ProviderManifest = {
       surfaces: [{ toolFamily: '*', interceptionPoint: 'transform-tool-result' }],
       evidence: {
         sourceReference: 'docs/spikes/9.0-harness-observation-log.md',
-        upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+        // The real machine observed this surface on HarnessTrim 0.0.6. The managed installer
+        // review below is separately pinned to 0.1.0 and must not rewrite the evidence history.
+        upstreamVersion: '0.0.6',
       },
     },
     {
@@ -209,7 +211,7 @@ const MANIFEST: ProviderManifest = {
       surfaces: [{ toolFamily: '*', interceptionPoint: 'tool-result' }],
       evidence: {
         sourceReference: 'docs/spikes/9.0-harness-observation-log.md',
-        upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+        upstreamVersion: '0.0.6',
       },
     },
   ],
