@@ -31,7 +31,9 @@ const MANIFEST: HarnessManifest = {
   id: HERMES,
   displayName: 'Hermes Agent',
   homepage: 'https://hermes-agent.nousresearch.com/docs/',
-  testedVersions: { minimum: '0.1.0', maximum: '0.1.0' },
+  // PLAN §9.0 observed Hermes Agent 0.19.0 on the second machine. Keep the range at
+  // exactly that version until another real build is exercised.
+  testedVersions: { minimum: '0.19.0', maximum: '0.19.0' },
   verificationTier: 'config-only',
   versionCommand: { executable: 'hermes', args: ['--version'] },
   interceptionPoints: [{ scopeId: 'transform-tool-result', eventName: 'transform_tool_result' }],
