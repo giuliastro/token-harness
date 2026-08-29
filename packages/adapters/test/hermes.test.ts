@@ -19,7 +19,7 @@ function context(): HarnessContext {
       executablePath: '/usr/bin/hermes',
       exitCode: 0,
       signal: null,
-      stdout: plugins ? 'harnesstrim enabled 0.1.0\n' : 'Hermes Agent 0.1.0\n',
+      stdout: plugins ? 'harnesstrim enabled 0.1.0\n' : 'Hermes Agent v0.19.0 (2026.7.20)\n',
       stderr: '',
       stdoutTruncated: false,
       stderrTruncated: false,
@@ -71,7 +71,7 @@ describe('Hermes harness adapter', () => {
     const result = await hermesAdapter.detect(context());
     assert.equal(result.harnessId, 'hermes');
     assert.equal(result.state, 'configured');
-    assert.equal(result.version, '0.1.0');
+    assert.equal(result.version, '0.19.0');
     assert.equal(result.versionVerdict, 'in-range');
   });
 
