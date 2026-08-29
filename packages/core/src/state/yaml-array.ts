@@ -104,7 +104,11 @@ function validateDocument(lines: readonly string[]): string | null {
   if (
     lines.some((line) => {
       const trimmed = line.trimStart();
-      return trimmed.startsWith('---') || trimmed.startsWith('...') || /(^|\s)[&*!][^\s]*/.test(trimmed);
+      return (
+        trimmed.startsWith('---') ||
+        trimmed.startsWith('...') ||
+        /(^|\s)[&*!][^\s]*/.test(trimmed)
+      );
     })
   ) {
     return 'document markers, aliases, anchors and tagged values are not supported in managed YAML';
@@ -184,7 +188,9 @@ function locatePath(
     if (found === null) return null;
     if ('error' in found) return found;
     if (parent !== null && parent.value !== '') {
-      return { error: `${segments.slice(0, segments.indexOf(segment)).join('.')} has an inline value` };
+      return {
+        error: `${segments.slice(0, segments.indexOf(segment)).join('.')} has an inline value`,
+      };
     }
     parent = found;
   }
@@ -201,8 +207,12 @@ function parseScalar(text: string): string | null {
   return null;
 }
 
-function sequenceItems(lines: readonly Line[], mapping: MappingLocation): SequenceItem[] | { error: string } {
-  if (mapping.value !== '') return { error: 'flow-style or scalar values are not supported for the target sequence' };
+function sequenceItems(
+  lines: readonly Line[],
+  mapping: MappingLocation,
+): SequenceItem[] | { error: string } {
+  if (mapping.value !== '')
+    return { error: 'flow-style or scalar values are not supported for the target sequence' };
   const items: SequenceItem[] = [];
   let itemIndent: number | null = null;
 
@@ -213,10 +223,13 @@ function sequenceItems(lines: readonly Line[], mapping: MappingLocation): Sequen
 
     const match = /^- +(.*)$/.exec(line.content);
     if (match === null) {
-      return { error: 'the target sequence contains a non-sequence child or unsupported multiline item' };
+      return {
+        error: 'the target sequence contains a non-sequence child or unsupported multiline item',
+      };
     }
     itemIndent = itemIndent ?? line.indent;
-    if (line.indent !== itemIndent) return { error: 'the target sequence has ambiguous indentation' };
+    if (line.indent !== itemIndent)
+      return { error: 'the target sequence has ambiguous indentation' };
     const value = parseScalar(match[1] ?? '');
     items.push({
       index: at,
@@ -262,7 +275,9 @@ export function mergeYamlStringArrayEntry(input: {
     const items = sequenceItems(classified, target);
     if ('error' in items) return { state: 'unmergeable', reason: items.error };
     const digest = yamlStringDigest(input.value);
-    const existing = items.find((item) => item.value !== null && yamlStringDigest(item.value) === digest);
+    const existing = items.find(
+      (item) => item.value !== null && yamlStringDigest(item.value) === digest,
+    );
     if (existing !== undefined) {
       return {
         state: 'merged',
@@ -272,7 +287,10 @@ export function mergeYamlStringArrayEntry(input: {
       };
     }
     if (items.some((item) => item.value === null)) {
-      return { state: 'unmergeable', reason: 'the target sequence contains an unsupported scalar syntax' };
+      return {
+        state: 'unmergeable',
+        reason: 'the target sequence contains an unsupported scalar syntax',
+      };
     }
     const indent = items[0]?.indent ?? target.indent + 2;
     const inserted = `${' '.repeat(indent)}- ${input.value}`;
@@ -304,7 +322,8 @@ export function mergeYamlStringArrayEntry(input: {
   }
 
   const tail = segments.slice(missingAt);
-  if (tail.length === 0) return { state: 'unmergeable', reason: 'the target sequence could not be located' };
+  if (tail.length === 0)
+    return { state: 'unmergeable', reason: 'the target sequence could not be located' };
   const baseIndent = parent === null ? 0 : parent.indent + 2;
   const nested = renderNested(tail, input.value, baseIndent);
   const insertAt = parent === null ? lines.length : parent.blockEnd;
