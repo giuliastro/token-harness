@@ -119,7 +119,11 @@ function capabilities(harness: 'hermes' | 'pi'): string {
 }
 
 class ManagedRunner implements ProcessRunner {
-  constructor(private readonly harness: 'hermes' | 'pi') {}
+  private readonly harness: 'hermes' | 'pi';
+
+  constructor(harness: 'hermes' | 'pi') {
+    this.harness = harness;
+  }
 
   run(request: ProcessRequest): Promise<ProcessOutcome> {
     if (request.executable === 'harnesstrim' && request.args[0] === '--version') {
