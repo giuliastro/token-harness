@@ -15,6 +15,7 @@ import {
   diagnostic,
   digestText,
   evidence,
+  findYamlStringArrayEntry,
   harnessId,
   providerId,
   type CapabilitySurface,
@@ -26,6 +27,7 @@ import {
   type OptimizationEvent,
   type ProviderDetection,
   type DelegatedProviderInstallAction,
+  type MergeYamlAction,
   type ProviderManifest,
   type ProviderPlan,
   type ProviderState,
@@ -54,6 +56,27 @@ const PI = harnessId('pi');
  * the same seven artifacts with the same digests into a different directory.
  */
 const SKILLS_UPSTREAM = '0.0.7';
+const MANAGED_ADAPTER_UPSTREAM = '0.1.0';
+
+const HERMES_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
+  '.hermes/plugins/harnesstrim/__init__.py':
+    'sha256:b59d7c610cc5cd28d67a313dce11ba3d202385a945ccc54bb8ad13a3e3c4f82e',
+  '.hermes/plugins/harnesstrim/plugin.yaml':
+    'sha256:002c5685314d5edcc9b987230d2a075df3158583390fe6c0ab6b990702a473e6',
+  '.hermes/plugins/harnesstrim/.installed':
+    'sha256:ef56bcfe8dce38f71ecbc0fc7eacff9adc58ecb1ca8910d9c7083bd3c3769840',
+  '.hermes/plugins/harnesstrim/config.json':
+    'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
+};
+
+const PI_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
+  '.pi/extensions/harnesstrim/index.ts':
+    'sha256:1e20c85ff23644a01b9f5cd2050332bb79b3ca9095ad6b2d736cdf6f8eb93d91',
+  '.pi/extensions/harnesstrim/.installed':
+    'sha256:a792738d5b37de9549b776a07b2861413382316cebe2bfcd9904a3a3fdedcf02',
+  '.pi/extensions/harnesstrim/config.json':
+    'sha256:e8208c5b5ebc4e50ddea95825702a01c53d11c84f0253680c3021f72dd1082d9',
+};
 
 const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'compact-handoff/SKILL.md':
@@ -171,6 +194,26 @@ const MANIFEST: ProviderManifest = {
         upstreamVersion: '0.0.5',
       },
     },
+    {
+      capability: 'tool.output.reduce',
+      mode: 'exclusive',
+      harnesses: [HERMES],
+      surfaces: [{ toolFamily: '*', interceptionPoint: 'transform-tool-result' }],
+      evidence: {
+        sourceReference: 'docs/spikes/9.0-harness-observation-log.md',
+        upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+      },
+    },
+    {
+      capability: 'tool.output.reduce',
+      mode: 'exclusive',
+      harnesses: [PI],
+      surfaces: [{ toolFamily: '*', interceptionPoint: 'tool-result' }],
+      evidence: {
+        sourceReference: 'docs/spikes/9.0-harness-observation-log.md',
+        upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+      },
+    },
   ],
   platforms: [
     { os: 'windows', wsl: false, supported: true, limitation: null },
@@ -192,6 +235,16 @@ const MANIFEST: ProviderManifest = {
     {
       harness: OPENCODE,
       testedVersions: { minimum: '1.18.9', maximum: '1.18.9' },
+      verificationTier: 'config-only',
+    },
+    {
+      harness: HERMES,
+      testedVersions: { minimum: '0.19.0', maximum: '0.19.0' },
+      verificationTier: 'config-only',
+    },
+    {
+      harness: PI,
+      testedVersions: { minimum: '0.83.0', maximum: '0.83.0' },
       verificationTier: 'config-only',
     },
   ],
@@ -252,6 +305,21 @@ const MANIFEST: ProviderManifest = {
       containmentBoundary: ['.codex', 'AGENTS.md'],
       upstreamUninstallAvailable: true,
     },
+    hermes: {
+      upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+      reviewedWriteSet: Object.keys(HERMES_ARTIFACT_DIGESTS),
+      // config.yaml is inside the reviewed boundary because the normal upstream install may touch
+      // it; Token Harness delegates with --no-enable and marks it protected, then owns only the
+      // plugins.enabled entry through merge-yaml.
+      containmentBoundary: ['.hermes/plugins/harnesstrim', '.hermes/config.yaml'],
+      upstreamUninstallAvailable: true,
+    },
+    pi: {
+      upstreamVersion: MANAGED_ADAPTER_UPSTREAM,
+      reviewedWriteSet: Object.keys(PI_ARTIFACT_DIGESTS),
+      containmentBoundary: ['.pi/extensions/harnesstrim'],
+      upstreamUninstallAvailable: true,
+    },
   },
 };
 
@@ -282,7 +350,7 @@ const SKILLS_INSTALL: Readonly<
 /**
  * The reviewed release that supports the safe Claude skills-only invocation.
  */
-const TESTED_UPSTREAM = '0.0.7';
+const TESTED_UPSTREAM = MANAGED_ADAPTER_UPSTREAM;
 const TESTED_VERSIONS = { minimum: '0.0.5', maximum: TESTED_UPSTREAM };
 
 /**
@@ -435,6 +503,8 @@ async function probeCapabilities(context: ProviderContext): Promise<{
 const SURFACE_ANCHORS: Readonly<Record<string, string>> = {
   'post-tool-use': 'PostToolUse',
   'tool-execute-after': 'tool.execute.after',
+  'transform-tool-result': 'transform_tool_result',
+  'tool-result': 'tool_result',
 };
 
 function surfaceMatchesDeclaration(surface: string, declaration: CapabilitySurface): boolean {
