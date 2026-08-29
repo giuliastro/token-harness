@@ -21,6 +21,7 @@ import type {
   ResolvedCapability,
   VerificationReceipt,
 } from '@token-harness/core';
+import { harnessId, providerId } from '@token-harness/core';
 
 import {
   claudeAdapter,
@@ -1070,12 +1071,12 @@ function ownedToolOutput(
 ): ResolvedCapability {
   return {
     scope: {
-      harness,
+      harness: harnessId(harness),
       toolFamily: 'tool.result',
       interceptionPoint,
       capability: 'tool.output.reduce',
     },
-    owner: 'harnesstrim',
+    owner: providerId('harnesstrim'),
     mode: 'exclusive',
     order: 0,
   };
