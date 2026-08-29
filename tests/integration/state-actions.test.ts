@@ -762,26 +762,32 @@ describe('merge-yaml', () => {
     claim('merge-yaml', 'idempotency');
   });
 
-  it('detects a user edit to the exact owned line through the stored-plan precondition', async () => {
-    const h = harness();
-    const target = join(h.project, 'config.yaml');
-    writeFileSync(target, HERMES);
-    const applied = await applyAction(mergePlugin(target), h.context);
-    const owned = applied.ownership[0];
-    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+  it(
+    'detects a user edit to the exact owned line through the stored-plan precondition',
+    async () => {
+      const h = harness();
+      const target = join(h.project, 'config.yaml');
+      writeFileSync(target, HERMES);
+      const applied = await applyAction(mergePlugin(target), h.context);
+      const owned = applied.ownership[0];
+      assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
 
-    writeFileSync(
-      target,
-      readFileSync(target, 'utf8').replace('    - harnesstrim', '    - harnesstrim # keep this'),
-    );
-    const outcome = await applyAction(
-      mergePlugin(target, owned.valueDigest, owned.lineDigest),
-      h.context,
-    );
-    assert.equal(outcome.status, 'precondition-drift');
-    assert.ok(readFileSync(target, 'utf8').includes('# keep this'));
-    claim('merge-yaml', 'precondition-drift', 'user-modification');
-  });
+      writeFileSync(
+        target,
+        readFileSync(target, 'utf8').replace(
+          '    - harnesstrim',
+          '    - harnesstrim # keep this',
+        ),
+      );
+      const outcome = await applyAction(
+        mergePlugin(target, owned.valueDigest, owned.lineDigest),
+        h.context,
+      );
+      assert.equal(outcome.status, 'precondition-drift');
+      assert.ok(readFileSync(target, 'utf8').includes('# keep this'));
+      claim('merge-yaml', 'precondition-drift', 'user-modification');
+    },
+  );
 
   it('rolls back to the original YAML bytes', async () => {
     const h = harness();
