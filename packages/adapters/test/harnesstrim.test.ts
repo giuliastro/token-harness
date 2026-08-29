@@ -350,22 +350,21 @@ describe('detection', () => {
     assert.equal(detection.warnings[0]?.code, 'provider-configured-but-missing');
   });
 
-  it('is never managed by Token Harness', async () => {
+  it('keeps package ownership separate from managed integration ownership', async () => {
     const detection = await harnesstrimAdapter.detect(context({ configs: [wired('codex')] }));
-    // Structural rather than circumstantial: PLAN §11 says Token Harness never installs it, so
-    // every installation it can ever see is the user's.
+    // Token Harness can own reviewed configuration without claiming that it installed the
+    // harnesstrim package itself.
     assert.equal(detection.managedByTokenHarness, false);
   });
 
-  it('reports a wired harness it does not manage, and leaves it alone', async () => {
+  it('classifies a wired Hermes integration inside the managed harness surface', async () => {
     const detection = await harnesstrimAdapter.detect(context({ configs: [wired('hermes')] }));
-    // RFC 0002 §Providers may exceed the managed surface. HarnessTrim ships Hermes and Pi adapters
-    // that Token Harness does not manage.
-    assert.equal(detection.supportsUnmanagedHarnesses, true);
-    assert.deepEqual(detection.unmanagedHarnessesConfigured, ['hermes']);
+    assert.equal(detection.supportsUnmanagedHarnesses, false);
+    assert.deepEqual(detection.configuredHarnesses, ['hermes']);
+    assert.deepEqual(detection.unmanagedHarnessesConfigured, []);
   });
 
-  it('reports a wired Pi extension it does not manage, and leaves it alone', async () => {
+  it('classifies a wired Pi extension inside the managed harness surface', async () => {
     const detection = await harnesstrimAdapter.detect(
       context({
         configs: [
@@ -381,7 +380,8 @@ describe('detection', () => {
       }),
     );
     // Pi's extension has no enable command, so the wiring is the installed module path alone.
-    assert.deepEqual(detection.unmanagedHarnessesConfigured, ['pi']);
+    assert.deepEqual(detection.configuredHarnesses, ['pi']);
+    assert.deepEqual(detection.unmanagedHarnessesConfigured, []);
   });
 
   it('recognises the Pi extension module path as wiring in either directory', () => {
