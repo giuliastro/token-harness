@@ -748,6 +748,17 @@ describe('merge-yaml', () => {
     claim('merge-yaml', 'apply');
   });
 
+  it('does not claim a byte-identical entry that existed before the first apply', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, 'plugins:\n  enabled:\n    - harnesstrim\n');
+
+    const outcome = await applyAction(mergePlugin(target), h.context);
+    assert.equal(outcome.status, 'already-satisfied');
+    assert.deepEqual(outcome.ownership, []);
+    assert.deepEqual(outcome.snapshots, []);
+  });
+
   it('is already satisfied on an identical second apply', async () => {
     const h = harness();
     const target = join(h.project, 'config.yaml');

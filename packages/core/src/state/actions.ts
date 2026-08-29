@@ -626,14 +626,20 @@ async function applyMergeYaml(
 
     text = merged.text;
     changed ||= merged.changed;
-    ownership.push({
-      kind: 'owned-yaml-entry',
-      path: action.path,
-      pointer: merged.entry.pointer,
-      placement: 'array-element',
-      valueDigest: merged.entry.valueDigest,
-      lineDigest: merged.entry.lineDigest,
-    });
+    // Brownfield rule: an initial plan whose desired value is already present did not write that
+    // entry, so it must not turn the user's byte-identical configuration into Token Harness
+    // ownership. A persisted update carries expectedValueDigest/expectedLineDigest and may retain
+    // an ownership claim; a fresh append earns ownership only when it actually adds the line.
+    if (merged.changed || operation.expectedValueDigest !== null) {
+      ownership.push({
+        kind: 'owned-yaml-entry',
+        path: action.path,
+        pointer: merged.entry.pointer,
+        placement: 'array-element',
+        valueDigest: merged.entry.valueDigest,
+        lineDigest: merged.entry.lineDigest,
+      });
+    }
   }
 
   if (!changed) return outcome(action, 'already-satisfied', { ownership });
