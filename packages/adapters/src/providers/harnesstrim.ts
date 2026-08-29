@@ -937,12 +937,13 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     unmanagedHarnessesConfigured: configured.filter(
       (harness) => !MANIFEST.harnesses.some((entry) => entry.harness === harness),
     ),
-    // RFC 0002 §Providers may exceed the managed surface: HarnessTrim ships adapters for Hermes and
-    // Pi as well, which Token Harness does not manage, so a wired one is reported and left alone.
-    supportsUnmanagedHarnesses: true,
-    // RFC 0004 §Brownfield adoption, and for this provider it is structural rather than
-    // circumstantial: PLAN §11 says Token Harness never installs it, so every installation it ever
-    // sees is the user's.
+    // Every harness declared by this manifest is registered by Token Harness. OpenCode remains
+    // adoption-only under the current packaging model, but that is a lifecycle restriction on a
+    // managed harness, not an unmanaged-harness escape hatch.
+    supportsUnmanagedHarnesses: false,
+    // Integration ownership and package ownership are deliberately separate. Token Harness may
+    // manage reviewed Hermes/Pi configuration, but it still does not install or own the
+    // harnesstrim package itself.
     managedByTokenHarness: false,
     // PLAN §15 item 46, per harness. Decided by the build in front of us and by which harnesses
     // carry a reviewed write set: those are the two things that make the assignment producible.
