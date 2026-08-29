@@ -575,22 +575,46 @@ function formatSurface(surface: CapabilitySurface): string {
  * `undefined` covers the build that could not be asked. It keeps the `0.0.5` verdict, which is the
  * conservative direction: a provider that cannot be asked is exactly the one RFC 0003 excludes.
  */
-function assignableOn(capabilities: HarnessTrimCapabilities | null): HarnessId[] {
+async function hermesManagedYamlShape(context: ProviderContext): Promise<boolean> {
+  const configPath = context.fs.join(context.paths.home, '.hermes', 'config.yaml');
+  const stat = await context.fs.stat(configPath);
+  if (stat === null || stat.kind !== 'file') return false;
+
+  const text = new TextDecoder().decode(await context.fs.readFile(configPath));
+  const merged = mergeYamlStringArrayEntry({
+    text,
+    pointer: HERMES_ENTRY_POINTER,
+    value: HERMES_ENTRY_VALUE,
+  });
+  // Item 26's real Hermes fixture uses this exact block-sequence shape. Keeping the managed path
+  // to that rendered line lets uninstall reconstruct the journal ownership without parsing the
+  // journal inside the provider. A comment or different indentation therefore makes Hermes
+  // detection-only until it is reviewed, rather than creating an ownership claim we cannot later
+  // remove safely.
+  return merged.state === 'merged' && merged.entry.lineDigest === HERMES_ENTRY_LINE_DIGEST;
+}
+
+async function assignableOn(
+  context: ProviderContext,
+  capabilities: HarnessTrimCapabilities | null,
+): Promise<HarnessId[]> {
   if (capabilities === null) return [];
   const reviews = MANIFEST.delegatedInstallReviews ?? {};
-  return Object.keys(reviews)
-    .filter((harness) => {
-      const observed = capabilities.harnesses[harness];
-      // Two conditions, and both are about producibility. The build must declare a narrowing flag
-      // for this harness — RFC 0003's "cannot be asked for" is exactly the absence of one — and its
-      // declared write set must still be the one the review covers.
-      return (
-        observed !== undefined &&
-        observed.narrowing.length > 0 &&
-        writeSetStillReviewed(capabilities, harnessId(harness))
-      );
-    })
-    .map((harness) => harnessId(harness));
+  const result: HarnessId[] = [];
+
+  for (const harness of Object.keys(reviews)) {
+    const observed = capabilities.harnesses[harness];
+    if (
+      observed === undefined ||
+      observed.narrowing.length === 0 ||
+      !writeSetStillReviewed(capabilities, harnessId(harness))
+    ) {
+      continue;
+    }
+    if (harness === HERMES && !(await hermesManagedYamlShape(context))) continue;
+    result.push(harnessId(harness));
+  }
+  return result;
 }
 
 /**
@@ -918,7 +942,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     managedByTokenHarness: false,
     // PLAN §15 item 46, per harness. Decided by the build in front of us and by which harnesses
     // carry a reviewed write set: those are the two things that make the assignment producible.
-    assignableHarnesses: assignableOn(observed?.capabilities ?? null),
+    assignableHarnesses: await assignableOn(context, observed?.capabilities ?? null),
     evidence: evidenceItems,
     warnings,
   };
