@@ -26,7 +26,7 @@ version outside it is reported as such and treated conservatively rather than re
 | --- | --- | --- | --- | --- | --- |
 | claude | 2.0.0–2.1.212 | canary | `Bash`, `PowerShell` | provider-telemetry | no |
 | codex | 0.146.0–0.146.0 | config-only | `Bash` | harness-event-stream | yes |
-| hermes | 0.1.0–0.1.0 | config-only | `tool.result` | provider-telemetry | yes |
+| hermes | 0.19.0–0.19.0 | config-only | `tool.result` | provider-telemetry | yes |
 | opencode | 1.18.9–1.18.14 | config-only | `tool.execute` | none | no |
 | pi | 0.83.0–0.83.0 | config-only | `tool.result` | none | no |
 
