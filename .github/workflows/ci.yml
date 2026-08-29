@@ -42,6 +42,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Show exact Prettier diff
+        if: runner.os == 'Linux'
+        run: |
+          pnpm exec prettier --write packages/adapters/src/providers/harnesstrim.ts packages/adapters/test/harnesstrim.test.ts
+          git diff -- packages/adapters/src/providers/harnesstrim.ts packages/adapters/test/harnesstrim.test.ts
+          exit 1
+
       - name: Typecheck
         run: pnpm typecheck
 
