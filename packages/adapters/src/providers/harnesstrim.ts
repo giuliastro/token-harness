@@ -1507,11 +1507,9 @@ async function collectMetrics(
 }
 
 /**
- * Safe HarnessTrim onboarding is deliberately outside payload ownership: version 0.0.7 can copy
- * Claude skills while skipping both output-reduction paths. The reviewed files are exact, and the
- * executor rejects any hook or instruction change before restoring its snapshot.
+ * Safe HarnessTrim onboarding is deliberately outside payload ownership for Claude/Codex, while
+ * Hermes/Pi are real payload owners and therefore require resolver ownership before they plan.
  */
-/** The artifacts the skills-only install writes for one harness, with their reviewed digests. */
 function skillArtifacts(
   context: ProviderContext,
   harness: string,
@@ -1525,64 +1523,247 @@ function skillArtifacts(
   }));
 }
 
-/**
- * One delegated install per harness with a reviewed write set — PLAN §15 item 46b.
- *
- * This used to be Claude alone, hard-coded from the directory up. HarnessTrim's capability is
- * assigned on Codex too, and the plan answered with nothing: not because the install was unsafe but
- * because the function had one harness written into it. Now the reviews decide, and a harness
- * without one is simply not a target.
- *
- * The reviewed state is asked of the build, per harness: a declared write set that still sits inside
- * the reviewed boundary and still covers every reviewed path is one the review speaks for. A build
- * that cannot answer falls back to the exact reviewed version, which is the conservative direction.
- */
-async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
-  const reviews = MANIFEST.delegatedInstallReviews ?? {};
-  const targets = request.harnesses
-    .map((harness) => harness.id)
-    .filter((harness) => reviews[harness] !== undefined && SKILLS_INSTALL[harness] !== undefined);
+function managedArtifacts(
+  context: ProviderContext,
+  harness: HarnessId,
+): { path: string; digest: string }[] {
+  if (harness === HERMES) {
+    const root = context.fs.join(context.paths.home, '.hermes', 'plugins', 'harnesstrim');
+    return Object.entries(HERMES_ARTIFACT_DIGESTS).map(([path, digest]) => ({
+      path: context.fs.join(root, path),
+      digest,
+    }));
+  }
+  if (harness === PI) {
+    const root = context.fs.join(context.projectRoot, '.pi', 'extensions', 'harnesstrim');
+    return Object.entries(PI_ARTIFACT_DIGESTS).map(([path, digest]) => ({
+      path: context.fs.join(root, path),
+      digest,
+    }));
+  }
+  return [];
+}
 
-  if (targets.length === 0) {
+function removeOwnedFile(
+  context: ProviderContext,
+  harness: HarnessId,
+  artifact: { path: string; digest: string },
+  reverses: string,
+): RemoveOwnedChangeAction {
+  return {
+    kind: 'remove-owned-change',
+    id: `harnesstrim-${harness}-remove-${digestText(artifact.path).slice(7, 15)}`,
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [artifact.path],
+    affectedProcesses: [],
+    preconditions: ['the installed artifact still matches the ownership receipt'],
+    postconditions: ['the owned HarnessTrim artifact is absent'],
+    rollbackData: 'file-snapshot',
+    explanation: `Remove the owned HarnessTrim ${harness} artifact ${context.fs.basename(artifact.path)}`,
+    path: artifact.path,
+    reverses,
+    target: {
+      kind: 'owned-file',
+      path: artifact.path,
+      digest: artifact.digest,
+      mode: null,
+    },
+  };
+}
+
+function hermesEnableRemoval(context: ProviderContext): RemoveOwnedChangeAction {
+  const path = context.fs.join(context.paths.home, '.hermes', 'config.yaml');
+  return {
+    kind: 'remove-owned-change',
+    id: `harnesstrim-hermes-enable-remove-${digestText(path).slice(7, 15)}`,
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: ['the exact managed plugins.enabled line still matches the ownership receipt'],
+    postconditions: ['the owned harnesstrim entry is absent from plugins.enabled'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Remove only Token Harness\' owned harnesstrim entry from Hermes plugins.enabled',
+    path,
+    reverses: `harnesstrim-hermes-enable-${digestText(path).slice(7, 15)}`,
+    target: {
+      kind: 'owned-yaml-entry',
+      path,
+      pointer: HERMES_ENTRY_POINTER,
+      placement: 'array-element',
+      valueDigest: HERMES_ENTRY_VALUE_DIGEST,
+      lineDigest: HERMES_ENTRY_LINE_DIGEST,
+    },
+  };
+}
+
+function hermesEnableAction(context: ProviderContext): MergeYamlAction {
+  const path = context.fs.join(context.paths.home, '.hermes', 'config.yaml');
+  return {
+    kind: 'merge-yaml',
+    id: `harnesstrim-hermes-enable-${digestText(path).slice(7, 15)}`,
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: [
+      'Hermes config.yaml exists and its plugins.enabled block has the reviewed block-sequence shape',
+    ],
+    postconditions: ['plugins.enabled contains harnesstrim exactly once'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Enable the reviewed HarnessTrim plugin through one owned Hermes YAML entry',
+    path,
+    ownedPointers: [HERMES_ENTRY_POINTER],
+    operations: [
+      {
+        kind: 'append-string',
+        pointer: HERMES_ENTRY_POINTER,
+        value: HERMES_ENTRY_VALUE,
+        expectedValueDigest: null,
+        expectedLineDigest: null,
+      },
+    ],
+    createIfMissing: false,
+  };
+}
+
+function managedInstallAction(
+  context: ProviderContext,
+  harness: HarnessId,
+  review: NonNullable<ProviderManifest['delegatedInstallReviews']>[string],
+): DelegatedProviderInstallAction | null {
+  const expectedArtifacts = managedArtifacts(context, harness);
+  if (expectedArtifacts.length === 0) return null;
+
+  if (harness === HERMES) {
+    const pluginRoot = context.fs.join(context.paths.home, '.hermes', 'plugins', 'harnesstrim');
+    const configPath = context.fs.join(context.paths.home, '.hermes', 'config.yaml');
     return {
-      providerId: HARNESSTRIM,
-      desiredState: request.desiredState,
-      actions: [],
-      targetHarnesses: [],
+      kind: 'delegated-provider-install',
+      id: `harnesstrim-hermes-bundle-${digestText(pluginRoot).slice(7, 15)}`,
+      riskClass: 'delegated',
+      requiresNetwork: false,
+      requiresElevation: false,
+      affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
+      affectedProcesses: ['harnesstrim'],
+      preconditions: [
+        'harnesstrim 0.1.0 is installed and declares the reviewed Hermes write set',
+        'Hermes config.yaml has the managed YAML shape and must remain unchanged by the delegated command',
+      ],
+      postconditions: [
+        'the Hermes plugin bundle matches the reviewed 0.1.0 artifacts',
+        'the delegated installer did not edit Hermes config.yaml',
+      ],
+      rollbackData: 'directory-snapshot',
+      explanation: 'Install the HarnessTrim Hermes bundle without delegating enablement',
+      executable: 'harnesstrim',
+      args: ['install', 'hermes', context.paths.home, '--apply', '--mode', 'active', '--no-enable'],
+      // config.yaml is itself a boundary so the executor can prove --no-enable really left it alone.
+      containmentBoundary: [pluginRoot, configPath],
+      expectedArtifacts,
+      protectedPaths: [configPath],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1_048_576,
+      upstreamUninstallAvailable: review.upstreamUninstallAvailable,
     };
   }
 
-  if (request.desiredState === 'absent') {
-    const actions: RemoveOwnedChangeAction[] = targets.flatMap((harness) =>
-      skillArtifacts(context, harness).map((artifact) => ({
-        kind: 'remove-owned-change' as const,
-        id: `harnesstrim-${harness}-skill-remove-${digestText(artifact.path).slice(7, 15)}`,
-        riskClass: 'reversible' as const,
-        requiresNetwork: false,
-        requiresElevation: false,
-        affectedPaths: [artifact.path],
-        affectedProcesses: [],
-        preconditions: [
-          `the HarnessTrim skill still matches the reviewed ${SKILLS_UPSTREAM} artifact`,
-        ],
-        postconditions: ['the owned HarnessTrim skill is absent'],
-        rollbackData: 'file-snapshot' as const,
-        explanation: `Remove the owned HarnessTrim ${harness} skill ${context.fs.basename(context.fs.dirname(artifact.path))}`,
-        path: artifact.path,
-        reverses: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
-        target: {
-          kind: 'owned-file' as const,
-          path: artifact.path,
-          digest: artifact.digest,
-          mode: null,
-        },
-      })),
+  if (harness === PI) {
+    const extensionRoot = context.fs.join(
+      context.projectRoot,
+      '.pi',
+      'extensions',
+      'harnesstrim',
     );
+    return {
+      kind: 'delegated-provider-install',
+      id: `harnesstrim-pi-extension-${digestText(extensionRoot).slice(7, 15)}`,
+      riskClass: 'delegated',
+      requiresNetwork: false,
+      requiresElevation: false,
+      affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
+      affectedProcesses: ['harnesstrim'],
+      preconditions: [
+        'harnesstrim 0.1.0 is installed and declares the reviewed Pi write set',
+      ],
+      postconditions: ['the Pi extension matches the reviewed 0.1.0 artifacts in active mode'],
+      rollbackData: 'directory-snapshot',
+      explanation: 'Install the project-scoped HarnessTrim Pi tool_result extension',
+      executable: 'harnesstrim',
+      args: ['install', 'pi', context.projectRoot, '--apply', '--mode', 'active'],
+      containmentBoundary: [extensionRoot],
+      expectedArtifacts,
+      protectedPaths: [],
+      rollbackStrategy: 'restore-snapshot',
+      snapshotSizeCapBytes: 1_048_576,
+      upstreamUninstallAvailable: review.upstreamUninstallAvailable,
+    };
+  }
+
+  return null;
+}
+
+async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
+  const reviews = MANIFEST.delegatedInstallReviews ?? {};
+  const present = new Set(request.harnesses.map((harness) => harness.id));
+  const skillsTargets = [...present].filter(
+    (harness) => reviews[harness] !== undefined && SKILLS_INSTALL[harness] !== undefined,
+  );
+  const ownedManaged = new Set(
+    request.ownership
+      .map((entry) => entry.scope.harness)
+      .filter((harness) => harness === HERMES || harness === PI),
+  );
+  const managedTargets =
+    request.desiredState === 'configured'
+      ? [...ownedManaged].filter((harness) => present.has(harness))
+      : [HERMES, PI].filter((harness) => present.has(harness));
+
+  if (request.desiredState === 'absent') {
+    const actions: RemoveOwnedChangeAction[] = [];
+
+    for (const harness of skillsTargets) {
+      for (const artifact of skillArtifacts(context, harness)) {
+        actions.push(
+          removeOwnedFile(
+            context,
+            harnessId(harness),
+            artifact,
+            `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
+          ),
+        );
+      }
+    }
+
+    for (const harness of managedTargets) {
+      const id = harnessId(harness);
+      const installId =
+        id === HERMES
+          ? `harnesstrim-hermes-bundle-${digestText(
+              context.fs.join(context.paths.home, '.hermes', 'plugins', 'harnesstrim'),
+            ).slice(7, 15)}`
+          : `harnesstrim-pi-extension-${digestText(
+              context.fs.join(context.projectRoot, '.pi', 'extensions', 'harnesstrim'),
+            ).slice(7, 15)}`;
+      for (const artifact of managedArtifacts(context, id)) {
+        actions.push(removeOwnedFile(context, id, artifact, installId));
+      }
+      // Last on purpose. If the user edited the enabled line, this refuses and the transaction
+      // restores every bundle file removed earlier in the same uninstall.
+      if (id === HERMES) actions.push(hermesEnableRemoval(context));
+    }
+
     return {
       providerId: HARNESSTRIM,
       desiredState: 'absent',
       actions,
-      targetHarnesses: actions.length === 0 ? [] : targets.map((harness) => harnessId(harness)),
+      targetHarnesses: [
+        ...new Set([...skillsTargets, ...managedTargets].map((harness) => harnessId(harness))),
+      ],
     };
   }
 
@@ -1597,14 +1778,13 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
   }
 
   const observed = await probeCapabilities(context);
-  const actions: DelegatedProviderInstallAction[] = [];
+  const actions: Array<DelegatedProviderInstallAction | MergeYamlAction> = [];
   const plannedHarnesses: HarnessId[] = [];
 
-  for (const harness of targets) {
+  for (const harness of skillsTargets) {
     const review = reviews[harness];
     const install = SKILLS_INSTALL[harness];
     if (review === undefined || install === undefined) continue;
-
     const reviewed =
       observed.capabilities === null
         ? installed.version === review.upstreamVersion
@@ -1632,11 +1812,10 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
       explanation: `Install HarnessTrim ${harness} skills without a hook or reduce-pipe instruction`,
       executable: 'harnesstrim',
       args: ['install', harness, context.projectRoot, '--apply', ...install.args],
-      containmentBoundary: review.containmentBoundary.map((path) =>
-        context.fs.join(context.projectRoot, path),
+      containmentBoundary: review.containmentBoundary.map((part) =>
+        context.fs.join(context.projectRoot, part),
       ),
       expectedArtifacts,
-      // The two files each installer reports skipping. Named here because they must not appear.
       protectedPaths: [
         context.fs.join(context.projectRoot, install.directory, install.hook),
         context.fs.join(context.projectRoot, install.instructions),
@@ -1648,11 +1827,33 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     plannedHarnesses.push(harnessId(harness));
   }
 
+  for (const harness of managedTargets) {
+    const review = reviews[harness];
+    if (review === undefined) continue;
+    const id = harnessId(harness);
+    // Managed adapter bundles are reviewed against the exact 0.1.0 implementation. A matching
+    // path declaration at some future version is not enough to reuse content digests.
+    if (
+      installed.version !== MANAGED_ADAPTER_UPSTREAM ||
+      observed.capabilities === null ||
+      !writeSetStillReviewed(observed.capabilities, id)
+    ) {
+      continue;
+    }
+    if (id === HERMES && !(await hermesManagedYamlShape(context))) continue;
+
+    const delegated = managedInstallAction(context, id, review);
+    if (delegated === null) continue;
+    actions.push(delegated);
+    if (id === HERMES) actions.push(hermesEnableAction(context));
+    plannedHarnesses.push(id);
+  }
+
   return {
     providerId: HARNESSTRIM,
     desiredState: 'configured',
     actions,
-    targetHarnesses: plannedHarnesses,
+    targetHarnesses: [...new Set(plannedHarnesses)],
   };
 }
 
