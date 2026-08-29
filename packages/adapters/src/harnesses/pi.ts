@@ -49,7 +49,7 @@ const MANIFEST: HarnessManifest = {
       primary: true,
     },
     {
-      path: '.pi/extensions/harnesstrim/harnesstrim.ts',
+      path: '.pi/extensions/harnesstrim/index.ts',
       scope: 'project',
       parser: 'markers',
       primary: false,

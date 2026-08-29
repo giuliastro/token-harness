@@ -8,7 +8,7 @@ import type { HarnessContext } from '../src/harnesses/contract.js';
 const HOME = '/home/test';
 const PROJECT = '/tmp/project';
 const USER_EXTENSION = `${HOME}/.pi/agent/extensions/harnesstrim/index.ts`;
-const PROJECT_EXTENSION = `${PROJECT}/.pi/extensions/harnesstrim/harnesstrim.ts`;
+const PROJECT_EXTENSION = `${PROJECT}/.pi/extensions/harnesstrim/index.ts`;
 
 /** The module's own header, enough for the harnesstrim marker check. */
 const EXTENSION = `// HarnessTrim Pi extension — slims noisy tool output via the \`tool_result\` hook.\n`;
