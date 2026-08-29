@@ -19,6 +19,8 @@ version outside it is reported as such and treated conservatively rather than re
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
 | harnesstrim | opencode | 1.18.9–1.18.9 | `tool.output.reduce` |
+| harnesstrim | hermes | 0.19.0–0.19.0 | `tool.output.reduce` |
+| harnesstrim | pi | 0.83.0–0.83.0 | `tool.output.reduce` |
 
 ## Harnesses
 
@@ -43,6 +45,8 @@ correct and that nothing available can show it ran.
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
 | harnesstrim | opencode | config-only | config-only | at the harness ceiling |
+| harnesstrim | hermes | config-only | config-only | at the harness ceiling |
+| harnesstrim | pi | config-only | config-only | at the harness ceiling |
 
 ## Platforms
 
@@ -128,8 +132,8 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Installation and updates
 
-- **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
-- **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
+- **Hermes managed lifecycle is implemented but not admitted yet.** Token Harness prepares the reviewed HarnessTrim 0.1.0 bundle with `--no-enable`, owns only the `plugins.enabled += harnesstrim` YAML entry, and removes only journal-owned artifacts. No Hermes compatibility row ships in this PR: RFC 0009 still requires a fresh real-machine fixture before plan/apply may mutate Hermes. The running gateway still needs its normal restart lifecycle before it can load a newly installed bundle.
+- **Pi managed lifecycle is implemented but not admitted yet.** Token Harness prepares the reviewed project-scoped HarnessTrim 0.1.0 extension with `--mode active`; Pi needs no separate enable command because presence in `<project>/.pi/extensions/` is the load decision. No Pi compatibility row ships in this PR: RFC 0009 still requires a fresh real-machine fixture before plan/apply may mutate Pi.
 - **Three compatibility rows ship, all on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
   `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
   (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` / Codex `0.146.0` (`config-only`).
