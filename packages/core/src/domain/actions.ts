@@ -21,6 +21,7 @@
 
 import type { HarnessId, ProviderId } from './ids.js';
 import type { JsonMergeOperation } from './json.js';
+import type { YamlMergeOperation } from './yaml.js';
 import type { OwnedArtifact } from './ownership.js';
 
 export type ActionRiskClass = 'read-only' | 'reversible' | 'delegated' | 'destructive';
@@ -139,6 +140,10 @@ export interface MergeYamlAction extends PlannedActionBase {
   kind: 'merge-yaml';
   path: string;
   ownedPointers: string[];
+  /** Narrow, serializable operations; currently only block-sequence string append is admitted. */
+  operations: YamlMergeOperation[];
+  /** Whether a missing YAML document may be created. */
+  createIfMissing: boolean;
 }
 
 export interface PatchMarkerBlockAction extends PlannedActionBase {

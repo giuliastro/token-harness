@@ -31,6 +31,7 @@ import {
   type DelegatedProviderInstallAction,
   type JsonValue,
   type MergeJsonAction,
+  type MergeYamlAction,
   type PackageManagerInstallAction,
   type PatchMarkerBlockAction,
   type PlannedAction,
@@ -694,6 +695,146 @@ describe('merge-json', () => {
   );
 });
 
+describe('merge-yaml', () => {
+  const HERMES = [
+    '# user-owned config',
+    'theme: dark',
+    'plugins:',
+    '  enabled:',
+    '    - security-guidance',
+    '  path: ~/.hermes/plugins',
+    '',
+  ].join('\r\n');
+
+  function mergePlugin(
+    path: string,
+    expectedValueDigest: string | null = null,
+    expectedLineDigest: string | null = null,
+    createIfMissing = false,
+  ): MergeYamlAction {
+    return {
+      ...BASE,
+      id: 'y1',
+      kind: 'merge-yaml',
+      affectedPaths: [path],
+      path,
+      ownedPointers: ['plugins.enabled'],
+      operations: [
+        {
+          kind: 'append-string',
+          pointer: 'plugins.enabled',
+          value: 'harnesstrim',
+          expectedValueDigest,
+          expectedLineDigest,
+        },
+      ],
+      createIfMissing,
+    };
+  }
+
+  it('adds one owned YAML array entry and preserves the rest byte-for-byte', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, HERMES);
+
+    const outcome = await applyAction(mergePlugin(target), h.context);
+    assert.equal(outcome.status, 'applied');
+    assert.ok(
+      readFileSync(target, 'utf8').includes(
+        '    - security-guidance\r\n    - harnesstrim\r\n  path:',
+      ),
+    );
+    assert.equal(outcome.ownership[0]?.kind, 'owned-yaml-entry');
+    claim('merge-yaml', 'apply');
+  });
+
+  it('is already satisfied on an identical second apply', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, HERMES);
+    await applyAction(mergePlugin(target), h.context);
+    const before = readFileSync(target);
+
+    const again = await applyAction(mergePlugin(target), h.context);
+    assert.equal(again.status, 'already-satisfied');
+    assert.deepEqual(again.snapshots, []);
+    assert.deepEqual(readFileSync(target), before);
+    claim('merge-yaml', 'idempotency');
+  });
+
+  it('detects a user edit to the exact owned line through the stored-plan precondition', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, HERMES);
+    const applied = await applyAction(mergePlugin(target), h.context);
+    const owned = applied.ownership[0];
+    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+
+    writeFileSync(
+      target,
+      readFileSync(target, 'utf8').replace('    - harnesstrim', '    - harnesstrim # keep this'),
+    );
+    const outcome = await applyAction(
+      mergePlugin(target, owned.valueDigest, owned.lineDigest),
+      h.context,
+    );
+    assert.equal(outcome.status, 'precondition-drift');
+    assert.ok(readFileSync(target, 'utf8').includes('# keep this'));
+    claim('merge-yaml', 'precondition-drift', 'user-modification');
+  });
+
+  it('rolls back to the original YAML bytes', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    const original = Buffer.from(HERMES, 'utf8');
+    writeFileSync(target, original);
+
+    const outcome = await applyAction(mergePlugin(target), h.context);
+    assert.equal(outcome.status, 'applied');
+    await rollback(h, outcome);
+    assert.deepEqual(readFileSync(target), original);
+    claim('merge-yaml', 'rollback');
+  });
+
+  it('refuses unsupported YAML instead of normalizing it', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    const original = 'plugins:\n  enabled: [security-guidance]\n';
+    writeFileSync(target, original);
+
+    const outcome = await applyAction(mergePlugin(target), h.context);
+    assert.equal(outcome.status, 'refused');
+    assert.equal(outcome.diagnostics[0]?.code, 'yaml-shape-unsupported');
+    assert.equal(readFileSync(target, 'utf8'), original);
+  });
+
+  it('creates a missing config only when the plan permits it', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    const denied = await applyAction(mergePlugin(target), h.context);
+    assert.equal(denied.status, 'precondition-drift');
+
+    const allowed = await applyAction(mergePlugin(target, null, null, true), h.context);
+    assert.equal(allowed.status, 'applied');
+    assert.equal(readFileSync(target, 'utf8'), 'plugins:\n  enabled:\n    - harnesstrim');
+  });
+
+  it(
+    'merges YAML at a native Windows path with spaces',
+    { skip: NATIVE_WINDOWS ? false : 'native Windows only' },
+    async () => {
+      const h = harness();
+      const dir = join(h.project, 'Application Support');
+      const target = join(dir, 'config.yaml');
+      mkdirSync(dir);
+      writeFileSync(target, HERMES);
+      const outcome = await applyAction(mergePlugin(target), h.context);
+      assert.equal(outcome.status, 'applied');
+      claim('merge-yaml', 'windows-path');
+    },
+  );
+});
+
 function removal(target: RemoveOwnedChangeAction['target']): RemoveOwnedChangeAction {
   return {
     ...BASE,
@@ -779,6 +920,80 @@ describe('remove-owned-change', () => {
     assert.equal(outcome.status, 'applied');
     // Byte-for-byte back to the user's document, CRLF and four-space indentation.
     assert.deepEqual(readFileSync(target), original);
+  });
+
+  it('removes only the YAML array entry Token Harness owns', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    const original = 'theme: dark\r\nplugins:\r\n  enabled:\r\n    - security-guidance\r\n';
+    writeFileSync(target, original);
+
+    const applied = await applyAction(
+      {
+        ...BASE,
+        id: 'y1',
+        kind: 'merge-yaml',
+        affectedPaths: [target],
+        path: target,
+        ownedPointers: ['plugins.enabled'],
+        operations: [
+          {
+            kind: 'append-string',
+            pointer: 'plugins.enabled',
+            value: 'harnesstrim',
+            expectedValueDigest: null,
+            expectedLineDigest: null,
+          },
+        ],
+        createIfMissing: false,
+      },
+      h.context,
+    );
+    const owned = applied.ownership[0];
+    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+
+    const outcome = await applyAction(removal(owned), h.context);
+    assert.equal(outcome.status, 'applied');
+    assert.deepEqual(readFileSync(target, 'utf8'), original);
+  });
+
+  it('refuses to remove an owned YAML entry after the user edits its line', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.yaml');
+    writeFileSync(target, 'plugins:\n  enabled:\n');
+
+    const applied = await applyAction(
+      {
+        ...BASE,
+        id: 'y1',
+        kind: 'merge-yaml',
+        affectedPaths: [target],
+        path: target,
+        ownedPointers: ['plugins.enabled'],
+        operations: [
+          {
+            kind: 'append-string',
+            pointer: 'plugins.enabled',
+            value: 'harnesstrim',
+            expectedValueDigest: null,
+            expectedLineDigest: null,
+          },
+        ],
+        createIfMissing: false,
+      },
+      h.context,
+    );
+    const owned = applied.ownership[0];
+    assert.ok(owned !== undefined && owned.kind === 'owned-yaml-entry');
+    writeFileSync(
+      target,
+      readFileSync(target, 'utf8').replace('    - harnesstrim', '    - harnesstrim # user'),
+    );
+
+    const outcome = await applyAction(removal(owned), h.context);
+    assert.equal(outcome.status, 'refused');
+    assert.equal(outcome.diagnostics[0]?.code, 'owned-artifact-modified');
+    assert.ok(readFileSync(target, 'utf8').includes('# user'));
   });
 
   it('refuses to remove an owned JSON entry the user edited', async () => {
@@ -1336,7 +1551,6 @@ describe('action families this build does not execute', () => {
     'download-artifact',
     'run-installer-command',
     'merge-toml',
-    'merge-yaml',
     'register-mcp-server',
     'register-hook',
   ];
@@ -1358,7 +1572,7 @@ describe('action families this build does not execute', () => {
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       assert.equal(isExecutableActionKind(kind), true, kind);
     }
-    assert.equal(EXECUTABLE_ACTION_KINDS.length, 7);
+    assert.equal(EXECUTABLE_ACTION_KINDS.length, 8);
   });
 });
 

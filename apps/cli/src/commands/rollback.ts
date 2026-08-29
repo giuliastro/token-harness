@@ -54,6 +54,9 @@ function ownershipKey(artifact: OwnedArtifact): string {
   if (artifact.kind === 'owned-json-entry') {
     return `json ${artifact.path} ${artifact.pointer} ${artifact.placement} ${artifact.valueDigest}`;
   }
+  if (artifact.kind === 'owned-yaml-entry') {
+    return `yaml ${artifact.path} ${artifact.pointer} ${artifact.placement} ${artifact.valueDigest} ${artifact.lineDigest}`;
+  }
   if (artifact.kind === 'owned-marker-block') {
     return `marker ${artifact.path} ${artifact.markerBegin} ${artifact.bodyDigest}`;
   }
