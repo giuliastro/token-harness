@@ -18,14 +18,17 @@ import type {
   PlatformFacts,
   ProcessOutcome,
   ProcessRequest,
+  ResolvedCapability,
   VerificationReceipt,
 } from '@token-harness/core';
 
 import {
   claudeAdapter,
   compareCapabilities,
+  hermesAdapter,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
+  piAdapter,
   synthesizeEventId,
   type HarnessTrimCapabilities,
   type HarnessTrimHarnessCapabilities,
@@ -36,6 +39,7 @@ const HOME = 'C:\\Users\\dev';
 const PROJECT = 'C:\\work\\demo';
 const METRICS = `${PROJECT}\\.harnesstrim\\metrics.jsonl`;
 const HERMES_METRICS = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
+const HERMES_CONFIG = `${HOME}\\.hermes\\config.yaml`;
 const CLAUDE_MD = `${PROJECT}\\CLAUDE.md`;
 const AGENTS = `${PROJECT}\\AGENTS.md`;
 
@@ -1029,7 +1033,151 @@ describe('verification', () => {
   });
 });
 
+function ownedToolOutput(
+  harness: 'hermes' | 'pi',
+  interceptionPoint: 'transform-tool-result' | 'tool-result',
+): ResolvedCapability {
+  return {
+    scope: {
+      harness,
+      toolFamily: 'tool.result',
+      interceptionPoint,
+      capability: 'tool.output.reduce',
+    },
+    owner: 'harnesstrim',
+    mode: 'exclusive',
+    order: 0,
+  };
+}
+
 describe('planning', () => {
+  it('plans the reviewed Hermes bundle before surgical YAML enablement', async () => {
+    const result = await harnesstrimAdapter.plan(
+      context({
+        version: '0.1.0',
+        files: {
+          [HERMES_CONFIG]:
+            'plugins:\n  disabled: []\n  enabled:\n    - google_meet\n    - rtk-rewrite\n',
+        },
+      }),
+      {
+        ownership: [ownedToolOutput('hermes', 'transform-tool-result')],
+        harnesses: [hermesAdapter.manifest],
+        desiredState: 'configured',
+      },
+    );
+
+    assert.deepEqual(result.targetHarnesses, ['hermes']);
+    assert.equal(result.actions.length, 2);
+    const delegated = result.actions[0];
+    assert.ok(delegated !== undefined && delegated.kind === 'delegated-provider-install');
+    assert.deepEqual(delegated.args, [
+      'install',
+      'hermes',
+      HOME,
+      '--apply',
+      '--mode',
+      'active',
+      '--no-enable',
+    ]);
+    assert.deepEqual(delegated.protectedPaths, [HERMES_CONFIG]);
+    assert.equal(delegated.containmentBoundary.includes(HERMES_CONFIG), true);
+    assert.equal(delegated.expectedArtifacts.length, 4);
+
+    const enable = result.actions[1];
+    assert.ok(enable !== undefined && enable.kind === 'merge-yaml');
+    assert.equal(enable.path, HERMES_CONFIG);
+    assert.deepEqual(enable.ownedPointers, ['plugins.enabled']);
+    assert.equal(enable.operations[0]?.kind, 'append-string');
+    assert.equal(enable.operations[0]?.value, 'harnesstrim');
+  });
+
+  it('does not use plansWithoutOwnership to claim the Hermes payload surface', async () => {
+    const result = await harnesstrimAdapter.plan(
+      context({
+        version: '0.1.0',
+        files: {
+          [HERMES_CONFIG]: 'plugins:\n  enabled:\n    - google_meet\n',
+        },
+      }),
+      {
+        ownership: [],
+        harnesses: [hermesAdapter.manifest],
+        desiredState: 'configured',
+      },
+    );
+    assert.deepEqual(result.actions, []);
+    assert.deepEqual(result.targetHarnesses, []);
+  });
+
+  it('fails closed on a Hermes YAML shape whose owned line would not match the observed fixture', async () => {
+    const result = await harnesstrimAdapter.plan(
+      context({
+        version: '0.1.0',
+        files: {
+          [HERMES_CONFIG]: 'plugins:\n    enabled:\n      - google_meet\n',
+        },
+      }),
+      {
+        ownership: [ownedToolOutput('hermes', 'transform-tool-result')],
+        harnesses: [hermesAdapter.manifest],
+        desiredState: 'configured',
+      },
+    );
+    assert.deepEqual(result.actions, []);
+    assert.deepEqual(result.targetHarnesses, []);
+  });
+
+  it('plans the project-scoped Pi extension in active mode when Pi owns the surface', async () => {
+    const result = await harnesstrimAdapter.plan(context({ version: '0.1.0' }), {
+      ownership: [ownedToolOutput('pi', 'tool-result')],
+      harnesses: [piAdapter.manifest],
+      desiredState: 'configured',
+    });
+    assert.deepEqual(result.targetHarnesses, ['pi']);
+    assert.equal(result.actions.length, 1);
+    const delegated = result.actions[0];
+    assert.ok(delegated !== undefined && delegated.kind === 'delegated-provider-install');
+    assert.deepEqual(delegated.args, ['install', 'pi', PROJECT, '--apply', '--mode', 'active']);
+    assert.equal(
+      delegated.containmentBoundary[0],
+      `${PROJECT}\\.pi\\extensions\\harnesstrim`,
+    );
+    assert.equal(delegated.expectedArtifacts.length, 3);
+  });
+
+  it('plans Hermes owned-file removals before the owned YAML entry and no upstream uninstall', async () => {
+    const result = await harnesstrimAdapter.plan(
+      context({
+        version: '0.1.0',
+        files: {
+          [HERMES_CONFIG]: 'plugins:\n  enabled:\n    - harnesstrim\n',
+        },
+      }),
+      {
+        ownership: [],
+        harnesses: [hermesAdapter.manifest],
+        desiredState: 'absent',
+      },
+    );
+    assert.equal(result.actions.length, 5);
+    assert.equal(result.actions.slice(0, 4).every((action) => action.kind === 'remove-owned-change'), true);
+    const last = result.actions[4];
+    assert.ok(last !== undefined && last.kind === 'remove-owned-change');
+    assert.equal(last.target.kind, 'owned-yaml-entry');
+    assert.equal(
+      result.actions.some(
+        (action) =>
+          'executable' in action &&
+          action.executable === 'harnesstrim' &&
+          'args' in action &&
+          Array.isArray(action.args) &&
+          action.args.includes('uninstall'),
+      ),
+      false,
+    );
+  });
+
   it('plans nothing without Claude Code in scope', async () => {
     const result = await harnesstrimAdapter.plan(context(), {
       ownership: [],
