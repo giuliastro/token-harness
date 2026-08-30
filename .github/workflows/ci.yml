@@ -48,12 +48,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Formatter diagnostic
-        if: runner.os == 'Linux'
-        run: |
-          pnpm format
-          git diff --no-color -- apps/cli/src/commands/budget.ts apps/cli/src/render/budget.ts packages/adapters/src/harnesses/codex.ts packages/adapters/src/harnesses/contract.ts packages/adapters/test/codex.test.ts packages/core/src/domain/budget.ts
-
       - name: Format check
         run: pnpm format:check
 
