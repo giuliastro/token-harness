@@ -27,6 +27,7 @@ import {
 /** Commands the Phase 1 shell implements. */
 export const AVAILABLE_COMMANDS = [
   'apply',
+  'budget',
   'doctor',
   'metrics',
   'plan',
