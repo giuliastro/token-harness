@@ -24,6 +24,7 @@ import type {
   HarnessDetection,
   HarnessId,
   HarnessManifest,
+  HarnessBudgetObservation,
   HarnessToolFamily,
   PlatformFacts,
   PlatformPaths,
@@ -116,6 +117,14 @@ export interface HarnessAdapter {
    * rather than `pass` when nothing has been observed.
    */
   verify(context: HarnessContext): Promise<HarnessVerification>;
+  /**
+   * RFC 0011 subscription headroom. Optional because not every harness exposes a supported
+   * machine-readable usage surface. A missing implementation means "unavailable", never zero.
+   */
+  observeUsage?(
+    context: HarnessContext,
+    observedAt: string,
+  ): Promise<HarnessBudgetObservation>;
 }
 
 /** The absolute path a declaration resolves to. Shared by every adapter. */
