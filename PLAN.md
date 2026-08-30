@@ -1610,10 +1610,10 @@ Acceptance:
 - model-to-bucket mapping is never inferred from a name;
 - JSON output is stable and covered by golden fixtures.
 
-### 18.2 P0 — Context and instruction audit — Partially done (#94, #96)
+### 18.2 P0 — Context and instruction audit — Partially done (#94, #97)
 
 #94 shipped `context`, effective Codex config/model/MCP inventory, instruction-byte accounting and
-Codex-compatible AGENTS hierarchy discovery. #96 adds the focused `mcp` view plus explicit
+Codex-compatible AGENTS hierarchy discovery. #97 adds the focused `mcp` view plus explicit
 root+subtree/monolithic hierarchy reporting. Still open: tool-output volume by family,
 session-age/context signals, task-boundary clear/new-session/compact advice, evidence-backed
 per-server removal advice, and the native-deferral benchmark before assigning Lazy MCP.
