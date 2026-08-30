@@ -81,7 +81,6 @@ export interface OptimizeReport {
   harnesses: HarnessOptimizationAdvice[];
 }
 
-
 const EFFORT_ORDER = [
   'none',
   'minimal',
@@ -101,7 +100,9 @@ const QUALITY_FLOOR: Readonly<Record<TaskClass, string>> = {
   critical: 'high',
 };
 
-const PROFILE_TARGET: Readonly<Record<Exclude<BudgetProfile, 'custom'>, Record<TaskClass, string>>> = {
+const PROFILE_TARGET: Readonly<
+  Record<Exclude<BudgetProfile, 'custom'>, Record<TaskClass, string>>
+> = {
   economy: {
     mechanical: 'minimal',
     standard: 'low',
@@ -163,12 +164,7 @@ export function assessWindowPace(
   const nowMs = Date.parse(now);
   const resetMs = Date.parse(window.resetsAt);
   const durationMs = window.windowDurationMinutes * 60_000;
-  if (
-    !Number.isFinite(nowMs) ||
-    !Number.isFinite(resetMs) ||
-    durationMs <= 0 ||
-    nowMs >= resetMs
-  ) {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(resetMs) || durationMs <= 0 || nowMs >= resetMs) {
     return {
       ...base,
       state: 'unknown',
@@ -244,11 +240,7 @@ export function chooseSupportedEffort(input: {
   if (underPaceNearReset) targetRank = Math.min(EFFORT_ORDER.length - 1, targetRank + 1);
 
   const currentRank = effortRank(input.current ?? input.defaultEffort);
-  if (
-    input.contextPressure === 'high' &&
-    currentRank !== null &&
-    targetRank > currentRank
-  ) {
+  if (input.contextPressure === 'high' && currentRank !== null && targetRank > currentRank) {
     targetRank = Math.max(floorRank, currentRank);
   }
 
