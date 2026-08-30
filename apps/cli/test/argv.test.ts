@@ -147,4 +147,33 @@ describe('argv', () => {
     assert.equal(parsed.diagnostics[0]?.code, 'flag-takes-no-value');
     assert.equal(parsed.json, true);
   });
+
+  it('parses optimizer task profile and reserve inputs', () => {
+    const parsed = parseArgv([
+      'optimize',
+      '--task',
+      'hard',
+      '--profile=quality',
+      '--reserve',
+      '15',
+    ]);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.command, 'optimize');
+    assert.equal(parsed.options.task, 'hard');
+    assert.equal(parsed.options.profile, 'quality');
+    assert.equal(parsed.options.reservePercent, 15);
+  });
+
+  it('rejects invalid optimizer policy values', () => {
+    for (const argv of [
+      ['optimize', '--task', 'impossible'],
+      ['optimize', '--profile', 'turbo'],
+      ['optimize', '--reserve', '101'],
+    ]) {
+      const parsed = parseArgv(argv);
+      assert.equal(parsed.kind, 'usage-error');
+    }
+  });
+
 });
