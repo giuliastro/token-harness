@@ -121,10 +121,7 @@ export interface HarnessAdapter {
    * RFC 0011 subscription headroom. Optional because not every harness exposes a supported
    * machine-readable usage surface. A missing implementation means "unavailable", never zero.
    */
-  observeUsage?(
-    context: HarnessContext,
-    observedAt: string,
-  ): Promise<HarnessBudgetObservation>;
+  observeUsage?(context: HarnessContext, observedAt: string): Promise<HarnessBudgetObservation>;
 }
 
 /** The absolute path a declaration resolves to. Shared by every adapter. */
