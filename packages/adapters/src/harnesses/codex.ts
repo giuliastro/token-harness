@@ -14,6 +14,7 @@ import {
   type Diagnostic,
   type Evidence,
   type HarnessBudgetObservation,
+  type HarnessContextObservation,
   type HarnessDetection,
   type HarnessManifest,
   type JsonValue,
@@ -672,10 +673,240 @@ async function observeUsage(
   };
 }
 
+
+function readBoolean(record: Record<string, JsonValue>, key: string): boolean | null {
+  const value = record[key];
+  return typeof value === 'boolean' ? value : null;
+}
+
+function readStringArray(record: Record<string, JsonValue>, key: string): string[] {
+  const value = record[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function utf8Bytes(value: string | null): number {
+  return value === null ? 0 : new TextEncoder().encode(value).byteLength;
+}
+
+function rpcResult(messages: JsonValue[], id: number): Record<string, JsonValue> | null {
+  const response = messages.find(
+    (message) => isRecord(message) && message['id'] === id && isRecord(message['result']),
+  );
+  return isRecord(response) && isRecord(response['result']) ? response['result'] : null;
+}
+
+function parseJsonLines(stdout: string): JsonValue[] {
+  const messages: JsonValue[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    if (line.trim() === '') continue;
+    try {
+      messages.push(JSON.parse(line) as JsonValue);
+    } catch {
+      // App-server tracing belongs on stderr. Ignore unrelated stdout rather than guessing.
+    }
+  }
+  return messages;
+}
+
+async function observeContext(
+  context: HarnessContext,
+  observedAt: string,
+): Promise<HarnessContextObservation> {
+  const stdin = [
+    JSON.stringify({
+      method: 'initialize',
+      id: 1,
+      params: {
+        clientInfo: {
+          name: 'token_harness',
+          title: 'Token Harness',
+          version: '0.1',
+        },
+      },
+    }),
+    JSON.stringify({ method: 'initialized', params: {} }),
+    JSON.stringify({
+      method: 'config/read',
+      id: 2,
+      params: { cwd: context.projectRoot, includeLayers: true },
+    }),
+    JSON.stringify({
+      method: 'mcpServerStatus/list',
+      id: 3,
+      params: { limit: 1000, detail: 'toolsAndAuthOnly' },
+    }),
+    '',
+  ].join('\n');
+
+  const outcome = await context.runner.run({
+    executable: 'codex',
+    args: ['app-server', '--stdio'],
+    cwd: context.projectRoot,
+    stdin,
+    timeoutMs: 15_000,
+    maxOutputBytes: 4 * 1024 * 1024,
+  });
+
+  const unavailable = (
+    state: HarnessContextObservation['state'],
+    code: string,
+    message: string,
+  ): HarnessContextObservation => ({
+    harnessId: CODEX,
+    state,
+    model: null,
+    reasoningEffort: null,
+    verbosity: null,
+    projectDocMaxBytes: null,
+    toolOutputTokenLimit: null,
+    toolSearchEnabled: null,
+    projectRootMarkers: null,
+    projectDocFallbackFilenames: [],
+    configInstructionBytes: null,
+    mcpServers: [],
+    mcpInventoryTruncated: false,
+    diagnostics: [
+      diagnostic({
+        severity: 'warning',
+        code,
+        subject: CODEX,
+        message,
+        remediation: 'Update Codex and retry token-harness context',
+      }),
+    ],
+  });
+
+  if (outcome.failure !== null) {
+    return unavailable(
+      outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable',
+      'codex-context-unavailable',
+      'Codex context inventory could not be read: ' + outcome.failure.message,
+    );
+  }
+  if (outcome.exitCode !== 0) {
+    return unavailable(
+      'unavailable',
+      'codex-context-unavailable',
+      'Codex app-server exited ' + String(outcome.exitCode) + ' during context inventory',
+    );
+  }
+
+  const messages = parseJsonLines(outcome.stdout);
+  const configResponse = rpcResult(messages, 2);
+  const mcpResponse = rpcResult(messages, 3);
+  const config =
+    configResponse !== null && isRecord(configResponse['config'])
+      ? configResponse['config']
+      : null;
+
+  const features = config !== null && isRecord(config['features']) ? config['features'] : null;
+  const instructions = config === null ? null : readString(config, 'instructions');
+  const developerInstructions =
+    config === null ? null : readString(config, 'developer_instructions');
+
+  const mcpServers: HarnessContextObservation['mcpServers'] = [];
+  const data = mcpResponse?.['data'];
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (!isRecord(item)) continue;
+      const name = readString(item, 'name');
+      if (name === null) continue;
+      const tools = isRecord(item['tools']) ? item['tools'] : null;
+      mcpServers.push({
+        harnessId: CODEX,
+        name,
+        toolCount: tools === null ? null : Object.keys(tools).length,
+        runtimeStatus: readString(item, 'runtimeStatus'),
+        authStatus: readString(item, 'authStatus'),
+        pluginId: readString(item, 'pluginId'),
+        source: 'native-rpc',
+      });
+    }
+  }
+
+  const mcpInventoryTruncated =
+    mcpResponse !== null &&
+    mcpResponse['nextCursor'] !== null &&
+    mcpResponse['nextCursor'] !== undefined;
+
+  const diagnostics: Diagnostic[] = [];
+  if (config === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-config-read-unavailable',
+        subject: CODEX,
+        message: 'Codex returned no recognizable config/read result',
+        remediation: 'Treat effective Codex configuration as unknown',
+      }),
+    );
+  }
+  if (mcpResponse === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-mcp-inventory-unavailable',
+        subject: CODEX,
+        message: 'Codex returned no recognizable mcpServerStatus/list result',
+        remediation: 'Treat Codex MCP overhead as unknown',
+      }),
+    );
+  }
+  if (mcpInventoryTruncated) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-mcp-inventory-truncated',
+        subject: CODEX,
+        message: 'Codex MCP inventory exceeded the one-shot page size',
+        remediation: 'Treat the reported MCP/tool counts as lower bounds',
+      }),
+    );
+  }
+
+  const projectRootMarkers =
+    config === null
+      ? null
+      : Array.isArray(config['project_root_markers'])
+        ? readStringArray(config, 'project_root_markers')
+        : null;
+
+  return {
+    harnessId: CODEX,
+    state:
+      config !== null && mcpResponse !== null
+        ? mcpInventoryTruncated
+          ? 'partial'
+          : 'observed'
+        : config !== null || mcpResponse !== null
+          ? 'partial'
+          : 'unavailable',
+    model: config === null ? null : readString(config, 'model'),
+    reasoningEffort: config === null ? null : readString(config, 'model_reasoning_effort'),
+    verbosity: config === null ? null : readString(config, 'model_verbosity'),
+    projectDocMaxBytes: config === null ? null : readNumber(config, 'project_doc_max_bytes'),
+    toolOutputTokenLimit:
+      config === null ? null : readNumber(config, 'tool_output_token_limit'),
+    toolSearchEnabled: features === null ? null : readBoolean(features, 'tool_search'),
+    projectRootMarkers,
+    projectDocFallbackFilenames:
+      config === null ? [] : readStringArray(config, 'project_doc_fallback_filenames'),
+    configInstructionBytes:
+      config === null
+        ? null
+        : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
+    mcpServers,
+    mcpInventoryTruncated,
+    diagnostics,
+  };
+}
+
 export const codexAdapter: HarnessAdapter = {
   manifest: MANIFEST,
   detect,
   inspect,
   verify,
   observeUsage,
+  observeContext,
 };
