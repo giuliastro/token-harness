@@ -420,9 +420,8 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         context: harnessContext,
         budgetWindows: pace,
         localBurnTrend:
-          historyReport?.harnesses.find(
-            (item) => item.harnessId === harnessContext.harnessId,
-          )?.burnTrend ?? null,
+          historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
+            ?.burnTrend ?? null,
         taskClass,
         profile,
       }),
