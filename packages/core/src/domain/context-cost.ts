@@ -68,6 +68,34 @@ export interface HarnessContextObservation {
   diagnostics: Diagnostic[];
 }
 
+export interface InstructionHierarchyObservation {
+  harnessId: HarnessId;
+  projectFileCount: number;
+  userFileCount: number;
+  distinctProjectDirectories: number;
+  nestedProjectHierarchy: boolean;
+  largestProjectFileBytes: number | null;
+  monolithicProjectInstructions: boolean;
+  reason: string | null;
+}
+
+export interface McpHarnessReport {
+  harnessId: HarnessId;
+  state: ContextObservationState;
+  servers: McpServerObservation[];
+  knownToolCount: number;
+  unknownToolServerCount: number;
+  inventoryTruncated: boolean;
+  diagnostics: Diagnostic[];
+}
+
+export interface McpReport {
+  platform: PlatformFacts;
+  projectRoot: string;
+  observedAt: string;
+  harnesses: McpHarnessReport[];
+}
+
 export interface ContextReport {
   platform: PlatformFacts;
   projectRoot: string;
@@ -76,5 +104,6 @@ export interface ContextReport {
   /** Sum only where loadedBytes is known. Unknown candidates are intentionally excluded. */
   knownLoadedInstructionBytes: number;
   discoveredInstructionBytes: number;
+  instructionHierarchy: InstructionHierarchyObservation[];
   harnesses: HarnessContextObservation[];
 }
