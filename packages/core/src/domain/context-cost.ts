@@ -48,6 +48,25 @@ export interface McpServerObservation {
   source: 'native-rpc' | 'native-cli';
 }
 
+export type McpExposurePressure = 'low' | 'moderate' | 'high' | 'unknown';
+export type McpUsability = 'usable' | 'attention' | 'disabled' | 'unknown';
+export type McpAssessmentAction = 'none' | 'review-exposure' | 'fix-or-disable-if-unneeded';
+
+export interface McpServerAssessment {
+  harnessId: HarnessId;
+  name: string;
+  toolCount: number | null;
+  exposure: McpExposurePressure;
+  usability: McpUsability;
+  action: McpAssessmentAction;
+  /**
+   * False until Token Harness has task relevance or actual per-server usage evidence.
+   * A high tool count alone is never enough evidence to recommend removal.
+   */
+  hasRemovalEvidence: boolean;
+  reason: string;
+}
+
 export interface HarnessContextObservation {
   harnessId: HarnessId;
   state: ContextObservationState;
@@ -83,6 +102,7 @@ export interface McpHarnessReport {
   harnessId: HarnessId;
   state: ContextObservationState;
   servers: McpServerObservation[];
+  assessments: McpServerAssessment[];
   knownToolCount: number;
   unknownToolServerCount: number;
   inventoryTruncated: boolean;
@@ -106,4 +126,58 @@ export interface ContextReport {
   discoveredInstructionBytes: number;
   instructionHierarchy: InstructionHierarchyObservation[];
   harnesses: HarnessContextObservation[];
+}
+
+export function assessMcpServer(server: McpServerObservation): McpServerAssessment {
+  const exposure: McpExposurePressure =
+    server.toolCount === null
+      ? 'unknown'
+      : server.toolCount >= 20
+        ? 'high'
+        : server.toolCount >= 10
+          ? 'moderate'
+          : 'low';
+
+  const status = [server.runtimeStatus, server.authStatus]
+    .filter((value): value is string => value !== null)
+    .join(' ')
+    .toLowerCase();
+
+  const usability: McpUsability =
+    status.includes('disabled')
+      ? 'disabled'
+      : /fail|error|needs authentication|authenticationrequired|unauthenticated/.test(status)
+        ? 'attention'
+        : /connected|running|ready/.test(status)
+          ? 'usable'
+          : 'unknown';
+
+  const action: McpAssessmentAction =
+    usability === 'attention'
+      ? 'fix-or-disable-if-unneeded'
+      : exposure === 'high'
+        ? 'review-exposure'
+        : 'none';
+
+  const reason =
+    usability === 'attention'
+      ? 'the server is not currently usable; task relevance is still unknown'
+      : exposure === 'high'
+        ? 'the server exposes at least 20 known tools; usage and task relevance are not observed'
+        : exposure === 'moderate'
+          ? 'the server exposes 10-19 known tools; usage and task relevance are not observed'
+          : exposure === 'low'
+            ? 'the server exposes fewer than 10 known tools; usage and task relevance are not observed'
+            : 'tool exposure is unknown; usage and task relevance are not observed';
+
+  return {
+    harnessId: server.harnessId,
+    name: server.name,
+    toolCount: server.toolCount,
+    exposure,
+    usability,
+    action,
+    hasRemovalEvidence: false,
+    reason,
+  };
 }
