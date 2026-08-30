@@ -16,6 +16,7 @@ import {
   type ContextReport,
   type HarnessContextObservation,
   type HarnessOptimizationAdvice,
+  type LocalBurnTrend,
   type OptimizeReport,
   type OptimizationRecommendation,
   type RecommendationEvidence,
@@ -26,6 +27,7 @@ import {
 import { runBudget } from './budget.js';
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
+import { runHistory } from './history.js';
 
 const DEFAULT_RESERVE = 20;
 
@@ -147,14 +149,30 @@ function adviceForHarness(input: {
   contextReport: ContextReport;
   context: HarnessContextObservation;
   budgetWindows: ReturnType<typeof assessWindowPace>[];
+  localBurnTrend: LocalBurnTrend | null;
   taskClass: TaskClass;
   profile: BudgetProfile;
 }): HarnessOptimizationAdvice {
-  const { context, contextReport, budgetWindows, taskClass, profile } = input;
+  const { context, contextReport, budgetWindows, localBurnTrend, taskClass, profile } = input;
   const diagnostics = [...context.diagnostics];
   const pressure = contextEvidence(contextReport, context);
   const recommendations: OptimizationRecommendation[] = [];
   const paceEvidence = quotaEvidence(budgetWindows);
+  const historyEvidence: RecommendationEvidence[] =
+    localBurnTrend === null || localBurnTrend.state === 'unknown'
+      ? []
+      : [
+          {
+            code: 'local-token-burn',
+            summary:
+              'local token volume is ' +
+              localBurnTrend.state +
+              (localBurnTrend.changePercent === null
+                ? ''
+                : ' (' + String(localBurnTrend.changePercent) + '%)') +
+              '; this is workload history, not subscription quota',
+          },
+        ];
   const overPace = budgetWindows.some((item) => item.state === 'over-pace');
   const underPaceSoon =
     (taskClass === 'hard' || taskClass === 'critical') &&
@@ -184,7 +202,7 @@ function adviceForHarness(input: {
       priority: pressure.pressure === 'high' ? 'next' : 'first',
       action: 'Protect the configured reserve; avoid unnecessary escalation',
       target: null,
-      evidence: paceEvidence,
+      evidence: [...paceEvidence, ...historyEvidence],
     });
   } else if (underPaceSoon) {
     recommendations.push({
@@ -192,7 +210,7 @@ function adviceForHarness(input: {
       priority: 'next',
       action: 'Use available headroom on this hard task before the window resets',
       target: null,
-      evidence: paceEvidence,
+      evidence: [...paceEvidence, ...historyEvidence],
     });
   } else if (
     budgetWindows.length === 0 ||
@@ -204,6 +222,16 @@ function adviceForHarness(input: {
       action: 'Keep pacing unknown; do not infer subscription headroom from local token counts',
       target: null,
       evidence: [{ code: 'quota-unknown', summary: 'no paceable live usage window was observed' }],
+    });
+  }
+
+  if (localBurnTrend?.state === 'rising') {
+    recommendations.push({
+      area: 'history',
+      priority: overPace ? 'next' : 'optional',
+      action: 'Review growing local usage before escalating model effort or extending the session',
+      target: null,
+      evidence: historyEvidence,
     });
   }
 
@@ -320,6 +348,7 @@ function adviceForHarness(input: {
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,
+    localBurnTrend,
     pace: budgetWindows,
     recommendations,
     diagnostics,
@@ -345,12 +374,14 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
   }
   const reservePercent = context.reservePercent ?? DEFAULT_RESERVE;
 
-  const [budgetResult, contextResult] = await Promise.all([
+  const [budgetResult, contextResult, historyResult] = await Promise.all([
     runBudget(context),
     runContext(context),
+    runHistory(context),
   ]);
   const contextReport = contextResult.data;
   const budgetReport = budgetResult.data;
+  const historyReport = historyResult.data;
 
   const report: OptimizeReport = {
     platform: context.platform,
@@ -367,7 +398,11 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
       command: 'optimize',
       exitCode: EXIT_CODES.ok,
       data: report,
-      diagnostics: [...budgetResult.diagnostics, ...contextResult.diagnostics],
+      diagnostics: [
+        ...budgetResult.diagnostics,
+        ...contextResult.diagnostics,
+        ...historyResult.diagnostics,
+      ],
     });
   }
 
@@ -384,6 +419,10 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         contextReport,
         context: harnessContext,
         budgetWindows: pace,
+        localBurnTrend:
+          historyReport?.harnesses.find(
+            (item) => item.harnessId === harnessContext.harnessId,
+          )?.burnTrend ?? null,
         taskClass,
         profile,
       }),
@@ -397,6 +436,7 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
     diagnostics: [
       ...budgetResult.diagnostics,
       ...contextResult.diagnostics,
+      ...historyResult.diagnostics,
       ...report.harnesses.flatMap((item) => item.diagnostics),
     ],
   });
