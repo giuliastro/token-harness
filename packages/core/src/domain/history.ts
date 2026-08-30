@@ -211,10 +211,7 @@ export function assessRecentSessionBoundary(
   }
 
   const row = candidate.row;
-  const minutesSinceLastActivity = Math.max(
-    0,
-    Math.round((nowMs - candidate.lastMs) / 60_000),
-  );
+  const minutesSinceLastActivity = Math.max(0, Math.round((nowMs - candidate.lastMs) / 60_000));
   const firstMs = row.firstActivity === null ? Number.NaN : Date.parse(row.firstActivity);
   const durationMinutes =
     Number.isFinite(firstMs) && firstMs <= candidate.lastMs
