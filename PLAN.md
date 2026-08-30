@@ -1619,8 +1619,11 @@ Acceptance:
 Codex-compatible AGENTS hierarchy discovery. #97 adds the focused `mcp` view plus explicit
 root+subtree/monolithic hierarchy reporting. The session-boundary tranche adds a conservative
 ccusage-backed most-recent-session signal and conditional new-session/compact advice without claiming
-that the observed session is active. Still open: tool-output volume by family, evidence-backed
-per-server removal advice, and the native-deferral benchmark before assigning Lazy MCP.
+that the observed session is active. The MCP assessment tranche now identifies per-server exposure
+hotspots and unusable/auth-broken servers while explicitly refusing removal advice when usage or
+task-relevance evidence is absent. Still open: tool-output volume by family, actual per-server
+usage/task-relevance evidence required to recommend removal, and the native-deferral benchmark before
+assigning Lazy MCP.
 
 Add:
 
