@@ -20,7 +20,7 @@ First time here
   1  token-harness doctor        what is on this machine        writes nothing
   2  token-harness budget        quota remaining                writes nothing
   3  token-harness context       static context cost            writes nothing
-  4  token-harness mcp           MCP audit                       writes nothing
+  4  token-harness mcp           MCP audit                     writes nothing
   5  token-harness optimize      quota-aware advice             writes nothing
   6  token-harness plan          what would change              writes nothing
   7  token-harness apply --yes   make those changes             WRITES
