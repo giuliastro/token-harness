@@ -46,12 +46,28 @@ export interface LocalBurnTrend {
   reason: string;
 }
 
+export type SessionBoundaryState = 'recent-small' | 'recent-large' | 'stale' | 'unknown';
+
+export interface SessionBoundarySignal {
+  harnessId: HarnessId;
+  state: SessionBoundaryState;
+  /** Most recently active session with a valid timestamp; never claimed to be the current session. */
+  candidateSessionId: string | null;
+  totalTokens: number | null;
+  firstActivity: string | null;
+  lastActivity: string | null;
+  durationMinutes: number | null;
+  minutesSinceLastActivity: number | null;
+  reason: string;
+}
+
 export interface HarnessHistorySummary extends HistoryTokenTotals {
   harnessId: HarnessId;
   days: number;
   sessions: number;
   modelsUsed: string[];
   burnTrend: LocalBurnTrend;
+  recentSession: SessionBoundarySignal;
 }
 
 export interface HistorySource {
@@ -150,5 +166,77 @@ export function assessLocalBurnTrend(
         : state === 'falling'
           ? 'recent local token volume is more than 20% below the preceding comparison window'
           : 'recent local token volume is within a 20% deadband of the preceding window',
+  };
+}
+
+export function assessRecentSessionBoundary(
+  harnessId: HarnessId,
+  sessions: readonly SessionHistoryRow[],
+  now: string,
+): SessionBoundarySignal {
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) {
+    return {
+      harnessId,
+      state: 'unknown',
+      candidateSessionId: null,
+      totalTokens: null,
+      firstActivity: null,
+      lastActivity: null,
+      durationMinutes: null,
+      minutesSinceLastActivity: null,
+      reason: 'the observation time is invalid',
+    };
+  }
+
+  const candidates = sessions
+    .filter((row) => row.harnessId === harnessId && row.lastActivity !== null)
+    .map((row) => ({ row, lastMs: Date.parse(row.lastActivity ?? '') }))
+    .filter((item) => Number.isFinite(item.lastMs) && item.lastMs <= nowMs)
+    .sort((left, right) => right.lastMs - left.lastMs);
+
+  const candidate = candidates[0];
+  if (candidate === undefined) {
+    return {
+      harnessId,
+      state: 'unknown',
+      candidateSessionId: null,
+      totalTokens: null,
+      firstActivity: null,
+      lastActivity: null,
+      durationMinutes: null,
+      minutesSinceLastActivity: null,
+      reason: 'no session with a valid past activity timestamp was observed',
+    };
+  }
+
+  const row = candidate.row;
+  const minutesSinceLastActivity = Math.max(0, Math.round((nowMs - candidate.lastMs) / 60_000));
+  const firstMs = row.firstActivity === null ? Number.NaN : Date.parse(row.firstActivity);
+  const durationMinutes =
+    Number.isFinite(firstMs) && firstMs <= candidate.lastMs
+      ? Math.round((candidate.lastMs - firstMs) / 60_000)
+      : null;
+
+  // Token Harness policy heuristics, not harness context-window limits.
+  const stale = minutesSinceLastActivity > 6 * 60;
+  const large = row.totalTokens >= 100_000 || (durationMinutes !== null && durationMinutes >= 4 * 60);
+  const state: SessionBoundaryState = stale ? 'stale' : large ? 'recent-large' : 'recent-small';
+
+  return {
+    harnessId,
+    state,
+    candidateSessionId: row.sessionId,
+    totalTokens: row.totalTokens,
+    firstActivity: row.firstActivity,
+    lastActivity: row.lastActivity,
+    durationMinutes,
+    minutesSinceLastActivity,
+    reason:
+      state === 'stale'
+        ? 'the most recently observed session has been inactive for more than six hours'
+        : state === 'recent-large'
+          ? 'the most recently observed session exceeds a Token Harness size or duration heuristic'
+          : 'the most recently observed session is recent and below Token Harness size heuristics',
   };
 }
