@@ -24,7 +24,7 @@ First time here
   5  token-harness verify        is it actually intercepting    writes nothing
   6  token-harness metrics       what it saved                  writes nothing
 
-  Steps 1 and 2 are safe to run right now. Nothing changes until step 3.
+  Steps 1, 2 and 3 are safe to run right now. Nothing changes until step 4.
 
 Usage
   token-harness <command> [flags]
