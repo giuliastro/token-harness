@@ -46,6 +46,7 @@ provider routing, or benchmark token counts.
 | --- | --- | --- |
 | **Claude Code native controls** | Usage status, model/effort choice, context inspection, clear/compact lifecycle | **P0 — build into core**. Prefer native surfaces over third-party credential scraping; discover available models dynamically |
 | **Codex native app-server + profiles** | Structured rate-limit telemetry; model, reasoning effort, verbosity, tool-output and MCP/context controls | **P0 — build into core**. `account/rateLimits/read` is the preferred live quota source when available |
+| [cclimits](https://github.com/cruzanstx/cclimits) | Live/local quota companion across coding tools | **P0 — optional observational companion for Claude**. Token Harness uses only cacheless Claude JSON mode, never reads its credentials, and labels the result `reported` or `cached`. Codex keeps its native app-server reader |
 | [ccusage](https://github.com/ccusage/ccusage) | Local historical token/session/cost analytics for Claude Code and Codex | **P0 — high-priority read-only companion**. Useful for history and baselines; not a substitute for live subscription-limit telemetry |
 | [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and command-output reduction | **P1 — active, keep**. Reduces context that would otherwise be resent on later turns |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP reduction | **P1 — active, keep**. Continue only on proven non-overlapping surfaces |
@@ -95,6 +96,9 @@ token-harness budget
 token-harness context
 token-harness history --since 7d
 token-harness optimize
+
+# Optional: Claude live quota can use an already-installed cclimits build that
+# supports --no-cache-write. Token Harness never installs it automatically.
 
 # 3. Preview every proposed configuration change.
 token-harness plan
