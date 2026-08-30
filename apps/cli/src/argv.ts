@@ -35,6 +35,7 @@ export const AVAILABLE_COMMANDS = [
   'context',
   'doctor',
   'metrics',
+  'mcp',
   'optimize',
   'plan',
   'rollback',
