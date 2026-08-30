@@ -20,12 +20,13 @@ First time here
   1  token-harness doctor        what is on this machine        writes nothing
   2  token-harness budget        quota remaining                writes nothing
   3  token-harness context       static context cost            writes nothing
-  4  token-harness plan          what would change              writes nothing
-  5  token-harness apply --yes   make those changes             WRITES
-  6  token-harness verify        is it actually intercepting    writes nothing
-  7  token-harness metrics       what it saved                  writes nothing
+  4  token-harness optimize      quota-aware advice             writes nothing
+  5  token-harness plan          what would change              writes nothing
+  6  token-harness apply --yes   make those changes             WRITES
+  7  token-harness verify        is it actually intercepting    writes nothing
+  8  token-harness metrics       what it saved                  writes nothing
 
-  Steps 1 through 4 are safe to run right now. Nothing changes until step 5.
+  Steps 1 through 5 are safe to run right now. Nothing changes until step 6.
 
 Usage
   token-harness <command> [flags]
@@ -39,6 +40,7 @@ Commands, in the order you would use them
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
   metrics     Report what was saved, labelled with how it was measured
+  optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
   rollback    Restore the files a transaction changed, as they were before
@@ -52,6 +54,9 @@ Flags
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
   --plan <id>          Apply a previously computed plan by id
+  --task <class>        Optimizer task: mechanical, standard, hard, critical
+  --profile <name>      Optimizer profile: economy, balanced, quality, custom
+  --reserve <percent>   Keep this percent of observed allowance in reserve
   --yes                Grant the confirmation a mutating command requires
   --version            Print the version and exit 0
   --help               Print usage and exit 0
@@ -60,6 +65,22 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  optimize: `token-harness optimize — explain how to spend the current allowance
+
+Usage
+  token-harness optimize [--json] [--harness <id>] [--project <dir>]
+                         [--task <class>] [--profile <name>] [--reserve <0-95>]
+
+Defaults to --task standard --profile balanced --reserve 20. The command is
+read-only. It combines live budget windows with context/MCP inventory and emits
+ordered recommendations with the observations that caused them.
+
+Pacing is calculated only when used percentage, duration, and reset are known.
+Model names are never ranked by inference: a model switch is not recommended
+until benchmark evidence exists. Reasoning effort is selected only from levels
+advertised by the current discovered model. The custom profile currently requires
+an explicit --reserve and otherwise keeps the task quality-floor rules.`,
+
   context: `token-harness context — audit context overhead before spending quota
 
 Usage
