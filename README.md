@@ -1,50 +1,79 @@
 # Token Harness
 
-Token Harness has one objective: **reduce the tokens consumed by coding agents without hiding
-useful information or overstating the result**.
+Token Harness has one objective: **maximize the useful coding work you can get from Claude Code
+and Codex usage limits, without hiding quality regressions or pretending that opaque subscription
+quota is exactly equivalent to a token count**.
 
-Coding sessions repeatedly send test logs, command output, repository context, MCP schemas,
-tool results, and conversation history back to the model. Specialized tools can reduce each of
-those sources, but installing them independently creates a second problem: overlapping hooks,
-double reduction, incompatible configurations, and savings counted more than once.
+The scarce resource is no longer just model context. Subscription users are constrained by rolling
+usage windows, weekly limits, model-dependent burn, long-session context growth, MCP/tool schema
+overhead, noisy tool output, and repeated work after poor model or effort choices. Token Harness is
+evolving from a token-reduction control plane into a **quota-aware efficiency layer** for coding
+harnesses.
 
-Token Harness is the control plane for that optimization stack. It finds the coding agents and
-token-saving tools on the machine, selects a compatible owner for each interception point, shows
-every proposed change before applying it, verifies whether the integration is genuinely being
-used, and reports how many tokens or characters were saved.
+The product therefore optimizes two related budgets:
 
-The reduction still happens inside specialized providers such as RTK and HarnessTrim. Token
-Harness makes those providers safe to combine, observable, reversible, and comparable.
+1. **subscription headroom** — observe the usage windows the harness itself exposes, pace work
+   against reset time, and choose native model/effort settings that fit the task and remaining
+   budget;
+2. **context sent to the model** — keep instructions, MCP schemas, conversation history, repository
+   context, and tool output as small as possible without removing information needed to finish the
+   task correctly.
+
+RTK and HarnessTrim remain useful providers, but reducers are now one layer of the system rather
+than the product definition. Native harness controls come first because choosing the right model,
+effort, context shape, and enabled tools can avoid an expensive turn entirely.
+
+## What Token Harness should optimize
+
+| Layer | Target behavior |
+| --- | --- |
+| Usage-window observability | Read five-hour, weekly, model-specific, or credit-backed limits only from surfaces the harness can actually prove; show reset time, headroom, and burn rate |
+| Native model policy | Prefer economical models/effort for routine work, escalate only for tasks whose expected quality benefit justifies the extra quota |
+| Session hygiene | Detect task boundaries, oversized conversations, and stale context; recommend clear/compact/new-session actions before history dominates each turn |
+| Instruction budget | Keep `CLAUDE.md` / `AGENTS.md` concise and hierarchical instead of injecting one large global instruction file everywhere |
+| MCP/tool budget | Disable irrelevant MCP servers, defer schemas where the harness supports it, and expose only the tools required by the current task |
+| Tool-output budget | Reduce logs, diffs, test output, and repeated command results before they re-enter model context |
+| Cross-harness scheduling | When Claude Code and Codex have independent headroom, recommend the harness that can do the task with the best expected quality per remaining quota |
+| Measurement | Correlate quota delta, model/effort, context size, tool traffic, and task outcome; never convert local token savings into an unproven subscription-quota claim |
 
 ## Optimization ecosystem
 
-The long-term goal is to coordinate token savings across the whole coding-agent pipeline. Only
-tools marked **active** are integrated in this release; every other row is a candidate and is
-neither installed nor configured by Token Harness.
+The priority order below is deliberately different from the original Token Harness roadmap. A tool
+is high priority only when it helps **included Claude Code/Codex capacity**, not merely API cost,
+provider routing, or benchmark token counts.
 
-| Tool | Optimization layer | Token Harness status |
+| Tool or surface | Optimization layer | Token Harness direction |
 | --- | --- | --- |
-| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and command-output reduction | **Active — integrated** |
-| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP reduction | **Active — integrated** |
-| [Dejavu](https://github.com/Salnika/dejavu) | Emit only the delta when command output repeats | Not active — candidate |
-| [Lazy MCP](https://gitlab.com/gitlab-org/ai/lazy-mcp) | Load MCP tool schemas only when needed | Not active — candidate |
-| [repowise](https://github.com/repowise-dev/repowise) | Retrieve task-specific repository context | Not active — candidate |
-| [LiteLLM](https://github.com/BerriAI/litellm) | Model routing, fallbacks, budgets, and usage telemetry | Not active — candidate |
-| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Route simpler requests to less expensive models | Not active — candidate |
-| [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Route by task, complexity, tools, and deployment locality | Not active — candidate |
-| [Claude Code Router](https://github.com/musistudio/claude-code-router) | Route coding-agent requests across models and providers with effort-based rules and fallback chains | Not active — candidate · high priority |
-| [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | Select the model by task complexity, cost, and quality across routing strategies | Not active — candidate · high priority |
-| [Headroom](https://github.com/headroomlabs-ai/headroom) | Compress tool, MCP, file, and RAG payloads | Not active — candidate |
-| [Context Mode](https://github.com/mksglu/context-mode) | Keep raw tool results outside model context | Not active — candidate |
-| [LLMLingua](https://github.com/microsoft/LLMLingua) | Compress long prompts and context | Not active — candidate |
-| [Caveman](https://github.com/JuliusBrussee/caveman) | Reduce visible model-output verbosity | Not active — candidate |
+| **Claude Code native controls** | Usage status, model/effort choice, context inspection, clear/compact lifecycle | **P0 — build into core**. Prefer native surfaces over third-party credential scraping; discover available models dynamically |
+| **Codex native app-server + profiles** | Structured rate-limit telemetry; model, reasoning effort, verbosity, tool-output and MCP/context controls | **P0 — build into core**. `account/rateLimits/read` is the preferred live quota source when available |
+| [ccusage](https://github.com/ccusage/ccusage) | Local historical token/session/cost analytics for Claude Code and Codex | **P0 — high-priority read-only companion**. Useful for history and baselines; not a substitute for live subscription-limit telemetry |
+| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and command-output reduction | **P1 — active, keep**. Reduces context that would otherwise be resent on later turns |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, harness adapters, skills, pipes, and MCP reduction | **P1 — active, keep**. Continue only on proven non-overlapping surfaces |
+| [Lazy MCP](https://gitlab.com/gitlab-org/ai/lazy-mcp) | Load MCP tool schemas only when needed | **P1 — high priority**. Directly attacks schema/context overhead; benchmark against native Codex tool deferral before installing another owner |
+| [Context Mode](https://github.com/mksglu/context-mode) | Keep raw tool/MCP results outside model context | **P2 — alternative broad context owner**. Evaluate against Headroom, not alongside overlapping reducers by default |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | Compress tool, MCP, file, and RAG payloads | **P2 — alternative broad context owner**. Admit only after pair-specific quality and attribution fixtures |
+| [Dejavu](https://github.com/Salnika/dejavu) | Emit only the delta when command output repeats | **P2 — useful for test/rerun loops** after the normal output-reduction path is measured |
+| [repowise](https://github.com/repowise-dev/repowise) | Retrieve task-specific repository context | **P2 — conditional**. Its MCP overhead must be lower than the repository context it avoids |
+| LiteLLM, Claude Code Router, RouteLLM, LLMRouter, vLLM Semantic Router | Route requests across models/providers | **P3 — overflow/API routing only**. Useful after included quota is exhausted or for explicit external-provider policy; not a core subscription-quota optimizer |
+| [LLMLingua](https://github.com/microsoft/LLMLingua) | Generic prompt compression | **Research only** until a harness-aware lifecycle proves must-keep recall and quality |
+| [Caveman](https://github.com/JuliusBrussee/caveman) | Reduce visible model-output verbosity | **De-prioritized**. Use native verbosity/effort controls first and measure their effect before adding another instruction owner |
 
-Candidate status means only that the project has identified a useful optimization layer. A tool
-becomes active only after its installation, conflicts, rollback behavior, verification, and
-metrics attribution have been implemented and tested. Token Harness never installs a candidate
-merely because it is present on the machine. Rows marked `high priority` are the next intended
-intake; the admission gates each one carries are recorded in
+Candidate status still means that Token Harness neither installs nor configures the tool until its
+installation, conflicts, rollback behavior, verification, quality gates, and metrics attribution are
+implemented and tested. The intake evidence lives in
 [docs/provider-landscape.md](docs/provider-landscape.md).
+
+### Why generic routers moved down
+
+The original roadmap treated model routers as high priority. For the new objective that is backwards:
+a router can reduce API cost by sending work to another provider while consuming **none of the
+included Claude Code or Codex allowance**, or it can bypass subscription authentication entirely.
+That can be valuable as explicit overflow, but it does not demonstrate better use of the allowance
+the user already paid for.
+
+Token Harness should first exploit the harness-native choices that are actually inside the plan:
+model tier, reasoning effort, verbosity, session lifecycle, instruction size, MCP exposure, and tool
+output. External routing becomes an opt-in second budget, never an invisible shortcut.
 
 ## Quick start
 
