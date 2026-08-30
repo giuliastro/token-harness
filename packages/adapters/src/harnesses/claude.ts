@@ -683,8 +683,7 @@ async function observeUsage(
     );
   }
 
-  const confidence: 'reported' | 'cached' =
-    source === 'claude_code_cache' ? 'cached' : 'reported';
+  const confidence: 'reported' | 'cached' = source === 'claude_code_cache' ? 'cached' : 'reported';
   const windows = [
     cclimitsUsageWindow(claude['five_hour'], {
       scope: 'five-hour',
@@ -720,7 +719,8 @@ async function observeUsage(
         code: 'cclimits-claude-window-unrecognized',
         subject: CLAUDE,
         message: 'One cclimits Claude quota window failed strict percentage validation',
-        remediation: 'Treat the omitted window as unknown and update the cclimits compatibility fixture',
+        remediation:
+          'Treat the omitted window as unknown and update the cclimits compatibility fixture',
       }),
     );
   }
