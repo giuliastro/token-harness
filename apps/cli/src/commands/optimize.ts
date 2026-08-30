@@ -6,6 +6,7 @@
 
 import {
   EXIT_CODES,
+  assessMcpServer,
   assessWindowPace,
   chooseSupportedEffort,
   commandResult,
@@ -187,6 +188,48 @@ function adviceForHarness(input: {
   const underPaceSoon =
     (taskClass === 'hard' || taskClass === 'critical') &&
     budgetWindows.some((item) => item.state === 'under-pace' && resetSoon(item));
+
+  const mcpAssessments = context.mcpServers.map((server) => assessMcpServer(server));
+
+  for (const assessment of mcpAssessments.filter((item) => item.usability === 'attention')) {
+    recommendations.push({
+      area: 'mcp',
+      priority: pressure.pressure === 'high' ? 'first' : 'next',
+      action:
+        'Fix this MCP server status/auth, or disable it manually only if you know the task does not need it',
+      target: assessment.name,
+      evidence: [
+        {
+          code: 'mcp-unusable',
+          summary:
+            assessment.name +
+            ' is not currently usable; task relevance and actual usage are not observed',
+        },
+      ],
+    });
+  }
+
+  for (const assessment of mcpAssessments.filter(
+    (item) => item.exposure === 'high' && item.usability !== 'attention',
+  )) {
+    recommendations.push({
+      area: 'mcp',
+      priority: 'optional',
+      action:
+        'Review this high-exposure MCP server before a long task; do not remove it without usage or task-relevance evidence',
+      target: assessment.name,
+      evidence: [
+        {
+          code: 'mcp-high-exposure',
+          summary:
+            assessment.name +
+            ' exposes ' +
+            String(assessment.toolCount) +
+            ' known tools; no per-server usage evidence is available',
+        },
+      ],
+    });
+  }
 
   if (pressure.pressure === 'high') {
     recommendations.push({
