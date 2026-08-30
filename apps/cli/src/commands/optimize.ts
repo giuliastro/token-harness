@@ -96,7 +96,8 @@ function contextEvidence(
   }
 
   return {
-    pressure: score >= 2 ? 'high' : score === 1 ? 'moderate' : evidence.length > 0 ? 'low' : 'unknown',
+    pressure:
+      score >= 2 ? 'high' : score === 1 ? 'moderate' : evidence.length > 0 ? 'low' : 'unknown',
     evidence,
   };
 }
@@ -193,7 +194,10 @@ function adviceForHarness(input: {
       target: null,
       evidence: paceEvidence,
     });
-  } else if (budgetWindows.length === 0 || budgetWindows.every((item) => item.state === 'unknown')) {
+  } else if (
+    budgetWindows.length === 0 ||
+    budgetWindows.every((item) => item.state === 'unknown')
+  ) {
     recommendations.push({
       area: 'quota',
       priority: 'optional',
@@ -206,9 +210,9 @@ function adviceForHarness(input: {
   const catalogModel =
     context.model === null
       ? null
-      : context.availableModels.find(
+      : (context.availableModels.find(
           (model) => model.model === context.model || model.id === context.model,
-        ) ?? null;
+        ) ?? null);
   const currentEffort = context.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
   const recommendedEffort =
     catalogModel === null
@@ -230,7 +234,8 @@ function adviceForHarness(input: {
         code: 'current-model-not-in-catalog',
         subject: context.harnessId,
         message: 'The effective model is absent from the discovered model catalog',
-        remediation: 'Keep the current model and refresh the harness model catalog before switching',
+        remediation:
+          'Keep the current model and refresh the harness model catalog before switching',
       }),
     );
   }
@@ -321,9 +326,7 @@ function adviceForHarness(input: {
   };
 }
 
-export async function runOptimize(
-  context: CommandContext,
-): Promise<CommandResult<OptimizeReport>> {
+export async function runOptimize(context: CommandContext): Promise<CommandResult<OptimizeReport>> {
   const taskClass = context.taskClass ?? 'standard';
   const profile = context.budgetProfile ?? 'balanced';
   if (profile === 'custom' && context.reservePercent === null) {
