@@ -1,7 +1,7 @@
 # Provider and harness landscape
 
-Research snapshot: **2026-07-31**. Harness section added **2026-08-03**. Routing section updated
-**2026-08-06**.
+Research snapshot: **2026-08-30**. Harness section added **2026-08-03**. Quota-aware and routing priorities refreshed
+**2026-08-30**.
 
 This document is the researched intake queue for Token Harness providers and harnesses. It is
 not a support matrix: only adapters in `packages/adapters/src/providers` and
@@ -10,29 +10,48 @@ below are discovery evidence, not Token Harness benchmark results.
 
 ## Recommendation
 
-The strongest additions are the ones that operate on a different source of waste from
-RTK and HarnessTrim:
+Token Harness is now optimizing **useful work per included Claude Code/Codex allowance**, not token
+count in isolation. The intake order therefore starts with native quota and context controls before
+adding more payload-transforming providers:
 
-1. **Dejavu** for repeated-output deltas;
-2. **Lazy MCP** for MCP schema loading on demand;
-3. **repowise** for bounded, task-specific repository retrieval;
-4. **LiteLLM** as the common gateway and telemetry seam for model routing;
-5. **Claude Code Router** as the agent-native routing surface, and **LLMRouter** as the
-   effort-aware routing engine — both high-priority additions, gated in the routing table below;
-6. **one routing-policy owner**, initially evaluated between RouteLLM, vLLM Semantic Router,
-   and LLMRouter;
-7. **one broad context owner**, evaluated between Headroom and Context Mode;
-8. **LLMLingua** as a compression engine only after a provider supplies the harness
-   lifecycle around it;
-9. **Caveman** as an explicit, opt-in output policy.
+1. **native quota observability** — Claude Code's supported usage/status surfaces and Codex
+   app-server rate-limit RPCs;
+2. **native model/effort/context policy** — use the harness's own model, reasoning, verbosity,
+   compaction, instruction, and tool controls before introducing another proxy;
+3. **ccusage** as a read-only historical telemetry companion for local Claude Code and Codex
+   sessions;
+4. **RTK + HarnessTrim** on the already proven, non-overlapping reduction surfaces;
+5. **Lazy MCP**, but benchmark it against native deferred/tool-search behavior before assigning the
+   MCP-schema channel;
+6. **one broad context owner**, evaluated between Headroom and Context Mode;
+7. **Dejavu** for repeated-output deltas after the ordinary output path has been measured;
+8. **repowise** only where paired tests prove its retrieval envelope costs less context than it
+   avoids;
+9. **generic model routers** only as explicit overflow/API-cost policy, not as a core way to improve
+   subscription quota;
+10. **LLMLingua and Caveman** only after native compaction/verbosity/effort controls have been
+    exhausted and quality-preservation fixtures justify another owner.
 
-This order does not mean that every earlier item can be enabled together. The capability
-resolver still fails closed until the exact provider pair, order, versions, and fixture
-are recorded.
+This is both a ranking by expected quota impact and an implementation order. A provider still fails
+closed until the exact capability owner, order, versions, rollback behavior, and measurement class
+are known.
 
-It is also a ranking by source of waste, not an implementation order. PLAN §9.3 §The admission set
-for this phase records which of these are implemented first and why the two rankings differ: an
-entry high on this list can carry an unresolved admission gate, and one lower down can carry none.
+## Quota observability and native control
+
+These surfaces are different from providers: they are controls already exposed by the harness and
+should be preferred because they do not add another interception layer.
+
+| Surface | Role | Admission rule |
+| --- | --- | --- |
+| Claude Code native usage/model/context controls | Observe plan usage and reset information; select model and effort; inspect or reduce long-session context | **P0 internal adapter.** Prefer supported CLI/user-visible surfaces. Do not scrape or reuse OAuth credentials merely to obtain a prettier meter. Unknown live quota is an acceptable result |
+| Codex app-server `account/rateLimits/read` and updates | Structured current usage, window duration, reset timestamp, reached-limit state, and reset-credit inventory | **P0 internal adapter.** Read-only first. Never redeem a reset credit automatically, and never infer model-to-bucket mappings the server does not expose |
+| Codex native config profiles | Model, reasoning effort, plan-mode effort, verbosity, instruction budget, tool-output budget, and MCP/tool deferral | **P0 internal policy surface.** Discover supported fields/models from the installed Codex version and preserve user-owned configuration |
+| [ccusage](https://github.com/ccusage/ccusage) | Local daily/weekly/monthly/session token and estimated-cost history across Claude Code and Codex | **P0 read-only companion.** MIT, local and read-only. Historical token activity is evidence for trends, not proof of the subscription backend's remaining quota |
+| Token Harness budget controller | Pace five-hour and weekly headroom against reset time; recommend economy/balanced/quality choices | **New core capability.** Recommendations first; managed mutation only after the native control and rollback contracts are versioned |
+
+The backend meter remains authoritative. A local token count can explain *why* a task was expensive,
+but Token Harness must not manufacture an exact conversion from tokens to subscription percentage
+unless the harness exposes one.
 
 ## Context and token reduction
 
@@ -71,9 +90,9 @@ measurements for both paths.
 | System | License | Role | Why it adds value | Admission gates |
 | --- | --- | --- | --- | --- |
 | [LiteLLM](https://github.com/BerriAI/litellm) | MIT outside `enterprise/` | Gateway and telemetry substrate | Provides one self-hosted OpenAI-compatible surface for 100+ providers, with load balancing, retries/fallbacks, spend tracking, budgets, and usage logs. It is the most practical common seam beneath a routing policy. | Do not label load balancing as intelligent routing. Add credential redaction, endpoint ownership, per-request model receipts, uninstall/restore, and a hosted-egress warning. |
-| [Claude Code Router](https://github.com/musistudio/claude-code-router) | MIT | Agent-native model gateway for coding agents | One local endpoint for Claude Code, Codex, OpenCode, and other agents, with effort- and request-conditioned routing rules, ordered fallback chains, and request logs carrying the resolved route, latency, tokens, and estimated cost. It speaks to exactly the harnesses Token Harness manages and is distributed as an npm CLI, so it shares the platform and packaging expectations of this project. **High priority.** | It rewrites the same agent configuration surfaces Token Harness owns and holds credentials, so endpoint and profile ownership must be resolved before mutation. Confirm detection of a user-run instance on `127.0.0.1:3456`, a read-only adoption path for its routing rules and logs, credential redaction, and that routing outcomes stay out of the token-saving totals. Requires the model-routing RFC below before a manifest. |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) | MIT | Agent-native model gateway for coding agents | One local endpoint for Claude Code, Codex, OpenCode, and other agents, with effort- and request-conditioned routing rules, ordered fallback chains, and request logs carrying the resolved route, latency, tokens, and estimated cost. It speaks to exactly the harnesses Token Harness manages and is distributed as an npm CLI, so it shares the platform and packaging expectations of this project. **Overflow-only candidate.** | It rewrites the same agent configuration surfaces Token Harness owns and holds credentials, so endpoint and profile ownership must be resolved before mutation. Confirm detection of a user-run instance on `127.0.0.1:3456`, a read-only adoption path for its routing rules and logs, credential redaction, and that routing outcomes stay out of the token-saving totals. Requires the model-routing RFC below before a manifest. |
 | [RouteLLM](https://github.com/lm-sys/RouteLLM) | Apache-2.0 | Learned strong/weak model router | Ships trained routers and an OpenAI-compatible server; upstream reports up to 85% cost reduction while retaining 95% GPT-4 performance on general benchmarks and already uses LiteLLM for model access. | Recalibrate on coding-agent turns, tool calls, and long sessions; record the chosen model per operation; A/B task success; treat the generic benchmark as insufficient for a default coding profile. |
-| [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | MIT | Effort-aware routing library and server | Selects the model per query by task complexity, cost, and quality across 16+ strategies (KNN, MLP, graph, Elo, multi-round, personalized), with training and data-generation pipelines plus an OpenAI-compatible serving surface. It is the most direct implementation of the "escalate only when the task needs it" tier model. **High priority.** | Evaluate as the effort-aware routing-policy owner against RouteLLM, not as a second router in the same request path. Verify the inference-server footprint and that routing decisions are observable per request without prompt egress; Python research stack needs a versioned, documented serving mode before plan/apply/verify can be built on it. |
+| [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | MIT | Effort-aware routing library and server | Selects the model per query by task complexity, cost, and quality across 16+ strategies (KNN, MLP, graph, Elo, multi-round, personalized), with training and data-generation pipelines plus an OpenAI-compatible serving surface. It is the most direct implementation of the "escalate only when the task needs it" tier model. **Overflow-only candidate.** | Evaluate as the effort-aware routing-policy owner against RouteLLM, not as a second router in the same request path. Verify the inference-server footprint and that routing decisions are observable per request without prompt egress; Python research stack needs a versioned, documented serving mode before plan/apply/verify can be built on it. |
 | [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Apache-2.0 | Self-hosted mixture-of-models router | Actively targets model, reasoning, and tool selection plus semantic caching across heterogeneous local/private/cloud inference. It is the better fit for teams already running vLLM infrastructure. | Heavy deployment footprint; separate desktop and fleet support; prove cache identity and privacy; make it an alternative owner to RouteLLM, not a second router in the same request path. |
 
 ### Required architecture work before any router adapter
@@ -92,9 +111,9 @@ such as `model.request.route` and defines:
 - credential, prompt-egress, and data-residency diagnostics;
 - plan, apply, verification, rollback, and brownfield adoption for endpoint changes.
 
-Claude Code Router and LLMRouter are the first local candidates evaluated under this RFC;
-neither is admitted before the `model.request.route` capability and its cost/quality
-attribution class exist.
+Claude Code Router and LLMRouter remain local candidates under this RFC, but the quota-aware
+roadmap does not schedule them before native model/effort/context policy. Neither is admitted before
+the `model.request.route` capability and its cost/quality attribution class exist.
 
 Hosted routers such as [Not Diamond](https://docs.notdiamond.ai/docs/what-is-model-routing)
 and [OpenRouter Auto](https://openrouter.ai/openrouter/auto) remain later opt-in candidates.
