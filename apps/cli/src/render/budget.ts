@@ -18,10 +18,7 @@ function reset(value: string | null): string {
   return value.replace('T', ' ').replace('.000Z', 'Z');
 }
 
-export function renderBudgetReport(
-  report: BudgetReport,
-  _context: RenderContext,
-): string {
+export function renderBudgetReport(report: BudgetReport, _context: RenderContext): string {
   const lines: string[] = ['BUDGET', ''];
 
   lines.push(
