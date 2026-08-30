@@ -88,12 +88,13 @@ function context(options: {
   files?: Readonly<Record<string, string>>;
   version?: string | null;
   facts?: PlatformFacts;
+  runner?: ProcessRunner;
 }): HarnessContext {
   return {
     fs: memoryFileSystem(options.files ?? {}),
-    runner: versionRunner(
-      options.version === undefined ? '2.1.212 (Claude Code)' : options.version,
-    ),
+    runner:
+      options.runner ??
+      versionRunner(options.version === undefined ? '2.1.212 (Claude Code)' : options.version),
     facts: options.facts ?? LINUX,
     paths: {
       home: HOME,
@@ -396,6 +397,174 @@ describe('brownfield adoption', () => {
       inspection.configs.filter((config) => config.configuredPoints.length > 0).length,
       2,
     );
+  });
+});
+
+describe('quota observation', () => {
+  function successfulOutcome(request: ProcessRequest, stdout: string): ProcessOutcome {
+    return {
+      displayCommand: request.executable + ' ' + request.args.join(' '),
+      interpreter: 'direct',
+      executablePath: '/usr/local/bin/' + request.executable,
+      exitCode: 0,
+      signal: null,
+      stdout,
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 2,
+      timedOut: false,
+      failure: null,
+    };
+  }
+
+  it('reads live Claude Desktop quota only through cacheless cclimits JSON', async () => {
+    const requests: ProcessRequest[] = [];
+    const runner: ProcessRunner = {
+      run: async (request) => {
+        requests.push(request);
+        return successfulOutcome(
+          request,
+          JSON.stringify({
+            claude: {
+              status: 'ok',
+              source: 'claude_desktop_oauth',
+              plan: 'pro',
+              five_hour: {
+                used: '18.0%',
+                remaining: '82.0%',
+                resets_at: '2026-08-30T16:00:00+00:00',
+              },
+              seven_day: {
+                used: '42.0%',
+                remaining: '58.0%',
+                resets_at: '2026-09-05T12:00:00+00:00',
+              },
+            },
+          }),
+        );
+      },
+    };
+
+    const result = await claudeAdapter.observeUsage?.(
+      context({ runner }),
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.equal(result.planType, 'pro');
+    assert.equal(result.windows.length, 2);
+    assert.deepEqual(
+      result.windows.map((window) => ({
+        scope: window.scope,
+        used: window.usedPercent,
+        remaining: window.remainingPercent,
+        reset: window.resetsAt,
+        source: window.source,
+        confidence: window.confidence,
+      })),
+      [
+        {
+          scope: 'five-hour',
+          used: 18,
+          remaining: 82,
+          reset: '2026-08-30T16:00:00.000Z',
+          source: 'companion-cli',
+          confidence: 'reported',
+        },
+        {
+          scope: 'weekly',
+          used: 42,
+          remaining: 58,
+          reset: '2026-09-05T12:00:00.000Z',
+          source: 'companion-cli',
+          confidence: 'reported',
+        },
+      ],
+    );
+    assert.deepEqual(requests[0]?.args, [
+      '--claude',
+      '--json',
+      '--no-cache-write',
+      '--no-stale-fallback',
+    ]);
+    assert.equal(requests[0]?.env?.['PYTHONDONTWRITEBYTECODE'], '1');
+  });
+
+  it('shows a fresh Claude Code local cache as cached evidence, not live authority', async () => {
+    const runner: ProcessRunner = {
+      run: async (request) =>
+        successfulOutcome(
+          request,
+          JSON.stringify({
+            claude: {
+              status: 'ok',
+              source: 'claude_code_cache',
+              source_age_seconds: 120,
+              five_hour: {
+                used: '37.5%',
+                remaining: '62.5%',
+                resets_at: '2026-08-30T16:00:00+00:00',
+              },
+            },
+          }),
+        ),
+    };
+
+    const result = await claudeAdapter.observeUsage?.(
+      context({ runner }),
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.equal(result.windows[0]?.confidence, 'cached');
+  });
+
+  it('refuses stale Claude Code cached quota as a live budget observation', async () => {
+    const runner: ProcessRunner = {
+      run: async (request) =>
+        successfulOutcome(
+          request,
+          JSON.stringify({
+            claude: {
+              status: 'ok',
+              source: 'claude_code_cache',
+              source_age_seconds: 7200,
+              source_stale: true,
+              five_hour: { used: '10.0%', remaining: '90.0%' },
+            },
+          }),
+        ),
+    };
+
+    const result = await claudeAdapter.observeUsage?.(
+      context({ runner }),
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'unavailable');
+    assert.equal(result.windows.length, 0);
+    assert.equal(result.diagnostics[0]?.code, 'cclimits-claude-cache-stale');
+  });
+
+  it('keeps missing cclimits non-fatal and explicit', async () => {
+    const runner: ProcessRunner = {
+      run: async (request) => ({
+        ...successfulOutcome(request, ''),
+        executablePath: null,
+        exitCode: null,
+        failure: { reason: 'executable-not-found', message: 'cclimits not found' },
+      }),
+    };
+
+    const result = await claudeAdapter.observeUsage?.(
+      context({ runner }),
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'unavailable');
+    assert.equal(result.diagnostics[0]?.code, 'cclimits-not-installed');
+    assert.equal(result.diagnostics[0]?.severity, 'info');
   });
 });
 
