@@ -20,6 +20,7 @@ import {
   type OptimizeReport,
   type OptimizationRecommendation,
   type RecommendationEvidence,
+  type SessionBoundarySignal,
   type TaskClass,
   type WindowPaceAssessment,
 } from '@token-harness/core';
@@ -150,10 +151,19 @@ function adviceForHarness(input: {
   context: HarnessContextObservation;
   budgetWindows: ReturnType<typeof assessWindowPace>[];
   localBurnTrend: LocalBurnTrend | null;
+  recentSession: SessionBoundarySignal | null;
   taskClass: TaskClass;
   profile: BudgetProfile;
 }): HarnessOptimizationAdvice {
-  const { context, contextReport, budgetWindows, localBurnTrend, taskClass, profile } = input;
+  const {
+    context,
+    contextReport,
+    budgetWindows,
+    localBurnTrend,
+    recentSession,
+    taskClass,
+    profile,
+  } = input;
   const diagnostics = [...context.diagnostics];
   const pressure = contextEvidence(contextReport, context);
   const recommendations: OptimizationRecommendation[] = [];
@@ -233,6 +243,41 @@ function adviceForHarness(input: {
       target: null,
       evidence: historyEvidence,
     });
+  }
+
+  if (recentSession !== null && recentSession.state !== 'unknown') {
+    const sessionEvidence: RecommendationEvidence[] = [
+      {
+        code: 'recent-session-candidate',
+        summary:
+          'most recently observed local session candidate is ' +
+          recentSession.state +
+          ', ' +
+          (recentSession.totalTokens === null
+            ? 'token volume unknown'
+            : String(recentSession.totalTokens) + ' local tokens') +
+          '; it is not assumed to be the active session',
+      },
+    ];
+    if (recentSession.state === 'stale') {
+      recommendations.push({
+        area: 'session',
+        priority: pressure.pressure === 'high' ? 'first' : 'next',
+        action:
+          'If this is a new task, start a new harness session instead of reviving stale context',
+        target: 'new-session',
+        evidence: sessionEvidence,
+      });
+    } else if (recentSession.state === 'recent-large') {
+      recommendations.push({
+        area: 'session',
+        priority: pressure.pressure === 'high' || overPace ? 'first' : 'next',
+        action:
+          'If continuing the same task, compact or hand off before more turns; if the task changed, start a new session',
+        target: 'compact-or-new-session',
+        evidence: sessionEvidence,
+      });
+    }
   }
 
   const catalogModel =
@@ -349,6 +394,7 @@ function adviceForHarness(input: {
     recommendedVerbosity,
     contextPressure: pressure.pressure,
     localBurnTrend,
+    recentSession,
     pace: budgetWindows,
     recommendations,
     diagnostics,
@@ -422,6 +468,9 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         localBurnTrend:
           historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
             ?.burnTrend ?? null,
+        recentSession:
+          historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
+            ?.recentSession ?? null,
         taskClass,
         profile,
       }),
