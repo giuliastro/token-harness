@@ -417,6 +417,38 @@ describe('context-cost observation', () => {
                   nextCursor: null,
                 },
               }),
+              JSON.stringify({
+                id: 4,
+                result: {
+                  data: [
+                    {
+                      id: 'gpt-5.6-codex',
+                      model: 'gpt-5.6-codex',
+                      displayName: 'GPT-5.6 Codex',
+                      modelSpecialty: null,
+                      hidden: false,
+                      supportedReasoningEfforts: [
+                        { reasoningEffort: 'low', description: 'Low' },
+                        { reasoningEffort: 'medium', description: 'Medium' },
+                        { reasoningEffort: 'high', description: 'High' },
+                      ],
+                      defaultReasoningEffort: 'medium',
+                      inputModalities: ['text'],
+                      supportsPersonality: true,
+                      multiAgentVersion: null,
+                      additionalSpeedTiers: [],
+                      serviceTiers: [],
+                      defaultServiceTier: null,
+                      isDefault: true,
+                      upgrade: null,
+                      upgradeInfo: null,
+                      availabilityNux: null,
+                      description: 'test model',
+                    },
+                  ],
+                  nextCursor: null,
+                },
+              }),
               '',
             ].join('\n'),
             stderr: '',
@@ -442,6 +474,13 @@ describe('context-cost observation', () => {
     assert.deepEqual(result.projectRootMarkers, ['.git']);
     assert.deepEqual(result.projectDocFallbackFilenames, ['TEAM.md']);
     assert.equal(result.configInstructionBytes, 5);
+    assert.equal(result.availableModels.length, 1);
+    assert.equal(result.availableModels[0]?.model, 'gpt-5.6-codex');
+    assert.deepEqual(result.availableModels[0]?.supportedReasoningEfforts, [
+      'low',
+      'medium',
+      'high',
+    ]);
     assert.equal(result.mcpServers.length, 1);
     assert.equal(result.mcpServers[0]?.toolCount, 2);
     assert.equal(result.mcpServers[0]?.runtimeStatus, 'connected');
@@ -450,6 +489,7 @@ describe('context-cost observation', () => {
     assert.equal(requests.length, 1);
     assert.match(requests[0]?.stdin ?? '', /config\/read/);
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
+    assert.match(requests[0]?.stdin ?? '', /model\/list/);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
   });
 });
