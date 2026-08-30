@@ -421,7 +421,6 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   };
 }
 
-
 function readNumber(record: Record<string, JsonValue>, key: string): number | null {
   const value = record[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -602,7 +601,8 @@ async function observeUsage(
           code: 'codex-rate-limits-unavailable',
           subject: CODEX,
           message: 'Codex rate limits could not be read: ' + outcome.failure.message,
-          remediation: 'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
+          remediation:
+            'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
         }),
       ],
     };
@@ -665,10 +665,17 @@ async function observeUsage(
               code: 'codex-rate-limits-empty',
               subject: CODEX,
               message: 'Codex returned a rate-limit response without any readable usage windows',
-              remediation: 'Treat current Codex quota as unknown and retry after a normal Codex session',
+              remediation:
+                'Treat current Codex quota as unknown and retry after a normal Codex session',
             }),
           ],
   };
 }
 
-export const codexAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify, observeUsage };
+export const codexAdapter: HarnessAdapter = {
+  manifest: MANIFEST,
+  detect,
+  inspect,
+  verify,
+  observeUsage,
+};
