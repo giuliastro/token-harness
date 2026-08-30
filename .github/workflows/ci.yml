@@ -48,6 +48,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Formatter diagnostic
+        if: runner.os == 'Linux'
+        run: |
+          pnpm prettier packages/core/src/domain/context-cost.ts --write
+          git diff --no-color -- packages/core/src/domain/context-cost.ts
+
       - name: Format check
         run: pnpm format:check
 
