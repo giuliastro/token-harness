@@ -9,13 +9,7 @@ import type { Diagnostic } from './diagnostics.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
 
-export type UsageWindowScope =
-  | 'five-hour'
-  | 'weekly'
-  | 'monthly'
-  | 'model'
-  | 'credit'
-  | 'unknown';
+export type UsageWindowScope = 'five-hour' | 'weekly' | 'monthly' | 'model' | 'credit' | 'unknown';
 
 export type UsageWindowSource = 'native-rpc' | 'native-cli' | 'local-history' | 'unknown';
 export type UsageConfidence = 'authoritative' | 'reported' | 'estimated';
