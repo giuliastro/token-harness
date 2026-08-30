@@ -160,7 +160,7 @@ describe('metrics channel rendering', () => {
     assert.match(rendered, /^Observed by measurement class \(provider events\)$/m);
     assert.match(rendered, /^By channel \(raw to final\)$/m);
     assert.match(rendered, /alpha -> beta - measured/);
-    assert.match(rendered, /Exact local: saved 1,600 tokens across 2 operations/);
+    assert.match(rendered, /Exact local: 2,000 -> 400 tokens; saved 1,600 across 2 operations/);
     assert.match(rendered, /rtk - attribution-unavailable/);
     assert.match(rendered, /do not carry enough pipeline\s+identity/);
     assert.match(rendered, /^Pipeline total$/m);
