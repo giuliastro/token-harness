@@ -90,15 +90,21 @@ Then run the complete workflow from the project in which you use your coding age
 # 1. Inspect the machine. This does not change agent configuration.
 token-harness doctor
 
-# 2. Preview every proposed change.
+# 2. Inspect subscription headroom and avoidable context. Still read-only.
+token-harness budget
+token-harness context
+token-harness history --since 7d
+token-harness optimize
+
+# 3. Preview every proposed configuration change.
 token-harness plan
 
-# 3. Apply the reviewed plan. This is the first configuration-changing step.
+# 4. Apply the reviewed plan. This is the first configuration-changing step.
 token-harness apply --yes
 
-# 4. Restart the coding agent, then run a normal shell command through it.
+# 5. Restart the coding agent, then run a normal shell command through it.
 
-# 5. Check configuration, real interception evidence, and savings.
+# 6. Check configuration, real interception evidence, and savings.
 token-harness status
 token-harness verify
 token-harness metrics --since 7d
