@@ -19,12 +19,13 @@ const ROOT_USAGE = `token-harness — maximize useful Claude Code and Codex subs
 First time here
   1  token-harness doctor        what is on this machine        writes nothing
   2  token-harness budget        quota remaining                writes nothing
-  3  token-harness plan          what would change              writes nothing
-  4  token-harness apply --yes   make those changes             WRITES
-  5  token-harness verify        is it actually intercepting    writes nothing
-  6  token-harness metrics       what it saved                  writes nothing
+  3  token-harness context       static context cost            writes nothing
+  4  token-harness plan          what would change              writes nothing
+  5  token-harness apply --yes   make those changes             WRITES
+  6  token-harness verify        is it actually intercepting    writes nothing
+  7  token-harness metrics       what it saved                  writes nothing
 
-  Steps 1, 2 and 3 are safe to run right now. Nothing changes until step 4.
+  Steps 1 through 4 are safe to run right now. Nothing changes until step 5.
 
 Usage
   token-harness <command> [flags]
@@ -33,6 +34,7 @@ Usage
 Commands, in the order you would use them
   doctor      What is installed, what is wired up, what is worth knowing
   budget      Read verified Claude/Codex usage windows; unknown stays unknown
+  context     Audit instruction bytes, effective config, MCP servers and tools
   plan        Compute what would change, file by file. Changes nothing
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
@@ -58,6 +60,19 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  context: `token-harness context — audit context overhead before spending quota
+
+Usage
+  token-harness context [--json] [--harness <id>] [--project <dir>]
+
+Read-only. Codex uses config/read and mcpServerStatus/list from its app-server,
+then mirrors AGENTS.md discovery from project root to the selected working
+directory. Claude uses its native mcp list command; CLAUDE.md file sizes are
+reported as candidates because this command cannot prove their admitted bytes.
+
+Bytes, MCP servers and tool counts remain separate measurements. A question mark
+means unknown, never zero. Instruction contents are never printed.`,
+
   budget: `token-harness budget — read current subscription usage windows
 
 Usage
