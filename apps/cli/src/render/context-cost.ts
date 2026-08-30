@@ -112,5 +112,38 @@ export function renderContextReport(report: ContextReport, context: RenderContex
     );
   }
 
+  lines.push('', 'HIERARCHY');
+  if (report.instructionHierarchy.length === 0) {
+    lines.push('  no instruction hierarchy observed');
+  } else {
+    for (const hierarchy of report.instructionHierarchy) {
+      const shape =
+        hierarchy.projectFileCount === 0
+          ? 'none'
+          : hierarchy.nestedProjectHierarchy
+            ? 'root+subtree'
+            : hierarchy.monolithicProjectInstructions
+              ? 'monolithic'
+              : 'single-scope';
+      lines.push(
+        truncate(
+          '  ' +
+            hierarchy.harnessId +
+            ': ' +
+            shape +
+            '; project-files=' +
+            formatCount(hierarchy.projectFileCount) +
+            '; dirs=' +
+            formatCount(hierarchy.distinctProjectDirectories) +
+            '; largest=' +
+            (hierarchy.largestProjectFileBytes === null
+              ? '-'
+              : formatCount(hierarchy.largestProjectFileBytes) + 'B'),
+          78,
+        ),
+      );
+    }
+  }
+
   return document(lines);
 }
