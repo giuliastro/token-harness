@@ -89,6 +89,25 @@ describe('optimize command', () => {
         },
         runner: {
           run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+            if (request.executable === 'ccusage') {
+              if (request.args[0] === '--version') return outcome(request, 'ccusage 20.0.20');
+              const daily = [100, 100, 100, 200, 220, 240].map((tokens, index) => ({
+                agent: 'all',
+                period: '2026-08-' + String(24 + index).padStart(2, '0'),
+                agents: [
+                  {
+                    agent: 'codex',
+                    inputTokens: tokens,
+                    cacheCreationTokens: 0,
+                    cacheReadTokens: 0,
+                    outputTokens: 0,
+                    totalTokens: tokens,
+                    modelsUsed: ['gpt-5.6-codex'],
+                  },
+                ],
+              }));
+              return outcome(request, JSON.stringify({ daily, session: [] }));
+            }
             if (request.args[0] === '--version') return outcome(request, 'codex-cli 0.146.0');
             const stdin = request.stdin ?? '';
             if (stdin.includes('account/rateLimits/read')) {
@@ -203,6 +222,8 @@ describe('optimize command', () => {
     assert.equal(advice.currentEffort, 'high');
     assert.equal(advice.recommendedEffort, 'medium');
     assert.equal(advice.recommendedModel, 'gpt-5.6-codex');
+    assert.equal(advice.localBurnTrend?.state, 'rising');
+    assert.equal(advice.recommendations.some((item) => item.area === 'history'), true);
     assert.equal(advice.recommendations[0]?.area, 'context');
     assert.match(advice.recommendations[0]?.action ?? '', /static context/i);
   });
