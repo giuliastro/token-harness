@@ -145,7 +145,10 @@ describe('history command', () => {
           outputTokens: 100,
           totalTokens: 650,
           modelsUsed: ['claude-sonnet-test'],
-          metadata: { lastActivity: '2026-08-30T14:00:00.000Z' },
+          metadata: {
+            firstActivity: '2026-08-30T13:00:00.000Z',
+            lastActivity: '2026-08-30T14:00:00.000Z',
+          },
         },
         {
           agent: 'codex',
@@ -156,7 +159,10 @@ describe('history command', () => {
           outputTokens: 60,
           totalTokens: 390,
           modelsUsed: ['gpt-test'],
-          metadata: { lastActivity: '2026-08-30T15:00:00.000Z' },
+          metadata: {
+            firstActivity: '2026-08-30T14:30:00.000Z',
+            lastActivity: '2026-08-30T15:00:00.000Z',
+          },
         },
       ],
     };
@@ -183,6 +189,9 @@ describe('history command', () => {
     assert.equal(claude.sessions, 1);
     assert.equal(claude.burnTrend.state, 'rising');
     assert.ok((claude.burnTrend.changePercent ?? 0) > 20);
+    assert.equal(claude.recentSession.state, 'recent-small');
+    assert.equal(claude.recentSession.candidateSessionId, 'claude-session');
+    assert.equal(claude.recentSession.durationMinutes, 60);
 
     const historyRequest = requests.at(-1);
     assert.ok(historyRequest);
