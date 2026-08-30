@@ -139,6 +139,9 @@ describe('mcp command', () => {
     assert.equal(result.data.harnesses[0]?.unknownToolServerCount, 0);
     assert.equal(result.data.harnesses[0]?.servers[0]?.name, 'github');
     assert.equal(result.data.harnesses[0]?.servers[0]?.runtimeStatus, 'connected');
+    assert.equal(result.data.harnesses[0]?.assessments[0]?.exposure, 'low');
+    assert.equal(result.data.harnesses[0]?.assessments[0]?.action, 'none');
+    assert.equal(result.data.harnesses[0]?.assessments[0]?.hasRemovalEvidence, false);
 
     const appServer = requests.find((request) => request.args[0] === 'app-server');
     assert.ok(appServer);
