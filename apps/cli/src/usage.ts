@@ -191,6 +191,12 @@ alter what it measures; nothing outside the state directory is written.
 bound is midnight UTC, so a report is reproducible regardless of the reader's
 timezone. The default window is 7d.
 
+For safely attributable pipeline channels, the channel row also reports
+raw-to-final payload volume before and after optimization. Because the channel
+names the harness and tool family, this is the supported tool-output-by-family
+view; Token Harness does not sum independently measured channels into a fake
+cross-family total.
+
 Figures are never merged across measurement classes or units: tokens are not
 added to characters, and an estimate is not added to an exact figure. A
 counterfactual reduction is reported on its own line and never as a saving.
