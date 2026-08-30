@@ -52,6 +52,7 @@ export type RecommendationArea =
   | 'history'
   | 'session'
   | 'context'
+  | 'mcp'
   | 'model'
   | 'reasoning'
   | 'verbosity';
