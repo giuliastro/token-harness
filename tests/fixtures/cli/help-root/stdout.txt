@@ -2,7 +2,7 @@ token-harness — maximize useful Claude Code and Codex subscription capacity
 
 First time here
   1  token-harness doctor        what is on this machine        writes nothing
-  2  token-harness budget        how much verified quota is left writes nothing
+  2  token-harness budget        verified quota remaining        writes nothing
   3  token-harness plan          what would change              writes nothing
   4  token-harness apply --yes   make those changes             WRITES
   5  token-harness verify        is it actually intercepting    writes nothing
