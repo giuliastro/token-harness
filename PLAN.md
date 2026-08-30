@@ -1649,7 +1649,9 @@ Acceptance:
 classes, reserve-aware five-hour/weekly pacing, context-first pressure, quality floors, native Codex
 model catalog discovery, and effort recommendations restricted to levels the current model advertises.
 It deliberately keeps the current model until benchmarked model-tier quality/quota evidence exists.
-Still open: recent burn slope, failed-attempt/escalation history and empirical model-tier ranking.
+#98 adds a ccusage-backed local token-volume burn trend as workload evidence without converting it
+to subscription quota. Still open: failed-attempt/escalation history and empirical model-tier
+ranking.
 
 Add `token-harness optimize` with profiles:
 
@@ -1714,7 +1716,13 @@ Acceptance:
 - model IDs are resolved at apply time from the installed version;
 - no managed setting silently enables pay-as-you-go API usage.
 
-### 18.5 P1 — Historical telemetry with ccusage
+### 18.5 P1 — Historical telemetry with ccusage — Partially done (#98)
+
+#98 adds `token-harness history` over an already installed fixture-gated ccusage 20.x. The reader
+is forced offline and cost-free, keeps Claude/Codex daily and session token history separate from
+live quota, and treats missing/incompatible ccusage as an ordinary explicit state. Still open:
+project/task/receipt correlation, Claude five-hour block history, and optional API-equivalent cost
+reporting kept in its own measurement class.
 
 Admit ccusage first as a read-only historical source, not as a live quota authority.
 
