@@ -93,7 +93,10 @@ Usage
 Read-only. Uses the same native inventory as token-harness context. Codex reports
 server status, auth state and native tool counts when app-server exposes them.
 Claude reports the server inventory from claude mcp list and keeps per-server
-tool counts unknown rather than guessing. A question mark means unknown, not zero.`,
+tool counts unknown rather than guessing. The assessment section classifies only
+known tool exposure and observable status/auth health. High tool count is never
+treated as evidence that a server is irrelevant or removable. A question mark
+means unknown, not zero.`,
 
   optimize: `token-harness optimize — explain how to spend the current allowance
 
@@ -110,8 +113,10 @@ Model names are never ranked by inference: a model switch is not recommended
 until benchmark evidence exists. Reasoning effort is selected only from levels
 advertised by the current discovered model. When ccusage session history exists,
 the most recently observed session may produce conditional new-session/compact
-advice; it is never assumed to be the active session. The custom profile currently
-requires an explicit --reserve and otherwise keeps the task quality-floor rules.`,
+advice; it is never assumed to be the active session. MCP advice can flag a
+non-working server or a high-exposure hotspot, but never recommends removal
+without task-relevance or usage evidence. The custom profile currently requires
+an explicit --reserve and otherwise keeps the task quality-floor rules.`,
 
   context: `token-harness context — audit context overhead before spending quota
 
