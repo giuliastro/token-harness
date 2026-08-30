@@ -29,6 +29,7 @@ import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
 import { runMetrics } from './commands/metrics.js';
+import { runMcp } from './commands/mcp.js';
 import { runOptimize } from './commands/optimize.js';
 import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
@@ -62,6 +63,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   context: runContext,
   doctor: runDoctor,
   metrics: runMetrics,
+  mcp: runMcp,
   optimize: runOptimize,
   plan: runPlan,
   rollback: runRollback,
