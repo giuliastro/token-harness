@@ -113,7 +113,8 @@ function dailyRows(payload: Record<string, unknown>): DailyHistoryRow[] {
 
 function sessionRows(payload: Record<string, unknown>): SessionHistoryRow[] {
   const rows: SessionHistoryRow[] = [];
-  for (const raw of array(payload['session'])) {
+  const sourceRows = array(payload['session']).concat(array(payload['sessions']));
+  for (const raw of sourceRows) {
     const row = object(raw);
     if (row === null) continue;
     const harness = normalizedHarness(row['agent']);
