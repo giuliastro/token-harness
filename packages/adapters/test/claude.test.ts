@@ -399,7 +399,6 @@ describe('brownfield adoption', () => {
   });
 });
 
-
 describe('context-cost observation', () => {
   it('uses claude mcp list without inventing tool counts', async () => {
     const base = context({});
