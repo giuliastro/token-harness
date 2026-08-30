@@ -36,7 +36,7 @@ Usage
 
 Commands, in the order you would use them
   doctor      What is installed, what is wired up, what is worth knowing
-  budget      Read verified Claude/Codex usage windows; unknown stays unknown
+  budget      Read Claude/Codex usage windows with explicit source/confidence
   context     Audit instruction bytes, effective config, MCP servers and tools
   mcp         Show the focused native MCP/server/tool inventory
   history     Read local Claude/Codex usage history through ccusage
@@ -131,14 +131,17 @@ means unknown, never zero. Instruction contents are never printed.`,
 Usage
   token-harness budget [--json] [--harness <id>] [--project <dir>]
 
-Read-only. Codex uses its documented app-server rate-limit RPC when available.
-Claude Code is reported as unavailable until a supported, versioned native usage
-surface is admitted; Token Harness does not scrape private OAuth endpoints.
+Read-only. Codex uses its native app-server rate-limit RPC when available.
+Claude prefers a future fixture-proven native surface; until then Token Harness can
+delegate to an already-installed cclimits companion only when it supports the
+cacheless JSON observer flags. Token Harness never reads Claude OAuth credentials
+itself and never installs cclimits.
 
-Five-hour, weekly and unknown backend buckets stay separate. A local token count
+Companion OAuth readings are labelled reported. A fresh Claude local cache is
+labelled cached and is displayed but never used for live pacing; stale cache is
+rejected. Five-hour, weekly and unknown buckets stay separate. A local token count
 is never converted into a subscription percentage. Reset-credit inventory may be
-reported, but this command cannot redeem or consume credits. Exits 0 when quota is
-unknown: unknown is an observation, not a broken integration.`,
+reported, but this command cannot redeem or consume credits.`,
   apply: `token-harness apply — execute a plan inside a reversible transaction
 
 Usage
