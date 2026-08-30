@@ -79,10 +79,11 @@ Read-only. Uses an already installed ccusage 20.x and forces --offline --no-cost
 Token Harness does not install ccusage, fetch pricing, or include estimated API
 costs. Claude and Codex history stays separate from live subscription quota.
 
-The default window is 7d. Local token volume can describe a recent burn trend,
-but it is never converted into a provider allowance percentage or subscription
-spend. Missing ccusage, an unsupported major, and unreadable history are explicit
-states rather than zero usage.`,
+The default window is 7d. Local token volume can describe a recent burn trend
+and a conservative most-recent-session boundary signal, but neither is assumed
+to represent the active session or converted into provider allowance percentage
+or subscription spend. Missing ccusage, an unsupported major, and unreadable
+history are explicit states rather than zero usage.`,
 
   mcp: `token-harness mcp — inspect MCP servers and exposed tools
 
@@ -107,8 +108,10 @@ ordered recommendations with the observations that caused them.
 Pacing is calculated only when used percentage, duration, and reset are known.
 Model names are never ranked by inference: a model switch is not recommended
 until benchmark evidence exists. Reasoning effort is selected only from levels
-advertised by the current discovered model. The custom profile currently requires
-an explicit --reserve and otherwise keeps the task quality-floor rules.`,
+advertised by the current discovered model. When ccusage session history exists,
+the most recently observed session may produce conditional new-session/compact
+advice; it is never assumed to be the active session. The custom profile currently
+requires an explicit --reserve and otherwise keeps the task quality-floor rules.`,
 
   context: `token-harness context — audit context overhead before spending quota
 
