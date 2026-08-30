@@ -386,7 +386,11 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
   }
 
   const payload = object(parsed);
-  if (payload === null) {
+  const hasDailySection = payload !== null && Array.isArray(payload['daily']);
+  const hasSessionSection =
+    payload !== null &&
+    (Array.isArray(payload['session']) || Array.isArray(payload['sessions']));
+  if (payload === null || !hasDailySection || !hasSessionSection) {
     const warning = diagnostic({
       severity: 'warning',
       code: 'ccusage-history-invalid-schema',
