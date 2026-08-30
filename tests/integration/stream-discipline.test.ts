@@ -49,6 +49,7 @@ const noisyCommands = {
     ),
   plan: () => Promise.reject(new Error('unused')),
   metrics: () => Promise.reject(new Error('unused')),
+  optimize: () => Promise.reject(new Error('unused')),
   apply: () => Promise.reject(new Error('unused')),
   verify: () => Promise.reject(new Error('unused')),
   rollback: () => Promise.reject(new Error('unused')),
