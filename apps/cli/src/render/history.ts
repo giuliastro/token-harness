@@ -108,9 +108,6 @@ export function renderHistoryReport(report: HistoryReport, _context: RenderConte
     }
   }
 
-  lines.push(
-    '',
-    '  Local token history is not converted into subscription quota or spend.',
-  );
+  lines.push('', '  Local token history is not converted into subscription quota or spend.');
   return document(lines);
 }
