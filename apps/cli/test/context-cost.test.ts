@@ -131,6 +131,10 @@ describe('context-cost command', () => {
     assert.ok(result.data);
     assert.equal(result.data.knownLoadedInstructionBytes, 25);
     assert.equal(result.data.discoveredInstructionBytes, 50);
+    assert.equal(result.data.instructionHierarchy.length, 1);
+    assert.equal(result.data.instructionHierarchy[0]?.nestedProjectHierarchy, true);
+    assert.equal(result.data.instructionHierarchy[0]?.monolithicProjectInstructions, false);
+    assert.equal(result.data.instructionHierarchy[0]?.distinctProjectDirectories, 2);
     assert.deepEqual(
       result.data.instructions.map((item) => ({
         path: item.path,
