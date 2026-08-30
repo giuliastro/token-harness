@@ -527,11 +527,13 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   return { harnessId: CLAUDE, declaredTier: MANIFEST.verificationTier, achievedTier, checks };
 }
 
-
 function claudeMcpStatus(text: string): string | null {
   const normalized = text.toLowerCase();
   if (normalized.includes('connected')) return 'connected';
-  if (normalized.includes('needs authentication') || normalized.includes('authentication required')) {
+  if (
+    normalized.includes('needs authentication') ||
+    normalized.includes('authentication required')
+  ) {
     return 'authenticationRequired';
   }
   if (normalized.includes('failed') || normalized.includes('error')) return 'failed';
@@ -572,18 +574,15 @@ async function observeContext(
   });
 
   if (outcome.failure !== null) {
-    return empty(
-      outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable',
-      [
-        diagnostic({
-          severity: 'warning',
-          code: 'claude-mcp-inventory-unavailable',
-          subject: CLAUDE,
-          message: 'Claude MCP inventory could not be read: ' + outcome.failure.message,
-          remediation: 'Run claude mcp list directly and verify the CLI installation',
-        }),
-      ],
-    );
+    return empty(outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable', [
+      diagnostic({
+        severity: 'warning',
+        code: 'claude-mcp-inventory-unavailable',
+        subject: CLAUDE,
+        message: 'Claude MCP inventory could not be read: ' + outcome.failure.message,
+        remediation: 'Run claude mcp list directly and verify the CLI installation',
+      }),
+    ]);
   }
 
   if (outcome.exitCode !== 0) {
@@ -623,4 +622,10 @@ async function observeContext(
   };
 }
 
-export const claudeAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify, observeContext };
+export const claudeAdapter: HarnessAdapter = {
+  manifest: MANIFEST,
+  detect,
+  inspect,
+  verify,
+  observeContext,
+};
