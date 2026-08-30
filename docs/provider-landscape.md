@@ -195,6 +195,16 @@ gate that matters most.
 
 Primary upstream sources reviewed for this snapshot:
 
+Quota and native-control sources refreshed on 2026-08-30:
+
+- [Claude plans and pricing](https://claude.com/pricing), for rolling five-hour and paid weekly usage limits.
+- [Claude Code: Models, usage, and limits](https://support.claude.com/en/articles/14552983-models-usage-and-limits-in-claude-code), for model selection, `/clear`, `/compact`, `/context`, instruction hygiene, and Opus-plan/Sonnet-execute guidance.
+- [Anthropic Agent SDK subscription update](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan), for the June 15 pause: `claude -p`, Agent SDK, and third-party Agent SDK usage still draw from subscription limits.
+- [Codex pricing](https://chatgpt.com/codex/pricing/), for current five-hour model ranges, weekly-limit caveat, Luna guidance, prompt/AGENTS/MCP optimization guidance, and paid-credit separation.
+- [Codex app-server README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md), for `account/rateLimits/read`, reset timestamps, and reset-credit inventory.
+- [Codex config schema](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json), for native profiles, model/reasoning/verbosity, project-doc budget, tool-output budget, and tool-deferral feature discovery.
+- [ccusage](https://github.com/ccusage/ccusage), for local read-only Claude Code/Codex token/session history.
+
 - [Dejavu README and limitations](https://github.com/Salnika/dejavu)
 - [Lazy MCP README](https://gitlab.com/gitlab-org/ai/lazy-mcp) — the GitLab project, published to npm as
   `lazy-mcp`. See §Which Lazy MCP.
