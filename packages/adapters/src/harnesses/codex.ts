@@ -735,6 +735,11 @@ async function observeContext(
       id: 3,
       params: { limit: 1000, detail: 'toolsAndAuthOnly' },
     }),
+    JSON.stringify({
+      method: 'model/list',
+      id: 4,
+      params: { limit: 1000, includeHidden: false },
+    }),
     '',
   ].join('\n');
 
@@ -763,6 +768,8 @@ async function observeContext(
     projectRootMarkers: null,
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
+    availableModels: [],
+    modelCatalogTruncated: false,
     mcpServers: [],
     mcpInventoryTruncated: false,
     diagnostics: [
@@ -794,6 +801,7 @@ async function observeContext(
   const messages = parseJsonLines(outcome.stdout);
   const configResponse = rpcResult(messages, 2);
   const mcpResponse = rpcResult(messages, 3);
+  const modelResponse = rpcResult(messages, 4);
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
 
@@ -801,6 +809,43 @@ async function observeContext(
   const instructions = config === null ? null : readString(config, 'instructions');
   const developerInstructions =
     config === null ? null : readString(config, 'developer_instructions');
+
+  const availableModels: HarnessContextObservation['availableModels'] = [];
+  const modelData = modelResponse?.['data'];
+  if (Array.isArray(modelData)) {
+    for (const item of modelData) {
+      if (!isRecord(item)) continue;
+      const id = readString(item, 'id');
+      const model = readString(item, 'model');
+      const displayName = readString(item, 'displayName');
+      if (id === null || model === null || displayName === null) continue;
+      const efforts: string[] = [];
+      const effortOptions = item['supportedReasoningEfforts'];
+      if (Array.isArray(effortOptions)) {
+        for (const option of effortOptions) {
+          if (!isRecord(option)) continue;
+          const effort = readString(option, 'reasoningEffort');
+          if (effort !== null) efforts.push(effort);
+        }
+      }
+      availableModels.push({
+        harnessId: CODEX,
+        id,
+        model,
+        displayName,
+        modelSpecialty: readString(item, 'modelSpecialty'),
+        supportedReasoningEfforts: [...new Set(efforts)],
+        defaultReasoningEffort: readString(item, 'defaultReasoningEffort'),
+        isDefault: item['isDefault'] === true,
+        source: 'native-rpc',
+      });
+    }
+  }
+
+  const modelCatalogTruncated =
+    modelResponse !== null &&
+    modelResponse['nextCursor'] !== null &&
+    modelResponse['nextCursor'] !== undefined;
 
   const mcpServers: HarnessContextObservation['mcpServers'] = [];
   const data = mcpResponse?.['data'];
@@ -839,6 +884,28 @@ async function observeContext(
       }),
     );
   }
+  if (modelResponse === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-model-catalog-unavailable',
+        subject: CODEX,
+        message: 'Codex returned no recognizable model/list result',
+        remediation: 'Keep the current model; do not infer alternative model ids',
+      }),
+    );
+  }
+  if (modelCatalogTruncated) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-model-catalog-truncated',
+        subject: CODEX,
+        message: 'Codex model catalog exceeded the one-shot page size',
+        remediation: 'Do not recommend a model absent from the returned catalog page',
+      }),
+    );
+  }
   if (mcpResponse === null) {
     diagnostics.push(
       diagnostic({
@@ -872,11 +939,11 @@ async function observeContext(
   return {
     harnessId: CODEX,
     state:
-      config !== null && mcpResponse !== null
-        ? mcpInventoryTruncated
+      config !== null && mcpResponse !== null && modelResponse !== null
+        ? mcpInventoryTruncated || modelCatalogTruncated
           ? 'partial'
           : 'observed'
-        : config !== null || mcpResponse !== null
+        : config !== null || mcpResponse !== null || modelResponse !== null
           ? 'partial'
           : 'unavailable',
     model: config === null ? null : readString(config, 'model'),
@@ -890,6 +957,8 @@ async function observeContext(
       config === null ? [] : readStringArray(config, 'project_doc_fallback_filenames'),
     configInstructionBytes:
       config === null ? null : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
+    availableModels,
+    modelCatalogTruncated,
     mcpServers,
     mcpInventoryTruncated,
     diagnostics,
