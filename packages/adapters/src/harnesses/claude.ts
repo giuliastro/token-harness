@@ -28,6 +28,7 @@ import {
   MANIFEST_SCHEMA_VERSION,
   type Diagnostic,
   type Evidence,
+  type HarnessContextObservation,
   type HarnessDetection,
   type HarnessManifest,
   type HarnessState,
@@ -526,4 +527,100 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   return { harnessId: CLAUDE, declaredTier: MANIFEST.verificationTier, achievedTier, checks };
 }
 
-export const claudeAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify };
+
+function claudeMcpStatus(text: string): string | null {
+  const normalized = text.toLowerCase();
+  if (normalized.includes('connected')) return 'connected';
+  if (normalized.includes('needs authentication') || normalized.includes('authentication required')) {
+    return 'authenticationRequired';
+  }
+  if (normalized.includes('failed') || normalized.includes('error')) return 'failed';
+  if (normalized.includes('disabled')) return 'disabled';
+  return text.trim() === '' ? null : text.trim();
+}
+
+async function observeContext(
+  context: HarnessContext,
+  _observedAt: string,
+): Promise<HarnessContextObservation> {
+  const outcome = await context.runner.run({
+    executable: 'claude',
+    args: ['mcp', 'list'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+    maxOutputBytes: 1024 * 1024,
+  });
+
+  const empty = (
+    state: HarnessContextObservation['state'],
+    diagnostics: Diagnostic[],
+  ): HarnessContextObservation => ({
+    harnessId: CLAUDE,
+    state,
+    model: null,
+    reasoningEffort: null,
+    verbosity: null,
+    projectDocMaxBytes: null,
+    toolOutputTokenLimit: null,
+    toolSearchEnabled: null,
+    projectRootMarkers: null,
+    projectDocFallbackFilenames: [],
+    configInstructionBytes: null,
+    mcpServers: [],
+    mcpInventoryTruncated: false,
+    diagnostics,
+  });
+
+  if (outcome.failure !== null) {
+    return empty(
+      outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable',
+      [
+        diagnostic({
+          severity: 'warning',
+          code: 'claude-mcp-inventory-unavailable',
+          subject: CLAUDE,
+          message: 'Claude MCP inventory could not be read: ' + outcome.failure.message,
+          remediation: 'Run claude mcp list directly and verify the CLI installation',
+        }),
+      ],
+    );
+  }
+
+  if (outcome.exitCode !== 0) {
+    return empty('unavailable', [
+      diagnostic({
+        severity: 'warning',
+        code: 'claude-mcp-inventory-unavailable',
+        subject: CLAUDE,
+        message: 'claude mcp list exited ' + String(outcome.exitCode),
+        remediation: 'Run claude mcp list directly and fix the reported MCP configuration',
+      }),
+    ]);
+  }
+
+  const servers: HarnessContextObservation['mcpServers'] = [];
+  for (const line of outcome.stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === '' || /^checking\b/i.test(trimmed)) continue;
+    const match = /^([^:]+):\s+.*?\s+-\s+(.+)$/.exec(trimmed);
+    if (match === null) continue;
+    const name = match[1]?.trim();
+    if (name === undefined || name === '') continue;
+    servers.push({
+      harnessId: CLAUDE,
+      name,
+      toolCount: null,
+      runtimeStatus: claudeMcpStatus(match[2] ?? ''),
+      authStatus: null,
+      pluginId: null,
+      source: 'native-cli',
+    });
+  }
+
+  return {
+    ...empty('observed', []),
+    mcpServers: servers,
+  };
+}
+
+export const claudeAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify, observeContext };
