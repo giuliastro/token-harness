@@ -398,3 +398,57 @@ describe('brownfield adoption', () => {
     );
   });
 });
+
+
+describe('context-cost observation', () => {
+  it('uses claude mcp list without inventing tool counts', async () => {
+    const base = context({});
+    const requests: ProcessRequest[] = [];
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+          requests.push(request);
+          return {
+            displayCommand: 'claude mcp list',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/claude',
+            exitCode: 0,
+            signal: null,
+            stdout: [
+              'Checking MCP server health...',
+              'github: https://example.invalid/mcp (HTTP) - ✓ Connected',
+              'figma: https://example.invalid/mcp (HTTP) - ! Needs authentication',
+              '',
+            ].join('\n'),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 2,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+    };
+
+    const result = await claudeAdapter.observeContext?.(
+      observedContext,
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.deepEqual(
+      result.mcpServers.map((server) => ({
+        name: server.name,
+        tools: server.toolCount,
+        status: server.runtimeStatus,
+      })),
+      [
+        { name: 'github', tools: null, status: 'connected' },
+        { name: 'figma', tools: null, status: 'authenticationRequired' },
+      ],
+    );
+    assert.deepEqual(requests[0]?.args, ['mcp', 'list']);
+  });
+});
