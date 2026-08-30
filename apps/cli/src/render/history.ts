@@ -77,6 +77,29 @@ export function renderHistoryReport(report: HistoryReport, _context: RenderConte
     );
   }
 
+  lines.push('', 'SESSION SIGNAL');
+  for (const harness of report.harnesses) {
+    const signal = harness.recentSession;
+    lines.push(
+      truncate(
+        '  ' +
+          harness.harnessId +
+          ': ' +
+          signal.state +
+          '; candidate=' +
+          (signal.candidateSessionId ?? '?') +
+          '; tokens=' +
+          (signal.totalTokens === null ? '?' : formatCount(signal.totalTokens)) +
+          '; inactive=' +
+          (signal.minutesSinceLastActivity === null
+            ? '?'
+            : formatCount(signal.minutesSinceLastActivity) + 'm'),
+        78,
+      ),
+    );
+  }
+  lines.push('  candidate means most recently observed, not necessarily active');
+
   lines.push('', 'SESSIONS');
   if (report.sessions.length === 0) {
     lines.push('  no Claude/Codex sessions observed');
