@@ -1584,7 +1584,11 @@ This phase is intentionally additive to the existing safety architecture. The tr
 provider ownership, rollback, verification tiers, and strict metrics classes stay. What changes is
 the optimization objective and therefore the admission order.
 
-### 18.1 P0 — Live budget observability
+### 18.1 P0 — Live budget observability — Done (#93)
+
+`budget` now has the provider-neutral window model, Codex app-server reader, explicit Claude
+unavailable state, separate five-hour/weekly buckets, reset timestamps/credits, confidence/source,
+and no credential scraping or credit redemption. Unknown backend state remains unknown.
 
 Implement a provider-neutral usage-window model and:
 
@@ -1606,7 +1610,13 @@ Acceptance:
 - model-to-bucket mapping is never inferred from a name;
 - JSON output is stable and covered by golden fixtures.
 
-### 18.2 P0 — Context and instruction audit
+### 18.2 P0 — Context and instruction audit — Partially done (#94, #96)
+
+#94 shipped `context`, effective Codex config/model/MCP inventory, instruction-byte accounting and
+Codex-compatible AGENTS hierarchy discovery. #96 adds the focused `mcp` view plus explicit
+root+subtree/monolithic hierarchy reporting. Still open: tool-output volume by family,
+session-age/context signals, task-boundary clear/new-session/compact advice, evidence-backed
+per-server removal advice, and the native-deferral benchmark before assigning Lazy MCP.
 
 Add:
 
@@ -1633,7 +1643,13 @@ Acceptance:
 - native Codex controls are benchmarked before Lazy MCP or a broad context provider is assigned the
   same surface.
 
-### 18.3 P0 — Budget-aware recommendation engine
+### 18.3 P0 — Budget-aware recommendation engine — Partially done (#95)
+
+#95 shipped deterministic advisory `optimize`, economy/balanced/quality/custom profiles, task
+classes, reserve-aware five-hour/weekly pacing, context-first pressure, quality floors, native Codex
+model catalog discovery, and effort recommendations restricted to levels the current model advertises.
+It deliberately keeps the current model until benchmarked model-tier quality/quota evidence exists.
+Still open: recent burn slope, failed-attempt/escalation history and empirical model-tier ranking.
 
 Add `token-harness optimize` with profiles:
 
