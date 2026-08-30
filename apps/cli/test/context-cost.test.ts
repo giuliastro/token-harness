@@ -93,6 +93,10 @@ describe('context-cost command', () => {
                       id: 3,
                       result: { data: [], nextCursor: null },
                     }),
+                    JSON.stringify({
+                      id: 4,
+                      result: { data: [], nextCursor: null },
+                    }),
                   ].join('\n');
             return {
               displayCommand: 'codex ' + request.args.join(' '),
