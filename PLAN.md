@@ -2,9 +2,11 @@
 
 ## 1. Objective
 
-Build a cross-platform, local-first control plane that installs and coordinates
-token-saving tools for coding agents, prevents incompatible pipelines, verifies real
-activation, and reports trustworthy savings.
+Build a cross-platform, local-first control plane that **maximizes useful coding work per included
+Claude Code/Codex usage allowance**. It observes real quota windows where the harness exposes them,
+reduces avoidable context, applies native model/effort/tool policies before third-party routing,
+coordinates compatible reduction providers, verifies real activation, and reports trustworthy
+measurements without equating local token counts with opaque subscription quota.
 
 The implementation starts from the accepted Phase 0 RFCs. Scope changes that alter a
 public contract, safety invariant, or attribution rule require an RFC update before
@@ -98,6 +100,7 @@ Exit criteria:
 | 0008 | Metrics storage driver | Reserved — written only when JSONL is outgrown |
 | 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
 | 0010 | Read-only status seam for external consumers | Reserved — Phase 9, §9.4, §15 item 41 |
+| 0011 | Quota-aware Claude Code and Codex orchestration | Proposed — post-0.2 product direction |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -1570,3 +1573,234 @@ Resolved since the first draft of this plan:
   which is a post-`1.0` concern.
 
 None of these decisions changes the accepted product or safety contracts.
+
+
+## 18. Phase 10 — Quota-aware Claude Code/Codex efficiency
+
+RFC 0011 changes the next product milestone from "add more token reducers" to
+**maximize accepted coding work inside the usage allowance the user already pays for**.
+
+This phase is intentionally additive to the existing safety architecture. The transaction engine,
+provider ownership, rollback, verification tiers, and strict metrics classes stay. What changes is
+the optimization objective and therefore the admission order.
+
+### 18.1 P0 — Live budget observability
+
+Implement a provider-neutral usage-window model and:
+
+- `token-harness budget`;
+- `token-harness budget --json`;
+- a Codex reader based on the installed app-server's `account/rateLimits/read` contract;
+- Claude Code usage/status discovery with an explicit compatibility fixture for every parsed native
+  surface;
+- reset timestamp, window duration, used/remaining percentage, confidence and source;
+- five-hour and weekly buckets kept distinct;
+- reset-credit inventory as read-only data;
+- `unknown` rather than an estimate when a live bucket cannot be proved.
+
+Acceptance:
+
+- Codex can expose a real snapshot without reading `auth.json` directly;
+- Claude can expose either a fixture-proven native snapshot or a clear `live quota unavailable`;
+- no call path can redeem a reset credit;
+- model-to-bucket mapping is never inferred from a name;
+- JSON output is stable and covered by golden fixtures.
+
+### 18.2 P0 — Context and instruction audit
+
+Add:
+
+- `token-harness context`;
+- `token-harness mcp`;
+- project instruction byte accounting for `AGENTS.md` and `CLAUDE.md`;
+- hierarchy diagnostics for monolithic instruction files;
+- enabled MCP inventory and a measurable schema/context cost where the harness exposes it;
+- tool-output volume by family;
+- session-age/context signals where available;
+- actionable recommendations for task-boundary clear/new-session/compact behavior.
+
+Codex-specific work evaluates the native fields already present in the installed config schema,
+including model/reasoning/verbosity profiles, project-doc byte limits, tool-output token limits and
+tool/MCP deferral switches. Feature flags remain version-gated; their presence in one current schema
+does not make them a permanent public contract.
+
+Acceptance:
+
+- the audit is read-only;
+- a root + subtree instruction layout is recognized and not flattened;
+- recommended removal of an MCP server includes evidence that it is unused or irrelevant to the
+  current task;
+- native Codex controls are benchmarked before Lazy MCP or a broad context provider is assigned the
+  same surface.
+
+### 18.3 P0 — Budget-aware recommendation engine
+
+Add `token-harness optimize` with profiles:
+
+- `economy`;
+- `balanced` (default);
+- `quality`;
+- `custom`.
+
+The engine combines:
+
+- observed five-hour and weekly headroom;
+- time to reset and recent burn slope;
+- a user reserve target;
+- task class: mechanical, standard, hard, critical;
+- context/instruction/MCP waste;
+- benchmarked model-tier quality;
+- failed-attempt/escalation history.
+
+Initial output is advice, not mutation. Every recommendation names the evidence that caused it.
+
+Examples:
+
+- mechanical task + over-pace → economical native model tier, lower effort, low verbosity where
+  supported;
+- hard task + healthy weekly reserve → stronger model/effort instead of wasting allowance on
+  repeated failed cheap attempts;
+- any task + bloated context → fix context first, then consider model downgrade;
+- under-used window close to reset → permit spending more headroom on hard work rather than ending
+  the window with unused capacity.
+
+Acceptance:
+
+- the same snapshot + task description is deterministic;
+- recommendations never select a model absent from the installed harness's discovered catalog;
+- a quality floor can veto an economy recommendation;
+- `unknown` quota produces context/model advice without pretending to know pacing.
+
+### 18.4 P1 — Managed native policy
+
+Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
+be owned surgically.
+
+Codex candidates:
+
+- named profiles;
+- model tier;
+- reasoning effort;
+- plan-mode reasoning effort;
+- verbosity;
+- instruction-byte budget;
+- tool-output token budget;
+- stable MCP/tool-deferral controls.
+
+Claude candidates are admitted only from current, supported, reversible settings. Session commands
+such as clear/compact stay user-driven unless Claude exposes a safe non-interactive lifecycle
+contract.
+
+Acceptance:
+
+- user-owned profile entries remain user-owned;
+- every managed field has absent/brownfield/drift/rollback fixtures;
+- model IDs are resolved at apply time from the installed version;
+- no managed setting silently enables pay-as-you-go API usage.
+
+### 18.5 P1 — Historical telemetry with ccusage
+
+Admit ccusage first as a read-only historical source, not as a live quota authority.
+
+Use it to correlate:
+
+- project/session/task;
+- input, cached and output tokens where available;
+- model usage;
+- five-hour blocks/history;
+- estimated API-equivalent cost;
+- Token Harness task receipts.
+
+Token Harness may later implement equivalent native readers, but should not duplicate a mature
+parser merely to own it.
+
+Acceptance:
+
+- import is local/read-only;
+- ccusage absence is non-fatal;
+- estimated cost never appears as subscription spend;
+- local history and live backend quota remain distinct measurement classes.
+
+### 18.6 P1/P2 — Re-benchmark the provider stack
+
+Re-score providers against the new KPI: useful work per observed quota delta.
+
+Order:
+
+1. RTK and HarnessTrim — retain active status on proven channels;
+2. Lazy MCP — high priority, but only after comparison with native Codex tool deferral;
+3. one of Context Mode / Headroom — broad context owner, never both by default;
+4. Dejavu — repeated rerun loops;
+5. repowise — only where retrieval payload is net-positive.
+
+LLMLingua and Caveman do not block the milestone. Native compaction, verbosity and effort are tested
+first.
+
+Acceptance:
+
+- benchmark fixtures include task success, not token count alone;
+- provider marginal savings are still attributable by stage;
+- backend quota deltas are reported separately from reducer token savings;
+- a provider that saves tokens but increases retries can lose the comparison.
+
+### 18.7 P2 — Cross-harness scheduler and compact handoff
+
+Add a recommendation surface for choosing Claude Code or Codex for a new task based on:
+
+- independently observed headroom;
+- task class;
+- benchmarked quality;
+- current weekly reserve;
+- expected handoff/context cost.
+
+For in-progress work, generate a compact handoff containing objective, decisions, changed files,
+validation state, unresolved questions and next action. Never copy the entire transcript as the
+default handoff.
+
+Acceptance:
+
+- no background execution is required;
+- the user sees why the other harness is recommended;
+- a handoff has a configured size budget;
+- switching is refused/recommended-against when transfer cost is larger than expected quota benefit.
+
+### 18.8 P3 — Explicit paid overflow
+
+Only after the included-quota path is optimized should Token Harness revisit:
+
+- LiteLLM;
+- Claude Code Router;
+- RouteLLM;
+- LLMRouter;
+- vLLM Semantic Router.
+
+These are classified as paid/external overflow or provider-cost policy, not as default quota-saving
+providers.
+
+Acceptance:
+
+- API-key billing is visibly separate;
+- prompt egress and credentials are diagnosed;
+- a plan cannot cross from subscription auth to paid API billing implicitly;
+- cost routing is reported in currency/credits, not merged into subscription-quota savings.
+
+### 18.9 Quota-aware release gate
+
+The quota-aware milestone is complete when a user can:
+
+1. run `token-harness budget` and see verified Claude/Codex limit state or explicit unknowns;
+2. run `token-harness context` and identify the largest avoidable context sources;
+3. run `token-harness optimize` and receive an explainable economy/balanced/quality recommendation;
+4. apply at least one reversible native policy on a covered harness/version;
+5. see historical local usage beside live quota without the two being conflated;
+6. compare at least three task classes with quality-gated baseline/optimized receipts;
+7. generate a bounded cross-harness handoff;
+8. use the default profile without any external model router or paid API path.
+
+The headline claim for this milestone is intentionally narrow:
+
+> Token Harness helps you get more successful coding work from Claude Code and Codex subscription
+> limits by measuring live headroom, controlling avoidable context, and spending stronger
+> model/effort choices only where they pay off.
+
+It does **not** claim to bypass provider limits or to know an unpublished token-to-quota formula.
