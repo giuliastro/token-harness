@@ -21,36 +21,33 @@ function session(input: Partial<SessionHistoryRow> & { sessionId: string }): Ses
 }
 
 describe('recent session boundary signal', () => {
-  it(
-    'marks the most recently active large session as a candidate, not an active-session fact',
-    () => {
-      const result = assessRecentSessionBoundary(
-        CLAUDE,
-        [
-          session({
-            sessionId: 'older',
-            firstActivity: '2026-08-30T08:00:00.000Z',
-            lastActivity: '2026-08-30T09:00:00.000Z',
-            totalTokens: 10_000,
-          }),
-          session({
-            sessionId: 'recent-large',
-            firstActivity: '2026-08-30T10:00:00.000Z',
-            lastActivity: '2026-08-30T14:30:00.000Z',
-            totalTokens: 120_000,
-          }),
-        ],
-        '2026-08-30T15:00:00.000Z',
-      );
+  it('marks the most recently active large session as a candidate, not an active-session fact', () => {
+    const result = assessRecentSessionBoundary(
+      CLAUDE,
+      [
+        session({
+          sessionId: 'older',
+          firstActivity: '2026-08-30T08:00:00.000Z',
+          lastActivity: '2026-08-30T09:00:00.000Z',
+          totalTokens: 10_000,
+        }),
+        session({
+          sessionId: 'recent-large',
+          firstActivity: '2026-08-30T10:00:00.000Z',
+          lastActivity: '2026-08-30T14:30:00.000Z',
+          totalTokens: 120_000,
+        }),
+      ],
+      '2026-08-30T15:00:00.000Z',
+    );
 
-      assert.equal(result.state, 'recent-large');
-      assert.equal(result.candidateSessionId, 'recent-large');
-      assert.equal(result.totalTokens, 120_000);
-      assert.equal(result.durationMinutes, 270);
-      assert.equal(result.minutesSinceLastActivity, 30);
-      assert.match(result.reason, /heuristic/i);
-    },
-  );
+    assert.equal(result.state, 'recent-large');
+    assert.equal(result.candidateSessionId, 'recent-large');
+    assert.equal(result.totalTokens, 120_000);
+    assert.equal(result.durationMinutes, 270);
+    assert.equal(result.minutesSinceLastActivity, 30);
+    assert.match(result.reason, /heuristic/i);
+  });
 
   it('marks an old candidate stale even when it was small', () => {
     const result = assessRecentSessionBoundary(
