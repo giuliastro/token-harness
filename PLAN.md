@@ -1621,7 +1621,9 @@ root+subtree/monolithic hierarchy reporting. The session-boundary tranche adds a
 ccusage-backed most-recent-session signal and conditional new-session/compact advice without claiming
 that the observed session is active. The MCP assessment tranche now identifies per-server exposure
 hotspots and unusable/auth-broken servers while explicitly refusing removal advice when usage or
-task-relevance evidence is absent. Still open: tool-output volume by family, actual per-server
+task-relevance evidence is absent. Safely attributable measured channels now expose raw-to-final before/after payload volume beside
+their harness and tool family in `metrics`; independently measured channels are not summed across
+families. Still open: total harness output for unobserved/unowned tool families, actual per-server
 usage/task-relevance evidence required to recommend removal, and the native-deferral benchmark before
 assigning Lazy MCP.
 
