@@ -28,6 +28,7 @@ import {
   MANIFEST_SCHEMA_VERSION,
   type Diagnostic,
   type Evidence,
+  type HarnessBudgetObservation,
   type HarnessContextObservation,
   type HarnessDetection,
   type HarnessManifest,
@@ -527,6 +528,214 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   return { harnessId: CLAUDE, declaredTier: MANIFEST.verificationTier, achievedTier, checks };
 }
 
+function cclimitsPercent(value: JsonValue | undefined): number | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{1,3}(?:\.\d+)?)%$/.exec(value.trim());
+  if (match === null) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
+}
+
+function cclimitsReset(value: JsonValue | undefined): string | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function cclimitsUsageWindow(
+  value: JsonValue | undefined,
+  input: {
+    scope: 'five-hour' | 'weekly';
+    window: 'primary' | 'secondary';
+    durationMinutes: number;
+    observedAt: string;
+    confidence: 'reported' | 'cached';
+  },
+): HarnessBudgetObservation['windows'][number] | null {
+  if (!isRecord(value)) return null;
+  const usedPercent = cclimitsPercent(value['used']);
+  const remainingPercent = cclimitsPercent(value['remaining']);
+  if (
+    usedPercent === null ||
+    remainingPercent === null ||
+    Math.abs(usedPercent + remainingPercent - 100) > 0.2
+  ) {
+    return null;
+  }
+
+  return {
+    harnessId: CLAUDE,
+    bucketId: 'claude-subscription',
+    bucketName: 'Claude subscription',
+    window: input.window,
+    scope: input.scope,
+    usedPercent,
+    remainingPercent,
+    windowDurationMinutes: input.durationMinutes,
+    resetsAt: cclimitsReset(value['resets_at']),
+    observedAt: input.observedAt,
+    source: 'companion-cli',
+    confidence: input.confidence,
+  };
+}
+
+async function observeUsage(
+  context: HarnessContext,
+  observedAt: string,
+): Promise<HarnessBudgetObservation> {
+  const outcome = await context.runner.run({
+    executable: 'cclimits',
+    args: ['--claude', '--json', '--no-cache-write', '--no-stale-fallback'],
+    cwd: context.projectRoot,
+    env: { PYTHONDONTWRITEBYTECODE: '1' },
+    timeoutMs: 15_000,
+    maxOutputBytes: 512 * 1024,
+  });
+
+  const unavailable = (
+    code: string,
+    message: string,
+    severity: 'info' | 'warning' = 'warning',
+  ): HarnessBudgetObservation => ({
+    harnessId: CLAUDE,
+    state: 'unavailable',
+    windows: [],
+    planType: null,
+    rateLimitReachedType: null,
+    resetCreditsAvailable: null,
+    diagnostics: [
+      diagnostic({
+        severity,
+        code,
+        subject: CLAUDE,
+        message,
+        remediation:
+          severity === 'info'
+            ? 'Install a cclimits build with cacheless Claude JSON support if you want this optional fallback'
+            : 'Run cclimits --claude --json --no-cache-write --no-stale-fallback directly and inspect its output',
+      }),
+    ],
+  });
+
+  if (outcome.failure !== null) {
+    return unavailable(
+      outcome.failure.reason === 'executable-not-found'
+        ? 'cclimits-not-installed'
+        : 'cclimits-claude-usage-unavailable',
+      outcome.failure.reason === 'executable-not-found'
+        ? 'Claude live quota is unavailable because the optional cclimits companion is not installed'
+        : 'cclimits could not read Claude usage: ' + outcome.failure.message,
+      outcome.failure.reason === 'executable-not-found' ? 'info' : 'warning',
+    );
+  }
+
+  if (outcome.exitCode !== 0 || outcome.stdoutTruncated) {
+    return unavailable(
+      'cclimits-claude-usage-unavailable',
+      outcome.stdoutTruncated
+        ? 'cclimits Claude JSON exceeded the bounded output capture'
+        : 'cclimits exited ' +
+            String(outcome.exitCode) +
+            ' while reading Claude quota in cacheless mode',
+    );
+  }
+
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(outcome.stdout) as JsonValue;
+  } catch {
+    return unavailable(
+      'cclimits-claude-schema-unrecognized',
+      'cclimits returned output that is not valid JSON',
+    );
+  }
+  if (!isRecord(parsed) || !isRecord(parsed['claude'])) {
+    return unavailable(
+      'cclimits-claude-schema-unrecognized',
+      'cclimits JSON did not contain a Claude usage object',
+    );
+  }
+
+  const claude = parsed['claude'];
+  const source = claude['source'];
+  if (typeof claude['error'] === 'string') {
+    return unavailable(
+      'cclimits-claude-usage-unavailable',
+      'cclimits could not provide Claude quota: ' + claude['error'],
+      claude['error'] === 'No credentials found' ? 'info' : 'warning',
+    );
+  }
+  if (
+    source !== 'claude_code_oauth' &&
+    source !== 'claude_desktop_oauth' &&
+    source !== 'claude_code_cache'
+  ) {
+    return unavailable(
+      'cclimits-claude-schema-unrecognized',
+      'cclimits Claude usage did not name a fixture-proven source',
+    );
+  }
+  if (source === 'claude_code_cache' && claude['source_stale'] === true) {
+    return unavailable(
+      'cclimits-claude-cache-stale',
+      'cclimits found only a stale Claude Code local usage snapshot',
+      'info',
+    );
+  }
+
+  const confidence: 'reported' | 'cached' =
+    source === 'claude_code_cache' ? 'cached' : 'reported';
+  const windows = [
+    cclimitsUsageWindow(claude['five_hour'], {
+      scope: 'five-hour',
+      window: 'primary',
+      durationMinutes: 300,
+      observedAt,
+      confidence,
+    }),
+    cclimitsUsageWindow(claude['seven_day'], {
+      scope: 'weekly',
+      window: 'secondary',
+      durationMinutes: 10_080,
+      observedAt,
+      confidence,
+    }),
+  ].filter((window): window is NonNullable<typeof window> => window !== null);
+
+  if (windows.length === 0) {
+    return unavailable(
+      'cclimits-claude-schema-unrecognized',
+      'cclimits Claude usage contained no validated five-hour or weekly window',
+    );
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  if (
+    (claude['five_hour'] !== undefined && windows.every((item) => item.scope !== 'five-hour')) ||
+    (claude['seven_day'] !== undefined && windows.every((item) => item.scope !== 'weekly'))
+  ) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'cclimits-claude-window-unrecognized',
+        subject: CLAUDE,
+        message: 'One cclimits Claude quota window failed strict percentage validation',
+        remediation: 'Treat the omitted window as unknown and update the cclimits compatibility fixture',
+      }),
+    );
+  }
+
+  return {
+    harnessId: CLAUDE,
+    state: 'observed',
+    windows,
+    planType: typeof claude['plan'] === 'string' ? claude['plan'] : null,
+    rateLimitReachedType: null,
+    resetCreditsAvailable: null,
+    diagnostics,
+  };
+}
+
 function claudeMcpStatus(text: string): string | null {
   const normalized = text.toLowerCase();
   if (normalized.includes('connected')) return 'connected';
@@ -629,5 +838,6 @@ export const claudeAdapter: HarnessAdapter = {
   detect,
   inspect,
   verify,
+  observeUsage,
   observeContext,
 };
