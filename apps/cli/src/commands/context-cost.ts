@@ -190,9 +190,7 @@ async function claudeInstructionFiles(
   return results;
 }
 
-export async function runContext(
-  context: CommandContext,
-): Promise<CommandResult<ContextReport>> {
+export async function runContext(context: CommandContext): Promise<CommandResult<ContextReport>> {
   const report: ContextReport = {
     platform: context.platform,
     projectRoot: context.projectRoot,
