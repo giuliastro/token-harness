@@ -286,9 +286,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
       projectFiles.map((item) => context.adapters?.fs.dirname(item.path) ?? item.path),
     );
     const largestProjectFileBytes =
-      projectFiles.length === 0
-        ? null
-        : Math.max(...projectFiles.map((item) => item.byteLength));
+      projectFiles.length === 0 ? null : Math.max(...projectFiles.map((item) => item.byteLength));
     const knownLoadedProjectBytes = projectFiles.reduce(
       (total, item) => total + (item.loadedBytes ?? 0),
       0,
@@ -342,9 +340,6 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     command: 'context',
     exitCode: EXIT_CODES.ok,
     data: report,
-    diagnostics: [
-      ...report.harnesses.flatMap((item) => item.diagnostics),
-      ...hierarchyDiagnostics,
-    ],
+    diagnostics: [...report.harnesses.flatMap((item) => item.diagnostics), ...hierarchyDiagnostics],
   });
 }
