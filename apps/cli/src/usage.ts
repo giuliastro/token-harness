@@ -14,14 +14,15 @@
 
 import type { AvailableCommand } from './argv.js';
 
-const ROOT_USAGE = `token-harness — set up and measure token-saving tools for coding agents
+const ROOT_USAGE = `token-harness — maximize useful Claude Code and Codex subscription capacity
 
 First time here
   1  token-harness doctor        what is on this machine        writes nothing
-  2  token-harness plan          what would change              writes nothing
-  3  token-harness apply --yes   make those changes             WRITES
-  4  token-harness verify        is it actually intercepting    writes nothing
-  5  token-harness metrics       what it saved                  writes nothing
+  2  token-harness budget        how much verified quota is left writes nothing
+  3  token-harness plan          what would change              writes nothing
+  4  token-harness apply --yes   make those changes             WRITES
+  5  token-harness verify        is it actually intercepting    writes nothing
+  6  token-harness metrics       what it saved                  writes nothing
 
   Steps 1 and 2 are safe to run right now. Nothing changes until step 3.
 
@@ -31,6 +32,7 @@ Usage
 
 Commands, in the order you would use them
   doctor      What is installed, what is wired up, what is worth knowing
+  budget      Read verified Claude/Codex usage windows; unknown stays unknown
   plan        Compute what would change, file by file. Changes nothing
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
@@ -56,6 +58,19 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  budget: `token-harness budget — read current subscription usage windows
+
+Usage
+  token-harness budget [--json] [--harness <id>] [--project <dir>]
+
+Read-only. Codex uses its documented app-server rate-limit RPC when available.
+Claude Code is reported as unavailable until a supported, versioned native usage
+surface is admitted; Token Harness does not scrape private OAuth endpoints.
+
+Five-hour, weekly and unknown backend buckets stay separate. A local token count
+is never converted into a subscription percentage. Reset-credit inventory may be
+reported, but this command cannot redeem or consume credits. Exits 0 when quota is
+unknown: unknown is an observation, not a broken integration.`,
   apply: `token-harness apply — execute a plan inside a reversible transaction
 
 Usage
