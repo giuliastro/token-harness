@@ -48,6 +48,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Formatter diagnostic
+        if: runner.os == 'Linux'
+        run: |
+          pnpm prettier apps/cli/src/render/budget.ts packages/adapters/src/harnesses/claude.ts --write
+          git diff --no-color -- apps/cli/src/render/budget.ts packages/adapters/src/harnesses/claude.ts
+
       - name: Format check
         run: pnpm format:check
 
