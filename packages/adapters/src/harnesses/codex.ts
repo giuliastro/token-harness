@@ -13,6 +13,7 @@ import {
   MANIFEST_SCHEMA_VERSION,
   type Diagnostic,
   type Evidence,
+  type HarnessBudgetObservation,
   type HarnessDetection,
   type HarnessManifest,
   type JsonValue,
@@ -420,4 +421,254 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   };
 }
 
-export const codexAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify };
+
+function readNumber(record: Record<string, JsonValue>, key: string): number | null {
+  const value = record[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readString(record: Record<string, JsonValue>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function scopeForDuration(minutes: number | null): 'five-hour' | 'weekly' | 'monthly' | 'unknown' {
+  if (minutes === 300) return 'five-hour';
+  if (minutes === 10_080) return 'weekly';
+  if (minutes === 43_200) return 'monthly';
+  return 'unknown';
+}
+
+function resetInstant(epochSeconds: number | null): string | null {
+  if (epochSeconds === null || epochSeconds < 0) return null;
+  const date = new Date(epochSeconds * 1000);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function rateWindow(
+  value: JsonValue | undefined,
+  input: {
+    bucketId: string | null;
+    bucketName: string | null;
+    window: 'primary' | 'secondary';
+    observedAt: string;
+  },
+): HarnessBudgetObservation['windows'][number] | null {
+  if (!isRecord(value)) return null;
+  const usedPercent = readNumber(value, 'usedPercent');
+  const duration = readNumber(value, 'windowDurationMins');
+  const resetsAt = readNumber(value, 'resetsAt');
+  return {
+    harnessId: CODEX,
+    bucketId: input.bucketId,
+    bucketName: input.bucketName,
+    window: input.window,
+    scope: scopeForDuration(duration),
+    usedPercent,
+    remainingPercent: usedPercent === null ? null : Math.max(0, 100 - usedPercent),
+    windowDurationMinutes: duration,
+    resetsAt: resetInstant(resetsAt),
+    observedAt: input.observedAt,
+    source: 'native-rpc',
+    confidence: 'authoritative',
+  };
+}
+
+function snapshotWindows(
+  value: JsonValue,
+  observedAt: string,
+  fallbackBucketId: string | null,
+): {
+  windows: HarnessBudgetObservation['windows'];
+  planType: string | null;
+  rateLimitReachedType: string | null;
+} {
+  if (!isRecord(value)) return { windows: [], planType: null, rateLimitReachedType: null };
+  const bucketId = readString(value, 'limitId') ?? fallbackBucketId;
+  const bucketName = readString(value, 'limitName');
+  const primary = rateWindow(value['primary'], {
+    bucketId,
+    bucketName,
+    window: 'primary',
+    observedAt,
+  });
+  const secondary = rateWindow(value['secondary'], {
+    bucketId,
+    bucketName,
+    window: 'secondary',
+    observedAt,
+  });
+  return {
+    windows: [primary, secondary].filter(
+      (window): window is NonNullable<typeof window> => window !== null,
+    ),
+    planType: readString(value, 'planType'),
+    rateLimitReachedType: readString(value, 'rateLimitReachedType'),
+  };
+}
+
+function parseRateLimitResponse(
+  stdout: string,
+  observedAt: string,
+): Omit<HarnessBudgetObservation, 'harnessId' | 'state' | 'diagnostics'> | null {
+  const messages: JsonValue[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    if (line.trim() === '') continue;
+    try {
+      messages.push(JSON.parse(line) as JsonValue);
+    } catch {
+      // Tracing belongs on stderr, but a future version may print an unrelated stdout line.
+    }
+  }
+
+  const response = messages.find(
+    (message) => isRecord(message) && message['id'] === 2 && isRecord(message['result']),
+  );
+  if (!isRecord(response) || !isRecord(response['result'])) return null;
+  const result = response['result'];
+
+  const snapshots: Array<{ id: string | null; value: JsonValue }> = [];
+  const byId = result['rateLimitsByLimitId'];
+  if (isRecord(byId)) {
+    for (const [id, value] of Object.entries(byId)) {
+      if (value !== undefined) snapshots.push({ id, value });
+    }
+  }
+  if (snapshots.length === 0 && result['rateLimits'] !== undefined) {
+    snapshots.push({ id: null, value: result['rateLimits'] });
+  }
+
+  const windows: HarnessBudgetObservation['windows'] = [];
+  let planType: string | null = null;
+  let rateLimitReachedType: string | null = null;
+  for (const snapshot of snapshots) {
+    const parsed = snapshotWindows(snapshot.value, observedAt, snapshot.id);
+    windows.push(...parsed.windows);
+    planType ??= parsed.planType;
+    rateLimitReachedType ??= parsed.rateLimitReachedType;
+  }
+
+  let resetCreditsAvailable: number | null = null;
+  const resetCredits = result['rateLimitResetCredits'];
+  if (isRecord(resetCredits)) {
+    const available = readNumber(resetCredits, 'availableCount');
+    resetCreditsAvailable = available === null ? null : Math.max(0, Math.trunc(available));
+  }
+
+  return { windows, planType, rateLimitReachedType, resetCreditsAvailable };
+}
+
+async function observeUsage(
+  context: HarnessContext,
+  observedAt: string,
+): Promise<HarnessBudgetObservation> {
+  const stdin = [
+    JSON.stringify({
+      method: 'initialize',
+      id: 1,
+      params: {
+        clientInfo: {
+          name: 'token_harness',
+          title: 'Token Harness',
+          version: '0.1',
+        },
+      },
+    }),
+    JSON.stringify({ method: 'initialized', params: {} }),
+    JSON.stringify({ method: 'account/rateLimits/read', id: 2, params: {} }),
+    '',
+  ].join('\n');
+
+  const outcome = await context.runner.run({
+    executable: 'codex',
+    args: ['app-server', '--stdio'],
+    cwd: context.projectRoot,
+    stdin,
+    timeoutMs: 10_000,
+    maxOutputBytes: 1024 * 1024,
+  });
+
+  if (outcome.failure !== null) {
+    return {
+      harnessId: CODEX,
+      state: outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable',
+      windows: [],
+      planType: null,
+      rateLimitReachedType: null,
+      resetCreditsAvailable: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-rate-limits-unavailable',
+          subject: CODEX,
+          message: 'Codex rate limits could not be read: ' + outcome.failure.message,
+          remediation: 'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
+        }),
+      ],
+    };
+  }
+
+  if (outcome.exitCode !== 0) {
+    return {
+      harnessId: CODEX,
+      state: 'unavailable',
+      windows: [],
+      planType: null,
+      rateLimitReachedType: null,
+      resetCreditsAvailable: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-rate-limits-unavailable',
+          subject: CODEX,
+          message:
+            'Codex app-server exited ' +
+            String(outcome.exitCode) +
+            ' without a usable rate-limit snapshot',
+          remediation: 'Check codex app-server --help and the installed Codex authentication state',
+        }),
+      ],
+    };
+  }
+
+  const parsed = parseRateLimitResponse(outcome.stdout, observedAt);
+  if (parsed === null) {
+    return {
+      harnessId: CODEX,
+      state: 'unavailable',
+      windows: [],
+      planType: null,
+      rateLimitReachedType: null,
+      resetCreditsAvailable: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-rate-limits-schema-unrecognized',
+          subject: CODEX,
+          message: 'Codex app-server returned no recognizable account/rateLimits/read response',
+          remediation: 'Refresh the Codex compatibility fixture before relying on this version',
+        }),
+      ],
+    };
+  }
+
+  return {
+    harnessId: CODEX,
+    state: parsed.windows.length > 0 ? 'observed' : 'unavailable',
+    ...parsed,
+    diagnostics:
+      parsed.windows.length > 0
+        ? []
+        : [
+            diagnostic({
+              severity: 'warning',
+              code: 'codex-rate-limits-empty',
+              subject: CODEX,
+              message: 'Codex returned a rate-limit response without any readable usage windows',
+              remediation: 'Treat current Codex quota as unknown and retry after a normal Codex session',
+            }),
+          ],
+  };
+}
+
+export const codexAdapter: HarnessAdapter = { manifest: MANIFEST, detect, inspect, verify, observeUsage };
