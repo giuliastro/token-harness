@@ -213,6 +213,23 @@ describe('history command', () => {
     assert.equal(result.diagnostics[0]?.code, 'ccusage-not-installed');
   });
 
+  it('fails closed when a supported major omits documented JSON sections', async () => {
+    let calls = 0;
+    const result = await runHistory(
+      context(async (request) => {
+        calls += 1;
+        if (request.args[0] === '--version') return outcome(request, 'ccusage 20.0.20');
+        return outcome(request, JSON.stringify({ daily: [] }));
+      }),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data);
+    assert.equal(result.data.source.state, 'unavailable');
+    assert.equal(result.data.daily.length, 0);
+    assert.equal(calls, 2);
+    assert.equal(result.diagnostics[0]?.code, 'ccusage-history-invalid-schema');
+  });
+
   it('refuses to parse an unproven ccusage major', async () => {
     let calls = 0;
     const result = await runHistory(
