@@ -29,10 +29,7 @@ function totalTools(report: ContextReport, harnessId: string): string {
   );
 }
 
-export function renderContextReport(
-  report: ContextReport,
-  context: RenderContext,
-): string {
+export function renderContextReport(report: ContextReport, context: RenderContext): string {
   const lines: string[] = ['CONTEXT', ''];
   lines.push(
     row([
@@ -89,8 +86,7 @@ export function renderContextReport(
   } else {
     for (const item of report.instructions) {
       const path = truncatePath(displayPath(item.path, context.home), 42);
-      const loaded =
-        item.loadedBytes === null ? '?' : formatCount(item.loadedBytes) + 'B';
+      const loaded = item.loadedBytes === null ? '?' : formatCount(item.loadedBytes) + 'B';
       lines.push(
         truncate(
           row([
