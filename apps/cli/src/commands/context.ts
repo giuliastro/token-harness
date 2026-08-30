@@ -7,6 +7,7 @@
  */
 
 import type {
+  BudgetProfile,
   CompatibilityRow,
   FileSystemPort,
   HarnessId,
@@ -16,6 +17,7 @@ import type {
   PlatformPaths,
   ProcessRunner,
   ProviderId,
+  TaskClass,
 } from '@token-harness/core';
 
 export interface CommandContext {
@@ -28,6 +30,10 @@ export interface CommandContext {
   stateRoot: string | null;
   harness: HarnessId | null;
   provider: ProviderId | null;
+  /** RFC 0011 optimizer policy inputs; optional for hand-built test contexts. */
+  taskClass?: TaskClass | null;
+  budgetProfile?: BudgetProfile | null;
+  reservePercent?: number | null;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
   since: string | null;
   until: string | null;
