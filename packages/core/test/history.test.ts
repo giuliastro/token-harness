@@ -21,7 +21,9 @@ function session(input: Partial<SessionHistoryRow> & { sessionId: string }): Ses
 }
 
 describe('recent session boundary signal', () => {
-  it('marks the most recently active large session as a candidate, not an active-session fact', () => {
+  it(
+    'marks the most recently active large session as a candidate, not an active-session fact',
+    () => {
     const result = assessRecentSessionBoundary(
       CLAUDE,
       [
@@ -46,8 +48,9 @@ describe('recent session boundary signal', () => {
     assert.equal(result.totalTokens, 120_000);
     assert.equal(result.durationMinutes, 270);
     assert.equal(result.minutesSinceLastActivity, 30);
-    assert.match(result.reason, /heuristic/i);
-  });
+      assert.match(result.reason, /heuristic/i);
+    },
+  );
 
   it('marks an old candidate stale even when it was small', () => {
     const result = assessRecentSessionBoundary(
