@@ -84,6 +84,24 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
   }
   if (paceRows === 0) lines.push('  no paceable live quota window');
 
+  lines.push('', 'LOCAL HISTORY');
+  for (const harness of report.harnesses) {
+    const trend = harness.localBurnTrend;
+    lines.push(
+      truncate(
+        '  ' +
+          harness.harnessId +
+          ': ' +
+          (trend === null
+            ? 'unavailable'
+            : trend.state +
+              (trend.changePercent === null ? '' : ' ' + String(trend.changePercent) + '%')) +
+          ' (local tokens only; not quota)',
+        78,
+      ),
+    );
+  }
+
   lines.push('', 'ADVICE');
   let adviceCount = 0;
   for (const harness of report.harnesses) {
