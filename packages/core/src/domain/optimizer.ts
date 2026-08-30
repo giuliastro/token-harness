@@ -8,6 +8,7 @@
 
 import type { UsageWindowSnapshot } from './budget.js';
 import type { Diagnostic } from './diagnostics.js';
+import type { LocalBurnTrend } from './history.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
 
@@ -46,7 +47,13 @@ export interface RecommendationEvidence {
   summary: string;
 }
 
-export type RecommendationArea = 'quota' | 'context' | 'model' | 'reasoning' | 'verbosity';
+export type RecommendationArea =
+  | 'quota'
+  | 'history'
+  | 'context'
+  | 'model'
+  | 'reasoning'
+  | 'verbosity';
 
 export interface OptimizationRecommendation {
   area: RecommendationArea;
@@ -66,6 +73,8 @@ export interface HarnessOptimizationAdvice {
   currentVerbosity: string | null;
   recommendedVerbosity: string | null;
   contextPressure: ContextPressure;
+  /** Local token-volume trend only; never a subscription-quota estimate. */
+  localBurnTrend: LocalBurnTrend | null;
   pace: WindowPaceAssessment[];
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
