@@ -153,7 +153,11 @@ function summarize(
       emptyHistoryTotals(),
     );
   const modelsUsed = [
-    ...new Set(dayRows.flatMap((row) => row.modelsUsed).concat(sessionRowsForHarness.flatMap((row) => row.modelsUsed))),
+    ...new Set(
+      dayRows
+        .flatMap((row) => row.modelsUsed)
+        .concat(sessionRowsForHarness.flatMap((row) => row.modelsUsed)),
+    ),
   ].sort();
 
   return {
