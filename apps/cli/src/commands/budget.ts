@@ -22,10 +22,7 @@ const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const BUDGET_HARNESSES = new Set([CLAUDE, CODEX]);
 
-function unavailable(
-  id: typeof CLAUDE,
-  message: string,
-): HarnessBudgetObservation {
+function unavailable(id: typeof CLAUDE, message: string): HarnessBudgetObservation {
   return {
     harnessId: id,
     state: 'unavailable',
@@ -46,9 +43,7 @@ function unavailable(
   };
 }
 
-export async function runBudget(
-  context: CommandContext,
-): Promise<CommandResult<BudgetReport>> {
+export async function runBudget(context: CommandContext): Promise<CommandResult<BudgetReport>> {
   const observedAt = context.now();
   const report: BudgetReport = {
     platform: context.platform,
@@ -64,10 +59,7 @@ export async function runBudget(
     });
   }
 
-  if (
-    context.harness !== null &&
-    !BUDGET_HARNESSES.has(context.harness)
-  ) {
+  if (context.harness !== null && !BUDGET_HARNESSES.has(context.harness)) {
     const warning = diagnostic({
       severity: 'warning',
       code: 'budget-harness-unsupported',
@@ -93,10 +85,7 @@ export async function runBudget(
 
   const adapters = listHarnessAdapters()
     .filter((adapter) => BUDGET_HARNESSES.has(adapter.manifest.id))
-    .filter(
-      (adapter) =>
-        context.harness === null || adapter.manifest.id === context.harness,
-    );
+    .filter((adapter) => context.harness === null || adapter.manifest.id === context.harness);
 
   for (const adapter of adapters) {
     const detection = await adapter.detect(detectionContext);
@@ -123,9 +112,7 @@ export async function runBudget(
       continue;
     }
 
-    report.harnesses.push(
-      await adapter.observeUsage(detectionContext, observedAt),
-    );
+    report.harnesses.push(await adapter.observeUsage(detectionContext, observedAt));
   }
 
   return commandResult({
