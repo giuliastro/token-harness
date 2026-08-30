@@ -157,5 +157,16 @@ describe('context-cost command', () => {
         },
       ],
     );
+
+    files.delete('/home/dev/project/sub/AGENTS.override.md');
+    const monolithic = await runContext(context);
+    assert.ok(monolithic.data);
+    assert.equal(monolithic.data.instructionHierarchy[0]?.nestedProjectHierarchy, false);
+    assert.equal(monolithic.data.instructionHierarchy[0]?.monolithicProjectInstructions, true);
+    assert.equal(monolithic.data.instructionHierarchy[0]?.reason?.includes('75%'), true);
+    assert.equal(
+      monolithic.diagnostics.some((item) => item.code === 'instruction-file-monolithic'),
+      true,
+    );
   });
 });
