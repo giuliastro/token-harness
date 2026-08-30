@@ -18,7 +18,7 @@ const ROOT_USAGE = `token-harness — maximize useful Claude Code and Codex subs
 
 First time here
   1  token-harness doctor        what is on this machine        writes nothing
-  2  token-harness budget        verified quota remaining        writes nothing
+  2  token-harness budget        quota remaining                 writes nothing
   3  token-harness plan          what would change              writes nothing
   4  token-harness apply --yes   make those changes             WRITES
   5  token-harness verify        is it actually intercepting    writes nothing
