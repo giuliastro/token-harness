@@ -105,8 +105,9 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
             if (measurement.saved === null || measurement.unit === null) continue;
             lines.push(
               ...wrap(
-                `${CLASS_LABELS[measurement.class]}: saved ${formatCount(measurement.saved)} ` +
-                  `${measurement.unit} across ${formatCount(measurement.operations)} operation` +
+                `${CLASS_LABELS[measurement.class]}: ${formatCount(measurement.before ?? 0)} -> ` +
+                  `${formatCount(measurement.after ?? 0)} ${measurement.unit}; saved ` +
+                  `${formatCount(measurement.saved)} across ${formatCount(measurement.operations)} operation` +
                   `${measurement.operations === 1 ? '' : 's'}`,
                 4,
               ),
