@@ -63,6 +63,7 @@ describe('exit codes', () => {
       argv: ['doctor'],
       commands: {
         budget: () => Promise.reject(new Error('unused')),
+        context: () => Promise.reject(new Error('unused')),
         doctor: () => Promise.reject(new Error('boom')),
         plan: () => Promise.reject(new Error('unused')),
         metrics: () => Promise.reject(new Error('unused')),
@@ -118,6 +119,7 @@ describe('exit codes', () => {
       argv: ['doctor'],
       commands: {
         budget: () => Promise.reject(new Error('unused')),
+        context: () => Promise.reject(new Error('unused')),
         doctor: () =>
           Promise.resolve(
             commandResult({
@@ -154,6 +156,7 @@ describe('exit codes', () => {
       argv: ['plan'],
       commands: {
         budget: () => Promise.reject(new Error('unused')),
+        context: () => Promise.reject(new Error('unused')),
         doctor: () => Promise.reject(new Error('unused')),
         plan: () =>
           Promise.resolve(
