@@ -175,5 +175,4 @@ describe('argv', () => {
       assert.equal(parsed.kind, 'usage-error');
     }
   });
-
 });
