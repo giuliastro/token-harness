@@ -362,3 +362,98 @@ describe('subscription usage', () => {
     assert.equal(result.windows[0]?.windowDurationMinutes, 123);
   });
 });
+
+
+describe('context-cost observation', () => {
+  it('reads effective config and MCP tool inventory through app-server', async () => {
+    const base = context();
+    const requests: ProcessRequest[] = [];
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+          requests.push(request);
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: [
+              JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
+              JSON.stringify({
+                id: 2,
+                result: {
+                  config: {
+                    model: 'gpt-5.6-codex',
+                    model_reasoning_effort: 'medium',
+                    model_verbosity: 'low',
+                    project_doc_max_bytes: 32768,
+                    project_root_markers: ['.git'],
+                    project_doc_fallback_filenames: ['TEAM.md'],
+                    tool_output_token_limit: 4096,
+                    instructions: 'abc',
+                    developer_instructions: 'de',
+                    features: { tool_search: true },
+                  },
+                  origins: {},
+                  layers: [],
+                },
+              }),
+              JSON.stringify({
+                id: 3,
+                result: {
+                  data: [
+                    {
+                      name: 'github',
+                      runtimeStatus: 'connected',
+                      pluginId: null,
+                      serverInfo: null,
+                      tools: { search: {}, issue: {} },
+                      resources: [],
+                      resourceTemplates: [],
+                      authStatus: 'oAuth',
+                    },
+                  ],
+                  nextCursor: null,
+                },
+              }),
+              '',
+            ].join('\n'),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 2,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+    };
+
+    const result = await codexAdapter.observeContext?.(
+      observedContext,
+      '2026-08-30T15:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.equal(result.model, 'gpt-5.6-codex');
+    assert.equal(result.reasoningEffort, 'medium');
+    assert.equal(result.verbosity, 'low');
+    assert.equal(result.projectDocMaxBytes, 32768);
+    assert.equal(result.toolOutputTokenLimit, 4096);
+    assert.equal(result.toolSearchEnabled, true);
+    assert.deepEqual(result.projectRootMarkers, ['.git']);
+    assert.deepEqual(result.projectDocFallbackFilenames, ['TEAM.md']);
+    assert.equal(result.configInstructionBytes, 5);
+    assert.equal(result.mcpServers.length, 1);
+    assert.equal(result.mcpServers[0]?.toolCount, 2);
+    assert.equal(result.mcpServers[0]?.runtimeStatus, 'connected');
+    assert.equal(result.mcpServers[0]?.authStatus, 'oAuth');
+
+    assert.equal(requests.length, 1);
+    assert.match(requests[0]?.stdin ?? '', /config\/read/);
+    assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
+    assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
+  });
+});
