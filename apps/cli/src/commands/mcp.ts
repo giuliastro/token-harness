@@ -4,12 +4,7 @@
  * Focused, read-only MCP inventory derived from the same native observations as `context`.
  */
 
-import {
-  EXIT_CODES,
-  commandResult,
-  type CommandResult,
-  type McpReport,
-} from '@token-harness/core';
+import { EXIT_CODES, commandResult, type CommandResult, type McpReport } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
@@ -34,13 +29,10 @@ export async function runMcp(context: CommandContext): Promise<CommandResult<Mcp
           (total, server) => total + (server.toolCount ?? 0),
           0,
         ),
-        unknownToolServerCount: harness.mcpServers.filter(
-          (server) => server.toolCount === null,
-        ).length,
+        unknownToolServerCount: harness.mcpServers.filter((server) => server.toolCount === null)
+          .length,
         inventoryTruncated: harness.mcpInventoryTruncated,
-        diagnostics: harness.diagnostics.filter((item) =>
-          item.code.includes('mcp'),
-        ),
+        diagnostics: harness.diagnostics.filter((item) => item.code.includes('mcp')),
       });
     }
   }
