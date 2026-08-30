@@ -191,10 +191,28 @@ function adviceForHarness(input: {
 
   const mcpAssessments = context.mcpServers.map((server) => assessMcpServer(server));
 
+  if (pressure.pressure === 'high') {
+    recommendations.push({
+      area: 'context',
+      priority: 'first',
+      action: 'Reduce avoidable static context before spending more model effort',
+      target: null,
+      evidence: pressure.evidence,
+    });
+  } else if (pressure.pressure === 'moderate') {
+    recommendations.push({
+      area: 'context',
+      priority: 'next',
+      action: 'Review instruction and MCP exposure before a long task',
+      target: null,
+      evidence: pressure.evidence,
+    });
+  }
+
   for (const assessment of mcpAssessments.filter((item) => item.usability === 'attention')) {
     recommendations.push({
       area: 'mcp',
-      priority: pressure.pressure === 'high' ? 'first' : 'next',
+      priority: pressure.pressure === 'high' ? 'next' : 'first',
       action:
         'Fix this MCP server status/auth, or disable it manually only if you know the task does not need it',
       target: assessment.name,
@@ -228,24 +246,6 @@ function adviceForHarness(input: {
             ' known tools; no per-server usage evidence is available',
         },
       ],
-    });
-  }
-
-  if (pressure.pressure === 'high') {
-    recommendations.push({
-      area: 'context',
-      priority: 'first',
-      action: 'Reduce avoidable static context before spending more model effort',
-      target: null,
-      evidence: pressure.evidence,
-    });
-  } else if (pressure.pressure === 'moderate') {
-    recommendations.push({
-      area: 'context',
-      priority: 'next',
-      action: 'Review instruction and MCP exposure before a long task',
-      target: null,
-      evidence: pressure.evidence,
     });
   }
 
