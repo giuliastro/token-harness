@@ -219,7 +219,6 @@ describe('tool-family coverage', () => {
   });
 });
 
-
 describe('subscription usage', () => {
   it('reads five-hour and weekly Codex windows through app-server without a credit mutation', async () => {
     const base = context();
