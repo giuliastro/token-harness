@@ -16,12 +16,16 @@
 
 import {
   diagnostic,
+  isBudgetProfile,
   isHarnessId,
   isPlanId,
   isProviderId,
+  isTaskClass,
+  type BudgetProfile,
   type Diagnostic,
   type HarnessId,
   type ProviderId,
+  type TaskClass,
 } from '@token-harness/core';
 
 /** Commands the Phase 1 shell implements. */
@@ -31,6 +35,7 @@ export const AVAILABLE_COMMANDS = [
   'context',
   'doctor',
   'metrics',
+  'optimize',
   'plan',
   'rollback',
   'status',
@@ -67,6 +72,10 @@ export interface CommandOptions {
   until: string | null;
   /** `--plan <id>`; validated for shape here and for existence by the command. */
   plan: string | null;
+  /** RFC 0011 advisory optimizer inputs. */
+  task: TaskClass | null;
+  profile: BudgetProfile | null;
+  reservePercent: number | null;
   /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
   yes: boolean;
 }
@@ -85,6 +94,9 @@ const VALUE_FLAGS = new Set([
   '--since',
   '--until',
   '--plan',
+  '--task',
+  '--profile',
+  '--reserve',
 ]);
 
 /**
@@ -152,6 +164,9 @@ export function parseArgv(
     since: null,
     until: null,
     plan: null,
+    task: null,
+    profile: null,
+    reservePercent: null,
     yes: false,
   };
   let command: string | null = null;
@@ -276,6 +291,50 @@ export function parseArgv(
       case '--until':
         options.until = value;
         break;
+      case '--task':
+        if (!isTaskClass(value)) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-task-class',
+              message: `Task class ${JSON.stringify(value)} is not supported`,
+              remediation: 'Use mechanical, standard, hard, or critical',
+            }),
+          );
+        } else {
+          options.task = value;
+        }
+        break;
+      case '--profile':
+        if (!isBudgetProfile(value)) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-budget-profile',
+              message: `Budget profile ${JSON.stringify(value)} is not supported`,
+              remediation: 'Use economy, balanced, quality, or custom',
+            }),
+          );
+        } else {
+          options.profile = value;
+        }
+        break;
+      case '--reserve': {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > 95) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-reserve-percent',
+              message: `Reserve ${JSON.stringify(value)} must be a percentage from 0 to 95`,
+              remediation: 'Use a value such as --reserve 20',
+            }),
+          );
+        } else {
+          options.reservePercent = parsed;
+        }
+        break;
+      }
       case '--plan':
         if (!isPlanId(value)) {
           // Checked here rather than on the filesystem: a value that cannot be a plan id is a
