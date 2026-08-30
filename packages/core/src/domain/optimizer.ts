@@ -159,6 +159,16 @@ export function assessWindowPace(
     resetsAt: window.resetsAt,
   };
 
+  if (window.confidence === 'cached' || window.confidence === 'estimated') {
+    return {
+      ...base,
+      state: 'unknown',
+      targetUsedPercent: null,
+      minutesToReset: null,
+      reason: 'cached or estimated usage is displayed but not used for live pacing',
+    };
+  }
+
   if (
     window.usedPercent === null ||
     window.windowDurationMinutes === null ||
