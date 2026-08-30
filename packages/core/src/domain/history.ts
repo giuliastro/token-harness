@@ -211,7 +211,10 @@ export function assessRecentSessionBoundary(
   }
 
   const row = candidate.row;
-  const minutesSinceLastActivity = Math.max(0, Math.round((nowMs - candidate.lastMs) / 60_000));
+  const minutesSinceLastActivity = Math.max(
+    0,
+    Math.round((nowMs - candidate.lastMs) / 60_000),
+  );
   const firstMs = row.firstActivity === null ? Number.NaN : Date.parse(row.firstActivity);
   const durationMinutes =
     Number.isFinite(firstMs) && firstMs <= candidate.lastMs
@@ -220,7 +223,8 @@ export function assessRecentSessionBoundary(
 
   // Token Harness policy heuristics, not harness context-window limits.
   const stale = minutesSinceLastActivity > 6 * 60;
-  const large = row.totalTokens >= 100_000 || (durationMinutes !== null && durationMinutes >= 4 * 60);
+  const large =
+    row.totalTokens >= 100_000 || (durationMinutes !== null && durationMinutes >= 4 * 60);
   const state: SessionBoundaryState = stale ? 'stale' : large ? 'recent-large' : 'recent-small';
 
   return {
