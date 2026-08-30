@@ -363,7 +363,6 @@ describe('subscription usage', () => {
   });
 });
 
-
 describe('context-cost observation', () => {
   it('reads effective config and MCP tool inventory through app-server', async () => {
     const base = context();
@@ -431,10 +430,7 @@ describe('context-cost observation', () => {
       },
     };
 
-    const result = await codexAdapter.observeContext?.(
-      observedContext,
-      '2026-08-30T15:00:00.000Z',
-    );
+    const result = await codexAdapter.observeContext?.(observedContext, '2026-08-30T15:00:00.000Z');
     assert.ok(result);
     assert.equal(result.state, 'observed');
     assert.equal(result.model, 'gpt-5.6-codex');
