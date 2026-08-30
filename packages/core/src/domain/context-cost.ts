@@ -143,14 +143,13 @@ export function assessMcpServer(server: McpServerObservation): McpServerAssessme
     .join(' ')
     .toLowerCase();
 
-  const usability: McpUsability =
-    status.includes('disabled')
-      ? 'disabled'
-      : /fail|error|needs authentication|authenticationrequired|unauthenticated/.test(status)
-        ? 'attention'
-        : /connected|running|ready/.test(status)
-          ? 'usable'
-          : 'unknown';
+  const usability: McpUsability = status.includes('disabled')
+    ? 'disabled'
+    : /fail|error|needs authentication|authenticationrequired|unauthenticated/.test(status)
+      ? 'attention'
+      : /connected|running|ready/.test(status)
+        ? 'usable'
+        : 'unknown';
 
   const action: McpAssessmentAction =
     usability === 'attention'
