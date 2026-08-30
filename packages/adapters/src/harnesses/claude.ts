@@ -568,6 +568,8 @@ async function observeContext(
     projectRootMarkers: null,
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
+    availableModels: [],
+    modelCatalogTruncated: false,
     mcpServers: [],
     mcpInventoryTruncated: false,
     diagnostics,
