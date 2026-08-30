@@ -235,7 +235,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
@@ -250,7 +252,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [info]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [
+        info,
+      ]),
       diagnostics: [info],
     });
   }
@@ -292,7 +296,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', null, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
@@ -313,7 +319,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'incompatible', version, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'incompatible', version, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
@@ -352,7 +360,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
@@ -370,7 +380,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
@@ -386,7 +398,9 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
     return commandResult({
       command: 'history',
       exitCode: EXIT_CODES.ok,
-      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [warning]),
+      data: blankReport(context, window.windowStart, window.windowEnd, 'unavailable', version, [
+        warning,
+      ]),
       diagnostics: [warning],
     });
   }
