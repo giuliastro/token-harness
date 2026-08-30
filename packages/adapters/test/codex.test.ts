@@ -218,3 +218,154 @@ describe('tool-family coverage', () => {
     assert.deepEqual(inspection.uncoveredToolFamilies, []);
   });
 });
+
+
+describe('subscription usage', () => {
+  it('reads five-hour and weekly Codex windows through app-server without a credit mutation', async () => {
+    const base = context();
+    const requests: ProcessRequest[] = [];
+    const rateLimit = {
+      limitId: 'codex',
+      limitName: 'Codex',
+      primary: {
+        usedPercent: 42.5,
+        windowDurationMins: 300,
+        resetsAt: 1788105600,
+      },
+      secondary: {
+        usedPercent: 12,
+        windowDurationMins: 10080,
+        resetsAt: 1788710400,
+      },
+      credits: null,
+      individualLimit: null,
+      spendControlReached: null,
+      planType: 'pro',
+      rateLimitReachedType: null,
+    };
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+          requests.push(request);
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: [
+              JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
+              JSON.stringify({
+                id: 2,
+                result: {
+                  rateLimits: rateLimit,
+                  rateLimitsByLimitId: { codex: rateLimit },
+                  rateLimitResetCredits: { availableCount: 2, credits: [] },
+                },
+              }),
+              '',
+            ].join('\n'),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 2,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+    };
+
+    const result = await codexAdapter.observeUsage?.(
+      observedContext,
+      '2026-08-30T14:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.equal(result.planType, 'pro');
+    assert.equal(result.resetCreditsAvailable, 2);
+    assert.deepEqual(
+      result.windows.map((window) => ({
+        scope: window.scope,
+        used: window.usedPercent,
+        remaining: window.remainingPercent,
+        resetsAt: window.resetsAt,
+      })),
+      [
+        {
+          scope: 'five-hour',
+          used: 42.5,
+          remaining: 57.5,
+          resetsAt: '2026-08-30T16:00:00.000Z',
+        },
+        {
+          scope: 'weekly',
+          used: 12,
+          remaining: 88,
+          resetsAt: '2026-09-06T16:00:00.000Z',
+        },
+      ],
+    );
+
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0]?.args, ['app-server', '--stdio']);
+    assert.match(requests[0]?.stdin ?? '', /account\/rateLimits\/read/);
+    assert.doesNotMatch(requests[0]?.stdin ?? '', /consume|redeem/i);
+  });
+
+  it('keeps an unrecognized backend duration as an unknown window', async () => {
+    const base = context();
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (): Promise<ProcessOutcome> => ({
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/usr/local/bin/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 1, result: {} }),
+            JSON.stringify({
+              id: 2,
+              result: {
+                rateLimits: {
+                  limitId: 'future-bucket',
+                  limitName: null,
+                  primary: {
+                    usedPercent: 1,
+                    windowDurationMins: 123,
+                    resetsAt: null,
+                  },
+                  secondary: null,
+                  credits: null,
+                  individualLimit: null,
+                  spendControlReached: null,
+                  planType: null,
+                  rateLimitReachedType: null,
+                },
+                rateLimitsByLimitId: null,
+                rateLimitResetCredits: null,
+              },
+            }),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        }),
+      },
+    };
+
+    const result = await codexAdapter.observeUsage?.(
+      observedContext,
+      '2026-08-30T14:00:00.000Z',
+    );
+    assert.ok(result);
+    assert.equal(result.windows[0]?.scope, 'unknown');
+    assert.equal(result.windows[0]?.windowDurationMinutes, 123);
+  });
+});
