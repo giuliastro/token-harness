@@ -25,6 +25,7 @@ import {
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runApply } from './commands/apply.js';
+import { runBudget } from './commands/budget.js';
 import { runDoctor } from './commands/doctor.js';
 import { runMetrics } from './commands/metrics.js';
 import { runPlan } from './commands/plan.js';
@@ -55,6 +56,7 @@ export type CommandTable = Readonly<
 
 export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
+  budget: runBudget,
   doctor: runDoctor,
   metrics: runMetrics,
   plan: runPlan,
