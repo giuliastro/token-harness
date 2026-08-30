@@ -61,9 +61,7 @@ export function renderBudgetReport(report: BudgetReport, _context: RenderContext
 
     if (harness.windows.length > 0) {
       const sources = [
-        ...new Set(
-          harness.windows.map((window) => window.source + '/' + window.confidence),
-        ),
+        ...new Set(harness.windows.map((window) => window.source + '/' + window.confidence)),
       ];
       lines.push(truncate('  source - ' + sources.join(', '), 78));
     }
