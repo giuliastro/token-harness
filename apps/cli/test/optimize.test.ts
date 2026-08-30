@@ -181,7 +181,26 @@ describe('optimize command', () => {
                       layers: [],
                     },
                   }),
-                  JSON.stringify({ id: 3, result: { data: [], nextCursor: null } }),
+                  JSON.stringify({
+                    id: 3,
+                    result: {
+                      data: [
+                        {
+                          name: 'github',
+                          runtimeStatus: 'connected',
+                          pluginId: null,
+                          serverInfo: null,
+                          tools: Object.fromEntries(
+                            Array.from({ length: 25 }, (_, index) => ['tool-' + index, {}]),
+                          ),
+                          resources: [],
+                          resourceTemplates: [],
+                          authStatus: 'oAuth',
+                        },
+                      ],
+                      nextCursor: null,
+                    },
+                  }),
                   JSON.stringify({
                     id: 4,
                     result: {
@@ -257,6 +276,12 @@ describe('optimize command', () => {
     );
     assert.equal(advice.recommendations[0]?.area, 'context');
     assert.match(advice.recommendations[0]?.action ?? '', /static context/i);
+    const mcpAdvice = advice.recommendations.find(
+      (item) => item.area === 'mcp' && item.target === 'github',
+    );
+    assert.ok(mcpAdvice);
+    assert.match(mcpAdvice.action, /do not remove/i);
+    assert.match(mcpAdvice.evidence[0]?.summary ?? '', /25 known tools/i);
   });
 
   it('requires an explicit reserve for the custom profile', async () => {
