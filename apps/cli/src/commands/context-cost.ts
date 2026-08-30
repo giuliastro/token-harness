@@ -200,6 +200,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     instructions: [],
     knownLoadedInstructionBytes: 0,
     discoveredInstructionBytes: 0,
+    instructionHierarchy: [],
     harnesses: [],
   };
 
@@ -276,10 +277,74 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     0,
   );
 
+  const hierarchyDiagnostics = [];
+  for (const harness of report.harnesses) {
+    const files = report.instructions.filter((item) => item.harnessId === harness.harnessId);
+    const projectFiles = files.filter((item) => item.scope === 'project');
+    const userFiles = files.filter((item) => item.scope === 'user');
+    const projectDirectories = new Set(
+      projectFiles.map((item) => context.adapters?.fs.dirname(item.path) ?? item.path),
+    );
+    const largestProjectFileBytes =
+      projectFiles.length === 0
+        ? null
+        : Math.max(...projectFiles.map((item) => item.byteLength));
+    const knownLoadedProjectBytes = projectFiles.reduce(
+      (total, item) => total + (item.loadedBytes ?? 0),
+      0,
+    );
+    const usesMostOfCodexBudget =
+      harness.projectDocMaxBytes !== null &&
+      harness.projectDocMaxBytes > 0 &&
+      knownLoadedProjectBytes / harness.projectDocMaxBytes >= 0.75;
+    const largeSingleCandidate =
+      projectFiles.length === 1 &&
+      largestProjectFileBytes !== null &&
+      largestProjectFileBytes >= 32 * 1024;
+    const monolithicProjectInstructions =
+      projectFiles.length === 1 && (usesMostOfCodexBudget || largeSingleCandidate);
+
+    const reason = monolithicProjectInstructions
+      ? usesMostOfCodexBudget
+        ? 'one project instruction file consumes at least 75% of the harness project-doc byte budget'
+        : 'one project instruction candidate is at least 32 KiB'
+      : null;
+
+    report.instructionHierarchy.push({
+      harnessId: harness.harnessId,
+      projectFileCount: projectFiles.length,
+      userFileCount: userFiles.length,
+      distinctProjectDirectories: projectDirectories.size,
+      nestedProjectHierarchy: projectDirectories.size > 1,
+      largestProjectFileBytes,
+      monolithicProjectInstructions,
+      reason,
+    });
+
+    if (monolithicProjectInstructions) {
+      hierarchyDiagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'instruction-file-monolithic',
+          subject: harness.harnessId,
+          message:
+            harness.harnessId +
+            ' project instructions are concentrated in one large file instead of scoped hierarchy',
+          path: projectFiles[0]?.path ?? null,
+          remediation:
+            'Move subtree-specific rules into nested instruction files where the harness supports hierarchy',
+        }),
+      );
+    }
+  }
+
   return commandResult({
     command: 'context',
     exitCode: EXIT_CODES.ok,
     data: report,
-    diagnostics: report.harnesses.flatMap((item) => item.diagnostics),
+    diagnostics: [
+      ...report.harnesses.flatMap((item) => item.diagnostics),
+      ...hierarchyDiagnostics,
+    ],
   });
 }
