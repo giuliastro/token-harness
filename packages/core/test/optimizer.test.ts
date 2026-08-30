@@ -44,6 +44,17 @@ describe('quota pacing', () => {
     assert.equal(pace.state, 'unknown');
     assert.equal(pace.targetUsedPercent, null);
   });
+
+  it('never uses cached quota snapshots for live pacing', () => {
+    const pace = assessWindowPace(
+      { ...window(70), confidence: 'cached', source: 'companion-cli' },
+      '2026-08-30T14:00:00.000Z',
+      20,
+    );
+    assert.equal(pace.state, 'unknown');
+    assert.equal(pace.targetUsedPercent, null);
+    assert.match(pace.reason, /cached/i);
+  });
 });
 
 describe('quality-floor effort policy', () => {
