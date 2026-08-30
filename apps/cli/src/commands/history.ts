@@ -8,6 +8,7 @@
 import {
   EXIT_CODES,
   assessLocalBurnTrend,
+  assessRecentSessionBoundary,
   commandResult,
   diagnostic,
   emptyHistoryTotals,
@@ -138,6 +139,7 @@ function summarize(
   harness: typeof CLAUDE,
   daily: readonly DailyHistoryRow[],
   sessions: readonly SessionHistoryRow[],
+  observedAt: string,
 ): HarnessHistorySummary {
   const dayRows = daily.filter((row) => row.harnessId === harness);
   const sessionRowsForHarness = sessions.filter((row) => row.harnessId === harness);
@@ -166,6 +168,7 @@ function summarize(
     sessions: sessionRowsForHarness.length,
     modelsUsed,
     burnTrend: assessLocalBurnTrend(harness, dayRows),
+    recentSession: assessRecentSessionBoundary(harness, sessionRowsForHarness, observedAt),
     ...aggregate(dayRows),
   };
 }
@@ -416,7 +419,7 @@ export async function runHistory(context: CommandContext): Promise<CommandResult
 
   const harnesses = [CLAUDE, CODEX]
     .filter((harness) => filterHarness === null || harness === filterHarness)
-    .map((harness) => summarize(harness, daily, sessions));
+    .map((harness) => summarize(harness, daily, sessions, context.now()));
 
   const report: HistoryReport = {
     ...blankReport(context, window.windowStart, window.windowEnd, 'available', version, []),
