@@ -673,7 +673,6 @@ async function observeUsage(
   };
 }
 
-
 function readBoolean(record: Record<string, JsonValue>, key: string): boolean | null {
   const value = record[key];
   return typeof value === 'boolean' ? value : null;
@@ -796,9 +795,7 @@ async function observeContext(
   const configResponse = rpcResult(messages, 2);
   const mcpResponse = rpcResult(messages, 3);
   const config =
-    configResponse !== null && isRecord(configResponse['config'])
-      ? configResponse['config']
-      : null;
+    configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
 
   const features = config !== null && isRecord(config['features']) ? config['features'] : null;
   const instructions = config === null ? null : readString(config, 'instructions');
@@ -886,16 +883,13 @@ async function observeContext(
     reasoningEffort: config === null ? null : readString(config, 'model_reasoning_effort'),
     verbosity: config === null ? null : readString(config, 'model_verbosity'),
     projectDocMaxBytes: config === null ? null : readNumber(config, 'project_doc_max_bytes'),
-    toolOutputTokenLimit:
-      config === null ? null : readNumber(config, 'tool_output_token_limit'),
+    toolOutputTokenLimit: config === null ? null : readNumber(config, 'tool_output_token_limit'),
     toolSearchEnabled: features === null ? null : readBoolean(features, 'tool_search'),
     projectRootMarkers,
     projectDocFallbackFilenames:
       config === null ? [] : readStringArray(config, 'project_doc_fallback_filenames'),
     configInstructionBytes:
-      config === null
-        ? null
-        : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
+      config === null ? null : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
     mcpServers,
     mcpInventoryTruncated,
     diagnostics,
