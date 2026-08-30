@@ -1614,8 +1614,9 @@ Acceptance:
 
 #94 shipped `context`, effective Codex config/model/MCP inventory, instruction-byte accounting and
 Codex-compatible AGENTS hierarchy discovery. #97 adds the focused `mcp` view plus explicit
-root+subtree/monolithic hierarchy reporting. Still open: tool-output volume by family,
-session-age/context signals, task-boundary clear/new-session/compact advice, evidence-backed
+root+subtree/monolithic hierarchy reporting. The session-boundary tranche adds a conservative
+ccusage-backed most-recent-session signal and conditional new-session/compact advice without claiming
+that the observed session is active. Still open: tool-output volume by family, evidence-backed
 per-server removal advice, and the native-deferral benchmark before assigning Lazy MCP.
 
 Add:
@@ -1720,9 +1721,11 @@ Acceptance:
 
 The history tranche adds `token-harness history` over an already installed fixture-gated ccusage 20.x. The reader
 is forced offline and cost-free, keeps Claude/Codex daily and session token history separate from
-live quota, and treats missing/incompatible ccusage as an ordinary explicit state. Still open:
-project/task/receipt correlation, Claude five-hour block history, and optional API-equivalent cost
-reporting kept in its own measurement class.
+live quota, and treats missing/incompatible ccusage as an ordinary explicit state. It now derives a
+bounded most-recent-session candidate for advisory task-boundary hygiene, explicitly without
+asserting that the candidate is the current session. Still open: project/task/receipt correlation,
+Claude five-hour block history, and optional API-equivalent cost reporting kept in its own
+measurement class.
 
 Admit ccusage first as a read-only historical source, not as a live quota authority.
 
