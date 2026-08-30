@@ -21,13 +21,14 @@ First time here
   2  token-harness budget        quota remaining                writes nothing
   3  token-harness context       static context cost            writes nothing
   4  token-harness mcp           MCP audit                     writes nothing
-  5  token-harness optimize      quota-aware advice             writes nothing
-  6  token-harness plan          what would change              writes nothing
-  7  token-harness apply --yes   make those changes             WRITES
-  8  token-harness verify        is it actually intercepting    writes nothing
-  9  token-harness metrics       what it saved                  writes nothing
+  5  token-harness history       local usage history            writes nothing
+  6  token-harness optimize      quota-aware advice             writes nothing
+  7  token-harness plan          what would change              writes nothing
+  8  token-harness apply --yes   make those changes             WRITES
+  9  token-harness verify        is it actually intercepting    writes nothing
+ 10  token-harness metrics       what it saved                  writes nothing
 
-  Steps 1 through 6 are safe to run right now. Nothing changes until step 7.
+  Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
 Usage
   token-harness <command> [flags]
@@ -38,6 +39,7 @@ Commands, in the order you would use them
   budget      Read verified Claude/Codex usage windows; unknown stays unknown
   context     Audit instruction bytes, effective config, MCP servers and tools
   mcp         Show the focused native MCP/server/tool inventory
+  history     Read local Claude/Codex usage history through ccusage
   plan        Compute what would change, file by file. Changes nothing
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
@@ -67,6 +69,21 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  history: `token-harness history — read local Claude/Codex usage history
+
+Usage
+  token-harness history [--json] [--harness <id>] [--project <dir>]
+                        [--since <window>] [--until <window>]
+
+Read-only. Uses an already installed ccusage 20.x and forces --offline --no-cost.
+Token Harness does not install ccusage, fetch pricing, or include estimated API
+costs. Claude and Codex history stays separate from live subscription quota.
+
+The default window is 7d. Local token volume can describe a recent burn trend,
+but it is never converted into a provider allowance percentage or subscription
+spend. Missing ccusage, an unsupported major, and unreadable history are explicit
+states rather than zero usage.`,
+
   mcp: `token-harness mcp — inspect MCP servers and exposed tools
 
 Usage
