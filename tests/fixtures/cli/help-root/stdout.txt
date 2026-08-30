@@ -20,7 +20,7 @@ Usage
 
 Commands, in the order you would use them
   doctor      What is installed, what is wired up, what is worth knowing
-  budget      Read verified Claude/Codex usage windows; unknown stays unknown
+  budget      Read Claude/Codex usage windows with explicit source/confidence
   context     Audit instruction bytes, effective config, MCP servers and tools
   mcp         Show the focused native MCP/server/tool inventory
   history     Read local Claude/Codex usage history through ccusage
