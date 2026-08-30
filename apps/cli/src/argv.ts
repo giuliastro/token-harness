@@ -28,6 +28,7 @@ import {
 export const AVAILABLE_COMMANDS = [
   'apply',
   'budget',
+  'context',
   'doctor',
   'metrics',
   'plan',
