@@ -223,7 +223,10 @@ describe('optimize command', () => {
     assert.equal(advice.recommendedEffort, 'medium');
     assert.equal(advice.recommendedModel, 'gpt-5.6-codex');
     assert.equal(advice.localBurnTrend?.state, 'rising');
-    assert.equal(advice.recommendations.some((item) => item.area === 'history'), true);
+    assert.equal(
+      advice.recommendations.some((item) => item.area === 'history'),
+      true,
+    );
     assert.equal(advice.recommendations[0]?.area, 'context');
     assert.match(advice.recommendations[0]?.action ?? '', /static context/i);
   });
