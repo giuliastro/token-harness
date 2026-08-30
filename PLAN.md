@@ -1588,7 +1588,10 @@ the optimization objective and therefore the admission order.
 
 `budget` now has the provider-neutral window model, Codex app-server reader, explicit Claude
 unavailable state, separate five-hour/weekly buckets, reset timestamps/credits, confidence/source,
-and no credential scraping or credit redemption. Unknown backend state remains unknown.
+and no credential scraping or credit redemption. A later observational tranche adds an optional
+cacheless cclimits Claude fallback: OAuth-backed companion data is `reported`, fresh local Claude
+cache is `cached` and excluded from live pacing, and stale cache is rejected. Token Harness never
+reads cclimits credentials or installs the companion. Unknown backend state remains unknown.
 
 Implement a provider-neutral usage-window model and:
 
