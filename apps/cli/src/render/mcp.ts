@@ -65,5 +65,38 @@ export function renderMcpReport(report: McpReport, _context: RenderContext): str
     );
   }
 
+  const assessments = report.harnesses.flatMap((harness) => harness.assessments);
+  if (assessments.length > 0) {
+    lines.push('', 'ASSESSMENT');
+    for (const item of assessments) {
+      const action =
+        item.action === 'fix-or-disable-if-unneeded'
+          ? 'fix auth/status, or disable manually if unneeded'
+          : item.action === 'review-exposure'
+            ? 'review exposure; no removal advice'
+            : 'no action';
+      lines.push(
+        truncate(
+          '  ' +
+            item.harnessId +
+            '/' +
+            item.name +
+            ': ' +
+            item.exposure +
+            ' exposure, ' +
+            item.usability +
+            ' - ' +
+            action,
+          78,
+        ),
+      );
+      if (!item.hasRemovalEvidence && item.action !== 'none') {
+        lines.push(
+          truncate('    usage/task relevance not observed; removal is not recommended', 78),
+        );
+      }
+    }
+  }
+
   return document(lines);
 }
