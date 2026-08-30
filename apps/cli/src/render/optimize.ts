@@ -15,10 +15,7 @@ function percent(input: number | null): string {
   return input === null ? '?' : String(Math.round(input * 10) / 10) + '%';
 }
 
-export function renderOptimizeReport(
-  report: OptimizeReport,
-  _context: RenderContext,
-): string {
+export function renderOptimizeReport(report: OptimizeReport, _context: RenderContext): string {
   const lines: string[] = [
     'OPTIMIZE',
     truncate(
@@ -44,8 +41,7 @@ export function renderOptimizeReport(
   for (const harness of report.harnesses) {
     const effort =
       value(harness.currentEffort) +
-      (harness.recommendedEffort !== null &&
-      harness.recommendedEffort !== harness.currentEffort
+      (harness.recommendedEffort !== null && harness.recommendedEffort !== harness.currentEffort
         ? '→' + harness.recommendedEffort
         : '');
     lines.push(
@@ -80,9 +76,7 @@ export function renderOptimizeReport(
             ' target=' +
             percent(pace.targetUsedPercent) +
             ' reset=' +
-            (pace.minutesToReset === null
-              ? '?'
-              : formatCount(pace.minutesToReset) + 'm'),
+            (pace.minutesToReset === null ? '?' : formatCount(pace.minutesToReset) + 'm'),
           78,
         ),
       );
