@@ -102,6 +102,27 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
     );
   }
 
+  lines.push('', 'SESSION SIGNAL');
+  for (const harness of report.harnesses) {
+    const signal = harness.recentSession;
+    lines.push(
+      truncate(
+        '  ' +
+          harness.harnessId +
+          ': ' +
+          (signal === null
+            ? 'unavailable'
+            : signal.state +
+              '; candidate=' +
+              (signal.candidateSessionId ?? '?') +
+              '; tokens=' +
+              (signal.totalTokens === null ? '?' : formatCount(signal.totalTokens))),
+        78,
+      ),
+    );
+  }
+  lines.push('  most recently observed local session; it may not be the active session');
+
   lines.push('', 'ADVICE');
   let adviceCount = 0;
   for (const harness of report.harnesses) {
