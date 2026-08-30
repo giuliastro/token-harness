@@ -124,10 +124,7 @@ export interface HarnessAdapter {
    */
   observeUsage?(context: HarnessContext, observedAt: string): Promise<HarnessBudgetObservation>;
   /** RFC 0011 Phase 18.2: read-only effective context/config inventory. */
-  observeContext?(
-    context: HarnessContext,
-    observedAt: string,
-  ): Promise<HarnessContextObservation>;
+  observeContext?(context: HarnessContext, observedAt: string): Promise<HarnessContextObservation>;
 }
 
 /** The absolute path a declaration resolves to. Shared by every adapter. */
