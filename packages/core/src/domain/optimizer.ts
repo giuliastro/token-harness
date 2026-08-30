@@ -8,7 +8,7 @@
 
 import type { UsageWindowSnapshot } from './budget.js';
 import type { Diagnostic } from './diagnostics.js';
-import type { LocalBurnTrend } from './history.js';
+import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
 
@@ -50,6 +50,7 @@ export interface RecommendationEvidence {
 export type RecommendationArea =
   | 'quota'
   | 'history'
+  | 'session'
   | 'context'
   | 'model'
   | 'reasoning'
@@ -75,6 +76,8 @@ export interface HarnessOptimizationAdvice {
   contextPressure: ContextPressure;
   /** Local token-volume trend only; never a subscription-quota estimate. */
   localBurnTrend: LocalBurnTrend | null;
+  /** Most recently observed local session candidate; never asserted to be the active session. */
+  recentSession: SessionBoundarySignal | null;
   pace: WindowPaceAssessment[];
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
