@@ -25,6 +25,7 @@ import type {
   HarnessId,
   HarnessManifest,
   HarnessBudgetObservation,
+  HarnessContextObservation,
   HarnessToolFamily,
   PlatformFacts,
   PlatformPaths,
@@ -122,6 +123,11 @@ export interface HarnessAdapter {
    * machine-readable usage surface. A missing implementation means "unavailable", never zero.
    */
   observeUsage?(context: HarnessContext, observedAt: string): Promise<HarnessBudgetObservation>;
+  /** RFC 0011 Phase 18.2: read-only effective context/config inventory. */
+  observeContext?(
+    context: HarnessContext,
+    observedAt: string,
+  ): Promise<HarnessContextObservation>;
 }
 
 /** The absolute path a declaration resolves to. Shared by every adapter. */
