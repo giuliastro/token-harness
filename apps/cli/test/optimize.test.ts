@@ -106,7 +106,28 @@ describe('optimize command', () => {
                   },
                 ],
               }));
-              return outcome(request, JSON.stringify({ daily, session: [] }));
+              return outcome(
+                request,
+                JSON.stringify({
+                  daily,
+                  session: [
+                    {
+                      agent: 'codex',
+                      period: 'codex-recent-large',
+                      inputTokens: 100_000,
+                      cacheCreationTokens: 0,
+                      cacheReadTokens: 10_000,
+                      outputTokens: 10_000,
+                      totalTokens: 120_000,
+                      modelsUsed: ['gpt-5.6-codex'],
+                      metadata: {
+                        firstActivity: '2026-08-30T09:30:00.000Z',
+                        lastActivity: '2026-08-30T13:50:00.000Z',
+                      },
+                    },
+                  ],
+                }),
+              );
             }
             if (request.args[0] === '--version') return outcome(request, 'codex-cli 0.146.0');
             const stdin = request.stdin ?? '';
@@ -223,8 +244,15 @@ describe('optimize command', () => {
     assert.equal(advice.recommendedEffort, 'medium');
     assert.equal(advice.recommendedModel, 'gpt-5.6-codex');
     assert.equal(advice.localBurnTrend?.state, 'rising');
+    assert.equal(advice.recentSession?.state, 'recent-large');
     assert.equal(
       advice.recommendations.some((item) => item.area === 'history'),
+      true,
+    );
+    assert.equal(
+      advice.recommendations.some(
+        (item) => item.area === 'session' && item.target === 'compact-or-new-session',
+      ),
       true,
     );
     assert.equal(advice.recommendations[0]?.area, 'context');
