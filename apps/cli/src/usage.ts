@@ -20,13 +20,14 @@ First time here
   1  token-harness doctor        what is on this machine        writes nothing
   2  token-harness budget        quota remaining                writes nothing
   3  token-harness context       static context cost            writes nothing
-  4  token-harness optimize      quota-aware advice             writes nothing
-  5  token-harness plan          what would change              writes nothing
-  6  token-harness apply --yes   make those changes             WRITES
-  7  token-harness verify        is it actually intercepting    writes nothing
-  8  token-harness metrics       what it saved                  writes nothing
+  4  token-harness mcp           MCP/tool inventory              writes nothing
+  5  token-harness optimize      quota-aware advice             writes nothing
+  6  token-harness plan          what would change              writes nothing
+  7  token-harness apply --yes   make those changes             WRITES
+  8  token-harness verify        is it actually intercepting    writes nothing
+  9  token-harness metrics       what it saved                  writes nothing
 
-  Steps 1 through 5 are safe to run right now. Nothing changes until step 6.
+  Steps 1 through 6 are safe to run right now. Nothing changes until step 7.
 
 Usage
   token-harness <command> [flags]
@@ -36,6 +37,7 @@ Commands, in the order you would use them
   doctor      What is installed, what is wired up, what is worth knowing
   budget      Read verified Claude/Codex usage windows; unknown stays unknown
   context     Audit instruction bytes, effective config, MCP servers and tools
+  mcp         Show the focused native MCP/server/tool inventory
   plan        Compute what would change, file by file. Changes nothing
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
@@ -65,6 +67,16 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  mcp: `token-harness mcp — inspect MCP servers and exposed tools
+
+Usage
+  token-harness mcp [--json] [--harness <id>] [--project <dir>]
+
+Read-only. Uses the same native inventory as token-harness context. Codex reports
+server status, auth state and native tool counts when app-server exposes them.
+Claude reports the server inventory from claude mcp list and keeps per-server
+tool counts unknown rather than guessing. A question mark means unknown, not zero.`,
+
   optimize: `token-harness optimize — explain how to spend the current allowance
 
 Usage
