@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import {
-  assessRecentSessionBoundary,
-  harnessId,
-  type SessionHistoryRow,
-} from '../src/index.js';
+import { assessRecentSessionBoundary, harnessId, type SessionHistoryRow } from '../src/index.js';
 
 const CLAUDE = harnessId('claude');
 
