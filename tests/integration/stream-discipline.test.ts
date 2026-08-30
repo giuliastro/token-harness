@@ -24,6 +24,7 @@ const BASE = {
 } as const;
 
 const noisyCommands = {
+  budget: () => Promise.reject(new Error('unused')),
   doctor: () =>
     Promise.resolve(
       commandResult({
