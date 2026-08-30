@@ -277,10 +277,7 @@ describe('subscription usage', () => {
       },
     };
 
-    const result = await codexAdapter.observeUsage?.(
-      observedContext,
-      '2026-08-30T14:00:00.000Z',
-    );
+    const result = await codexAdapter.observeUsage?.(observedContext, '2026-08-30T14:00:00.000Z');
     assert.ok(result);
     assert.equal(result.state, 'observed');
     assert.equal(result.planType, 'pro');
@@ -360,10 +357,7 @@ describe('subscription usage', () => {
       },
     };
 
-    const result = await codexAdapter.observeUsage?.(
-      observedContext,
-      '2026-08-30T14:00:00.000Z',
-    );
+    const result = await codexAdapter.observeUsage?.(observedContext, '2026-08-30T14:00:00.000Z');
     assert.ok(result);
     assert.equal(result.windows[0]?.scope, 'unknown');
     assert.equal(result.windows[0]?.windowDurationMinutes, 123);
