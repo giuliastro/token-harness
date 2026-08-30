@@ -12,6 +12,7 @@
 
 import type {
   ApplyReport,
+  BudgetReport,
   CommandResult,
   Diagnostic,
   DoctorReport,
@@ -23,6 +24,7 @@ import type {
 } from '@token-harness/core';
 
 import { renderApplyReport } from './apply.js';
+import { renderBudgetReport } from './budget.js';
 import { renderDoctorReport } from './doctor.js';
 import { renderMetricsReport } from './metrics.js';
 import { renderPlanReport } from './plan.js';
@@ -68,6 +70,8 @@ export function renderHuman(
       // One renderer for three commands: all three report a transaction outcome, and RFC 0006
       // rule 3 makes the rendering a function of the result object rather than of the verb.
       return plain(renderApplyReport(data as ApplyReport, context, result.command));
+    case 'budget':
+      return plain(renderBudgetReport(data as BudgetReport, context));
     case 'doctor':
       return plain(renderDoctorReport(data as DoctorReport, context));
     case 'plan':
@@ -87,6 +91,7 @@ export function renderHuman(
 
 export {
   renderApplyReport,
+  renderBudgetReport,
   renderDoctorReport,
   renderMetricsReport,
   renderPlanReport,
