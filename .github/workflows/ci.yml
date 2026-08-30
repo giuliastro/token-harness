@@ -48,6 +48,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Formatter diagnostic
+        if: runner.os == 'Linux'
+        run: |
+          pnpm format
+          git diff --no-color -- packages/core/test/history.test.ts
+
       - name: Format check
         run: pnpm format:check
 
