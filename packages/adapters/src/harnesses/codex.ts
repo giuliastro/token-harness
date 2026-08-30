@@ -711,7 +711,7 @@ function parseJsonLines(stdout: string): JsonValue[] {
 
 async function observeContext(
   context: HarnessContext,
-  observedAt: string,
+  _observedAt: string,
 ): Promise<HarnessContextObservation> {
   const stdin = [
     JSON.stringify({
