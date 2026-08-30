@@ -11,8 +11,13 @@ import type { PlatformFacts } from './platform.js';
 
 export type UsageWindowScope = 'five-hour' | 'weekly' | 'monthly' | 'model' | 'credit' | 'unknown';
 
-export type UsageWindowSource = 'native-rpc' | 'native-cli' | 'local-history' | 'unknown';
-export type UsageConfidence = 'authoritative' | 'reported' | 'estimated';
+export type UsageWindowSource =
+  | 'native-rpc'
+  | 'native-cli'
+  | 'companion-cli'
+  | 'local-history'
+  | 'unknown';
+export type UsageConfidence = 'authoritative' | 'reported' | 'cached' | 'estimated';
 
 export interface UsageWindowSnapshot {
   harnessId: HarnessId;
