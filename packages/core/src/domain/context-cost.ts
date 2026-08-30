@@ -26,6 +26,18 @@ export interface InstructionFileObservation {
   source: 'filesystem';
 }
 
+export interface ModelObservation {
+  harnessId: HarnessId;
+  id: string;
+  model: string;
+  displayName: string;
+  modelSpecialty: string | null;
+  supportedReasoningEfforts: string[];
+  defaultReasoningEffort: string | null;
+  isDefault: boolean;
+  source: 'native-rpc';
+}
+
 export interface McpServerObservation {
   harnessId: HarnessId;
   name: string;
@@ -49,6 +61,8 @@ export interface HarnessContextObservation {
   projectDocFallbackFilenames: string[];
   /** Bytes of config-level instructions returned by the harness, content never emitted. */
   configInstructionBytes: number | null;
+  availableModels: ModelObservation[];
+  modelCatalogTruncated: boolean;
   mcpServers: McpServerObservation[];
   mcpInventoryTruncated: boolean;
   diagnostics: Diagnostic[];
