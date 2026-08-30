@@ -14,6 +14,7 @@ import type {
   ApplyReport,
   BudgetReport,
   CommandResult,
+  ContextReport,
   Diagnostic,
   DoctorReport,
   MetricsReport,
@@ -25,6 +26,7 @@ import type {
 
 import { renderApplyReport } from './apply.js';
 import { renderBudgetReport } from './budget.js';
+import { renderContextReport } from './context-cost.js';
 import { renderDoctorReport } from './doctor.js';
 import { renderMetricsReport } from './metrics.js';
 import { renderPlanReport } from './plan.js';
@@ -72,6 +74,8 @@ export function renderHuman(
       return plain(renderApplyReport(data as ApplyReport, context, result.command));
     case 'budget':
       return plain(renderBudgetReport(data as BudgetReport, context));
+    case 'context':
+      return plain(renderContextReport(data as ContextReport, context));
     case 'doctor':
       return plain(renderDoctorReport(data as DoctorReport, context));
     case 'plan':
@@ -92,6 +96,7 @@ export function renderHuman(
 export {
   renderApplyReport,
   renderBudgetReport,
+  renderContextReport,
   renderDoctorReport,
   renderMetricsReport,
   renderPlanReport,
