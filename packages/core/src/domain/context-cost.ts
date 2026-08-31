@@ -67,6 +67,21 @@ export interface McpServerAssessment {
   reason: string;
 }
 
+export interface NativeConfigOrigin {
+  type: string;
+  filePath: string | null;
+  profile: string | null;
+}
+
+export interface NativePolicyTarget {
+  kind: 'codex-user-config';
+  filePath: string;
+  version: string;
+  profile: string | null;
+  reasoningEffortOrigin: NativeConfigOrigin | null;
+  verbosityOrigin: NativeConfigOrigin | null;
+}
+
 export interface HarnessContextObservation {
   harnessId: HarnessId;
   state: ContextObservationState;
@@ -84,6 +99,8 @@ export interface HarnessContextObservation {
   modelCatalogTruncated: boolean;
   mcpServers: McpServerObservation[];
   mcpInventoryTruncated: boolean;
+  /** Writable native target discovered through a versioned harness-native read surface. */
+  nativePolicyTarget: NativePolicyTarget | null;
   diagnostics: Diagnostic[];
 }
 
