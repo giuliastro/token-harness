@@ -391,6 +391,21 @@ export function parseArgv(
     return usageError(json, diagnostics);
   }
 
+  if (
+    options.profile === 'custom' &&
+    options.reservePercent === null &&
+    (command === 'optimize' || command === 'plan' || command === 'apply')
+  ) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'custom-profile-needs-reserve',
+        message: 'The custom optimizer/native policy profile requires an explicit reserve',
+        remediation: 'Pass --reserve <0-95>, or use economy, balanced, or quality',
+      }),
+    );
+  }
+
   if (diagnostics.length > 0) return usageError(json, diagnostics);
 
   return { kind: 'command', json, command, options };
