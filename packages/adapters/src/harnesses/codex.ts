@@ -708,6 +708,54 @@ function parseJsonLines(stdout: string): JsonValue[] {
   return messages;
 }
 
+function nativeOrigin(value: JsonValue | undefined) {
+  if (!isRecord(value) || !isRecord(value['name'])) return null;
+  const name = value['name'];
+  const type = typeof name['type'] === 'string' ? name['type'] : null;
+  if (type === null) return null;
+  return {
+    type,
+    filePath: typeof name['file'] === 'string' ? name['file'] : null,
+    profile: typeof name['profile'] === 'string' ? name['profile'] : null,
+  };
+}
+
+function codexNativePolicyTarget(
+  configResponse: Record<string, JsonValue> | null,
+): HarnessContextObservation['nativePolicyTarget'] {
+  if (configResponse === null || !Array.isArray(configResponse['layers'])) return null;
+  const layers = configResponse['layers'];
+  const userLayers = layers
+    .filter((item): item is Record<string, JsonValue> => isRecord(item))
+    .filter((item) => isRecord(item['name']) && item['name']['type'] === 'user')
+    .map((item) => ({
+      item,
+      name: item['name'] as Record<string, JsonValue>,
+    }));
+  const selected =
+    userLayers.find(({ name }) => typeof name['profile'] === 'string') ??
+    userLayers.find(({ name }) => name['profile'] === null || name['profile'] === undefined) ??
+    null;
+  if (selected === null) return null;
+  const filePath =
+    typeof selected.name['file'] === 'string' ? selected.name['file'] : null;
+  const version =
+    typeof selected.item['version'] === 'string' ? selected.item['version'] : null;
+  if (filePath === null || version === null) return null;
+
+  const origins = isRecord(configResponse['origins']) ? configResponse['origins'] : null;
+  return {
+    kind: 'codex-user-config',
+    filePath,
+    version,
+    profile:
+      typeof selected.name['profile'] === 'string' ? selected.name['profile'] : null,
+    reasoningEffortOrigin:
+      origins === null ? null : nativeOrigin(origins['model_reasoning_effort']),
+    verbosityOrigin: origins === null ? null : nativeOrigin(origins['model_verbosity']),
+  };
+}
+
 async function observeContext(
   context: HarnessContext,
   _observedAt: string,
@@ -772,6 +820,7 @@ async function observeContext(
     modelCatalogTruncated: false,
     mcpServers: [],
     mcpInventoryTruncated: false,
+    nativePolicyTarget: null,
     diagnostics: [
       diagnostic({
         severity: 'warning',
@@ -961,6 +1010,7 @@ async function observeContext(
     modelCatalogTruncated,
     mcpServers,
     mcpInventoryTruncated,
+    nativePolicyTarget: codexNativePolicyTarget(configResponse),
     diagnostics,
   };
 }
