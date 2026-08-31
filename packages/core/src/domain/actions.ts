@@ -136,6 +136,25 @@ export interface MergeTomlAction extends PlannedActionBase {
   ownedPointers: string[];
 }
 
+export interface CodexConfigBatchWriteAction extends PlannedActionBase {
+  kind: 'codex-config-batch-write';
+  executable: 'codex';
+  /** Exact user config file returned by config/read. */
+  filePath: string;
+  /** Version of that user layer at plan time; app-server rejects drift before writing. */
+  expectedVersion: string;
+  edits: Array<{
+    keyPath: 'model_reasoning_effort' | 'model_verbosity';
+    value: string;
+    mergeStrategy: 'replace';
+  }>;
+  /**
+   * Kept false in the first managed-native tranche because both managed defaults are session-static
+   * or intended for the next conversation. Existing Codex sessions remain untouched.
+   */
+  reloadUserConfig: false;
+}
+
 export interface MergeYamlAction extends PlannedActionBase {
   kind: 'merge-yaml';
   path: string;
@@ -209,6 +228,7 @@ export type PlannedAction =
   | WriteOwnedFileAction
   | MergeJsonAction
   | MergeTomlAction
+  | CodexConfigBatchWriteAction
   | MergeYamlAction
   | PatchMarkerBlockAction
   | RemoveOwnedChangeAction
@@ -231,6 +251,7 @@ const ACTION_LABELS: Readonly<Record<PlannedActionKind, string>> = {
   'write-owned-file': 'write owned file',
   'merge-json': 'merge json',
   'merge-toml': 'merge toml',
+  'codex-config-batch-write': 'write codex native policy',
   'merge-yaml': 'merge yaml',
   'patch-marker-block': 'patch marker block',
   'remove-owned-change': 'remove owned change',
