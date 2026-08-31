@@ -177,8 +177,35 @@ describe('optimize command', () => {
                         project_root_markers: ['.git'],
                         project_doc_fallback_filenames: [],
                       },
-                      origins: {},
-                      layers: [],
+                      origins: {
+                        model_reasoning_effort: {
+                          name: {
+                            type: 'user',
+                            file: '/home/dev/.codex/config.toml',
+                            profile: null,
+                          },
+                          version: 'sha256:user-v1',
+                        },
+                        model_verbosity: {
+                          name: {
+                            type: 'user',
+                            file: '/home/dev/.codex/config.toml',
+                            profile: null,
+                          },
+                          version: 'sha256:user-v1',
+                        },
+                      },
+                      layers: [
+                        {
+                          name: {
+                            type: 'user',
+                            file: '/home/dev/.codex/config.toml',
+                            profile: null,
+                          },
+                          version: 'sha256:user-v1',
+                          config: {},
+                        },
+                      ],
                     },
                   }),
                   JSON.stringify({
@@ -262,6 +289,8 @@ describe('optimize command', () => {
     assert.equal(advice.currentEffort, 'high');
     assert.equal(advice.recommendedEffort, 'medium');
     assert.equal(advice.recommendedModel, 'gpt-5.6-codex');
+    assert.equal(advice.nativePolicyTarget?.filePath, '/home/dev/.codex/config.toml');
+    assert.equal(advice.nativePolicyTarget?.version, 'sha256:user-v1');
     assert.equal(advice.localBurnTrend?.state, 'rising');
     assert.equal(advice.recentSession?.state, 'recent-large');
     assert.equal(
