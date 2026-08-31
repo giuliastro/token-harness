@@ -10,6 +10,7 @@ import type { UsageWindowSnapshot } from './budget.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
+import type { NativePolicyTarget } from './context-cost.js';
 import type { PlatformFacts } from './platform.js';
 
 export const TASK_CLASSES = ['mechanical', 'standard', 'hard', 'critical'] as const;
@@ -70,6 +71,8 @@ export interface HarnessOptimizationAdvice {
   state: 'advised' | 'partial' | 'unavailable' | 'absent';
   currentModel: string | null;
   recommendedModel: string | null;
+  /** Versioned native config target, when the harness exposed one. Not a mutation by itself. */
+  nativePolicyTarget: NativePolicyTarget | null;
   currentEffort: string | null;
   recommendedEffort: string | null;
   currentVerbosity: string | null;
