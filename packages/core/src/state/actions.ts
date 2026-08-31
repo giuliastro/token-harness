@@ -1172,6 +1172,25 @@ async function applyCodexConfigBatchWrite(
     });
   }
 
+  const readMessage = messages.find((message) => message['id'] === 3);
+  const readResult =
+    readMessage !== undefined &&
+    typeof readMessage['result'] === 'object' &&
+    readMessage['result'] !== null &&
+    !Array.isArray(readMessage['result'])
+      ? (readMessage['result'] as Record<string, unknown>)
+      : null;
+  const effectiveConfig =
+    readResult !== null &&
+    typeof readResult['config'] === 'object' &&
+    readResult['config'] !== null &&
+    !Array.isArray(readResult['config'])
+      ? (readResult['config'] as Record<string, unknown>)
+      : null;
+  const effectiveMatches =
+    effectiveConfig !== null &&
+    action.edits.every((edit) => effectiveConfig[edit.keyPath] === edit.value);
+
   const error =
     typeof writeMessage['error'] === 'object' &&
     writeMessage['error'] !== null &&
@@ -1188,13 +1207,27 @@ async function applyCodexConfigBatchWrite(
         ? data['config_write_error_code']
         : null;
     if (code === 'configVersionConflict') {
+      if (effectiveMatches) {
+        return outcome(action, 'already-satisfied', {
+          diagnostics: [
+            diagnostic({
+              severity: 'info',
+              code: 'codex-native-policy-already-satisfied',
+              message:
+                'Codex config version changed, but the reviewed native policy values are already effective; no write was needed',
+              path: action.filePath,
+              remediation: null,
+            }),
+          ],
+        });
+      }
       return outcome(action, 'precondition-drift', {
         diagnostics: [
           diagnostic({
             severity: 'error',
             code: 'action-precondition-drift',
             message:
-              'Codex user config changed after this policy plan was computed; nothing was written',
+              'Codex user config changed after this policy plan was computed and the desired native policy is not already effective; nothing was written',
             path: action.filePath,
             remediation: 'Run token-harness plan again and review the new native policy',
           }),
@@ -1247,24 +1280,7 @@ async function applyCodexConfigBatchWrite(
     });
   }
 
-  const readMessage = messages.find((message) => message['id'] === 3);
-  const readResult =
-    readMessage !== undefined &&
-    typeof readMessage['result'] === 'object' &&
-    readMessage['result'] !== null &&
-    !Array.isArray(readMessage['result'])
-      ? (readMessage['result'] as Record<string, unknown>)
-      : null;
-  const effectiveConfig =
-    readResult !== null &&
-    typeof readResult['config'] === 'object' &&
-    readResult['config'] !== null &&
-    !Array.isArray(readResult['config'])
-      ? (readResult['config'] as Record<string, unknown>)
-      : null;
-  const mismatched =
-    effectiveConfig === null ||
-    action.edits.some((edit) => effectiveConfig[edit.keyPath] !== edit.value);
+  const mismatched = !effectiveMatches;
   if (mismatched) {
     return outcome(action, 'failed', {
       snapshots: [snapshot],
