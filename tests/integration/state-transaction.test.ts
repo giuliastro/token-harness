@@ -36,6 +36,7 @@ import {
   executeTransaction,
   jsonValueDigest,
   verifyRestoration,
+  type CodexConfigBatchWriteAction,
   type Diagnostic,
   type JsonValue,
   type JournalStore,
@@ -44,6 +45,7 @@ import {
   type PlannedAction,
   type PlannedActionBase,
   type PlatformFacts,
+  type ProcessRunner,
   type TransactionJournal,
   type TransactionOutcomeKind,
   type WriteOwnedFileAction,
@@ -154,6 +156,7 @@ function run(
   h: Harness,
   actions: readonly PlannedAction[],
   verifyPostconditions?: () => Promise<readonly Diagnostic[]>,
+  runner?: ProcessRunner,
 ) {
   return executeTransaction({
     transactionId: h.transactionId,
@@ -165,6 +168,7 @@ function run(
     snapshots: h.snapshots,
     journal: h.journal,
     now: () => CLOCK,
+    ...(runner === undefined ? {} : { runner }),
     ...(verifyPostconditions === undefined ? {} : { verifyPostconditions }),
   });
 }
@@ -232,6 +236,79 @@ function writeReceipt(path: string, content = 'receipt\n'): WriteOwnedFileAction
     expectedDigest: null,
   };
 }
+
+describe('Codex native policy rollback', () => {
+  it('automatically restores config.toml when Codex reports an overridden write', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    const before = Buffer.from(
+      'model_reasoning_effort = "high"\r\nmodel_verbosity = "medium"\r\n',
+    );
+    writeFileSync(target, before);
+
+    const action: CodexConfigBatchWriteAction = {
+      ...BASE,
+      id: 'codex-native-fail',
+      kind: 'codex-config-batch-write',
+      affectedPaths: [target],
+      affectedProcesses: ['codex'],
+      executable: 'codex',
+      filePath: target,
+      expectedVersion: 'sha256:before',
+      edits: [
+        {
+          keyPath: 'model_reasoning_effort',
+          value: 'medium',
+          mergeStrategy: 'replace',
+        },
+      ],
+      reloadUserConfig: false,
+    };
+    const runner: ProcessRunner = {
+      async run(request) {
+        writeFileSync(target, 'model_reasoning_effort = "medium"\n');
+        return {
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/fake/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 1, result: {} }),
+            JSON.stringify({
+              id: 2,
+              result: {
+                filePath: target,
+                status: 'okOverridden',
+                version: 'sha256:after',
+              },
+            }),
+            JSON.stringify({
+              id: 3,
+              result: { config: { model_reasoning_effort: 'high' } },
+            }),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+
+    const result = await run(h, [action], undefined, runner);
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.deepEqual(readFileSync(target), before);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'codex-native-policy-overridden'),
+      true,
+    );
+  });
+});
 
 describe('committing', () => {
   it('applies every action, verifies postconditions, and records what it owns', async () => {
