@@ -8,6 +8,7 @@
  */
 
 import type { CapabilityExclusion, ResolvedCapability } from './capabilities.js';
+import type { BudgetProfile } from './optimizer.js';
 import type { HarnessId, ProviderId } from './ids.js';
 import type { PlannedAction } from './actions.js';
 
@@ -49,6 +50,8 @@ export interface PlanReport {
    */
   planId: string | null;
   profile: ProfileId;
+  /** Explicit quota/native-policy profile, distinct from the provider-pipeline profile above. */
+  nativePolicyProfile?: BudgetProfile | null;
   /** The `--harness` selector, or null when the plan covers every harness. */
   harness: HarnessId | null;
   /** Absolute project root the plan was computed against. */
