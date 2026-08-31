@@ -29,11 +29,13 @@ import {
   isProfileId,
   buildStoredPlan,
   derivePlanId,
+  digestText,
   findMarkerRegionConflicts,
   planRequiresElevation,
   planRequiresNetwork,
   resolveOwnership,
   storedPlanFileName,
+  type CodexConfigBatchWriteAction,
   type CommandResult,
   type Diagnostic,
   type HarnessConfigSummary,
@@ -51,6 +53,7 @@ import {
 } from '@token-harness/core';
 
 import { PLANS_DIRECTORY } from './apply.js';
+import { runOptimize } from './optimize.js';
 
 import type { CommandContext } from './context.js';
 
@@ -285,6 +288,147 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
             managedIntegrations.push({ providerId: adapter.manifest.id, harnessId: harness });
           }
         }
+      }
+    }
+  }
+
+  if (
+    context.budgetProfile !== null &&
+    context.budgetProfile !== undefined &&
+    context.provider === null &&
+    (context.harness === null || context.harness === ('codex' as HarnessId))
+  ) {
+    const optimized = await runOptimize(context);
+    const advice = optimized.data?.harnesses.find((item) => item.harnessId === 'codex');
+    const target = advice?.nativePolicyTarget ?? null;
+
+    if (advice === undefined || target === null) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-native-policy-target-unavailable',
+          message:
+            'Codex native policy was requested, but this installed Codex did not expose a versioned writable user config target',
+          remediation:
+            'Run token-harness context --harness codex and update Codex before applying native policy',
+        }),
+      );
+    } else {
+      const sameUserLayer = (
+        origin: typeof target.reasoningEffortOrigin,
+      ): boolean =>
+        origin === null ||
+        (origin.type === 'user' &&
+          origin.filePath === target.filePath &&
+          origin.profile === target.profile);
+
+      const edits: CodexConfigBatchWriteAction['edits'] = [];
+      if (
+        advice.recommendedEffort !== null &&
+        advice.recommendedEffort !== advice.currentEffort
+      ) {
+        if (sameUserLayer(target.reasoningEffortOrigin)) {
+          edits.push({
+            keyPath: 'model_reasoning_effort',
+            value: advice.recommendedEffort,
+            mergeStrategy: 'replace',
+          });
+        } else {
+          diagnostics.push(
+            diagnostic({
+              severity: 'warning',
+              code: 'codex-native-policy-origin-not-user',
+              message:
+                'Codex reasoning effort is controlled by a non-user config layer, so Token Harness will not override it',
+              path: target.filePath,
+              remediation: 'Change that higher-precedence Codex layer explicitly if desired',
+            }),
+          );
+        }
+      }
+
+      if (
+        advice.recommendedVerbosity !== null &&
+        advice.recommendedVerbosity !== advice.currentVerbosity
+      ) {
+        if (sameUserLayer(target.verbosityOrigin)) {
+          edits.push({
+            keyPath: 'model_verbosity',
+            value: advice.recommendedVerbosity,
+            mergeStrategy: 'replace',
+          });
+        } else {
+          diagnostics.push(
+            diagnostic({
+              severity: 'warning',
+              code: 'codex-native-policy-origin-not-user',
+              message:
+                'Codex verbosity is controlled by a non-user config layer, so Token Harness will not override it',
+              path: target.filePath,
+              remediation: 'Change that higher-precedence Codex layer explicitly if desired',
+            }),
+          );
+        }
+      }
+
+      if (edits.length > 0) {
+        const digest = digestText(
+          JSON.stringify({
+            filePath: target.filePath,
+            expectedVersion: target.version,
+            edits,
+          }),
+        );
+        const action: CodexConfigBatchWriteAction = {
+          kind: 'codex-config-batch-write',
+          id: 'codex-native-' + digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 9),
+          riskClass: 'reversible',
+          requiresNetwork: false,
+          requiresElevation: false,
+          affectedPaths: [target.filePath],
+          affectedProcesses: ['codex'],
+          preconditions: [
+            'Codex user config version is still ' + target.version,
+            'Managed values still resolve from this user layer or the default layer',
+          ],
+          postconditions: edits.map((edit) => edit.keyPath + ' resolves to ' + edit.value),
+          rollbackData: 'file-snapshot',
+          explanation:
+            'Set reviewed Codex native defaults for future sessions through config/batchWrite; rollback restores the prior config.toml bytes',
+          executable: 'codex',
+          filePath: target.filePath,
+          expectedVersion: target.version,
+          edits,
+          reloadUserConfig: false,
+        };
+        actions.push(action);
+        diagnostics.push(
+          diagnostic({
+            severity: 'info',
+            code: 'codex-native-policy-planned',
+            message:
+              'The explicit ' +
+              context.budgetProfile +
+              ' profile adds ' +
+              String(edits.length) +
+              ' reversible Codex native default change' +
+              (edits.length === 1 ? '' : 's') +
+              ' for future sessions',
+            path: target.filePath,
+            remediation: null,
+          }),
+        );
+      } else {
+        diagnostics.push(
+          diagnostic({
+            severity: 'info',
+            code: 'codex-native-policy-already-satisfied',
+            message:
+              'The requested Codex native policy recommends no change to reasoning effort or verbosity',
+            path: target.filePath,
+            remediation: null,
+          }),
+        );
       }
     }
   }
