@@ -27,6 +27,7 @@ import {
   ownedFileDigest,
   type ActionContext,
   type ActionOutcome,
+  type CodexConfigBatchWriteAction,
   type CreateDirectoryAction,
   type DelegatedProviderInstallAction,
   type JsonValue,
@@ -1557,6 +1558,228 @@ describe('delegated-provider-install', () => {
   });
 });
 
+describe('Codex native config batch write', () => {
+  function nativeAction(path: string): CodexConfigBatchWriteAction {
+    return {
+      ...BASE,
+      id: 'codex-native-1',
+      kind: 'codex-config-batch-write',
+      affectedPaths: [path],
+      affectedProcesses: ['codex'],
+      executable: 'codex',
+      filePath: path,
+      expectedVersion: 'sha256:before',
+      edits: [
+        {
+          keyPath: 'model_reasoning_effort',
+          value: 'medium',
+          mergeStrategy: 'replace',
+        },
+        {
+          keyPath: 'model_verbosity',
+          value: 'low',
+          mergeStrategy: 'replace',
+        },
+      ],
+      reloadUserConfig: false,
+    };
+  }
+
+  function rpcRunner(
+    target: string,
+    options: {
+      versionConflict?: boolean;
+      effectiveMatches?: boolean;
+      write?: boolean;
+      status?: 'ok' | 'okOverridden';
+    } = {},
+  ): ProcessRunner {
+    return {
+      async run(request) {
+        assert.equal(request.executable, 'codex');
+        assert.deepEqual(request.args, ['app-server', '--stdio']);
+        assert.match(request.stdin ?? '', /config\/batchWrite/);
+        assert.match(request.stdin ?? '', /"expectedVersion":"sha256:before"/);
+        assert.equal((request.stdin ?? '').includes(JSON.stringify(target)), true);
+
+        if (options.write !== false && options.versionConflict !== true) {
+          writeFileSync(
+            target,
+            'model_reasoning_effort = "medium"\nmodel_verbosity = "low"\n',
+          );
+        }
+
+        const effectiveMatches = options.effectiveMatches ?? true;
+        const writeMessage =
+          options.versionConflict === true
+            ? {
+                id: 2,
+                error: {
+                  code: -32000,
+                  message: 'config version conflict',
+                  data: { config_write_error_code: 'configVersionConflict' },
+                },
+              }
+            : {
+                id: 2,
+                result: {
+                  filePath: target,
+                  status: options.status ?? 'ok',
+                  version: 'sha256:after',
+                },
+              };
+        const readMessage = {
+          id: 3,
+          result: {
+            config: effectiveMatches
+              ? {
+                  model_reasoning_effort: 'medium',
+                  model_verbosity: 'low',
+                }
+              : {
+                  model_reasoning_effort: 'high',
+                  model_verbosity: 'medium',
+                },
+            origins: {},
+            layers: [],
+          },
+        };
+        return {
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/fake/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 1, result: {} }),
+            JSON.stringify(writeMessage),
+            JSON.stringify(readMessage),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+  }
+
+  it('writes the reviewed native policy through the versioned app-server RPC', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    writeFileSync(target, 'model_reasoning_effort = "high"\nmodel_verbosity = "medium"\n');
+    const outcome = await applyAction(nativeAction(target), {
+      ...h.context,
+      runner: rpcRunner(target),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'applied');
+    assert.equal(
+      readFileSync(target, 'utf8'),
+      'model_reasoning_effort = "medium"\nmodel_verbosity = "low"\n',
+    );
+    assert.equal(outcome.snapshots.length, 1);
+    claim('codex-config-batch-write', 'apply');
+  });
+
+  it('is idempotent when a replay sees version drift but the desired values are already effective', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    const desired = 'model_reasoning_effort = "medium"\nmodel_verbosity = "low"\n';
+    writeFileSync(target, desired);
+
+    const outcome = await applyAction(nativeAction(target), {
+      ...h.context,
+      runner: rpcRunner(target, { versionConflict: true, write: false, effectiveMatches: true }),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'already-satisfied');
+    assert.equal(readFileSync(target, 'utf8'), desired);
+    assert.deepEqual(outcome.snapshots, []);
+    claim('codex-config-batch-write', 'idempotency');
+  });
+
+  it('reports precondition drift and preserves a user edit when the config version changed', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    const userEdit =
+      'model_reasoning_effort = "high"\nmodel_verbosity = "high"\n# user changed this\n';
+    writeFileSync(target, userEdit);
+
+    const outcome = await applyAction(nativeAction(target), {
+      ...h.context,
+      runner: rpcRunner(target, { versionConflict: true, write: false, effectiveMatches: false }),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'precondition-drift');
+    assert.equal(outcome.diagnostics[0]?.code, 'action-precondition-drift');
+    assert.equal(readFileSync(target, 'utf8'), userEdit);
+    claim('codex-config-batch-write', 'precondition-drift', 'user-modification');
+  });
+
+  it('rolls back to the exact previous config bytes', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    const before =
+      Buffer.from('model_reasoning_effort = "high"\r\nmodel_verbosity = "medium"\r\n');
+    writeFileSync(target, before);
+
+    const outcome = await applyAction(nativeAction(target), {
+      ...h.context,
+      runner: rpcRunner(target),
+      cwd: h.project,
+    });
+    assert.equal(outcome.status, 'applied');
+    await rollback(h, outcome);
+    assert.deepEqual(readFileSync(target), before);
+    claim('codex-config-batch-write', 'rollback');
+  });
+
+  it('returns a restorable snapshot when Codex reports the written value is overridden', async () => {
+    const h = harness();
+    const target = join(h.project, 'config.toml');
+    const before = 'model_reasoning_effort = "high"\nmodel_verbosity = "medium"\n';
+    writeFileSync(target, before);
+
+    const outcome = await applyAction(nativeAction(target), {
+      ...h.context,
+      runner: rpcRunner(target, { status: 'okOverridden' }),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.diagnostics[0]?.code, 'codex-native-policy-overridden');
+    assert.equal(outcome.snapshots.length, 1);
+    await rollback(h, outcome);
+    assert.equal(readFileSync(target, 'utf8'), before);
+  });
+
+  it(
+    'uses the exact native Windows config path returned by Codex',
+    { skip: NATIVE_WINDOWS ? false : 'native Windows only' },
+    async () => {
+      const h = harness();
+      const directory = join(h.project, 'Application Support', 'Codex');
+      mkdirSync(directory, { recursive: true });
+      const target = join(directory, 'config.toml');
+      writeFileSync(target, 'model_reasoning_effort = "high"\n');
+
+      const outcome = await applyAction(nativeAction(target), {
+        ...h.context,
+        runner: rpcRunner(target),
+        cwd: h.project,
+      });
+      assert.equal(outcome.status, 'applied');
+      claim('codex-config-batch-write', 'windows-path');
+    },
+  );
+});
+
 describe('action families this build does not execute', () => {
   const unimplemented: readonly PlannedActionKind[] = [
     'download-artifact',
@@ -1583,7 +1806,7 @@ describe('action families this build does not execute', () => {
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       assert.equal(isExecutableActionKind(kind), true, kind);
     }
-    assert.equal(EXECUTABLE_ACTION_KINDS.length, 8);
+    assert.equal(EXECUTABLE_ACTION_KINDS.length, 9);
   });
 });
 
