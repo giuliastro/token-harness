@@ -30,6 +30,7 @@ import {
 } from './install.js';
 import { processSucceeded, type ProcessRunner } from '../domain/process.js';
 import type {
+  CodexConfigBatchWriteAction,
   CreateDirectoryAction,
   DelegatedProviderInstallAction,
   MergeJsonAction,
@@ -1044,6 +1045,258 @@ async function applyDelegatedProviderInstall(
  * They report rather than no-op, because an executor that silently skips an action it
  * does not understand produces a plan that claims to have been applied and was not.
  */
+async function applyCodexConfigBatchWrite(
+  action: CodexConfigBatchWriteAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  if (context.runner === null || context.runner === undefined || context.cwd === undefined) {
+    return refusal(
+      action,
+      'process-runner-unavailable',
+      action.filePath,
+      'A Codex native config write requires the Codex app-server process runner',
+      'Run this action through the Token Harness CLI',
+    );
+  }
+
+  if (
+    action.edits.length === 0 ||
+    action.edits.some(
+      (edit) =>
+        !['model_reasoning_effort', 'model_verbosity'].includes(edit.keyPath) ||
+        edit.mergeStrategy !== 'replace',
+    )
+  ) {
+    return refusal(
+      action,
+      'codex-native-policy-action-invalid',
+      action.filePath,
+      'This Codex native policy action contains an unreviewed config edit',
+      'Recompute the plan with this Token Harness build',
+    );
+  }
+
+  const snapshot = await context.snapshots.capture(action.filePath);
+  const stdin = [
+    JSON.stringify({
+      method: 'initialize',
+      id: 1,
+      params: {
+        clientInfo: {
+          name: 'token_harness',
+          title: 'Token Harness',
+          version: '0.1',
+        },
+      },
+    }),
+    JSON.stringify({ method: 'initialized', params: {} }),
+    JSON.stringify({
+      method: 'config/batchWrite',
+      id: 2,
+      params: {
+        edits: action.edits,
+        expectedVersion: action.expectedVersion,
+        filePath: action.filePath,
+        reloadUserConfig: action.reloadUserConfig,
+      },
+    }),
+    JSON.stringify({
+      method: 'config/read',
+      id: 3,
+      params: { cwd: context.cwd, includeLayers: false },
+    }),
+    '',
+  ].join('\\n');
+
+  const result = await context.runner.run({
+    executable: action.executable,
+    args: ['app-server', '--stdio'],
+    cwd: context.cwd,
+    stdin,
+    timeoutMs: 20_000,
+    maxOutputBytes: 2 * 1024 * 1024,
+  });
+
+  if (!processSucceeded(result)) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-native-policy-process-failed',
+          message: 'Codex app-server did not complete the native policy write successfully',
+          path: action.filePath,
+          remediation: 'Inspect Codex app-server output and recompute the plan',
+        }),
+      ],
+    });
+  }
+
+  const messages: Array<Record<string, unknown>> = [];
+  for (const line of result.stdout.split(/\\r?\\n/)) {
+    if (line.trim() === '') continue;
+    try {
+      const parsed = JSON.parse(line) as unknown;
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        messages.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      return outcome(action, 'failed', {
+        snapshots: [snapshot],
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'codex-native-policy-invalid-json',
+            message: 'Codex app-server returned non-JSON output during the native policy write',
+            path: action.filePath,
+            remediation: 'Upgrade Token Harness or Codex before retrying this policy',
+          }),
+        ],
+      });
+    }
+  }
+
+  const writeMessage = messages.find((message) => message['id'] === 2);
+  if (writeMessage === undefined) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-native-policy-write-response-missing',
+          message: 'Codex app-server returned no config/batchWrite response',
+          path: action.filePath,
+          remediation: 'Upgrade Token Harness or Codex before retrying this policy',
+        }),
+      ],
+    });
+  }
+
+  const error =
+    typeof writeMessage['error'] === 'object' &&
+    writeMessage['error'] !== null &&
+    !Array.isArray(writeMessage['error'])
+      ? (writeMessage['error'] as Record<string, unknown>)
+      : null;
+  if (error !== null) {
+    const data =
+      typeof error['data'] === 'object' && error['data'] !== null && !Array.isArray(error['data'])
+        ? (error['data'] as Record<string, unknown>)
+        : null;
+    const code =
+      data !== null && typeof data['config_write_error_code'] === 'string'
+        ? data['config_write_error_code']
+        : null;
+    if (code === 'configVersionConflict') {
+      return outcome(action, 'precondition-drift', {
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'action-precondition-drift',
+            message:
+              'Codex user config changed after this policy plan was computed; nothing was written',
+            path: action.filePath,
+            remediation: 'Run token-harness plan again and review the new native policy',
+          }),
+        ],
+      });
+    }
+    return outcome(action, 'refused', {
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code:
+            code === 'configRequirementReadonly'
+              ? 'codex-native-policy-managed-requirement'
+              : 'codex-native-policy-write-refused',
+          message:
+            code === 'configRequirementReadonly'
+              ? 'Codex reports this setting is controlled by a managed requirement'
+              : 'Codex refused the native policy write' +
+                (typeof error['message'] === 'string' ? ': ' + error['message'] : ''),
+          path: action.filePath,
+          remediation:
+            code === 'configRequirementReadonly'
+              ? 'Leave the managed Codex requirement unchanged'
+              : 'Re-read Codex configuration and recompute the plan',
+        }),
+      ],
+    });
+  }
+
+  const writeResult =
+    typeof writeMessage['result'] === 'object' &&
+    writeMessage['result'] !== null &&
+    !Array.isArray(writeMessage['result'])
+      ? (writeMessage['result'] as Record<string, unknown>)
+      : null;
+  if (writeResult === null || writeResult['status'] !== 'ok') {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-native-policy-overridden',
+          message:
+            'Codex accepted the user config write but reported it as overridden or unrecognized',
+          path: action.filePath,
+          remediation:
+            'Token Harness will restore the snapshot; inspect higher-precedence Codex config layers',
+        }),
+      ],
+    });
+  }
+
+  const readMessage = messages.find((message) => message['id'] === 3);
+  const readResult =
+    readMessage !== undefined &&
+    typeof readMessage['result'] === 'object' &&
+    readMessage['result'] !== null &&
+    !Array.isArray(readMessage['result'])
+      ? (readMessage['result'] as Record<string, unknown>)
+      : null;
+  const effectiveConfig =
+    readResult !== null &&
+    typeof readResult['config'] === 'object' &&
+    readResult['config'] !== null &&
+    !Array.isArray(readResult['config'])
+      ? (readResult['config'] as Record<string, unknown>)
+      : null;
+  const mismatched =
+    effectiveConfig === null ||
+    action.edits.some((edit) => effectiveConfig[edit.keyPath] !== edit.value);
+  if (mismatched) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-native-policy-postcondition-failed',
+          message:
+            'Codex native config did not resolve to the values this reviewed policy requested',
+          path: action.filePath,
+          remediation:
+            'Token Harness will restore the snapshot; inspect project, profile, or managed overrides',
+        }),
+      ],
+    });
+  }
+
+  return outcome(action, 'applied', {
+    snapshots: [snapshot],
+    diagnostics: [
+      diagnostic({
+        severity: 'info',
+        code: 'codex-native-policy-applied',
+        message:
+          'Codex native defaults were updated for future sessions; existing session-static settings were not changed',
+        path: action.filePath,
+        remediation: null,
+      }),
+    ],
+  });
+}
+
 function notImplemented(action: PlannedAction): ActionOutcome {
   return outcome(action, 'failed', {
     diagnostics: [
@@ -1074,6 +1327,8 @@ export async function applyAction(
       return applyMergeJson(action, context);
     case 'merge-yaml':
       return applyMergeYaml(action, context);
+    case 'codex-config-batch-write':
+      return applyCodexConfigBatchWrite(action, context);
     case 'package-manager-install':
       return applyPackageManagerInstall(action, context);
     case 'delegated-provider-install':
@@ -1168,6 +1423,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'patch-marker-block',
   'merge-json',
   'merge-yaml',
+  'codex-config-batch-write',
   'remove-owned-change',
   'package-manager-install',
   'delegated-provider-install',
