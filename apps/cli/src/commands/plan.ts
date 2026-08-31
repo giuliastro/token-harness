@@ -24,6 +24,7 @@ import {
   COMPATIBILITY_RULES,
   EXIT_CODES,
   admitManagedMutation,
+  classifyVersion,
   commandResult,
   diagnostic,
   isProfileId,
@@ -31,6 +32,7 @@ import {
   derivePlanId,
   digestText,
   findMarkerRegionConflicts,
+  harnessId,
   planRequiresElevation,
   planRequiresNetwork,
   resolveOwnership,
@@ -59,6 +61,7 @@ import type { CommandContext } from './context.js';
 
 /** RFC 0003 §Profiles: `safe` is the default and `balanced` does not exist. */
 const DEFAULT_PROFILE: ProfileId = 'safe';
+const CODEX = harnessId('codex');
 
 /**
  * What `plan` computes, shared with `apply`.
@@ -296,13 +299,30 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     context.budgetProfile !== null &&
     context.budgetProfile !== undefined &&
     context.provider === null &&
-    (context.harness === null || context.harness === ('codex' as HarnessId))
+    (context.harness === null || context.harness === CODEX)
   ) {
+    const codexManifest = present.find((item) => item.id === CODEX);
+    const codexVersion = versions.harnesses[CODEX] ?? null;
+    const nativeVersionVerdict =
+      codexManifest === undefined || codexVersion === null
+        ? null
+        : classifyVersion(codexVersion, codexManifest.testedVersions);
+
     const optimized = await runOptimize(context);
-    const advice = optimized.data?.harnesses.find((item) => item.harnessId === 'codex');
+    const advice = optimized.data?.harnesses.find((item) => item.harnessId === CODEX);
     const target = advice?.nativePolicyTarget ?? null;
 
-    if (advice === undefined || target === null) {
+    if (nativeVersionVerdict !== 'in-range') {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-native-policy-version-unproven',
+          message:
+            'Codex native policy was requested, but the detected Codex version is outside the fixture-proven write range',
+          remediation: 'Update Token Harness compatibility fixtures before applying this native policy',
+        }),
+      );
+    } else if (advice === undefined || target === null) {
       diagnostics.push(
         diagnostic({
           severity: 'warning',
