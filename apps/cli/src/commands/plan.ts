@@ -484,6 +484,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           }),
     pipelineId: resolution.pipelineId,
     profile,
+    nativePolicyProfile: context.budgetProfile ?? null,
     harness: context.harness,
     projectRoot: context.projectRoot,
     projectId: context.adapters?.projectIdFor(context.projectRoot) ?? null,
