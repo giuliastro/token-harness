@@ -431,6 +431,7 @@ function adviceForHarness(input: {
             : 'advised',
     currentModel: context.model,
     recommendedModel,
+    nativePolicyTarget: context.nativePolicyTarget,
     currentEffort,
     recommendedEffort,
     currentVerbosity: context.verbosity,
