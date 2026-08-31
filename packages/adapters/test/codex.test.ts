@@ -395,8 +395,26 @@ describe('context-cost observation', () => {
                     developer_instructions: 'de',
                     features: { tool_search: true },
                   },
-                  origins: {},
-                  layers: [],
+                  origins: {
+                    model_reasoning_effort: {
+                      name: { type: 'user', file: CONFIG, profile: null },
+                      version: 'sha256:user-v1',
+                    },
+                    model_verbosity: {
+                      name: { type: 'user', file: CONFIG, profile: null },
+                      version: 'sha256:user-v1',
+                    },
+                  },
+                  layers: [
+                    {
+                      name: { type: 'user', file: CONFIG, profile: null },
+                      version: 'sha256:user-v1',
+                      config: {
+                        model_reasoning_effort: 'medium',
+                        model_verbosity: 'low',
+                      },
+                    },
+                  ],
                 },
               }),
               JSON.stringify({
@@ -485,6 +503,22 @@ describe('context-cost observation', () => {
     assert.equal(result.mcpServers[0]?.toolCount, 2);
     assert.equal(result.mcpServers[0]?.runtimeStatus, 'connected');
     assert.equal(result.mcpServers[0]?.authStatus, 'oAuth');
+    assert.deepEqual(result.nativePolicyTarget, {
+      kind: 'codex-user-config',
+      filePath: CONFIG,
+      version: 'sha256:user-v1',
+      profile: null,
+      reasoningEffortOrigin: {
+        type: 'user',
+        filePath: CONFIG,
+        profile: null,
+      },
+      verbosityOrigin: {
+        type: 'user',
+        filePath: CONFIG,
+        profile: null,
+      },
+    });
 
     assert.equal(requests.length, 1);
     assert.match(requests[0]?.stdin ?? '', /config\/read/);
