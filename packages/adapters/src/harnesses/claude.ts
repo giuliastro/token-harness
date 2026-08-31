@@ -781,6 +781,7 @@ async function observeContext(
     modelCatalogTruncated: false,
     mcpServers: [],
     mcpInventoryTruncated: false,
+    nativePolicyTarget: null,
     diagnostics,
   });
 
