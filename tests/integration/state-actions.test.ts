@@ -1573,23 +1573,29 @@ describe('codex-config-batch-write', () => {
     };
   }
 
-  function runner(path: string, mode: 'success' | 'conflict' = 'success'): ProcessRunner {
+  function runner(
+    path: string,
+    mode: 'success' | 'conflict' | 'mismatch' = 'success',
+  ): ProcessRunner {
     return {
       async run(request) {
         assert.equal(request.executable, 'codex');
         assert.deepEqual(request.args, ['app-server', '--stdio']);
         assert.ok((request.stdin ?? '').includes('config/batchWrite'));
-        const batch = (request.stdin ?? '')
+        assert.ok((request.stdin ?? '').includes('config/read'));
+        const messages = (request.stdin ?? '')
           .split(/\r?\n/)
           .filter((line) => line.trim() !== '')
-          .map((line) => JSON.parse(line) as Record<string, unknown>)
-          .find((message) => message['id'] === 2);
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const batch = messages.find((message) => message['id'] === 2);
+        const read = messages.find((message) => message['id'] === 3);
         assert.ok(batch);
+        assert.ok(read);
         const params = batch['params'];
         assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
         assert.equal((params as Record<string, unknown>)['filePath'], path);
 
-        if (mode === 'success') {
+        if (mode !== 'conflict') {
           writeFileSync(path, 'model_reasoning_effort = "low"\n# user comment\n');
         }
 
@@ -1600,15 +1606,25 @@ describe('codex-config-batch-write', () => {
           exitCode: 0,
           signal: null,
           stdout:
-            mode === 'success'
-              ? JSON.stringify({ id: 2, result: { version: 'v2' } })
-              : JSON.stringify({
+            mode === 'conflict'
+              ? JSON.stringify({
                   id: 2,
                   error: {
                     code: -32600,
                     message: 'configVersionConflict: Configuration was modified since last read',
                   },
-                }),
+                })
+              : [
+                  JSON.stringify({ id: 2, result: { version: 'v2' } }),
+                  JSON.stringify({
+                    id: 3,
+                    result: {
+                      config: {
+                        model_reasoning_effort: mode === 'mismatch' ? 'high' : 'low',
+                      },
+                    },
+                  }),
+                ].join('\n'),
           stderr: '',
           stdoutTruncated: false,
           stderrTruncated: false,
@@ -1673,6 +1689,22 @@ describe('codex-config-batch-write', () => {
     assert.equal(outcome.diagnostics[0]?.code, 'action-precondition-drift');
     assert.equal(readFileSync(path, 'utf8'), original);
     claim('codex-config-batch-write', 'precondition-drift', 'user-modification');
+  });
+
+  it('fails when Codex accepts the batch but the effective postcondition does not match', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    writeFileSync(path, 'model_reasoning_effort = "high"\n# user comment\n');
+
+    const outcome = await applyAction(action(path), {
+      ...h.context,
+      runner: runner(path, 'mismatch'),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.diagnostics[0]?.code, 'codex-config-postcondition-failed');
+    assert.equal(outcome.snapshots[0]?.path, path);
   });
 
   it('restores the original config bytes from its snapshot', async () => {

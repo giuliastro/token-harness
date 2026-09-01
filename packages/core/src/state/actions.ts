@@ -44,6 +44,7 @@ import type {
 } from '../domain/actions.js';
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
 import { digestBytes, digestText } from '../domain/digest.js';
+import type { JsonValue } from '../domain/json.js';
 import {
   mayRemoveAutomatically,
   verifyOwnership,
@@ -1098,6 +1099,14 @@ async function applyCodexConfigBatchWrite(
         reloadUserConfig: action.reloadUserConfig,
       },
     }),
+    JSON.stringify({
+      method: 'config/read',
+      id: 3,
+      params: {
+        cwd: context.cwd ?? context.fs.dirname(action.path),
+        includeLayers: true,
+      },
+    }),
     '',
   ].join('\n');
 
@@ -1188,6 +1197,74 @@ async function applyCodexConfigBatchWrite(
         }),
       ],
     });
+  }
+
+  const verification = messages.find(
+    (message): message is Record<string, unknown> =>
+      typeof message === 'object' &&
+      message !== null &&
+      !Array.isArray(message) &&
+      (message as Record<string, unknown>)['id'] === 3,
+  );
+  const verificationResult =
+    verification !== undefined &&
+    typeof verification['result'] === 'object' &&
+    verification['result'] !== null &&
+    !Array.isArray(verification['result'])
+      ? (verification['result'] as Record<string, unknown>)
+      : null;
+  const verifiedConfig =
+    verificationResult !== null &&
+    typeof verificationResult['config'] === 'object' &&
+    verificationResult['config'] !== null
+      ? (verificationResult['config'] as JsonValue)
+      : null;
+
+  if (verifiedConfig === null) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-config-postcondition-unverified',
+          message:
+            'Codex accepted config/batchWrite but did not return a readable config/read result afterwards',
+          path: action.path,
+          remediation:
+            'Token Harness will restore the snapshot; recompute the plan against the current Codex configuration',
+        }),
+      ],
+    });
+  }
+
+  for (const edit of action.edits) {
+    const segments = parseJsonPointer(edit.keyPath);
+    const observed =
+      segments === null
+        ? { found: false, value: undefined }
+        : resolveJsonPointer(verifiedConfig, segments);
+    if (
+      !observed.found ||
+      observed.value === undefined ||
+      jsonValueDigest(observed.value) !== jsonValueDigest(edit.value)
+    ) {
+      return outcome(action, 'failed', {
+        snapshots: [snapshot],
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'codex-config-postcondition-failed',
+            message:
+              'Codex accepted the native config batch, but the effective value of ' +
+              edit.keyPath +
+              ' does not match the reviewed value',
+            path: action.path,
+            remediation:
+              'Token Harness will restore the snapshot; inspect higher-precedence Codex config before retrying',
+          }),
+        ],
+      });
+    }
   }
 
   return outcome(action, 'applied', { snapshots: [snapshot] });
