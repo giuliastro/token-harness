@@ -86,7 +86,17 @@ describe('context-cost command', () => {
                           project_doc_fallback_filenames: [],
                         },
                         origins: {},
-                        layers: [],
+                        layers: [
+                          {
+                            name: {
+                              type: 'user',
+                              file: '/home/dev/.codex/config.toml',
+                              profile: null,
+                            },
+                            version: 'user-v3',
+                            config: {},
+                          },
+                        ],
                       },
                     }),
                     JSON.stringify({
@@ -135,6 +145,13 @@ describe('context-cost command', () => {
     assert.equal(result.data.instructionHierarchy[0]?.nestedProjectHierarchy, true);
     assert.equal(result.data.instructionHierarchy[0]?.monolithicProjectInstructions, false);
     assert.equal(result.data.instructionHierarchy[0]?.distinctProjectDirectories, 2);
+    assert.deepEqual(result.data.harnesses[0]?.managedConfigTarget, {
+      harnessId: 'codex',
+      scope: 'user',
+      path: '/home/dev/.codex/config.toml',
+      version: 'user-v3',
+      source: 'native-rpc',
+    });
     assert.deepEqual(
       result.data.instructions.map((item) => ({
         path: item.path,
