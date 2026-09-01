@@ -78,6 +78,17 @@ export function renderContextReport(report: ContextReport, context: RenderContex
         ),
       );
     }
+    if (harness.managedConfigTarget !== null) {
+      lines.push(
+        truncate(
+          '  managed-config: ' +
+            truncatePath(displayPath(harness.managedConfigTarget.path, context.home), 44) +
+            ' version=' +
+            harness.managedConfigTarget.version,
+          78,
+        ),
+      );
+    }
   }
 
   lines.push('', 'INSTRUCTIONS');
