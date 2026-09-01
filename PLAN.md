@@ -1715,8 +1715,10 @@ optimizer to that transaction: `token-harness plan --native-policy` may translat
 reasoning-effort and verbosity deltas into one atomic, versioned `config/batchWrite`. It admits
 only fields whose origin metadata is present and either absent at that field or already matches the
 exact base-user target; project and selected-profile overrides remain untouched. The stored plan can
-then run through `apply --plan <id> --yes` with the existing rollback path. Model switching remains
-advisory until model-tier quota benchmarks exist.
+then run through `apply --plan <id> --yes` with the existing rollback path. After
+`config/batchWrite`, apply performs a native `config/read` and verifies every reviewed edit against
+the effective configuration; a missing or mismatched postcondition fails the action and restores the
+pre-write snapshot. Model switching remains advisory until model-tier quota benchmarks exist.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.
