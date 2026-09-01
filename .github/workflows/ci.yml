@@ -49,11 +49,7 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        shell: bash
-        run: |
-          pnpm exec prettier --write packages/adapters/src/harnesses/codex.ts
-          git diff -- packages/adapters/src/harnesses/codex.ts
-          git diff --quiet -- packages/adapters/src/harnesses/codex.ts
+        run: pnpm format:check
 
       - name: Test
         run: pnpm test
