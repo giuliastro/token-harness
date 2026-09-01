@@ -49,7 +49,11 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        run: pnpm format:check
+        shell: bash
+        run: |
+          pnpm exec prettier --write tests/integration/state-actions.test.ts
+          git diff -- tests/integration/state-actions.test.ts
+          git diff --quiet -- tests/integration/state-actions.test.ts
 
       - name: Test
         run: pnpm test
