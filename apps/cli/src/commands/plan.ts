@@ -132,10 +132,9 @@ async function appendCodexNativePolicy(
           severity: 'warning',
           code: 'codex-native-policy-observation-drift',
           subject: CODEX,
-          message:
-            `${input.keyPath} changed between optimizer observation (${String(
-              input.adviceCurrent,
-            )}) and native-plan observation (${String(input.observedCurrent)})`,
+          message: `${input.keyPath} changed between optimizer observation (${String(
+            input.adviceCurrent,
+          )}) and native-plan observation (${String(input.observedCurrent)})`,
           remediation:
             'Re-run token-harness plan --native-policy so recommendation and config precondition come from a stable state',
         }),
