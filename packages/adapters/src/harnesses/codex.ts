@@ -832,9 +832,10 @@ async function observeContext(
   })();
 
   const managedConfigFieldOrigins: HarnessContextObservation['managedConfigFieldOrigins'] = [];
-  const origins = configResponse !== null && isRecord(configResponse['origins'])
-    ? configResponse['origins']
-    : null;
+  const origins =
+    configResponse !== null && isRecord(configResponse['origins'])
+      ? configResponse['origins']
+      : null;
   for (const keyPath of ['model', 'model_reasoning_effort', 'model_verbosity']) {
     const metadata = origins !== null && isRecord(origins[keyPath]) ? origins[keyPath] : null;
     const source = metadata !== null && isRecord(metadata['name']) ? metadata['name'] : null;
