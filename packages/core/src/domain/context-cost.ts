@@ -67,6 +67,16 @@ export interface McpServerAssessment {
   reason: string;
 }
 
+export interface ManagedConfigTargetObservation {
+  harnessId: HarnessId;
+  scope: 'user';
+  /** Exact writable native config file, as reported by the harness. */
+  path: string;
+  /** Native optimistic-concurrency version for this layer. */
+  version: string;
+  source: 'native-rpc';
+}
+
 export interface HarnessContextObservation {
   harnessId: HarnessId;
   state: ContextObservationState;
@@ -80,6 +90,11 @@ export interface HarnessContextObservation {
   projectDocFallbackFilenames: string[];
   /** Bytes of config-level instructions returned by the harness, content never emitted. */
   configInstructionBytes: number | null;
+  /**
+   * Native writable user-config target, when the harness exposes one together with a version.
+   * Null means Token Harness must remain advisory rather than guessing a write path/version.
+   */
+  managedConfigTarget: ManagedConfigTargetObservation | null;
   availableModels: ModelObservation[];
   modelCatalogTruncated: boolean;
   mcpServers: McpServerObservation[];
