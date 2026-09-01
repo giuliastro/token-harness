@@ -77,6 +77,20 @@ export interface ManagedConfigTargetObservation {
   source: 'native-rpc';
 }
 
+export interface ManagedConfigFieldOriginObservation {
+  harnessId: HarnessId;
+  /** Native dotted key path, limited to fields Token Harness may manage in Phase 18.4. */
+  keyPath: string;
+  /** Raw native layer source type, preserved rather than guessed into precedence classes. */
+  sourceType: string;
+  path: string | null;
+  profile: string | null;
+  version: string;
+  /** True only when this field currently comes from the exact writable base-user layer. */
+  matchesManagedTarget: boolean;
+  source: 'native-rpc';
+}
+
 export interface HarnessContextObservation {
   harnessId: HarnessId;
   state: ContextObservationState;
@@ -95,6 +109,8 @@ export interface HarnessContextObservation {
    * Null means Token Harness must remain advisory rather than guessing a write path/version.
    */
   managedConfigTarget: ManagedConfigTargetObservation | null;
+  /** Effective origins for the native policy fields Token Harness is evaluating. */
+  managedConfigFieldOrigins: ManagedConfigFieldOriginObservation[];
   availableModels: ModelObservation[];
   modelCatalogTruncated: boolean;
   mcpServers: McpServerObservation[];

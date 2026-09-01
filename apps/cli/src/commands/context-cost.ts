@@ -39,6 +39,7 @@ function emptyObservation(
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
     managedConfigTarget: null,
+    managedConfigFieldOrigins: [],
     availableModels: [],
     modelCatalogTruncated: false,
     mcpServers: [],

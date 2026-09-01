@@ -769,6 +769,7 @@ async function observeContext(
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
     managedConfigTarget: null,
+    managedConfigFieldOrigins: [],
     availableModels: [],
     modelCatalogTruncated: false,
     mcpServers: [],
@@ -829,6 +830,37 @@ async function observeContext(
     }
     return null;
   })();
+
+  const managedConfigFieldOrigins: HarnessContextObservation['managedConfigFieldOrigins'] = [];
+  const origins =
+    configResponse !== null && isRecord(configResponse['origins'])
+      ? configResponse['origins']
+      : null;
+  for (const keyPath of ['model', 'model_reasoning_effort', 'model_verbosity']) {
+    const metadata = origins !== null && isRecord(origins[keyPath]) ? origins[keyPath] : null;
+    const source = metadata !== null && isRecord(metadata['name']) ? metadata['name'] : null;
+    if (metadata === null || source === null) continue;
+    const sourceType = readString(source, 'type');
+    const version = readString(metadata, 'version');
+    if (sourceType === null || version === null) continue;
+    const path = readString(source, 'file');
+    const profile = readString(source, 'profile');
+    managedConfigFieldOrigins.push({
+      harnessId: CODEX,
+      keyPath,
+      sourceType,
+      path,
+      profile,
+      version,
+      matchesManagedTarget:
+        managedConfigTarget !== null &&
+        sourceType === 'user' &&
+        profile === null &&
+        path === managedConfigTarget.path &&
+        version === managedConfigTarget.version,
+      source: 'native-rpc',
+    });
+  }
 
   const features = config !== null && isRecord(config['features']) ? config['features'] : null;
   const instructions = config === null ? null : readString(config, 'instructions');
@@ -996,6 +1028,7 @@ async function observeContext(
     configInstructionBytes:
       config === null ? null : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
     managedConfigTarget,
+    managedConfigFieldOrigins,
     availableModels,
     modelCatalogTruncated,
     mcpServers,

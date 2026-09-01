@@ -395,7 +395,20 @@ describe('context-cost observation', () => {
                     developer_instructions: 'de',
                     features: { tool_search: true },
                   },
-                  origins: {},
+                  origins: {
+                    model: {
+                      name: { type: 'project', file: PROJECT + '/.codex/config.toml' },
+                      version: 'project-v2',
+                    },
+                    model_reasoning_effort: {
+                      name: { type: 'user', file: CONFIG, profile: null },
+                      version: 'user-v7',
+                    },
+                    model_verbosity: {
+                      name: { type: 'user', file: CONFIG, profile: 'economy' },
+                      version: 'profile-v4',
+                    },
+                  },
                   layers: [
                     {
                       name: { type: 'user', file: CONFIG, profile: null },
@@ -487,6 +500,38 @@ describe('context-cost observation', () => {
       version: 'user-v7',
       source: 'native-rpc',
     });
+    assert.deepEqual(result.managedConfigFieldOrigins, [
+      {
+        harnessId: 'codex',
+        keyPath: 'model',
+        sourceType: 'project',
+        path: PROJECT + '/.codex/config.toml',
+        profile: null,
+        version: 'project-v2',
+        matchesManagedTarget: false,
+        source: 'native-rpc',
+      },
+      {
+        harnessId: 'codex',
+        keyPath: 'model_reasoning_effort',
+        sourceType: 'user',
+        path: CONFIG,
+        profile: null,
+        version: 'user-v7',
+        matchesManagedTarget: true,
+        source: 'native-rpc',
+      },
+      {
+        harnessId: 'codex',
+        keyPath: 'model_verbosity',
+        sourceType: 'user',
+        path: CONFIG,
+        profile: 'economy',
+        version: 'profile-v4',
+        matchesManagedTarget: false,
+        source: 'native-rpc',
+      },
+    ]);
     assert.equal(result.availableModels.length, 1);
     assert.equal(result.availableModels[0]?.model, 'gpt-5.6-codex');
     assert.deepEqual(result.availableModels[0]?.supportedReasoningEfforts, [

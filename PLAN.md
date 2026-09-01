@@ -1706,9 +1706,12 @@ config version observed while planning, snapshots the file before mutation, trea
 `configVersionConflict` as precondition drift, and participates in the existing byte-for-byte
 verified rollback path. Context observation now also reads Codex's native config layer stack and
 exposes the exact base user-config path plus its version as the only admissible managed write
-target; selected user profiles remain user-owned and are deliberately not adopted. This is still
-infrastructure only: no optimizer recommendation is automatically turned into a managed setting
-yet.
+target; selected user profiles remain user-owned and are deliberately not adopted. The same native
+read now records effective origins for the Phase 18.4 policy fields (`model`,
+`model_reasoning_effort`, and `model_verbosity`) and marks whether each currently comes from the
+exact writable base-user layer. This prevents the later planner from confusing a project/profile
+override with a setting it can safely own. This is still infrastructure only: no optimizer
+recommendation is automatically turned into a managed setting yet.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.
