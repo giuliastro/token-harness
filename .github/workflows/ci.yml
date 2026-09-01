@@ -49,11 +49,7 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        shell: bash
-        run: |
-          pnpm exec prettier --write apps/cli/src/commands/plan.ts
-          git diff -- apps/cli/src/commands/plan.ts
-          git diff --quiet -- apps/cli/src/commands/plan.ts
+        run: pnpm format:check
 
       - name: Test
         run: pnpm test
