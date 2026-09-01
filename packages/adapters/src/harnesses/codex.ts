@@ -769,6 +769,7 @@ async function observeContext(
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
     managedConfigTarget: null,
+    managedConfigOriginsObserved: false,
     managedConfigFieldOrigins: [],
     availableModels: [],
     modelCatalogTruncated: false,
@@ -836,6 +837,7 @@ async function observeContext(
     configResponse !== null && isRecord(configResponse['origins'])
       ? configResponse['origins']
       : null;
+  const managedConfigOriginsObserved = origins !== null;
   for (const keyPath of ['model', 'model_reasoning_effort', 'model_verbosity']) {
     const metadata = origins !== null && isRecord(origins[keyPath]) ? origins[keyPath] : null;
     const source = metadata !== null && isRecord(metadata['name']) ? metadata['name'] : null;
@@ -1028,6 +1030,7 @@ async function observeContext(
     configInstructionBytes:
       config === null ? null : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
     managedConfigTarget,
+    managedConfigOriginsObserved,
     managedConfigFieldOrigins,
     availableModels,
     modelCatalogTruncated,
