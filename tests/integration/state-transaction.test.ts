@@ -253,24 +253,27 @@ function codexBatch(path: string, expectedVersion = 'v1'): CodexConfigBatchWrite
 
 function fakeCodexConfigRunner(
   path: string,
-  response: 'success' | 'conflict' = 'success',
+  response: 'success' | 'conflict' | 'mismatch' = 'success',
 ): ProcessRunner {
   return {
     run: async (request) => {
       assert.equal(request.executable, 'codex');
       assert.deepEqual(request.args, ['app-server', '--stdio']);
       assert.match(request.stdin ?? '', /config\/batchWrite/);
-      const batch = (request.stdin ?? '')
+      assert.match(request.stdin ?? '', /config\/read/);
+      const requests = (request.stdin ?? '')
         .split(/\r?\n/)
         .filter((line) => line.trim() !== '')
-        .map((line) => JSON.parse(line) as Record<string, unknown>)
-        .find((message) => message['id'] === 2);
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      const batch = requests.find((message) => message['id'] === 2);
+      const read = requests.find((message) => message['id'] === 3);
       assert.ok(batch);
+      assert.ok(read);
       const params = batch['params'];
       assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
       assert.equal((params as Record<string, unknown>)['filePath'], path);
 
-      if (response === 'success') {
+      if (response !== 'conflict') {
         writeFileSync(path, 'model_reasoning_effort = "low"\n# preserved by rollback\n');
       }
 
@@ -281,18 +284,26 @@ function fakeCodexConfigRunner(
         exitCode: 0,
         signal: null,
         stdout:
-          response === 'success'
+          response === 'conflict'
             ? [
-                JSON.stringify({ id: 1, result: {} }),
-                JSON.stringify({ id: 2, result: { version: 'v2' } }),
-              ].join('\n')
-            : [
                 JSON.stringify({ id: 1, result: {} }),
                 JSON.stringify({
                   id: 2,
                   error: {
                     code: -32600,
                     message: 'configVersionConflict: Configuration was modified since last read',
+                  },
+                }),
+              ].join('\n')
+            : [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({ id: 2, result: { version: 'v2' } }),
+                JSON.stringify({
+                  id: 3,
+                  result: {
+                    config: {
+                      model_reasoning_effort: response === 'mismatch' ? 'high' : 'low',
+                    },
                   },
                 }),
               ].join('\n'),
@@ -339,6 +350,28 @@ describe('Codex native config transaction', () => {
 
     assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.preconditionDrift);
     assert.equal(result.journal.entries[0]?.status, 'precondition-drift');
+    assert.equal(readFileSync(config, 'utf8'), original);
+  });
+
+  it('rolls back the native write when Codex postcondition verification fails', async () => {
+    const h = harness();
+    const config = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\n# keep postcondition rollback exact\n';
+    writeFileSync(config, original);
+
+    const result = await run(
+      h,
+      [codexBatch(config)],
+      undefined,
+      fakeCodexConfigRunner(config, 'mismatch'),
+    );
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.equal(result.journal.entries[0]?.status, 'failed');
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'codex-config-postcondition-failed'),
+    );
     assert.equal(readFileSync(config, 'utf8'), original);
   });
 
