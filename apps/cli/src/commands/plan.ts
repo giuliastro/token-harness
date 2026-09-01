@@ -26,6 +26,7 @@ import {
   admitManagedMutation,
   commandResult,
   diagnostic,
+  harnessId,
   isProfileId,
   buildStoredPlan,
   derivePlanId,
@@ -51,11 +52,148 @@ import {
 } from '@token-harness/core';
 
 import { PLANS_DIRECTORY } from './apply.js';
+import { runContext } from './context-cost.js';
+import { runOptimize } from './optimize.js';
 
 import type { CommandContext } from './context.js';
 
 /** RFC 0003 §Profiles: `safe` is the default and `balanced` does not exist. */
 const DEFAULT_PROFILE: ProfileId = 'safe';
+const CODEX = harnessId('codex');
+
+async function appendCodexNativePolicy(
+  context: CommandContext,
+  actions: PlannedAction[],
+  diagnostics: Diagnostic[],
+): Promise<void> {
+  if (context.nativePolicy !== true) return;
+  if (context.harness !== null && context.harness !== CODEX) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'native-policy-harness-unsupported',
+        subject: context.harness,
+        message: 'This build can plan managed native policy only for Codex',
+        remediation: 'Use --harness codex, or omit --native-policy for this harness',
+      }),
+    );
+    return;
+  }
+
+  const nativeContext: CommandContext = { ...context, harness: CODEX };
+  const [optimization, contextResult] = await Promise.all([
+    runOptimize(nativeContext),
+    runContext(nativeContext),
+  ]);
+  const advice = optimization.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
+  const observation =
+    contextResult.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
+
+  if (advice === null || observation === null || observation.managedConfigTarget === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-native-policy-unavailable',
+        subject: CODEX,
+        message:
+          'Codex optimizer advice could not be paired with a versioned native user-config target',
+        remediation:
+          'Run token-harness context --harness codex and keep native policy advisory until the target is observable',
+      }),
+    );
+    return;
+  }
+
+  const target = observation.managedConfigTarget;
+  const edits: Array<{
+    keyPath: string;
+    value: string;
+    mergeStrategy: 'replace';
+  }> = [];
+
+  const consider = (input: {
+    keyPath: 'model_reasoning_effort' | 'model_verbosity';
+    current: string | null;
+    recommended: string | null;
+  }): void => {
+    if (input.recommended === null || input.recommended === input.current) return;
+    if (!observation.managedConfigOriginsObserved) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-native-policy-origin-unavailable',
+          subject: CODEX,
+          message: `Codex did not expose origin metadata for ${input.keyPath}, so it will not be managed`,
+          remediation: 'Keep this recommendation advisory rather than guessing config precedence',
+        }),
+      );
+      return;
+    }
+    const origin = observation.managedConfigFieldOrigins.find(
+      (item) => item.keyPath === input.keyPath,
+    );
+    if (origin !== undefined && !origin.matchesManagedTarget) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-native-policy-shadowed',
+          subject: CODEX,
+          message:
+            `${input.keyPath} currently comes from Codex layer ${origin.sourceType}` +
+            (origin.profile === null ? '' : ` profile ${origin.profile}`) +
+            ', not from the writable base user layer',
+          path: origin.path,
+          remediation:
+            'Leave the project/profile-owned value untouched; change that scope explicitly if desired',
+        }),
+      );
+      return;
+    }
+    edits.push({
+      keyPath: input.keyPath,
+      value: input.recommended,
+      mergeStrategy: 'replace',
+    });
+  };
+
+  consider({
+    keyPath: 'model_reasoning_effort',
+    current: advice.currentEffort,
+    recommended: advice.recommendedEffort,
+  });
+  consider({
+    keyPath: 'model_verbosity',
+    current: advice.currentVerbosity,
+    recommended: advice.recommendedVerbosity,
+  });
+
+  if (edits.length === 0) return;
+
+  actions.push({
+    kind: 'codex-config-batch-write',
+    id:
+      'codex-native-policy:' +
+      edits.map((edit) => edit.keyPath + '=' + String(edit.value)).join(','),
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [target.path],
+    affectedProcesses: ['codex'],
+    preconditions: [
+      'Codex user config target is still ' + target.path,
+      'Codex config version is still ' + target.version,
+    ],
+    postconditions: edits.map((edit) => edit.keyPath + '=' + String(edit.value)),
+    rollbackData: 'file-snapshot',
+    explanation:
+      'Apply reviewed Codex native policy: ' +
+      edits.map((edit) => edit.keyPath + '=' + String(edit.value)).join(', '),
+    path: target.path,
+    edits,
+    expectedVersion: target.version,
+    reloadUserConfig: true,
+  });
+}
 
 /**
  * What `plan` computes, shared with `apply`.
@@ -288,6 +426,8 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       }
     }
   }
+
+  await appendCodexNativePolicy(context, actions, diagnostics);
 
   const markerConflicts: HardConflict[] = findMarkerRegionConflicts(attributedActions).map(
     (conflict) => ({

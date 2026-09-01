@@ -34,6 +34,8 @@ export interface CommandContext {
   taskClass?: TaskClass | null;
   budgetProfile?: BudgetProfile | null;
   reservePercent?: number | null;
+  /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
+  nativePolicy?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
   since: string | null;
   until: string | null;

@@ -109,6 +109,8 @@ export interface HarnessContextObservation {
    * Null means Token Harness must remain advisory rather than guessing a write path/version.
    */
   managedConfigTarget: ManagedConfigTargetObservation | null;
+  /** True only when Codex returned a native origins object, even if a specific field is absent. */
+  managedConfigOriginsObserved: boolean;
   /** Effective origins for the native policy fields Token Harness is evaluating. */
   managedConfigFieldOrigins: ManagedConfigFieldOriginObservation[];
   availableModels: ModelObservation[];

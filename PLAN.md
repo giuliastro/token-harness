@@ -1710,8 +1710,13 @@ target; selected user profiles remain user-owned and are deliberately not adopte
 read now records effective origins for the Phase 18.4 policy fields (`model`,
 `model_reasoning_effort`, and `model_verbosity`) and marks whether each currently comes from the
 exact writable base-user layer. This prevents the later planner from confusing a project/profile
-override with a setting it can safely own. This is still infrastructure only: no optimizer
-recommendation is automatically turned into a managed setting yet.
+override with a setting it can safely own. The first reviewed policy path now connects the advisory
+optimizer to that transaction: `token-harness plan --native-policy` may translate Codex
+reasoning-effort and verbosity deltas into one atomic, versioned `config/batchWrite`. It admits
+only fields whose origin metadata is present and either absent at that field or already matches the
+exact base-user target; project and selected-profile overrides remain untouched. The stored plan can
+then run through `apply --plan <id> --yes` with the existing rollback path. Model switching remains
+advisory until model-tier quota benchmarks exist.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.

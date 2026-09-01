@@ -61,6 +61,7 @@ Flags
   --task <class>        Optimizer task: mechanical, standard, hard, critical
   --profile <name>      Optimizer profile: economy, balanced, quality, custom
   --reserve <percent>   Keep this percent of observed allowance in reserve
+  --native-policy       Add reversible native Codex policy edits to plan
   --yes                Grant the confirmation a mutating command requires
   --version            Print the version and exit 0
   --help               Print usage and exit 0
@@ -151,13 +152,16 @@ reported, but this command cannot redeem or consume credits.`,
 
 Usage
   token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]
-                      [--provider <id>] [--project <dir>]
+                      [--provider <id>] [--project <dir>] [--native-policy]
+                      [--task <class>] [--profile <name>] [--reserve <0-95>]
 
 Dry-run by default: without --yes the plan is computed and displayed and exit 8
 is returned, because nothing may change without an explicit decision.
 
 With --plan <id> the stored plan is loaded and revalidated instead of recomputed,
-so the artifact that was reviewed is the artifact that runs. It is rejected when
+so the artifact that was reviewed is the artifact that runs. Without --plan,
+--native-policy recomputes the same reversible Codex effort/verbosity policy
+described by token-harness plan --native-policy before confirmation. It is rejected when
 the project, the recorded provider or harness versions, the resolved ownership, or
 a precondition digest no longer match — exit 5, before any action executes.
 
@@ -259,9 +263,17 @@ not-exercised, which is not a failure.`,
 
 Usage
   token-harness plan [--json] [--harness <id>] [--provider <id>] [--project <dir>]
+                     [--native-policy] [--task <class>] [--profile <name>]
+                     [--reserve <0-95>]
 
 Read-only. Exits 0 when a plan was produced, and 4 when a hard conflict prevents
-apply. Nothing is changed either way.`,
+apply. Nothing is changed either way.
+
+--native-policy adds reviewed Codex native settings derived from the same optimizer
+policy as token-harness optimize. This build manages reasoning effort and verbosity
+only. A field coming from project config or a selected profile is left untouched.
+The resulting config/batchWrite action carries Codex's observed user-config version,
+is snapshotted before mutation, and can be executed later with apply --plan <id> --yes.`,
   rollback: `token-harness rollback — restore the files a transaction changed
 
 Usage
