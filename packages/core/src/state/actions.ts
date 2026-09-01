@@ -1117,7 +1117,9 @@ async function applyCodexConfigBatchWrite(
         diagnostic({
           severity: 'error',
           code: 'codex-config-write-unavailable',
-          message: 'Codex app-server could not apply the reviewed config batch: ' + result.failure.message,
+          message:
+            'Codex app-server could not apply the reviewed config batch: ' +
+            result.failure.message,
           path: action.path,
           remediation: 'Check the installed Codex CLI, then run token-harness plan again',
         }),
@@ -1166,7 +1168,12 @@ async function applyCodexConfigBatchWrite(
     );
   }
 
-  if (result.exitCode !== 0 || response === undefined || error !== null || !('result' in response)) {
+  if (
+    result.exitCode !== 0 ||
+    response === undefined ||
+    error !== null ||
+    !('result' in response)
+  ) {
     return outcome(action, 'failed', {
       snapshots: [snapshot],
       diagnostics: [
