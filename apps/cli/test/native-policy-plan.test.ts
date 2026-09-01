@@ -63,9 +63,11 @@ function context(input: {
   effortOrigin: Record<string, unknown> | null;
   verbosityOrigin: Record<string, unknown> | null;
   effort?: string;
+  secondEffort?: string;
   verbosity?: string;
 }): CommandContext {
   const files = new Map<string, string>([[CONFIG, 'model_reasoning_effort = "medium"\n']]);
+  let configReadCount = 0;
   const encoder = new TextEncoder();
 
   return {
@@ -151,6 +153,11 @@ function context(input: {
           }
 
           if (stdin.includes('config/read')) {
+            const currentEffort =
+              configReadCount === 0
+                ? (input.effort ?? 'medium')
+                : (input.secondEffort ?? input.effort ?? 'medium');
+            configReadCount += 1;
             const origins: Record<string, unknown> = {};
             if (input.effortOrigin !== null) {
               origins['model_reasoning_effort'] = input.effortOrigin;
@@ -167,7 +174,7 @@ function context(input: {
                   result: {
                     config: {
                       model: 'gpt-5.6-codex',
-                      model_reasoning_effort: input.effort ?? 'medium',
+                      model_reasoning_effort: currentEffort,
                       model_verbosity: input.verbosity ?? 'medium',
                       project_root_markers: ['.git'],
                       project_doc_fallback_filenames: [],
@@ -271,6 +278,49 @@ describe('Codex native policy planning', () => {
     assert.deepEqual(action.edits, [
       { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
     ]);
+  });
+
+  it('refuses a field when optimizer and native-plan observations diverge', async () => {
+    const computed = await computePlan(
+      context({
+        effortOrigin: USER_EFFORT,
+        verbosityOrigin: null,
+        effort: 'medium',
+        secondEffort: 'high',
+        verbosity: 'low',
+      }),
+    );
+    assert.equal(
+      computed.report.actions.some((candidate) => candidate.kind === 'codex-config-batch-write'),
+      false,
+    );
+    assert.equal(
+      computed.diagnostics.some(
+        (entry) => entry.code === 'codex-native-policy-observation-drift',
+      ),
+      true,
+    );
+  });
+
+  it('leaves a selected-profile value untouched', async () => {
+    const computed = await computePlan(
+      context({
+        effortOrigin: {
+          name: { type: 'user', file: CONFIG, profile: 'economy' },
+          version: 'profile-v3',
+        },
+        verbosityOrigin: null,
+        verbosity: 'low',
+      }),
+    );
+    assert.equal(
+      computed.report.actions.some((candidate) => candidate.kind === 'codex-config-batch-write'),
+      false,
+    );
+    assert.equal(
+      computed.diagnostics.some((entry) => entry.code === 'codex-native-policy-shadowed'),
+      true,
+    );
   });
 
   it('leaves a project-owned effective setting untouched', async () => {
