@@ -284,8 +284,7 @@ function fakeCodexConfigRunner(
                   id: 2,
                   error: {
                     code: -32600,
-                    message:
-                      'configVersionConflict: Configuration was modified since last read',
+                    message: 'configVersionConflict: Configuration was modified since last read',
                   },
                 }),
               ].join('\n'),
