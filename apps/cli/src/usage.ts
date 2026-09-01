@@ -152,13 +152,16 @@ reported, but this command cannot redeem or consume credits.`,
 
 Usage
   token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]
-                      [--provider <id>] [--project <dir>]
+                      [--provider <id>] [--project <dir>] [--native-policy]
+                      [--task <class>] [--profile <name>] [--reserve <0-95>]
 
 Dry-run by default: without --yes the plan is computed and displayed and exit 8
 is returned, because nothing may change without an explicit decision.
 
 With --plan <id> the stored plan is loaded and revalidated instead of recomputed,
-so the artifact that was reviewed is the artifact that runs. It is rejected when
+so the artifact that was reviewed is the artifact that runs. Without --plan,
+--native-policy recomputes the same reversible Codex effort/verbosity policy
+described by token-harness plan --native-policy before confirmation. It is rejected when
 the project, the recorded provider or harness versions, the resolved ownership, or
 a precondition digest no longer match — exit 5, before any action executes.
 
