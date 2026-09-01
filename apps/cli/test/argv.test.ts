@@ -148,6 +148,24 @@ describe('argv', () => {
     assert.equal(parsed.json, true);
   });
 
+  it('parses explicit native policy planning intent', () => {
+    const parsed = parseArgv([
+      'plan',
+      '--native-policy',
+      '--harness',
+      'codex',
+      '--task',
+      'mechanical',
+      '--profile',
+      'economy',
+    ]);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.options.nativePolicy, true);
+    assert.equal(parsed.options.task, 'mechanical');
+    assert.equal(parsed.options.profile, 'economy');
+  });
+
   it('parses optimizer task profile and reserve inputs', () => {
     const parsed = parseArgv([
       'optimize',
