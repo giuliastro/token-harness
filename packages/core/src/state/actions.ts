@@ -44,6 +44,7 @@ import type {
 } from '../domain/actions.js';
 import { diagnostic, type Diagnostic } from '../domain/diagnostics.js';
 import { digestBytes, digestText } from '../domain/digest.js';
+import type { JsonValue } from '../domain/json.js';
 import {
   mayRemoveAutomatically,
   verifyOwnership,
@@ -1216,7 +1217,7 @@ async function applyCodexConfigBatchWrite(
     verificationResult !== null &&
     typeof verificationResult['config'] === 'object' &&
     verificationResult['config'] !== null
-      ? (verificationResult['config'] as import('../domain/json.js').JsonValue)
+      ? (verificationResult['config'] as JsonValue)
       : null;
 
   if (verifiedConfig === null) {
