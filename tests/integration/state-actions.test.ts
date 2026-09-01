@@ -1579,7 +1579,15 @@ describe('codex-config-batch-write', () => {
         assert.equal(request.executable, 'codex');
         assert.deepEqual(request.args, ['app-server', '--stdio']);
         assert.ok((request.stdin ?? '').includes('config/batchWrite'));
-        assert.ok((request.stdin ?? '').includes(path));
+        const batch = (request.stdin ?? '')
+          .split(/\r?\n/)
+          .filter((line) => line.trim() !== '')
+          .map((line) => JSON.parse(line) as Record<string, unknown>)
+          .find((message) => message['id'] === 2);
+        assert.ok(batch);
+        const params = batch['params'];
+        assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
+        assert.equal((params as Record<string, unknown>)['filePath'], path);
 
         if (mode === 'success') {
           writeFileSync(path, 'model_reasoning_effort = "low"\n# user comment\n');
@@ -1627,6 +1635,7 @@ describe('codex-config-batch-write', () => {
     assert.equal(outcome.snapshots[0]?.path, path);
     assert.equal(readFileSync(path, 'utf8'), 'model_reasoning_effort = "low"\n# user comment\n');
     claim('codex-config-batch-write', 'apply');
+    if (NATIVE_WINDOWS) claim('codex-config-batch-write', 'windows-path');
   });
 
   it('is safely repeatable when Codex accepts the same desired value twice', async () => {
