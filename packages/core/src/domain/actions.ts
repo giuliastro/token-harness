@@ -20,7 +20,7 @@
  */
 
 import type { HarnessId, ProviderId } from './ids.js';
-import type { JsonMergeOperation } from './json.js';
+import type { JsonMergeOperation, JsonValue } from './json.js';
 import type { YamlMergeOperation } from './yaml.js';
 import type { OwnedArtifact } from './ownership.js';
 
@@ -136,6 +136,28 @@ export interface MergeTomlAction extends PlannedActionBase {
   ownedPointers: string[];
 }
 
+/**
+ * Atomic user-config mutation through Codex app-server's native config/batchWrite RPC.
+ *
+ * Phase 18.4 deliberately models this as a first-class action instead of pretending TOML can be
+ * edited safely with the generic merge family. Codex owns the parser/serializer; Token Harness
+ * owns the transaction boundary, precondition and rollback snapshot.
+ */
+export interface CodexConfigBatchWriteAction extends PlannedActionBase {
+  kind: 'codex-config-batch-write';
+  /** Exact user config.toml path that Codex must mutate. */
+  path: string;
+  edits: Array<{
+    keyPath: string;
+    value: JsonValue;
+    mergeStrategy: 'replace' | 'upsert';
+  }>;
+  /** Config version returned by the read used to build the plan; null only for fresh/unsupported readers. */
+  expectedVersion: string | null;
+  /** Whether Codex should hot-reload mutable user config after the atomic write. */
+  reloadUserConfig: boolean;
+}
+
 export interface MergeYamlAction extends PlannedActionBase {
   kind: 'merge-yaml';
   path: string;
@@ -209,6 +231,7 @@ export type PlannedAction =
   | WriteOwnedFileAction
   | MergeJsonAction
   | MergeTomlAction
+  | CodexConfigBatchWriteAction
   | MergeYamlAction
   | PatchMarkerBlockAction
   | RemoveOwnedChangeAction
@@ -231,6 +254,7 @@ const ACTION_LABELS: Readonly<Record<PlannedActionKind, string>> = {
   'write-owned-file': 'write owned file',
   'merge-json': 'merge json',
   'merge-toml': 'merge toml',
+  'codex-config-batch-write': 'codex config batch write',
   'merge-yaml': 'merge yaml',
   'patch-marker-block': 'patch marker block',
   'remove-owned-change': 'remove owned change',
