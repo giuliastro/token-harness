@@ -1573,10 +1573,7 @@ describe('codex-config-batch-write', () => {
     };
   }
 
-  function runner(
-    path: string,
-    mode: 'success' | 'conflict' = 'success',
-  ): ProcessRunner {
+  function runner(path: string, mode: 'success' | 'conflict' = 'success'): ProcessRunner {
     return {
       async run(request) {
         assert.equal(request.executable, 'codex');
