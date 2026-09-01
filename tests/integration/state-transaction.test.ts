@@ -260,7 +260,15 @@ function fakeCodexConfigRunner(
       assert.equal(request.executable, 'codex');
       assert.deepEqual(request.args, ['app-server', '--stdio']);
       assert.match(request.stdin ?? '', /config\/batchWrite/);
-      assert.ok((request.stdin ?? '').includes(path));
+      const batch = (request.stdin ?? '')
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find((message) => message['id'] === 2);
+      assert.ok(batch);
+      const params = batch['params'];
+      assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
+      assert.equal((params as Record<string, unknown>)['filePath'], path);
 
       if (response === 'success') {
         writeFileSync(path, 'model_reasoning_effort = "low"\n# preserved by rollback\n');
