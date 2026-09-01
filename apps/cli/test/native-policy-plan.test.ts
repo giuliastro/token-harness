@@ -295,9 +295,7 @@ describe('Codex native policy planning', () => {
       false,
     );
     assert.equal(
-      computed.diagnostics.some(
-        (entry) => entry.code === 'codex-native-policy-observation-drift',
-      ),
+      computed.diagnostics.some((entry) => entry.code === 'codex-native-policy-observation-drift'),
       true,
     );
   });
