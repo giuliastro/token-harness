@@ -27,6 +27,7 @@ import {
   ownedFileDigest,
   type ActionContext,
   type ActionOutcome,
+  type CodexConfigBatchWriteAction,
   type CreateDirectoryAction,
   type DelegatedProviderInstallAction,
   type JsonValue,
@@ -1557,6 +1558,136 @@ describe('delegated-provider-install', () => {
   });
 });
 
+describe('codex-config-batch-write', () => {
+  function action(path: string, expectedVersion = 'v1'): CodexConfigBatchWriteAction {
+    return {
+      ...BASE,
+      id: 'codex-config-1',
+      kind: 'codex-config-batch-write',
+      affectedPaths: [path],
+      affectedProcesses: ['codex'],
+      path,
+      edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
+      expectedVersion,
+      reloadUserConfig: true,
+    };
+  }
+
+  function runner(
+    path: string,
+    mode: 'success' | 'conflict' = 'success',
+  ): ProcessRunner {
+    return {
+      async run(request) {
+        assert.equal(request.executable, 'codex');
+        assert.deepEqual(request.args, ['app-server', '--stdio']);
+        assert.ok((request.stdin ?? '').includes('config/batchWrite'));
+        assert.ok((request.stdin ?? '').includes(path));
+
+        if (mode === 'success') {
+          writeFileSync(path, 'model_reasoning_effort = "low"\n# user comment\n');
+        }
+
+        return {
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/fake/codex',
+          exitCode: 0,
+          signal: null,
+          stdout:
+            mode === 'success'
+              ? JSON.stringify({ id: 2, result: { version: 'v2' } })
+              : JSON.stringify({
+                  id: 2,
+                  error: {
+                    code: -32600,
+                    message: 'configVersionConflict: Configuration was modified since last read',
+                  },
+                }),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+  }
+
+  it('applies an atomic native config batch and snapshots the exact target', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    writeFileSync(path, 'model_reasoning_effort = "high"\n# user comment\n');
+
+    const outcome = await applyAction(action(path), {
+      ...h.context,
+      runner: runner(path),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'applied');
+    assert.equal(outcome.snapshots[0]?.path, path);
+    assert.equal(readFileSync(path, 'utf8'), 'model_reasoning_effort = "low"\n# user comment\n');
+    claim('codex-config-batch-write', 'apply');
+  });
+
+  it('is safely repeatable when Codex accepts the same desired value twice', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    writeFileSync(path, 'model_reasoning_effort = "high"\n# user comment\n');
+    const native = runner(path);
+
+    const first = await applyAction(action(path), { ...h.context, runner: native, cwd: h.project });
+    const second = await applyAction(action(path, 'v2'), {
+      ...h.context,
+      runner: native,
+      cwd: h.project,
+    });
+
+    assert.equal(first.status, 'applied');
+    assert.equal(second.status, 'applied');
+    assert.equal(readFileSync(path, 'utf8'), 'model_reasoning_effort = "low"\n# user comment\n');
+    claim('codex-config-batch-write', 'idempotency');
+  });
+
+  it('turns a native config version conflict into precondition drift without writing', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\n# user edit\n';
+    writeFileSync(path, original);
+
+    const outcome = await applyAction(action(path, 'stale'), {
+      ...h.context,
+      runner: runner(path, 'conflict'),
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'precondition-drift');
+    assert.equal(outcome.diagnostics[0]?.code, 'action-precondition-drift');
+    assert.equal(readFileSync(path, 'utf8'), original);
+    claim('codex-config-batch-write', 'precondition-drift', 'user-modification');
+  });
+
+  it('restores the original config bytes from its snapshot', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\r\n# preserve CRLF\r\n';
+    writeFileSync(path, original);
+
+    const outcome = await applyAction(action(path), {
+      ...h.context,
+      runner: runner(path),
+      cwd: h.project,
+    });
+    assert.equal(outcome.status, 'applied');
+
+    await rollback(h, outcome);
+    assert.deepEqual(readFileSync(path), Buffer.from(original));
+    claim('codex-config-batch-write', 'rollback');
+  });
+});
+
 describe('action families this build does not execute', () => {
   const unimplemented: readonly PlannedActionKind[] = [
     'download-artifact',
@@ -1583,7 +1714,7 @@ describe('action families this build does not execute', () => {
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       assert.equal(isExecutableActionKind(kind), true, kind);
     }
-    assert.equal(EXECUTABLE_ACTION_KINDS.length, 8);
+    assert.equal(EXECUTABLE_ACTION_KINDS.length, 9);
   });
 });
 
