@@ -45,6 +45,7 @@ Flags
   --task <class>        Optimizer task: mechanical, standard, hard, critical
   --profile <name>      Optimizer profile: economy, balanced, quality, custom
   --reserve <percent>   Keep this percent of observed allowance in reserve
+  --native-policy       Add reversible native Codex policy edits to plan
   --yes                Grant the confirmation a mutating command requires
   --version            Print the version and exit 0
   --help               Print usage and exit 0
