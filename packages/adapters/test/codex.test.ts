@@ -504,7 +504,7 @@ describe('context-cost observation', () => {
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
     assert.match(requests[0]?.stdin ?? '', /model\/list/);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
-
+  });
 
   it('does not adopt a selected Codex profile as the writable managed target', async () => {
     const base = context();
@@ -554,6 +554,5 @@ describe('context-cost observation', () => {
         (entry) => entry.code === 'codex-managed-config-target-unavailable',
       ),
     );
-  });
   });
 });
