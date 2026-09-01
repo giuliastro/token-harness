@@ -1239,7 +1239,10 @@ async function applyCodexConfigBatchWrite(
 
   for (const edit of action.edits) {
     const segments = parseJsonPointer(edit.keyPath);
-    const observed = segments === null ? { found: false, value: undefined } : resolveJsonPointer(verifiedConfig, segments);
+    const observed =
+      segments === null
+        ? { found: false, value: undefined }
+        : resolveJsonPointer(verifiedConfig, segments);
     if (
       !observed.found ||
       observed.value === undefined ||
