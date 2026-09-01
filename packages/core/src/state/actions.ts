@@ -30,6 +30,7 @@ import {
 } from './install.js';
 import { processSucceeded, type ProcessRunner } from '../domain/process.js';
 import type {
+  CodexConfigBatchWriteAction,
   CreateDirectoryAction,
   DelegatedProviderInstallAction,
   MergeJsonAction,
@@ -1038,6 +1039,160 @@ async function applyDelegatedProviderInstall(
   }
   return outcome(action, 'applied', { snapshots, ownership });
 }
+
+/**
+ * `codex-config-batch-write`.
+ *
+ * Codex is the TOML editor. Token Harness supplies the exact user config path and the version
+ * observed while planning, snapshots the file before the RPC, and lets the surrounding transaction
+ * restore that snapshot on any later failure. A configVersionConflict is drift, never a retry
+ * against bytes the user did not review.
+ */
+async function applyCodexConfigBatchWrite(
+  action: CodexConfigBatchWriteAction,
+  context: ActionContext,
+): Promise<ActionOutcome> {
+  if (context.runner === null || context.runner === undefined) {
+    return refusal(
+      action,
+      'codex-config-runner-unavailable',
+      action.path,
+      'Codex config mutation requires the Codex app-server process runner',
+      'Run apply in an environment where Codex is installed and available on PATH',
+    );
+  }
+
+  if (action.affectedPaths.length !== 1 || action.affectedPaths[0] !== action.path) {
+    return refusal(
+      action,
+      'codex-config-path-mismatch',
+      action.path,
+      'This action does not declare exactly the config.toml path it asks Codex to mutate',
+      'Recompute the plan with a current Token Harness build',
+    );
+  }
+
+  if (action.edits.length === 0) return outcome(action, 'already-satisfied');
+
+  const snapshot = await context.snapshots.capture(action.path);
+  const stdin = [
+    JSON.stringify({
+      method: 'initialize',
+      id: 1,
+      params: {
+        clientInfo: {
+          name: 'token_harness',
+          title: 'Token Harness',
+          version: '0.1',
+        },
+      },
+    }),
+    JSON.stringify({ method: 'initialized', params: {} }),
+    JSON.stringify({
+      method: 'config/batchWrite',
+      id: 2,
+      params: {
+        edits: action.edits,
+        filePath: action.path,
+        expectedVersion: action.expectedVersion,
+        reloadUserConfig: action.reloadUserConfig,
+      },
+    }),
+    '',
+  ].join('\n');
+
+  const result = await context.runner.run({
+    executable: 'codex',
+    args: ['app-server', '--stdio'],
+    cwd: context.cwd ?? context.fs.dirname(action.path),
+    stdin,
+    timeoutMs: 15_000,
+    maxOutputBytes: 1024 * 1024,
+  });
+
+  if (result.failure !== null) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-config-write-unavailable',
+          message:
+            'Codex app-server could not apply the reviewed config batch: ' + result.failure.message,
+          path: action.path,
+          remediation: 'Check the installed Codex CLI, then run token-harness plan again',
+        }),
+      ],
+    });
+  }
+
+  const messages: unknown[] = [];
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (line.trim() === '') continue;
+    try {
+      messages.push(JSON.parse(line) as unknown);
+    } catch {
+      // Tracing belongs on stderr; unrelated stdout is ignored rather than treated as success.
+    }
+  }
+  const response = messages.find(
+    (message): message is Record<string, unknown> =>
+      typeof message === 'object' &&
+      message !== null &&
+      !Array.isArray(message) &&
+      (message as Record<string, unknown>)['id'] === 2,
+  );
+
+  const error =
+    response !== undefined &&
+    typeof response['error'] === 'object' &&
+    response['error'] !== null &&
+    !Array.isArray(response['error'])
+      ? (response['error'] as Record<string, unknown>)
+      : null;
+
+  const errorText =
+    error === null
+      ? ''
+      : [error['message'], error['data']]
+          .map((value) => (typeof value === 'string' ? value : JSON.stringify(value)))
+          .filter((value) => value !== undefined && value !== '')
+          .join(' ');
+
+  if (/configVersionConflict/i.test(errorText)) {
+    return drift(
+      action,
+      action.path,
+      'Codex reports that config.toml changed after this plan observed its config version',
+    );
+  }
+
+  if (
+    result.exitCode !== 0 ||
+    response === undefined ||
+    error !== null ||
+    !('result' in response)
+  ) {
+    return outcome(action, 'failed', {
+      snapshots: [snapshot],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'codex-config-write-failed',
+          message:
+            errorText !== ''
+              ? 'Codex rejected the reviewed config batch: ' + errorText
+              : 'Codex app-server returned no successful config/batchWrite response',
+          path: action.path,
+          remediation: 'Run token-harness plan again against the current Codex configuration',
+        }),
+      ],
+    });
+  }
+
+  return outcome(action, 'applied', { snapshots: [snapshot] });
+}
+
 /**
  * The action families PLAN §15 issue 6 does not cover.
  *
@@ -1074,6 +1229,8 @@ export async function applyAction(
       return applyMergeJson(action, context);
     case 'merge-yaml':
       return applyMergeYaml(action, context);
+    case 'codex-config-batch-write':
+      return applyCodexConfigBatchWrite(action, context);
     case 'package-manager-install':
       return applyPackageManagerInstall(action, context);
     case 'delegated-provider-install':
@@ -1168,6 +1325,7 @@ export const EXECUTABLE_ACTION_KINDS: readonly PlannedActionKind[] = [
   'patch-marker-block',
   'merge-json',
   'merge-yaml',
+  'codex-config-batch-write',
   'remove-owned-change',
   'package-manager-install',
   'delegated-provider-install',

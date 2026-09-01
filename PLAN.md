@@ -1698,7 +1698,14 @@ Acceptance:
 - a quality floor can veto an economy recommendation;
 - `unknown` quota produces context/model advice without pretending to know pacing.
 
-### 18.4 P1 — Managed native policy
+### 18.4 P1 — Managed native policy — In progress
+
+The transaction foundation now includes a first-class Codex `config/batchWrite` action. It delegates
+TOML parsing/serialization to Codex app-server, targets the exact user `config.toml`, carries the
+config version observed while planning, snapshots the file before mutation, treats
+`configVersionConflict` as precondition drift, and participates in the existing byte-for-byte
+verified rollback path. This is infrastructure only: no optimizer recommendation is automatically
+turned into a managed setting yet, and no user-owned profile entry is claimed.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.

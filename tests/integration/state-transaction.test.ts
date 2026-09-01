@@ -36,6 +36,7 @@ import {
   executeTransaction,
   jsonValueDigest,
   verifyRestoration,
+  type CodexConfigBatchWriteAction,
   type Diagnostic,
   type JsonValue,
   type JournalStore,
@@ -44,6 +45,7 @@ import {
   type PlannedAction,
   type PlannedActionBase,
   type PlatformFacts,
+  type ProcessRunner,
   type TransactionJournal,
   type TransactionOutcomeKind,
   type WriteOwnedFileAction,
@@ -154,6 +156,7 @@ function run(
   h: Harness,
   actions: readonly PlannedAction[],
   verifyPostconditions?: () => Promise<readonly Diagnostic[]>,
+  runner: ProcessRunner | null = null,
 ) {
   return executeTransaction({
     transactionId: h.transactionId,
@@ -164,6 +167,7 @@ function run(
     fs: h.fs,
     snapshots: h.snapshots,
     journal: h.journal,
+    runner,
     now: () => CLOCK,
     ...(verifyPostconditions === undefined ? {} : { verifyPostconditions }),
   });
@@ -232,6 +236,130 @@ function writeReceipt(path: string, content = 'receipt\n'): WriteOwnedFileAction
     expectedDigest: null,
   };
 }
+
+function codexBatch(path: string, expectedVersion = 'v1'): CodexConfigBatchWriteAction {
+  return {
+    ...BASE,
+    id: 'codex-native-1',
+    kind: 'codex-config-batch-write',
+    affectedPaths: [path],
+    affectedProcesses: ['codex'],
+    path,
+    edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
+    expectedVersion,
+    reloadUserConfig: true,
+  };
+}
+
+function fakeCodexConfigRunner(
+  path: string,
+  response: 'success' | 'conflict' = 'success',
+): ProcessRunner {
+  return {
+    run: async (request) => {
+      assert.equal(request.executable, 'codex');
+      assert.deepEqual(request.args, ['app-server', '--stdio']);
+      assert.match(request.stdin ?? '', /config\/batchWrite/);
+      const batch = (request.stdin ?? '')
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find((message) => message['id'] === 2);
+      assert.ok(batch);
+      const params = batch['params'];
+      assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
+      assert.equal((params as Record<string, unknown>)['filePath'], path);
+
+      if (response === 'success') {
+        writeFileSync(path, 'model_reasoning_effort = "low"\n# preserved by rollback\n');
+      }
+
+      return {
+        displayCommand: 'codex app-server --stdio',
+        interpreter: 'direct',
+        executablePath: '/usr/bin/codex',
+        exitCode: 0,
+        signal: null,
+        stdout:
+          response === 'success'
+            ? [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({ id: 2, result: { version: 'v2' } }),
+              ].join('\n')
+            : [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({
+                  id: 2,
+                  error: {
+                    code: -32600,
+                    message: 'configVersionConflict: Configuration was modified since last read',
+                  },
+                }),
+              ].join('\n'),
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 1,
+        timedOut: false,
+        failure: null,
+      };
+    },
+  };
+}
+
+describe('Codex native config transaction', () => {
+  it('executes one atomic batch through app-server and snapshots config.toml first', async () => {
+    const h = harness();
+    const config = join(h.project, 'config.toml');
+    writeFileSync(config, 'model_reasoning_effort = "high"\n# user comment\n');
+
+    const result = await run(h, [codexBatch(config)], undefined, fakeCodexConfigRunner(config));
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.ok);
+    assert.equal(result.journal.entries[0]?.status, 'applied');
+    assert.equal(h.snapshots.captured[0]?.path, config);
+    assert.equal(
+      readFileSync(config, 'utf8'),
+      'model_reasoning_effort = "low"\n# preserved by rollback\n',
+    );
+  });
+
+  it('treats expectedVersion conflict as drift and leaves the original bytes intact', async () => {
+    const h = harness();
+    const config = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\n# user comment\n';
+    writeFileSync(config, original);
+
+    const result = await run(
+      h,
+      [codexBatch(config, 'stale-v1')],
+      undefined,
+      fakeCodexConfigRunner(config, 'conflict'),
+    );
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.preconditionDrift);
+    assert.equal(result.journal.entries[0]?.status, 'precondition-drift');
+    assert.equal(readFileSync(config, 'utf8'), original);
+  });
+
+  it('restores config.toml byte-for-byte when a later action fails', async () => {
+    const h = harness({ copyFixture: true });
+    const config = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\n# keep me exactly\n';
+    writeFileSync(config, original);
+
+    const result = await run(
+      h,
+      [codexBatch(config), mergeHook(join(h.project, 'commented.json'))],
+      undefined,
+      fakeCodexConfigRunner(config),
+    );
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.equal(readFileSync(config, 'utf8'), original);
+  });
+});
 
 describe('committing', () => {
   it('applies every action, verifies postconditions, and records what it owns', async () => {
