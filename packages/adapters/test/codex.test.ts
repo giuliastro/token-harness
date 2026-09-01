@@ -550,9 +550,7 @@ describe('context-cost observation', () => {
     assert.ok(result);
     assert.equal(result.managedConfigTarget, null);
     assert.ok(
-      result.diagnostics.some(
-        (entry) => entry.code === 'codex-managed-config-target-unavailable',
-      ),
+      result.diagnostics.some((entry) => entry.code === 'codex-managed-config-target-unavailable'),
     );
   });
 });
