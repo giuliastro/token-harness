@@ -237,7 +237,6 @@ function writeReceipt(path: string, content = 'receipt\n'): WriteOwnedFileAction
   };
 }
 
-
 function codexBatch(path: string, expectedVersion = 'v1'): CodexConfigBatchWriteAction {
   return {
     ...BASE,
@@ -252,7 +251,10 @@ function codexBatch(path: string, expectedVersion = 'v1'): CodexConfigBatchWrite
   };
 }
 
-function fakeCodexConfigRunner(path: string, response: 'success' | 'conflict' = 'success'): ProcessRunner {
+function fakeCodexConfigRunner(
+  path: string,
+  response: 'success' | 'conflict' = 'success',
+): ProcessRunner {
   return {
     run: async (request) => {
       assert.equal(request.executable, 'codex');
@@ -272,8 +274,21 @@ function fakeCodexConfigRunner(path: string, response: 'success' | 'conflict' = 
         signal: null,
         stdout:
           response === 'success'
-            ? [JSON.stringify({ id: 1, result: {} }), JSON.stringify({ id: 2, result: { version: 'v2' } })].join('\n')
-            : [JSON.stringify({ id: 1, result: {} }), JSON.stringify({ id: 2, error: { code: -32600, message: 'configVersionConflict: Configuration was modified since last read' } })].join('\n'),
+            ? [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({ id: 2, result: { version: 'v2' } }),
+              ].join('\n')
+            : [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({
+                  id: 2,
+                  error: {
+                    code: -32600,
+                    message:
+                      'configVersionConflict: Configuration was modified since last read',
+                  },
+                }),
+              ].join('\n'),
         stderr: '',
         stdoutTruncated: false,
         stderrTruncated: false,
@@ -296,7 +311,10 @@ describe('Codex native config transaction', () => {
     assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.ok);
     assert.equal(result.journal.entries[0]?.status, 'applied');
     assert.equal(h.snapshots.captured[0]?.path, config);
-    assert.equal(readFileSync(config, 'utf8'), 'model_reasoning_effort = "low"\n# preserved by rollback\n');
+    assert.equal(
+      readFileSync(config, 'utf8'),
+      'model_reasoning_effort = "low"\n# preserved by rollback\n',
+    );
   });
 
   it('treats expectedVersion conflict as drift and leaves the original bytes intact', async () => {
