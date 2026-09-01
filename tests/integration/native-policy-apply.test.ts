@@ -352,16 +352,7 @@ describe('persisted Codex native policy', () => {
     ]);
 
     const applied = await invoke<ApplyReport>(
-      [
-        'apply',
-        '--yes',
-        '--plan',
-        planId,
-        '--harness',
-        'codex',
-        '--provider',
-        'none',
-      ],
+      ['apply', '--yes', '--plan', planId, '--harness', 'codex', '--provider', 'none'],
       place,
     );
 
@@ -384,16 +375,7 @@ describe('persisted Codex native policy', () => {
     place.version = 'external-v2';
 
     const applied = await invoke<ApplyReport>(
-      [
-        'apply',
-        '--yes',
-        '--plan',
-        planId,
-        '--harness',
-        'codex',
-        '--provider',
-        'none',
-      ],
+      ['apply', '--yes', '--plan', planId, '--harness', 'codex', '--provider', 'none'],
       place,
     );
 
