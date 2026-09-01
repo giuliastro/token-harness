@@ -777,6 +777,7 @@ async function observeContext(
     projectRootMarkers: null,
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
+    managedConfigTarget: null,
     availableModels: [],
     modelCatalogTruncated: false,
     mcpServers: [],

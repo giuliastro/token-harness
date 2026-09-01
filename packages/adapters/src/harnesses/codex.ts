@@ -768,6 +768,7 @@ async function observeContext(
     projectRootMarkers: null,
     projectDocFallbackFilenames: [],
     configInstructionBytes: null,
+    managedConfigTarget: null,
     availableModels: [],
     modelCatalogTruncated: false,
     mcpServers: [],
@@ -804,6 +805,30 @@ async function observeContext(
   const modelResponse = rpcResult(messages, 4);
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
+
+  const managedConfigTarget: HarnessContextObservation['managedConfigTarget'] = (() => {
+    const layers = configResponse?.['layers'];
+    if (!Array.isArray(layers)) return null;
+    for (const layer of layers) {
+      if (!isRecord(layer)) continue;
+      const source = isRecord(layer['name']) ? layer['name'] : null;
+      if (source === null || readString(source, 'type') !== 'user') continue;
+      // A selected profile is still user-owned. Phase 18.4 never adopts or rewrites one
+      // implicitly; only the base user layer is a managed write target.
+      if (readString(source, 'profile') !== null) continue;
+      const path = readString(source, 'file');
+      const version = readString(layer, 'version');
+      if (path === null || version === null) continue;
+      return {
+        harnessId: CODEX,
+        scope: 'user',
+        path,
+        version,
+        source: 'native-rpc',
+      };
+    }
+    return null;
+  })();
 
   const features = config !== null && isRecord(config['features']) ? config['features'] : null;
   const instructions = config === null ? null : readString(config, 'instructions');
@@ -884,6 +909,19 @@ async function observeContext(
       }),
     );
   }
+  if (config !== null && managedConfigTarget === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-managed-config-target-unavailable',
+        subject: CODEX,
+        message:
+          'Codex effective config was readable, but no versioned base user config layer was returned',
+        remediation:
+          'Keep native policy advisory; do not guess a config.toml path or expectedVersion',
+      }),
+    );
+  }
   if (modelResponse === null) {
     diagnostics.push(
       diagnostic({
@@ -957,6 +995,7 @@ async function observeContext(
       config === null ? [] : readStringArray(config, 'project_doc_fallback_filenames'),
     configInstructionBytes:
       config === null ? null : utf8Bytes(instructions) + utf8Bytes(developerInstructions),
+    managedConfigTarget,
     availableModels,
     modelCatalogTruncated,
     mcpServers,

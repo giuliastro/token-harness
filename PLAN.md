@@ -1704,8 +1704,11 @@ The transaction foundation now includes a first-class Codex `config/batchWrite` 
 TOML parsing/serialization to Codex app-server, targets the exact user `config.toml`, carries the
 config version observed while planning, snapshots the file before mutation, treats
 `configVersionConflict` as precondition drift, and participates in the existing byte-for-byte
-verified rollback path. This is infrastructure only: no optimizer recommendation is automatically
-turned into a managed setting yet, and no user-owned profile entry is claimed.
+verified rollback path. Context observation now also reads Codex's native config layer stack and
+exposes the exact base user-config path plus its version as the only admissible managed write
+target; selected user profiles remain user-owned and are deliberately not adopted. This is still
+infrastructure only: no optimizer recommendation is automatically turned into a managed setting
+yet.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.

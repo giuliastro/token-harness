@@ -396,7 +396,13 @@ describe('context-cost observation', () => {
                     features: { tool_search: true },
                   },
                   origins: {},
-                  layers: [],
+                  layers: [
+                    {
+                      name: { type: 'user', file: CONFIG, profile: null },
+                      version: 'user-v7',
+                      config: {},
+                    },
+                  ],
                 },
               }),
               JSON.stringify({
@@ -474,6 +480,13 @@ describe('context-cost observation', () => {
     assert.deepEqual(result.projectRootMarkers, ['.git']);
     assert.deepEqual(result.projectDocFallbackFilenames, ['TEAM.md']);
     assert.equal(result.configInstructionBytes, 5);
+    assert.deepEqual(result.managedConfigTarget, {
+      harnessId: 'codex',
+      scope: 'user',
+      path: CONFIG,
+      version: 'user-v7',
+      source: 'native-rpc',
+    });
     assert.equal(result.availableModels.length, 1);
     assert.equal(result.availableModels[0]?.model, 'gpt-5.6-codex');
     assert.deepEqual(result.availableModels[0]?.supportedReasoningEfforts, [
@@ -491,5 +504,53 @@ describe('context-cost observation', () => {
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
     assert.match(requests[0]?.stdin ?? '', /model\/list/);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
+  });
+
+  it('does not adopt a selected Codex profile as the writable managed target', async () => {
+    const base = context();
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (): Promise<ProcessOutcome> => ({
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/usr/local/bin/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 1, result: {} }),
+            JSON.stringify({
+              id: 2,
+              result: {
+                config: { model: 'gpt-5.6-codex' },
+                origins: {},
+                layers: [
+                  {
+                    name: { type: 'user', file: CONFIG, profile: 'economy' },
+                    version: 'profile-v1',
+                    config: {},
+                  },
+                ],
+              },
+            }),
+            JSON.stringify({ id: 3, result: { data: [], nextCursor: null } }),
+            JSON.stringify({ id: 4, result: { data: [], nextCursor: null } }),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        }),
+      },
+    };
+
+    const result = await codexAdapter.observeContext?.(observedContext, '2026-08-30T15:00:00.000Z');
+    assert.ok(result);
+    assert.equal(result.managedConfigTarget, null);
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'codex-managed-config-target-unavailable'),
+    );
   });
 });
