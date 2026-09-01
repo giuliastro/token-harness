@@ -1118,8 +1118,7 @@ async function applyCodexConfigBatchWrite(
           severity: 'error',
           code: 'codex-config-write-unavailable',
           message:
-            'Codex app-server could not apply the reviewed config batch: ' +
-            result.failure.message,
+            'Codex app-server could not apply the reviewed config batch: ' + result.failure.message,
           path: action.path,
           remediation: 'Check the installed Codex CLI, then run token-harness plan again',
         }),
