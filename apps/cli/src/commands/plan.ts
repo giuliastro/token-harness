@@ -86,7 +86,8 @@ async function appendCodexNativePolicy(
     runContext(nativeContext),
   ]);
   const advice = optimization.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
-  const observation = contextResult.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
+  const observation =
+    contextResult.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
 
   if (advice === null || observation === null || observation.managedConfigTarget === null) {
     diagnostics.push(
