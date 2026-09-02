@@ -93,6 +93,7 @@ export async function main(argv: readonly string[]): Promise<void> {
         ? {
             fs,
             runner: resolution.environment.runner,
+            resolveExecutables: resolution.environment.resolveExecutables,
             paths: resolution.environment.paths,
             localDatabase: new ChildLocalDatabase({
               runner: resolution.environment.runner,
