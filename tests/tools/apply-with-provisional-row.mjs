@@ -34,10 +34,12 @@
  * Usage, from a built checkout (`pnpm build` first):
  *
  *   node tests/tools/apply-with-provisional-row.mjs --harness claude --provider rtk --project .
+ *   node tests/tools/apply-with-provisional-row.mjs --operation rollback --harness codex --provider harnesstrim --project .
  *   node tests/tools/apply-with-provisional-row.mjs --operation uninstall --harness codex --provider harnesstrim --project .
  *
- * `--operation` defaults to `apply`; `uninstall` exists specifically so the fixture can prove
- * surgical removal before the reviewed row is committed.
+ * `--operation` defaults to `apply`. `rollback` keeps the same isolated state root, and
+ * `uninstall` exists specifically so the fixture can prove surgical removal before the reviewed
+ * row is committed.
  */
 
 import process from 'node:process';
@@ -68,8 +70,8 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 const operation = args.operation ?? 'apply';
-if (operation !== 'apply' && operation !== 'uninstall') {
-  throw new Error('--operation must be apply or uninstall');
+if (operation !== 'apply' && operation !== 'rollback' && operation !== 'uninstall') {
+  throw new Error('--operation must be apply, rollback, or uninstall');
 }
 for (const required of ['harness', 'provider', 'project']) {
   if (args[required] === undefined) throw new Error(`--${required} is required`);
@@ -99,6 +101,10 @@ const probe = (() => {
       HOME: args.home,
       USERPROFILE: args.home,
       LOCALAPPDATA: `${args.home}/state`,
+      XDG_CONFIG_HOME: `${args.home}/.config`,
+      XDG_DATA_HOME: `${args.home}/.local/share`,
+      XDG_STATE_HOME: `${args.home}/.local/state`,
+      XDG_CACHE_HOME: `${args.home}/.cache`,
     },
   };
 })();
