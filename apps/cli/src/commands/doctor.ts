@@ -98,6 +98,39 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
             ),
         );
 
+  const providersWithPathDiagnostics = providers.map((detection) => {
+    const enumerate = context.adapters?.resolveExecutables;
+    if (enumerate === undefined || detection.executable === null) return detection;
+
+    const visible = enumerate(detection.providerId);
+    if (visible.length <= 1) return detection;
+
+    const normalize = (path: string): string =>
+      context.platform.os === 'windows' && !context.platform.isWsl ? path.toLowerCase() : path;
+    const selected = normalize(detection.executable);
+    const shadowed = visible
+      .map((entry) => entry.path)
+      .filter((path) => normalize(path) !== selected);
+    if (shadowed.length === 0) return detection;
+
+    const selectedVersion = detection.version === null ? '' : ` (${detection.version})`;
+    return {
+      ...detection,
+      warnings: [
+        ...detection.warnings,
+        diagnostic({
+          severity: 'warning',
+          code: 'shadowed-provider-executable',
+          message:
+            `${detection.providerId}${selectedVersion} resolves to ${detection.executable}; ` +
+            `${String(shadowed.length)} other PATH ${shadowed.length === 1 ? 'copy is' : 'copies are'} shadowed: ${shadowed.join(', ')}`,
+          remediation:
+            'Review PATH order and remove or update stale duplicates manually if they are unintended',
+        }),
+      ],
+    };
+  });
+
   // RFC 0006 §Exit codes: exit 3 means "a broken integration, an unowned edit on
   // an exclusive surface, a version outside a tested range, or a verification
   // result below its declared tier". An installed-but-unwired provider is none
@@ -118,7 +151,7 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
    * It is a warning, not a problem, so it leaves the exit code alone.
    */
   const rows = context.compatibilityRows ?? COMPATIBILITY_ROWS;
-  const providersWithCoverage = providers.map((detection) => {
+  const providersWithCoverage = providersWithPathDiagnostics.map((detection) => {
     if (detection.state !== 'configured' || detection.configuredHarnesses.length === 0) {
       return detection;
     }
