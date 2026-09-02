@@ -579,11 +579,7 @@ async function observeUsage(
       },
     }),
     JSON.stringify({ method: 'initialized', params: {} }),
-    JSON.stringify({
-      method: 'account/rateLimits/read',
-      id: RATE_LIMIT_REQUEST_ID,
-      params: {},
-    }),
+    JSON.stringify({ method: 'account/rateLimits/read', id: RATE_LIMIT_REQUEST_ID, params: {} }),
     '',
   ].join('\n');
 
