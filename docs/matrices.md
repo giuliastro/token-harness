@@ -130,21 +130,17 @@ is exactly the drift generating the tables above exists to prevent.
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
-- **Three compatibility rows ship, all on Windows.** RTK × Claude Code at rtk `0.44.0` / Claude Code
-  `2.1.220` (`canary`), and HarnessTrim × Claude Code at harnesstrim `0.1.0` / Claude Code `2.1.220`
-  (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` / Codex `0.146.0` (`config-only`).
-  Each names a recording under `tests/fixtures/rows/`. The Codex row is reachable only with
-  `--harness codex`: HarnessTrim's OpenCode combination has no row, and a provider plan refused on
-  any combination is dropped whole, so a bare `apply` leaves its covered installs alone. macOS and Linux have no row:
-  a row is a state of a real machine and no such machine was available, so `plan` and `apply` refuse
-  there while detection, verification, and measurement continue to work. Codex and OpenCode have no
-  row either, for a different reason — nothing proposes a mutation on them, because RTK's plan
-  builder writes a Claude-shaped hook list and HarnessTrim's reviewed write set covers Claude only.
-- **Two stages are missing from every recording.** `invalidating-update` needs two versions of a
-  provider on one machine and neither machine had them; a synthesised state would assert something
-  nobody stood in. `uninstall` is missing from the HarnessTrim recording because `uninstall` computes
-  a plan and the RFC 0009 gate refused it before the row existed — it is recordable now and is not yet
-  recorded.
+- **Four compatibility rows ship.** Three are on Windows: RTK × Claude Code at rtk `0.44.0` /
+  Claude Code `2.1.220` (`canary`), HarnessTrim × Claude Code at harnesstrim `0.1.0` /
+  Claude Code `2.1.220` (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` /
+  Codex `0.146.0` (`config-only`). The fourth is the real Linux/non-WSL recording:
+  HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). Each names a recording under
+  `tests/fixtures/rows/`, and the Linux row is exact: nearby Codex/HarnessTrim versions and WSL
+  remain refused. HarnessTrim's OpenCode combination remains adoption-only.
+- **`invalidating-update` is still intentionally missing from the Linux recording.** It needs a
+  second real provider or harness version on the same machine; a synthesised state would assert
+  something nobody stood in. The Linux fixture does include `uninstall`, recorded after a second
+  apply, and proves the seven owned HarnessTrim artifacts are removed while user-owned files remain.
 - **The managed install refuses to adopt a hand-placed skill.** Applying HarnessTrim's skills-only
   install over a `SKILL.md` a user copied there themselves fails with
   `delegated-install-artifact-mismatch` naming that path, and rolls back with everything restored.
