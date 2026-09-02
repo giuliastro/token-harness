@@ -83,8 +83,8 @@ Flags
 
 Only apply, update, rollback and uninstall change harness/provider
 configuration, and none of them do without --yes. Metrics and benchmark
-capture may write only Token Harness's own local state. Exit codes and JSON are
-specified in RFC 0006.`;
+capture may write only Token Harness's own local state. Exit codes and JSON
+are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
   'benchmark-start': `token-harness benchmark-start — snapshot one task before it runs
