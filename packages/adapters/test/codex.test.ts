@@ -256,7 +256,7 @@ describe('subscription usage', () => {
             stdout: [
               JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
               JSON.stringify({
-                id: 2,
+                id: 'token-harness-rate-limits',
                 result: {
                   rateLimits: rateLimit,
                   rateLimitsByLimitId: { codex: rateLimit },
@@ -325,7 +325,7 @@ describe('subscription usage', () => {
           stdout: [
             JSON.stringify({ id: 1, result: {} }),
             JSON.stringify({
-              id: 2,
+              id: 'token-harness-rate-limits',
               result: {
                 rateLimits: {
                   limitId: 'future-bucket',
