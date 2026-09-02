@@ -27,6 +27,7 @@ import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } fro
 import { runApply } from './commands/apply.js';
 import { runBenchmark } from './commands/benchmark.js';
 import { runBenchmarkFinish, runBenchmarkStart } from './commands/benchmark-capture.js';
+import { runBenchmarkMatrix } from './commands/benchmark-matrix.js';
 import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
@@ -63,6 +64,7 @@ export type CommandTable = Readonly<
 export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
   benchmark: runBenchmark,
+  'benchmark-matrix': runBenchmarkMatrix,
   'benchmark-finish': runBenchmarkFinish,
   'benchmark-start': runBenchmarkStart,
   budget: runBudget,
