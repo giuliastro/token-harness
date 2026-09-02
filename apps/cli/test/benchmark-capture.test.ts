@@ -61,7 +61,7 @@ function fixture() {
           [
             JSON.stringify({ id: 1, result: {} }),
             JSON.stringify({
-              id: 2,
+              id: 'token-harness-rate-limits',
               result: {
                 rateLimits: {
                   limitId: 'codex-main',
