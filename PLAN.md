@@ -1816,10 +1816,17 @@ refuses mismatched task class/harness pairs, makes a known quality regression lo
 efficiency, uses only same-window authoritative/reported backend quota deltas that did not cross
 reset, and falls back to retry/error/attempt/local-token evidence without relabeling it as
 subscription quota. `token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>`
-now parses schema-1 receipts at runtime and exposes that comparison read-only. Automated task/receipt
-collection and the actual empirical multi-task benchmark matrix remain open. The deterministic
-paired fixture corpus is now present for mechanical, standard and hard tasks; it pins quota-backed
-wins, quality regressions and retry-cost losses and is explicitly marked contract-not-empirical.
+now parses schema-1 receipts at runtime and exposes that comparison read-only. The first **manual task-boundary receipt capture** is now implemented: `benchmark-start`
+records the selected harness's quota windows and discovered model/effort/verbosity into Token
+Harness state before the user runs the task; `benchmark-finish` re-observes quota, requires an
+explicit passed/failed quality gate plus attempt counts, verifies the same machine-local project id,
+and writes an immutable schema-1 receipt. It never executes the coding task or changes harness
+configuration, never stores the raw project path in the capture, and refuses overwrite. Local token
+totals and task-level runtime error correlation remain null/empty until trustworthy attribution is
+implemented. Fully automated task execution and the actual empirical multi-task benchmark matrix
+remain open. The deterministic paired fixture corpus is present for mechanical, standard and hard
+tasks; it pins quota-backed wins, quality regressions and retry-cost losses and is explicitly marked
+contract-not-empirical.
 
 Re-score providers against the new KPI: useful work per observed quota delta.
 
