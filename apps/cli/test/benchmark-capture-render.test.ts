@@ -50,7 +50,8 @@ describe('benchmark capture rendering', () => {
 
   it('makes local-usage absence explicit after finish', () => {
     const report: TaskBenchmarkCaptureFinishReport = {
-      capturePath: '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
+      capturePath:
+        '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
       receiptPath:
         '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.json',
       receipt: {
