@@ -325,14 +325,13 @@ export function deriveTaskLocalUsage(
     if (!Number.isFinite(last) || last < start || last > end) continue;
 
     const previous = beforeById.get(current.sessionId);
-    const base: TaskLocalUsage =
-      previous ?? {
-        inputTokens: 0,
-        cacheCreationTokens: 0,
-        cacheReadTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-      };
+    const base: TaskLocalUsage = previous ?? {
+      inputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
     const delta: TaskLocalUsage = {
       inputTokens: current.inputTokens - base.inputTokens,
       cacheCreationTokens: current.cacheCreationTokens - base.cacheCreationTokens,
