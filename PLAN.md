@@ -1698,7 +1698,7 @@ Acceptance:
 - a quality floor can veto an economy recommendation;
 - `unknown` quota produces context/model advice without pretending to know pacing.
 
-### 18.4 P1 — Managed native policy — In progress
+### 18.4 P1 — Managed native policy — Initial Codex slice complete
 
 The transaction foundation now includes a first-class Codex `config/batchWrite` action. It delegates
 TOML parsing/serialization to Codex app-server, targets the exact user `config.toml`, carries the
@@ -1752,12 +1752,16 @@ Claude candidates are admitted only from current, supported, reversible settings
 such as clear/compact stay user-driven unless Claude exposes a safe non-interactive lifecycle
 contract.
 
-Acceptance:
+Acceptance for the initial managed Codex slice (`model_reasoning_effort` and
+`model_verbosity`) is satisfied:
 
 - user-owned profile entries remain user-owned;
-- every managed field has absent/brownfield/drift/rollback fixtures;
-- model IDs are resolved at apply time from the installed version;
-- no managed setting silently enables pay-as-you-go API usage.
+- both managed fields have absent/brownfield/drift/rollback coverage;
+- future model edits are forced through apply-time native-catalog resolution;
+- the `subscription-safe` executor guard prevents the managed slice from silently enabling a
+  pay-as-you-go path.
+
+The candidate list above remains future expansion, not unfinished acceptance for the first slice.
 
 ### 18.5 P1 — Historical telemetry with ccusage — Partially done
 

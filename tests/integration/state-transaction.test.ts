@@ -377,6 +377,67 @@ describe('Codex native config transaction', () => {
     assert.equal(readFileSync(config, 'utf8'), original);
   });
 
+  it('rolls back both managed fields when verbosity fails its effective postcondition', async () => {
+    const h = harness();
+    const config = join(h.project, 'config.toml');
+    const original =
+      'model_reasoning_effort = "high"\nmodel_verbosity = "medium"\n# preserve both fields\n';
+    writeFileSync(config, original);
+
+    const action: CodexConfigBatchWriteAction = {
+      ...codexBatch(config),
+      policyGuard: 'subscription-safe',
+      edits: [
+        { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
+        { keyPath: 'model_verbosity', value: 'low', mergeStrategy: 'replace' },
+      ],
+    };
+    const runner: ProcessRunner = {
+      async run(request) {
+        assert.match(request.stdin ?? '', /config\/batchWrite/);
+        writeFileSync(
+          config,
+          'model_reasoning_effort = "low"\nmodel_verbosity = "low"\n# preserve both fields\n',
+        );
+        return {
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/usr/bin/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 2, result: { version: 'v2' } }),
+            JSON.stringify({
+              id: 3,
+              result: {
+                config: {
+                  model_reasoning_effort: 'low',
+                  model_verbosity: 'medium',
+                },
+              },
+            }),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+
+    const result = await run(h, [action], undefined, runner);
+
+    assert.equal(result.exitCode, TRANSACTION_EXIT_CODES.appliedFailedRolledBack);
+    assert.equal(result.journal.outcome, 'rolled-back');
+    assert.equal(result.journal.entries[0]?.status, 'failed');
+    assert.ok(
+      result.diagnostics.some((entry) => entry.code === 'codex-config-postcondition-failed'),
+    );
+    assert.equal(readFileSync(config, 'utf8'), original);
+  });
+
   it('restores config.toml byte-for-byte when a later action fails', async () => {
     const h = harness({ copyFixture: true });
     const config = join(h.project, 'config.toml');
