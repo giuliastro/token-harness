@@ -42,7 +42,7 @@ describe('benchmark capture rendering', () => {
     assert.match(rendered, /^Benchmark start — mechanical-real-1 \/ baseline$/m);
     assert.match(rendered, /benchmark-finish/);
     assert.match(rendered, /--quality passed/);
-    assert.match(rendered, /~\/\.local\/state\/token-harness/);
+    assert.match(rendered, /baseline\.capture\.json/);
     for (const line of rendered.trimEnd().split('\n')) {
       assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
     }
