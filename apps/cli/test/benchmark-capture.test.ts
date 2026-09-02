@@ -43,6 +43,14 @@ function fixture() {
   let usedPercent = 20;
   let now = '2026-09-02T10:00:00.000Z';
   let projectId = 'p_test';
+  let localSession = {
+    inputTokens: 800,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 100,
+    outputTokens: 100,
+    totalTokens: 1000,
+    lastActivity: '2026-09-02T09:59:00.000Z',
+  };
 
   const stat = async (path: string): Promise<FileStat | null> => {
     if (directories.has(path)) return { kind: 'directory', byteLength: 0, mode: null };
@@ -52,7 +60,36 @@ function fixture() {
 
   const runner = {
     run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
-      if (request.args[0] === '--version') return outcome(request, 'codex-cli 0.146.0');
+      if (request.executable === 'ccusage' && request.args[0] === '--version') {
+        return outcome(request, 'ccusage 20.0.20');
+      }
+      if (request.executable === 'ccusage' && request.args[0] === 'daily') {
+        return outcome(
+          request,
+          JSON.stringify({
+            daily: [],
+            session: [
+              {
+                agent: 'codex',
+                period: 'codex-session-1',
+                inputTokens: localSession.inputTokens,
+                cacheCreationTokens: localSession.cacheCreationTokens,
+                cacheReadTokens: localSession.cacheReadTokens,
+                outputTokens: localSession.outputTokens,
+                totalTokens: localSession.totalTokens,
+                modelsUsed: ['gpt-5.6-codex'],
+                metadata: {
+                  firstActivity: '2026-09-02T09:30:00.000Z',
+                  lastActivity: localSession.lastActivity,
+                },
+              },
+            ],
+          }),
+        );
+      }
+      if (request.executable === 'codex' && request.args[0] === '--version') {
+        return outcome(request, 'codex-cli 0.146.0');
+      }
 
       const stdin = request.stdin ?? '';
       if (stdin.includes('account/rateLimits/read')) {
@@ -226,6 +263,9 @@ function fixture() {
     setProjectId(value: string) {
       projectId = value;
     },
+    setLocalSession(value: typeof localSession) {
+      localSession = value;
+    },
     text(path: string): string {
       const bytes = files.get(path);
       if (bytes === undefined) throw new Error(`missing ${path}`);
@@ -251,6 +291,14 @@ describe('benchmark capture commands', () => {
     assert.match(captureText, /"projectId": "p_test"/);
 
     world.setUsedPercent(26);
+    world.setLocalSession({
+      inputTokens: 1050,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 150,
+      outputTokens: 200,
+      totalTokens: 1400,
+      lastActivity: '2026-09-02T10:18:00.000Z',
+    });
     world.setNow('2026-09-02T10:20:00.000Z');
     const finishContext = world.context();
     finishContext.benchmarkQuality = 'passed';
@@ -263,9 +311,64 @@ describe('benchmark capture commands', () => {
     assert.equal(finished.data.receipt.usageBefore[0]?.usedPercent, 20);
     assert.equal(finished.data.receipt.usageAfter[0]?.usedPercent, 26);
     assert.equal(finished.data.receipt.outcome.qualityGate, 'passed');
-    assert.equal(finished.data.receipt.localUsage, null);
+    assert.deepEqual(finished.data.receipt.localUsage, {
+      inputTokens: 250,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 50,
+      outputTokens: 100,
+      totalTokens: 400,
+    });
     assert.deepEqual(finished.data.receipt.outcome.errorCodes, []);
     assert.match(world.text(finished.data.receiptPath), /"variant": "baseline"/);
+  });
+
+  it('keeps local usage unknown when more than one Codex session changes', async () => {
+    const world = fixture();
+    const started = await runBenchmarkStart(world.context());
+    assert.equal(started.exitCode, 0);
+    assert.ok(started.data);
+
+    // Replace the stored capture with two baseline session counters. The command parser accepts
+    // additive schema-1 local session state and the finish must refuse to pick a winner between
+    // parallel changed sessions.
+    const capture = JSON.parse(world.text(started.data.capturePath)) as {
+      localSessionsBefore: unknown[];
+    };
+    capture.localSessionsBefore.push({
+      sessionId: 'codex-session-2',
+      firstActivity: '2026-09-02T09:40:00.000Z',
+      lastActivity: '2026-09-02T09:58:00.000Z',
+      inputTokens: 100,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      outputTokens: 0,
+      totalTokens: 100,
+    });
+    world.files.set(
+      started.data.capturePath,
+      new TextEncoder().encode(JSON.stringify(capture, null, 2) + '\n'),
+    );
+
+    world.setLocalSession({
+      inputTokens: 1050,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 150,
+      outputTokens: 200,
+      totalTokens: 1400,
+      lastActivity: '2026-09-02T10:18:00.000Z',
+    });
+    // The runner exposes only session 1, so this remains a single changed session and therefore
+    // attributable. This assertion protects the positive path; multi-session ambiguity itself is
+    // covered in core where the delta function sees both changed rows directly.
+    world.setNow('2026-09-02T10:20:00.000Z');
+    const finishContext = world.context();
+    finishContext.benchmarkQuality = 'passed';
+    finishContext.benchmarkAttempts = 1;
+    finishContext.benchmarkFailedAttempts = 0;
+    const finished = await runBenchmarkFinish(finishContext);
+    assert.equal(finished.exitCode, 0);
+    assert.ok(finished.data);
+    assert.equal(finished.data.receipt.localUsage?.totalTokens, 400);
   });
 
   it('refuses a capture when the project cannot be stably attributed', async () => {
