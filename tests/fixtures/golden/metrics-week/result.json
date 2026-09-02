@@ -68,6 +68,7 @@
     "coveragePercent": 91,
     "bypassed": 402,
     "errors": 0,
+    "errorBreakdown": [],
     "addedMedianLatencyMs": 11,
     "inflatedOperations": 0
   },
