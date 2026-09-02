@@ -341,6 +341,12 @@ export interface TaskBenchmarkComparison {
   reasons: string[];
 }
 
+export interface TaskBenchmarkCompareReport {
+  baseline: TaskBenchmarkReceipt;
+  optimized: TaskBenchmarkReceipt;
+  comparison: TaskBenchmarkComparison;
+}
+
 const QUOTA_SCOPE_PRIORITY: Readonly<Record<UsageWindowSnapshot['scope'], number>> = {
   'five-hour': 0,
   weekly: 1,
