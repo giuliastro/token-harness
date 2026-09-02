@@ -105,6 +105,14 @@ async function appendCodexNativePolicy(
   }
 
   const target = observation.managedConfigTarget;
+  const catalogModel =
+    observation.model === null
+      ? null
+      : (observation.availableModels.find(
+          (model) => model.model === observation.model || model.id === observation.model,
+        ) ?? null);
+  const observedCurrentEffort =
+    observation.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
   const edits: Array<{
     keyPath: string;
     value: string;
@@ -113,10 +121,26 @@ async function appendCodexNativePolicy(
 
   const consider = (input: {
     keyPath: 'model_reasoning_effort' | 'model_verbosity';
-    current: string | null;
+    adviceCurrent: string | null;
+    observedCurrent: string | null;
     recommended: string | null;
   }): void => {
-    if (input.recommended === null || input.recommended === input.current) return;
+    if (input.recommended === null || input.recommended === input.adviceCurrent) return;
+    if (input.adviceCurrent !== input.observedCurrent) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'codex-native-policy-observation-drift',
+          subject: CODEX,
+          message: `${input.keyPath} changed between optimizer observation (${String(
+            input.adviceCurrent,
+          )}) and native-plan observation (${String(input.observedCurrent)})`,
+          remediation:
+            'Re-run token-harness plan --native-policy so recommendation and config precondition come from a stable state',
+        }),
+      );
+      return;
+    }
     if (!observation.managedConfigOriginsObserved) {
       diagnostics.push(
         diagnostic({
@@ -158,12 +182,14 @@ async function appendCodexNativePolicy(
 
   consider({
     keyPath: 'model_reasoning_effort',
-    current: advice.currentEffort,
+    adviceCurrent: advice.currentEffort,
+    observedCurrent: observedCurrentEffort,
     recommended: advice.recommendedEffort,
   });
   consider({
     keyPath: 'model_verbosity',
-    current: advice.currentVerbosity,
+    adviceCurrent: advice.currentVerbosity,
+    observedCurrent: observation.verbosity,
     recommended: advice.recommendedVerbosity,
   });
 

@@ -1718,7 +1718,11 @@ exact base-user target; project and selected-profile overrides remain untouched.
 then run through `apply --plan <id> --yes` with the existing rollback path. After
 `config/batchWrite`, apply performs a native `config/read` and verifies every reviewed edit against
 the effective configuration; a missing or mismatched postcondition fails the action and restores the
-pre-write snapshot. Model switching remains advisory until model-tier quota benchmarks exist.
+pre-write snapshot. Planning also refuses a field when the optimizer's current value no longer
+matches the second native observation used to build the versioned write, preventing a recommendation
+from being applied across an observation race. A persisted-plan integration fixture now covers the
+full review/apply path and stale-version refusal. Model switching remains advisory until model-tier
+quota benchmarks exist.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.
