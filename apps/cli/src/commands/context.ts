@@ -30,6 +30,9 @@ export interface CommandContext {
   stateRoot: string | null;
   harness: HarnessId | null;
   provider: ProviderId | null;
+  /** Paired task benchmark receipt paths, supplied by the CLI. */
+  baselineReceipt?: string | null;
+  optimizedReceipt?: string | null;
   /** RFC 0011 optimizer policy inputs; optional for hand-built test contexts. */
   taskClass?: TaskClass | null;
   budgetProfile?: BudgetProfile | null;

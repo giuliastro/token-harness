@@ -166,6 +166,20 @@ describe('argv', () => {
     assert.equal(parsed.options.profile, 'economy');
   });
 
+  it('parses paired benchmark receipt paths', () => {
+    const parsed = parseArgv([
+      'benchmark',
+      '--baseline',
+      'fixtures/baseline.json',
+      '--optimized=fixtures/optimized.json',
+    ]);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.command, 'benchmark');
+    assert.equal(parsed.options.baselineReceipt, 'fixtures/baseline.json');
+    assert.equal(parsed.options.optimizedReceipt, 'fixtures/optimized.json');
+  });
+
   it('parses optimizer task profile and reserve inputs', () => {
     const parsed = parseArgv([
       'optimize',

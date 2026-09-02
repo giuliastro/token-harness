@@ -25,6 +25,7 @@ import {
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runApply } from './commands/apply.js';
+import { runBenchmark } from './commands/benchmark.js';
 import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
@@ -60,6 +61,7 @@ export type CommandTable = Readonly<
 
 export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
+  benchmark: runBenchmark,
   budget: runBudget,
   context: runContext,
   doctor: runDoctor,
@@ -392,6 +394,8 @@ export async function run(options: RunOptions): Promise<number> {
     stateRoot: options.stateRoot ?? null,
     harness: invocation.options.harness,
     provider: invocation.options.provider,
+    baselineReceipt: invocation.options.baselineReceipt,
+    optimizedReceipt: invocation.options.optimizedReceipt,
     taskClass: invocation.options.task,
     budgetProfile: invocation.options.profile,
     reservePercent: invocation.options.reservePercent,
