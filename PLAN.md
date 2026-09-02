@@ -1809,13 +1809,15 @@ provider, and harness in `token-harness metrics`. No exception text or tool payl
 This closes the reliability/observability prerequisite for comparing reducer savings against retry
 or failure cost.
 
-**Paired benchmark contract — core implemented (2026-09-02):** a baseline/optimized task receipt now
-records explicit quality outcome, attempts/failed attempts/runtime errors, local token volume and
-before/after usage-window snapshots. The deterministic comparator refuses mismatched task
-class/harness pairs, makes a known quality regression lose before considering efficiency, uses only
-same-window authoritative/reported backend quota deltas that did not cross reset, and falls back to
-retry/error/attempt/local-token evidence without relabeling it as subscription quota. Collection CLI,
-paired fixture corpus and the actual multi-task benchmark matrix remain open.
+**Paired benchmark contract — core + compare CLI implemented (2026-09-02):** a
+baseline/optimized task receipt records explicit quality outcome, attempts/failed attempts/runtime
+errors, local token volume and before/after usage-window snapshots. The deterministic comparator
+refuses mismatched task class/harness pairs, makes a known quality regression lose before considering
+efficiency, uses only same-window authoritative/reported backend quota deltas that did not cross
+reset, and falls back to retry/error/attempt/local-token evidence without relabeling it as
+subscription quota. `token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>`
+now parses schema-1 receipts at runtime and exposes that comparison read-only. Automated task/receipt
+collection, paired fixture corpus and the actual multi-task benchmark matrix remain open.
 
 Re-score providers against the new KPI: useful work per observed quota delta.
 
