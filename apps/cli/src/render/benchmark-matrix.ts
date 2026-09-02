@@ -42,7 +42,7 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
     return null;
   }
   return (
-    `local tokens across ${String(summary.localComparablePairs)} comparable pairs — baseline ` +
+    `local tokens across ${String(summary.localComparablePairs)} quality-passed pairs — baseline ` +
     `${formatCount(summary.baselineLocalTokens)}, optimized ${formatCount(
       summary.optimizedLocalTokens,
     )}, delta ${percent(summary.localTokenSavingPercent)}`
