@@ -16,6 +16,7 @@ import type {
   TaskBenchmarkCaptureFinishReport,
   TaskBenchmarkCaptureStartReport,
   TaskBenchmarkCompareReport,
+  TaskBenchmarkMatrixReport,
   CommandResult,
   ContextReport,
   Diagnostic,
@@ -33,6 +34,7 @@ import type {
 import { renderApplyReport } from './apply.js';
 import { renderBenchmarkReport } from './benchmark.js';
 import { renderBenchmarkFinishReport, renderBenchmarkStartReport } from './benchmark-capture.js';
+import { renderBenchmarkMatrixReport } from './benchmark-matrix.js';
 import { renderBudgetReport } from './budget.js';
 import { renderContextReport } from './context-cost.js';
 import { renderDoctorReport } from './doctor.js';
@@ -85,6 +87,8 @@ export function renderHuman(
       return plain(renderApplyReport(data as ApplyReport, context, result.command));
     case 'benchmark':
       return plain(renderBenchmarkReport(data as TaskBenchmarkCompareReport, context));
+    case 'benchmark-matrix':
+      return plain(renderBenchmarkMatrixReport(data as TaskBenchmarkMatrixReport, context));
     case 'benchmark-finish':
       return plain(renderBenchmarkFinishReport(data as TaskBenchmarkCaptureFinishReport, context));
     case 'benchmark-start':
@@ -120,6 +124,7 @@ export {
   renderApplyReport,
   renderBenchmarkReport,
   renderBenchmarkFinishReport,
+  renderBenchmarkMatrixReport,
   renderBenchmarkStartReport,
   renderBudgetReport,
   renderContextReport,
