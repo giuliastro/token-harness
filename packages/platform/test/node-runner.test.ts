@@ -346,7 +346,6 @@ describe('stdin', () => {
     assert.equal(outcome.timedOut, false);
     assert.match(outcome.stdout, /"id":"th-response"/);
   });
-
 });
 
 describe('redaction', () => {
