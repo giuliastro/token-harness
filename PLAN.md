@@ -1801,6 +1801,14 @@ Acceptance:
 
 ### 18.6 P1/P2 — Re-benchmark the provider stack
 
+**Measurement foundation — complete (2026-09-02):** HarnessTrim's reducer runtime is fail-open and
+records reducer exceptions separately from ordinary pass-throughs and output-growth errors. Token
+Harness imports that additive signal as unchanged, error-bearing `OptimizationEvent` records, emits
+an aggregated warning for newly imported failures, and retains a historical breakdown by error code,
+provider, and harness in `token-harness metrics`. No exception text or tool payload is persisted.
+This closes the reliability/observability prerequisite for comparing reducer savings against retry
+or failure cost; the actual multi-task benchmark matrix below remains open.
+
 Re-score providers against the new KPI: useful work per observed quota delta.
 
 Order:
@@ -1819,6 +1827,8 @@ Acceptance:
 - benchmark fixtures include task success, not token count alone;
 - provider marginal savings are still attributable by stage;
 - backend quota deltas are reported separately from reducer token savings;
+- reducer/runtime failures remain attributable by error code, provider, and harness without storing
+  payloads or exception messages — **done**;
 - a provider that saves tokens but increases retries can lose the comparison.
 
 ### 18.7 P2 — Cross-harness scheduler and compact handoff
