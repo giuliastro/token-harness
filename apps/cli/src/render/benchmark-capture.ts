@@ -7,13 +7,24 @@ import type {
   TaskBenchmarkCaptureStartReport,
 } from '@token-harness/core';
 
-import { MAX_WIDTH, displayPath, document, truncatePath, wrap, type RenderContext } from './layout.js';
+import {
+  MAX_WIDTH,
+  displayPath,
+  document,
+  truncatePath,
+  wrap,
+  type RenderContext,
+} from './layout.js';
 
 export function renderBenchmarkStartReport(
   report: TaskBenchmarkCaptureStartReport,
   context: RenderContext,
 ): string {
   const { capture } = report;
+  const capturePath = truncatePath(
+    displayPath(report.capturePath, context.home),
+    MAX_WIDTH - 'Capture: '.length,
+  );
   return document([
     `Benchmark start — ${capture.benchmarkId} / ${capture.variant}`,
     `${capture.taskClass} on ${capture.harnessId}`,
@@ -23,7 +34,7 @@ export function renderBenchmarkStartReport(
       0,
     ),
     `Quota windows captured: ${String(capture.usageBefore.length)}`,
-    `Capture: ${truncatePath(displayPath(report.capturePath, context.home), MAX_WIDTH - 'Capture: '.length)}`,
+    `Capture: ${capturePath}`,
     '',
     ...wrap(
       `Run the task, then finish with: token-harness benchmark-finish --benchmark-id ${capture.benchmarkId} --variant ${capture.variant} --quality passed --attempts 1 --failed-attempts 0`,
@@ -37,6 +48,10 @@ export function renderBenchmarkFinishReport(
   context: RenderContext,
 ): string {
   const { receipt } = report;
+  const receiptPath = truncatePath(
+    displayPath(report.receiptPath, context.home),
+    MAX_WIDTH - 'Receipt: '.length,
+  );
   return document([
     `Benchmark receipt — ${receipt.benchmarkId} / ${receipt.variant}`,
     `${receipt.taskClass} on ${receipt.harnessId}`,
@@ -47,7 +62,7 @@ export function renderBenchmarkFinishReport(
     ),
     `Quota windows: ${String(receipt.usageBefore.length)} before / ${String(receipt.usageAfter.length)} after`,
     'Local usage: not captured by this slice',
-    `Receipt: ${truncatePath(displayPath(report.receiptPath, context.home), MAX_WIDTH - 'Receipt: '.length)}`,
+    `Receipt: ${receiptPath}`,
     '',
     ...wrap(
       'After both variants are complete, compare their receipt files with token-harness benchmark --baseline <baseline.json> --optimized <optimized.json>.',
