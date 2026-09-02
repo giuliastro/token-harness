@@ -145,6 +145,7 @@ function report(): MetricsReport {
     bypassed: 0,
     inflatedOperations: 0,
     errors: 0,
+    errorBreakdown: [],
     addedMedianLatencyMs: null,
   };
 }
@@ -167,6 +168,37 @@ describe('metrics channel rendering', () => {
     assert.match(rendered, /unavailable - some channel operations are incomparable/);
     assert.match(rendered, /reason: channel-residue/);
     assert.match(rendered, /^By provider \(marginal\)$/m);
+  });
+
+  it('renders historical error identities only when errors exist', () => {
+    const input = report();
+    input.errors = 3;
+    input.errorBreakdown = [
+      {
+        code: 'harnesstrim-reducer-failed:test-output-slim',
+        count: 2,
+        providerIds: [providerId('harnesstrim')],
+        harnesses: [harnessId('opencode'), harnessId('pi')],
+      },
+      {
+        code: 'provider-timeout',
+        count: 1,
+        providerIds: [providerId('rtk')],
+        harnesses: [harnessId('claude')],
+      },
+    ];
+
+    const rendered = renderMetricsReport(input, {
+      toolVersion: 'test',
+      home: null,
+      decorate: false,
+    });
+
+    assert.match(rendered, /^Errors by code$/m);
+    assert.match(rendered, /harnesstrim-reducer-failed:test-output-slim/);
+    assert.match(rendered, /2 operations - providers harnesstrim - harnesses opencode, pi/);
+    assert.match(rendered, /provider-timeout/);
+    assert.match(rendered, /1 operation - providers rtk - harnesses claude/);
   });
 
   it('keeps every rendered line within the terminal contract', () => {
