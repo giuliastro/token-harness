@@ -11,10 +11,12 @@ import {
   TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION,
   commandResult,
   completeTaskBenchmarkCapture,
+  deriveTaskLocalUsage,
   diagnostic,
   harnessId,
   isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
+  snapshotTaskLocalSessions,
   type CommandResult,
   type HarnessId,
   type TaskBenchmarkCapture,
@@ -25,6 +27,7 @@ import {
 import { runBudget } from './budget.js';
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
+import { runHistory } from './history.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
@@ -192,12 +195,17 @@ export async function runBenchmarkStart(
 
   const startedAt = context.now();
   const observedContext = fixedContext(context, harness, startedAt);
-  const [budgetResult, contextResult] = await Promise.all([
+  const [budgetResult, contextResult, historyResult] = await Promise.all([
     runBudget(observedContext),
     runContext(observedContext),
+    runHistory({ ...observedContext, since: '1d', until: null }),
   ]);
   const budget = budgetResult.data?.harnesses.find((item) => item.harnessId === harness);
   const policy = contextResult.data?.harnesses.find((item) => item.harnessId === harness);
+  const localSessionsBefore =
+    historyResult.data?.source.state === 'available'
+      ? snapshotTaskLocalSessions(historyResult.data.sessions)
+      : null;
 
   const capture: TaskBenchmarkCapture = {
     schemaVersion: TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION,
@@ -211,6 +219,7 @@ export async function runBenchmarkStart(
     verbosity: policy?.verbosity ?? null,
     startedAt,
     usageBefore: budget?.windows ?? [],
+    localSessionsBefore,
   };
 
   if (!(await writeJson(context, paths.capturePath, capture))) {
@@ -234,7 +243,11 @@ export async function runBenchmarkStart(
     command: 'benchmark-start',
     exitCode: EXIT_CODES.ok,
     data: { capture, capturePath: paths.capturePath },
-    diagnostics: [...budgetResult.diagnostics, ...contextResult.diagnostics],
+    diagnostics: [
+      ...budgetResult.diagnostics,
+      ...contextResult.diagnostics,
+      ...historyResult.diagnostics,
+    ],
   });
 }
 
@@ -398,12 +411,24 @@ export async function runBenchmarkFinish(
   }
 
   const completedAt = context.now();
-  const budgetResult = await runBudget(
-    fixedContext(context, parsed.capture.harnessId, completedAt),
-  );
+  const completedContext = fixedContext(context, parsed.capture.harnessId, completedAt);
+  const [budgetResult, historyResult] = await Promise.all([
+    runBudget(completedContext),
+    runHistory({ ...completedContext, since: '1d', until: null }),
+  ]);
   const budget = budgetResult.data?.harnesses.find(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
+  const localUsage =
+    parsed.capture.localSessionsBefore !== null &&
+    historyResult.data?.source.state === 'available'
+      ? deriveTaskLocalUsage(
+          parsed.capture.localSessionsBefore,
+          snapshotTaskLocalSessions(historyResult.data.sessions),
+          parsed.capture.startedAt,
+          completedAt,
+        )
+      : null;
 
   const completed = completeTaskBenchmarkCapture(parsed.capture, {
     completedAt,
@@ -411,6 +436,7 @@ export async function runBenchmarkFinish(
     qualityGate,
     attempts,
     failedAttempts,
+    localUsage,
   });
   if (!completed.ok) {
     return commandResult({
@@ -454,6 +480,6 @@ export async function runBenchmarkFinish(
       capturePath: paths.capturePath,
       receiptPath: paths.receiptPath,
     },
-    diagnostics: budgetResult.diagnostics,
+    diagnostics: [...budgetResult.diagnostics, ...historyResult.diagnostics],
   });
 }
