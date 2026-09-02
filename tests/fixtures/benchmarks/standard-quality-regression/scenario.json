@@ -1,0 +1,10 @@
+{
+  "name": "standard-quality-regression",
+  "fixtureKind": "contract-not-empirical",
+  "taskClass": "standard",
+  "harnessId": "codex",
+  "expectedVerdict": "baseline-better",
+  "expectedBasis": "quality",
+  "expectedEvidenceLevel": "quality-only",
+  "note": "The optimized receipt uses fewer local tokens but fails the explicit quality gate, so it must lose before efficiency is considered."
+}
