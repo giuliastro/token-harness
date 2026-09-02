@@ -44,8 +44,15 @@ export interface VerificationResult {
   harnessId: HarnessId;
   status: VerificationStatus;
   declaredTier: VerificationTier;
-  /** RFC 0004 §Brownfield adoption: adopted installations are verified, not owned. */
+  /**
+   * Whether Token Harness owns this provider × harness integration.
+   *
+   * This is intentionally separate from provider installation ownership: Token Harness may own
+   * reviewed integration artifacts while the provider executable itself remains user-installed.
+   */
   managedByTokenHarness: boolean;
+  /** Whether Token Harness installed/owns the provider executable itself. */
+  providerManagedByTokenHarness?: boolean;
   checks: VerificationCheck[];
 }
 
