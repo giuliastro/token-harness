@@ -243,7 +243,11 @@ export async function runBenchmarkStart(
     command: 'benchmark-start',
     exitCode: EXIT_CODES.ok,
     data: { capture, capturePath: paths.capturePath },
-    diagnostics: [...budgetResult.diagnostics, ...contextResult.diagnostics, ...historyResult.diagnostics],
+    diagnostics: [
+      ...budgetResult.diagnostics,
+      ...contextResult.diagnostics,
+      ...historyResult.diagnostics,
+    ],
   });
 }
 
@@ -416,8 +420,7 @@ export async function runBenchmarkFinish(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
   const localUsage =
-    parsed.capture.localSessionsBefore !== null &&
-    historyResult.data?.source.state === 'available'
+    parsed.capture.localSessionsBefore !== null && historyResult.data?.source.state === 'available'
       ? deriveTaskLocalUsage(
           parsed.capture.localSessionsBefore,
           snapshotTaskLocalSessions(historyResult.data.sessions),
