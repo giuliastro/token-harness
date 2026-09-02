@@ -99,8 +99,10 @@ Usage
 
 This command does not execute the task or change harness configuration. It records
 the current discovered model/effort/verbosity and current usage windows into Token
-Harness's state directory. The raw project path is not stored in the capture; only
-the machine-local stable project id is persisted.
+Harness's state directory. When compatible ccusage history is available it also
+snapshots cumulative session counters for conservative finish-time subtraction.
+The raw project path is not stored in the capture; only the machine-local stable
+project id is persisted.
 
 An existing capture or completed receipt is never overwritten. Missing live quota
 is recorded as an empty window list rather than inferred from local tokens.`,
