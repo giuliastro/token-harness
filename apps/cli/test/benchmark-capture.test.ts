@@ -9,10 +9,7 @@ import {
   type ProcessRequest,
 } from '@token-harness/core';
 
-import {
-  runBenchmarkFinish,
-  runBenchmarkStart,
-} from '../src/commands/benchmark-capture.js';
+import { runBenchmarkFinish, runBenchmarkStart } from '../src/commands/benchmark-capture.js';
 import type { CommandContext } from '../src/commands/context.js';
 
 const PLATFORM: PlatformFacts = {
