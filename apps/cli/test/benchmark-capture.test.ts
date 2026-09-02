@@ -322,55 +322,6 @@ describe('benchmark capture commands', () => {
     assert.match(world.text(finished.data.receiptPath), /"variant": "baseline"/);
   });
 
-  it('keeps local usage unknown when more than one Codex session changes', async () => {
-    const world = fixture();
-    const started = await runBenchmarkStart(world.context());
-    assert.equal(started.exitCode, 0);
-    assert.ok(started.data);
-
-    // Replace the stored capture with two baseline session counters. The command parser accepts
-    // additive schema-1 local session state and the finish must refuse to pick a winner between
-    // parallel changed sessions.
-    const capture = JSON.parse(world.text(started.data.capturePath)) as {
-      localSessionsBefore: unknown[];
-    };
-    capture.localSessionsBefore.push({
-      sessionId: 'codex-session-2',
-      firstActivity: '2026-09-02T09:40:00.000Z',
-      lastActivity: '2026-09-02T09:58:00.000Z',
-      inputTokens: 100,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
-      outputTokens: 0,
-      totalTokens: 100,
-    });
-    world.files.set(
-      started.data.capturePath,
-      new TextEncoder().encode(JSON.stringify(capture, null, 2) + '\n'),
-    );
-
-    world.setLocalSession({
-      inputTokens: 1050,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 150,
-      outputTokens: 200,
-      totalTokens: 1400,
-      lastActivity: '2026-09-02T10:18:00.000Z',
-    });
-    // The runner exposes only session 1, so this remains a single changed session and therefore
-    // attributable. This assertion protects the positive path; multi-session ambiguity itself is
-    // covered in core where the delta function sees both changed rows directly.
-    world.setNow('2026-09-02T10:20:00.000Z');
-    const finishContext = world.context();
-    finishContext.benchmarkQuality = 'passed';
-    finishContext.benchmarkAttempts = 1;
-    finishContext.benchmarkFailedAttempts = 0;
-    const finished = await runBenchmarkFinish(finishContext);
-    assert.equal(finished.exitCode, 0);
-    assert.ok(finished.data);
-    assert.equal(finished.data.receipt.localUsage?.totalTokens, 400);
-  });
-
   it('refuses a capture when the project cannot be stably attributed', async () => {
     const world = fixture();
     world.setProjectId('p_unattributed');
