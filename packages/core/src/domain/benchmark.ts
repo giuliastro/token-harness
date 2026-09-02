@@ -131,13 +131,7 @@ function snapshotIdentity(window: UsageWindowSnapshot): string {
       : window.bucketName !== null
         ? `name:${window.bucketName}`
         : 'anonymous';
-  return [
-    window.harnessId,
-    bucket,
-    window.scope,
-    window.window ?? 'none',
-    window.source,
-  ].join('|');
+  return [window.harnessId, bucket, window.scope, window.window ?? 'none', window.source].join('|');
 }
 
 function validTimeOrder(before: UsageWindowSnapshot, after: UsageWindowSnapshot): boolean {
@@ -223,7 +217,9 @@ function pairedQuota(
   optimized: TaskBenchmarkReceipt,
 ): TaskBenchmarkQuotaComparison | null {
   const baselineDeltas = comparableQuotaDeltas(baseline);
-  const optimizedByKey = new Map(comparableQuotaDeltas(optimized).map((delta) => [delta.key, delta]));
+  const optimizedByKey = new Map(
+    comparableQuotaDeltas(optimized).map((delta) => [delta.key, delta]),
+  );
 
   for (const base of baselineDeltas) {
     const optimizedDelta = optimizedByKey.get(base.key);
@@ -275,47 +271,27 @@ export function compareTaskBenchmarkReceipts(
     baseline.variant !== 'baseline' ||
     optimized.variant !== 'optimized'
   ) {
-    return result(
-      baseline.benchmarkId,
-      'incomparable',
-      'none',
-      'none',
-      null,
-      ['receipts do not describe the same benchmark task/class and baseline/optimized roles'],
-    );
+    return result(baseline.benchmarkId, 'incomparable', 'none', 'none', null, [
+      'receipts do not describe the same benchmark task/class and baseline/optimized roles',
+    ]);
   }
 
   const baselineQuality = baseline.outcome.qualityGate;
   const optimizedQuality = optimized.outcome.qualityGate;
   if (baselineQuality === 'passed' && optimizedQuality === 'failed') {
-    return result(
-      baseline.benchmarkId,
-      'baseline-better',
-      'quality',
-      'quality-only',
-      null,
-      ['optimized receipt failed a quality gate that baseline passed'],
-    );
+    return result(baseline.benchmarkId, 'baseline-better', 'quality', 'quality-only', null, [
+      'optimized receipt failed a quality gate that baseline passed',
+    ]);
   }
   if (baselineQuality === 'failed' && optimizedQuality === 'passed') {
-    return result(
-      baseline.benchmarkId,
-      'optimized-better',
-      'quality',
-      'quality-only',
-      null,
-      ['optimized receipt passed a quality gate that baseline failed'],
-    );
+    return result(baseline.benchmarkId, 'optimized-better', 'quality', 'quality-only', null, [
+      'optimized receipt passed a quality gate that baseline failed',
+    ]);
   }
   if (baselineQuality !== 'passed' || optimizedQuality !== 'passed') {
-    return result(
-      baseline.benchmarkId,
-      'inconclusive',
-      'quality',
-      'none',
-      null,
-      ['both receipts must pass an explicit quality gate before efficiency can be compared'],
-    );
+    return result(baseline.benchmarkId, 'inconclusive', 'quality', 'none', null, [
+      'both receipts must pass an explicit quality gate before efficiency can be compared',
+    ]);
   }
 
   const quota = pairedQuota(baseline, optimized);
@@ -410,30 +386,19 @@ export function compareTaskBenchmarkReceipts(
       'local-usage',
       'local-evidence',
       quota,
-      [
-        ...reasons,
-        'winner used fewer locally observed tokens; this is not a backend quota claim',
-      ],
+      [...reasons, 'winner used fewer locally observed tokens; this is not a backend quota claim'],
     );
   }
 
   if (quota !== null) {
-    return result(
-      baseline.benchmarkId,
-      'equivalent',
-      'backend-quota',
-      'quota-backed',
-      quota,
-      [...reasons, 'quality and all available secondary costs were equal'],
-    );
+    return result(baseline.benchmarkId, 'equivalent', 'backend-quota', 'quota-backed', quota, [
+      ...reasons,
+      'quality and all available secondary costs were equal',
+    ]);
   }
 
-  return result(
-    baseline.benchmarkId,
-    'inconclusive',
-    'none',
-    'none',
-    null,
-    [...reasons, 'quality matched but no efficiency evidence separated the receipts'],
-  );
+  return result(baseline.benchmarkId, 'inconclusive', 'none', 'none', null, [
+    ...reasons,
+    'quality matched but no efficiency evidence separated the receipts',
+  ]);
 }
