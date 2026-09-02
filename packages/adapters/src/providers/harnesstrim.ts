@@ -867,10 +867,15 @@ interface TrimEvent {
   /** The native producer identity; null on legacy lines and on malformed native ones. */
   eventId: string | null;
   /**
-   * Native-only: `false` marks a recorded pass-through. Null on legacy lines, whose
+   * Native-only: `false` marks an unchanged attempt. Null on legacy lines, whose
    * `mode` is the only signal available.
    */
   changed: boolean | null;
+  /**
+   * Native-only additive field: true when a matched reducer threw and HarnessTrim returned
+   * the original payload unchanged. Missing/legacy lines normalize to false.
+   */
+  reductionFailed: boolean;
   /** Native-only, and null wherever the emitting path has no tokenizer. */
   beforeTokens: number | null;
   /** Native-only, and null wherever the emitting path has no tokenizer. */
@@ -922,6 +927,7 @@ function parseTrimEvent(line: string): TrimEvent | null {
     schemaVersion,
     eventId,
     changed: typeof record['changed'] === 'boolean' ? record['changed'] : null,
+    reductionFailed: record['reductionFailed'] === true,
     beforeTokens: typeof record['beforeTokens'] === 'number' ? record['beforeTokens'] : null,
     afterTokens: typeof record['afterTokens'] === 'number' ? record['afterTokens'] : null,
     ...(typeof record['mode'] === 'string' ? { mode: record['mode'] } : {}),
@@ -977,10 +983,10 @@ function toEvent(
   const native = event.schemaVersion === 1;
   const dryrun = event.mode === 'dryrun';
   const eventId = native ? (event.eventId as string) : synthesizeEventId(sourceId, ordinal, line);
-  // A recorded pass-through and an unchanged native event are the same thing with a native
-  // signal behind the first: a file in active mode ran and changed nothing. A dryrun is not one
-  // of these — nothing was attempted — so it stays counterfactual.
-  const passThrough = native && event.changed === false;
+  // A reducer failure is an observed attempted operation, not an ordinary no-match. Keep it
+  // separate so Token Harness can count it as an error without mistaking it for a saving.
+  const reducerFailure = native && event.reductionFailed;
+  const passThrough = native && event.changed === false && !reducerFailure;
   // Both figures, or neither: the producer emits token counts only where the emitting path has
   // a tokenizer, and a half figure would be a token count that cannot be summed.
   const hasTokens = native && event.beforeTokens !== null && event.afterTokens !== null;
@@ -1002,7 +1008,11 @@ function toEvent(
    * processes, so they cannot be in a dryrun at all, and their events stay exact.
    */
   const hasUnprovenMode =
-    native && MODE_CARRYING_HARNESSES.has(event.harness as HarnessId) && !hasTokens && !passThrough;
+    native &&
+    MODE_CARRYING_HARNESSES.has(event.harness as HarnessId) &&
+    !hasTokens &&
+    !passThrough &&
+    !reducerFailure;
 
   return {
     schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
@@ -1048,27 +1058,31 @@ function toEvent(
       // deliberately not asserted as a change: the figure may describe a dryrun, and reporting
       // `changed: true` would claim the model received fewer bytes than it did.
       changed:
-        dryrun || hasUnprovenMode
+        reducerFailure || dryrun || hasUnprovenMode
           ? false
           : native
             ? (event.changed ?? true)
             : event.afterChars !== event.beforeChars,
-      bypassReason: dryrun
-        ? 'dryrun'
-        : // Same reason value as the diagnostic code for the residual ambiguity: nothing refutes a
-          // dryrun, and nothing proves one, so the bypass is the envelope's own silence.
-          hasUnprovenMode
-          ? 'mode-unresolved'
-          : native
-            ? passThrough
-              ? 'pass-through'
-              : null
-            : event.afterChars === event.beforeChars
-              ? 'no-reduction-applied'
-              : null,
+      bypassReason: reducerFailure
+        ? 'reducer-failed'
+        : dryrun
+          ? 'dryrun'
+          : // Same reason value as the diagnostic code for the residual ambiguity: nothing refutes a
+            // dryrun, and nothing proves one, so the bypass is the envelope's own silence.
+            hasUnprovenMode
+            ? 'mode-unresolved'
+            : native
+              ? passThrough
+                ? 'pass-through'
+                : null
+              : event.afterChars === event.beforeChars
+                ? 'no-reduction-applied'
+                : null,
       originalReference: null,
       latencyMs: null,
-      errorCode: null,
+      errorCode: reducerFailure
+        ? `harnesstrim-reducer-failed:${event.reducer ?? 'unknown'}`
+        : null,
     },
     source: { nativeEventId: native ? eventId : null, importedAt: context.now() },
   };
