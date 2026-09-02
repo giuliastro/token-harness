@@ -51,6 +51,10 @@ function cliVersion(): string {
 
 const CI = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
 const RELEASE = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+const RELEASE_BRIDGE = readFileSync(
+  join(REPO_ROOT, '.github', 'workflows', 'release-bridge.yml'),
+  'utf8',
+);
 
 /**
  * `release.yml` with its comment lines removed.
@@ -131,7 +135,7 @@ describe('distribution', () => {
     );
   });
 
-  it('attests the exact tagged tarball without publishing it', () => {
+  it('attests the exact tagged tarball before publishing it', () => {
     assert.match(
       RELEASE_CONFIG,
       /npm pack \.\/dist\/package/,
@@ -154,26 +158,38 @@ describe('distribution', () => {
       'the attested tarball is not retained by the release run',
     );
     for (const permission of [
+      'contents: write',
       'id-token: write',
       'attestations: write',
       'artifact-metadata: write',
     ]) {
       assert.ok(RELEASE_CONFIG.includes(permission), `release lacks ${permission}`);
     }
+
+    const attestation = RELEASE_CONFIG.indexOf('actions/attest@v4');
+    const publish = RELEASE_CONFIG.indexOf('npm publish --provenance');
+    assert.ok(publish > attestation, 'npm publish runs before the release artifact is attested');
+    assert.match(RELEASE_CONFIG, /registry-url:\s*'https:\/\/registry\.npmjs\.org'/);
+    assert.match(RELEASE_CONFIG, /secrets\.NPM_TOKEN/, 'npm publish has no repository credential');
+    assert.match(RELEASE_CONFIG, /gh release create/, 'the workflow creates no GitHub release');
   });
 
-  it('validates release tags without publishing packages', () => {
+  it('validates release tags and dispatches only an exact release branch', () => {
     assert.match(
       RELEASE_CONFIG,
       /check-release-tag\.mjs/,
       'the release workflow does not check the tag against the version',
     );
-    assert.doesNotMatch(RELEASE_CONFIG, /npm publish/, 'the release workflow publishes packages');
-    assert.doesNotMatch(
-      RELEASE_CONFIG,
-      /\$\{\{\s*secrets\./,
-      'the release workflow reads settings',
-    );
+    const guard = RELEASE_CONFIG.indexOf('check-release-tag.mjs');
+    const publish = RELEASE_CONFIG.indexOf('npm publish --provenance');
+    assert.ok(publish > guard, 'the release tag is checked only after publishing');
+    assert.match(RELEASE, /workflow_dispatch:/, 'the validated bridge cannot dispatch a release');
+
+    assert.match(RELEASE_BRIDGE, /branches:\s*\n\s*- 'release\/v\*'/);
+    assert.match(RELEASE_BRIDGE, /require\('\.\/package\.json'\)\.version/);
+    assert.match(RELEASE_BRIDGE, /require\('\.\/apps\/cli\/package\.json'\)\.version/);
+    assert.match(RELEASE_BRIDGE, /refs\/tags\/v\$VERSION/);
+    assert.match(RELEASE_BRIDGE, /actions\/workflows\/release\.yml\/dispatches/);
   });
 
   it('uses the same runtime floor as CI', () => {

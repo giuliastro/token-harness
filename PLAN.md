@@ -1199,6 +1199,13 @@ Suggested first implementation issues:
     "sign or attest release artifacts" is still open, and item 23's phrasing above is left as it was
     written rather than retrofitted into having anticipated this.
 
+    **0.1.4 release update (2026-09-02):** publishing is automated again by explicit owner request.
+    The tag workflow keeps the full package/install gates, creates and attests the exact tarball and
+    SBOM, then publishes that staged package to npm through the repository `NPM_TOKEN` and creates
+    the GitHub Release. A validated `release/vX.Y.Z` branch bridge creates the matching tag and
+    dispatches the release workflow at that exact ref; it cannot select a version different from the
+    root and CLI manifests.
+
 ### Phase 9 queue
 
 Items 1–24 are the `0.1.0` record. What follows is the Phase 9 work, in dependency order, one PR

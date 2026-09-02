@@ -1,0 +1,59 @@
+name: release bridge
+
+on:
+  push:
+    branches:
+      - 'release/v*'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-bridge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: create tag and dispatch release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate release branch
+        id: release
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          cli_version="$(node -p "require('./apps/cli/package.json').version")"
+          if [ "$version" != "$cli_version" ]; then
+            echo "root version $version does not match CLI version $cli_version" >&2
+            exit 1
+          fi
+          expected="release/v$version"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "release branch $GITHUB_REF_NAME does not match version $version" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "tag v$version already exists" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" \
+            -f sha="$GITHUB_SHA"
+
+      - name: Dispatch release workflow at exact tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/dispatches" \
+            -f ref="v$VERSION"
