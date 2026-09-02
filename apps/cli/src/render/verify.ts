@@ -49,13 +49,20 @@ export function renderVerifyReport(report: VerifyReport, _context: RenderContext
    */
   for (const result of report.results) {
     lines.push('');
-    lines.push(`${result.providerId} on ${result.harnessId} — tier ${result.declaredTier}`);
-    lines.push(
-      ...wrap(
-        `Provider executable: ${result.providerManagedByTokenHarness ? 'managed by Token Harness' : 'user-installed'}; integration: ${result.managedByTokenHarness ? 'managed by Token Harness' : 'not managed by Token Harness'}`,
-        2,
-      ),
-    );
+    if (result.providerManagedByTokenHarness === undefined) {
+      lines.push(
+        `${result.providerId} on ${result.harnessId} — set up by ` +
+          `${result.managedByTokenHarness ? 'this tool' : 'you'}, tier ${result.declaredTier}`,
+      );
+    } else {
+      lines.push(`${result.providerId} on ${result.harnessId} — tier ${result.declaredTier}`);
+      lines.push(
+        ...wrap(
+          `Provider executable: ${result.providerManagedByTokenHarness ? 'managed by Token Harness' : 'user-installed'}; integration: ${result.managedByTokenHarness ? 'managed by Token Harness' : 'not managed by Token Harness'}`,
+          2,
+        ),
+      );
+    }
     for (const check of result.checks) {
       // The wrap indent is the column the detail starts in. Getting this wrong is what made the
       // first attempt put continuations further right than the text they continued.
