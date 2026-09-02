@@ -112,7 +112,6 @@ const WINDOW_SOURCES = new Set([
 ]);
 const WINDOW_CONFIDENCES = new Set(['authoritative', 'reported', 'cached', 'estimated']);
 const WINDOW_KINDS = new Set(['primary', 'secondary']);
-const QUALITY_GATES = new Set(['passed', 'failed', 'unknown']);
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
