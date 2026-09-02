@@ -49,6 +49,33 @@ The roots in every scenario are Windows paths. That is on purpose: it exercises
 separator folding and `~` abbreviation on all three operating systems, so one set
 of golden files stays valid across the whole CI matrix.
 
+## `benchmarks/` — paired task comparison contract
+
+These fixtures are deliberately **not empirical benchmark results**. They are deterministic contract
+fixtures that pin the comparison rules before real Claude/Codex runs are collected.
+
+Each directory contains:
+
+| File | Meaning |
+| --- | --- |
+| `scenario.json` | expected verdict/basis/evidence level and a `contract-not-empirical` marker |
+| `baseline.json` | schema-1 baseline task receipt |
+| `optimized.json` | schema-1 optimized task receipt |
+
+The initial corpus covers three task classes and three failure modes of naive "token saving = better"
+logic:
+
+- `mechanical-quota-win`: both quality gates pass and a smaller comparable authoritative backend
+  quota delta wins;
+- `standard-quality-regression`: the optimized run uses fewer local tokens but fails quality, so
+  baseline wins;
+- `hard-retry-cost`: both quality gates pass and optimized uses fewer local tokens, but two failed
+  attempts make it lose when no comparable backend quota window exists.
+
+`tests/integration/benchmark-fixtures.test.ts` parses every receipt through the public runtime
+parser and verifies the declared verdict. These fixtures prove comparison semantics, not provider or
+model performance.
+
 ## `schemas/` — public schema protection
 
 One document per public schema, asserted to round trip byte for byte through

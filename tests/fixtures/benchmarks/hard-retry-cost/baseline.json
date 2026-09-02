@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "hard-retry-cost",
+  "variant": "baseline",
+  "taskClass": "hard",
+  "harnessId": "codex",
+  "model": "gpt-5.6-codex",
+  "reasoningEffort": "high",
+  "verbosity": "medium",
+  "startedAt": "2026-09-02T11:00:00.000Z",
+  "completedAt": "2026-09-02T11:40:00.000Z",
+  "usageBefore": [],
+  "usageAfter": [],
+  "localUsage": {
+    "inputTokens": 5000,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 1500,
+    "outputTokens": 1500,
+    "totalTokens": 8000
+  },
+  "outcome": {
+    "qualityGate": "passed",
+    "attempts": 1,
+    "failedAttempts": 0,
+    "errorCodes": []
+  }
+}

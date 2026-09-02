@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 export const FIXTURES_ROOT = fileURLToPath(new URL('../../fixtures/', import.meta.url));
 export const GOLDEN_ROOT = fileURLToPath(new URL('../../fixtures/golden/', import.meta.url));
 export const CLI_ROOT = fileURLToPath(new URL('../../fixtures/cli/', import.meta.url));
+export const BENCHMARK_ROOT = fileURLToPath(new URL('../../fixtures/benchmarks/', import.meta.url));
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface ScenarioRoots {
@@ -97,5 +98,48 @@ export function loadCliScenario(name: string): {
     scenario: readJson<CliScenario>(`${dir}scenario.json`),
     expectedStdout: readFileSync(`${dir}stdout.txt`, 'utf8'),
     expectedStderr: readFileSync(`${dir}stderr.txt`, 'utf8'),
+  };
+}
+
+export interface BenchmarkFixtureScenario {
+  name: string;
+  fixtureKind: 'contract-not-empirical';
+  taskClass: 'mechanical' | 'standard' | 'hard' | 'critical';
+  harnessId: string;
+  expectedVerdict:
+    | 'optimized-better'
+    | 'baseline-better'
+    | 'equivalent'
+    | 'inconclusive'
+    | 'incomparable';
+  expectedBasis:
+    | 'quality'
+    | 'backend-quota'
+    | 'failed-attempts'
+    | 'runtime-errors'
+    | 'attempts'
+    | 'local-usage'
+    | 'none';
+  expectedEvidenceLevel: 'quota-backed' | 'local-evidence' | 'quality-only' | 'none';
+  note: string;
+}
+
+export function listBenchmarkFixtures(): string[] {
+  return readdirSync(BENCHMARK_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+export function loadBenchmarkFixture(name: string): {
+  scenario: BenchmarkFixtureScenario;
+  baseline: unknown;
+  optimized: unknown;
+} {
+  const dir = `${BENCHMARK_ROOT}${name}/`;
+  return {
+    scenario: readJson<BenchmarkFixtureScenario>(`${dir}scenario.json`),
+    baseline: readJson(`${dir}baseline.json`),
+    optimized: readJson(`${dir}optimized.json`),
   };
 }
