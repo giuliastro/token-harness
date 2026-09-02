@@ -23,7 +23,7 @@ export function renderBenchmarkStartReport(
       0,
     ),
     `Quota windows captured: ${String(capture.usageBefore.length)}`,
-    `Capture: ${displayPath(report.capturePath, context.home)}`,
+    ...wrap(`Capture: ${displayPath(report.capturePath, context.home)}`, 0),
     '',
     ...wrap(
       `Run the task, then finish with: token-harness benchmark-finish --benchmark-id ${capture.benchmarkId} --variant ${capture.variant} --quality passed --attempts 1 --failed-attempts 0`,
@@ -47,7 +47,7 @@ export function renderBenchmarkFinishReport(
     ),
     `Quota windows: ${String(receipt.usageBefore.length)} before / ${String(receipt.usageAfter.length)} after`,
     'Local usage: not captured by this slice',
-    `Receipt: ${displayPath(report.receiptPath, context.home)}`,
+    ...wrap(`Receipt: ${displayPath(report.receiptPath, context.home)}`, 0),
     '',
     ...wrap(
       'After both variants are complete, compare their receipt files with token-harness benchmark --baseline <baseline.json> --optimized <optimized.json>.',
