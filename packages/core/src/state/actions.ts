@@ -1049,6 +1049,11 @@ async function applyDelegatedProviderInstall(
  * restore that snapshot on any later failure. A configVersionConflict is drift, never a retry
  * against bytes the user did not review.
  */
+const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set([
+  'model_reasoning_effort',
+  'model_verbosity',
+]);
+
 async function applyCodexConfigBatchWrite(
   action: CodexConfigBatchWriteAction,
   context: ActionContext,
@@ -1060,6 +1065,24 @@ async function applyCodexConfigBatchWrite(
       action.path,
       'Codex config mutation requires the Codex app-server process runner',
       'Run apply in an environment where Codex is installed and available on PATH',
+    );
+  }
+
+  if (
+    action.policyGuard === 'subscription-safe' &&
+    action.edits.some((edit) => !SUBSCRIPTION_SAFE_CODEX_KEYS.has(edit.keyPath))
+  ) {
+    const unsafe = action.edits.find(
+      (edit) => !SUBSCRIPTION_SAFE_CODEX_KEYS.has(edit.keyPath),
+    );
+    return refusal(
+      action,
+      'codex-native-policy-unsafe-edit',
+      action.path,
+      'The subscription-safe Codex policy tried to edit ' +
+        String(unsafe?.keyPath ?? 'an unknown key') +
+        ', which is outside its quota-safe write set',
+      'Recompute the plan with the current Token Harness build; provider, auth, model, and service-tier changes require a separately reviewed policy path',
     );
   }
 
