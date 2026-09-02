@@ -1817,7 +1817,9 @@ efficiency, uses only same-window authoritative/reported backend quota deltas th
 reset, and falls back to retry/error/attempt/local-token evidence without relabeling it as
 subscription quota. `token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>`
 now parses schema-1 receipts at runtime and exposes that comparison read-only. Automated task/receipt
-collection, paired fixture corpus and the actual multi-task benchmark matrix remain open.
+collection and the actual empirical multi-task benchmark matrix remain open. The deterministic
+paired fixture corpus is now present for mechanical, standard and hard tasks; it pins quota-backed
+wins, quality regressions and retry-cost losses and is explicitly marked contract-not-empirical.
 
 Re-score providers against the new KPI: useful work per observed quota delta.
 
@@ -1834,7 +1836,8 @@ first.
 
 Acceptance:
 
-- benchmark fixtures include task success, not token count alone;
+- benchmark fixtures include task success, not token count alone — **done for the deterministic
+  mechanical/standard/hard contract corpus; empirical provider runs remain open**;
 - provider marginal savings are still attributable by stage;
 - backend quota deltas are reported separately from reducer token savings;
 - reducer/runtime failures remain attributable by error code, provider, and harness without storing
