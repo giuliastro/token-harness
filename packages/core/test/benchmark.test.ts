@@ -603,7 +603,10 @@ describe('empirical benchmark matrix', () => {
     assert.equal(report.overall.pairs, 2);
     assert.equal(report.overall.optimizedBetter, 1);
     assert.equal(report.overall.baselineBetter, 1);
-    assert.equal(report.overall.localComparablePairs, 2);
+    assert.equal(report.overall.localComparablePairs, 1);
+    assert.equal(report.overall.baselineLocalTokens, 2000);
+    assert.equal(report.overall.optimizedLocalTokens, 1400);
+    assert.equal(report.overall.localTokenSavingPercent, 30);
     assert.equal(report.selection.incomplete, 1);
     assert.deepEqual(
       report.byTaskClass.map((row) => row.taskClass),
