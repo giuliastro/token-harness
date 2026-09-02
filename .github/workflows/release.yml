@@ -1,12 +1,13 @@
-# Builds and attests the exact publishable `token-harness` artifact after release gates pass — PLAN §8.3.
+# Builds, attests, publishes and releases the exact `token-harness` artifact after release gates pass — PLAN §8.3.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   attestations: write
   artifact-metadata: write
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   verify:
-    name: verify release
+    name: verify and publish release
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +30,7 @@ jobs:
         with:
           node-version: '22.13.0'
           cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -77,3 +79,42 @@ jobs:
           name: token-harness-${{ github.ref_name }}
           path: dist/release/*.tgz
           if-no-files-found: error
+
+      - name: Decide whether npm needs this version
+        id: npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          version="$(node -p "require('./dist/package/package.json').version")"
+          name="$(node -p "require('./dist/package/package.json').name")"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm; publish is idempotently skipped"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is required to publish $name@$version"
+            exit 1
+          fi
+          echo "$name@$version is not on npm yet"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm
+        if: steps.npm.outputs.publish == 'true'
+        working-directory: dist/package
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create or refresh GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/release/*.tgz --clobber
+          else
+            gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes
+          fi
