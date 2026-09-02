@@ -1807,7 +1807,15 @@ Harness imports that additive signal as unchanged, error-bearing `OptimizationEv
 an aggregated warning for newly imported failures, and retains a historical breakdown by error code,
 provider, and harness in `token-harness metrics`. No exception text or tool payload is persisted.
 This closes the reliability/observability prerequisite for comparing reducer savings against retry
-or failure cost; the actual multi-task benchmark matrix below remains open.
+or failure cost.
+
+**Paired benchmark contract — core implemented (2026-09-02):** a baseline/optimized task receipt now
+records explicit quality outcome, attempts/failed attempts/runtime errors, local token volume and
+before/after usage-window snapshots. The deterministic comparator refuses mismatched task
+class/harness pairs, makes a known quality regression lose before considering efficiency, uses only
+same-window authoritative/reported backend quota deltas that did not cross reset, and falls back to
+retry/error/attempt/local-token evidence without relabeling it as subscription quota. Collection CLI,
+paired fixture corpus and the actual multi-task benchmark matrix remain open.
 
 Re-score providers against the new KPI: useful work per observed quota delta.
 

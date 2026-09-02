@@ -269,6 +269,13 @@ A task receipt can include:
 - wall-clock duration;
 - task outcome: tests/checks, accepted diff, review result, or explicit user acceptance.
 
+The first paired-receipt comparator is intentionally non-composite: baseline and optimized receipts
+must identify the same task class and harness; an explicit quality gate is evaluated first; only
+matching authoritative/reported backend windows that do not cross a reset can decide on quota;
+failed attempts, runtime/provider errors, attempt count, and local token volume are secondary
+evidence. Cached/estimated quota is never promoted into a backend comparison, and local token
+volume is never labeled subscription quota.
+
 Attribution classes remain strict:
 
 - exact provider token reduction is still exact only for that measured payload;
