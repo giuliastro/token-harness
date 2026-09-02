@@ -5,11 +5,13 @@ import {
   compareTaskBenchmarkReceipts,
   comparableQuotaDeltas,
   completeTaskBenchmarkCapture,
+  deriveTaskLocalUsage,
   isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
   harnessId,
   type TaskBenchmarkCapture,
+  type TaskBenchmarkLocalSessionSnapshot,
   type TaskBenchmarkReceipt,
   type UsageWindowSnapshot,
 } from '../src/index.js';
@@ -88,6 +90,7 @@ describe('task benchmark capture contract', () => {
       verbosity: 'low',
       startedAt: '2026-09-02T12:00:00.000Z',
       usageBefore: [window()],
+      localSessionsBefore: null,
     };
   }
 
@@ -148,6 +151,66 @@ describe('task benchmark capture contract', () => {
       failedAttempts: 0,
     });
     assert.equal(backwardsTime.ok, false);
+  });
+});
+
+
+describe('local benchmark usage attribution', () => {
+  function session(
+    sessionId: string,
+    totalTokens: number,
+    lastActivity: string,
+    inputTokens = totalTokens,
+  ): TaskBenchmarkLocalSessionSnapshot {
+    return {
+      sessionId,
+      firstActivity: '2026-09-02T11:50:00.000Z',
+      lastActivity,
+      inputTokens,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      outputTokens: totalTokens - inputTokens,
+      totalTokens,
+    };
+  }
+
+  it('subtracts one changed ccusage session across the task boundary', () => {
+    const usage = deriveTaskLocalUsage(
+      [session('s1', 1000, '2026-09-02T11:59:00.000Z', 800)],
+      [session('s1', 1400, '2026-09-02T12:10:00.000Z', 1100)],
+      '2026-09-02T12:00:00.000Z',
+      '2026-09-02T12:20:00.000Z',
+    );
+    assert.deepEqual(usage, {
+      inputTokens: 300,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      outputTokens: 100,
+      totalTokens: 400,
+    });
+  });
+
+  it('refuses local attribution when two sessions changed during the benchmark', () => {
+    const usage = deriveTaskLocalUsage(
+      [],
+      [
+        session('s1', 400, '2026-09-02T12:10:00.000Z'),
+        session('s2', 500, '2026-09-02T12:12:00.000Z'),
+      ],
+      '2026-09-02T12:00:00.000Z',
+      '2026-09-02T12:20:00.000Z',
+    );
+    assert.equal(usage, null);
+  });
+
+  it('ignores sessions whose latest activity is outside the benchmark boundary', () => {
+    const usage = deriveTaskLocalUsage(
+      [],
+      [session('s1', 400, '2026-09-02T11:59:59.000Z')],
+      '2026-09-02T12:00:00.000Z',
+      '2026-09-02T12:20:00.000Z',
+    );
+    assert.equal(usage, null);
   });
 });
 
