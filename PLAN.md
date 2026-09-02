@@ -653,7 +653,9 @@ Acceptance:
 - overlapping pipeline stages are counted once;
 - character-only legacy events are labeled estimated;
 - no raw output, command arguments, source paths, or prompts enter the store;
-- reports expose coverage, bypasses, latency, and errors;
+- reports expose coverage, bypasses, latency, and errors; error-bearing events also retain a
+  deterministic breakdown by error code, provider, and harness so historical fail-open reducer
+  failures remain diagnosable after their import-time warning has passed;
 - every command matches its RFC 0006 golden transcript.
 
 ## 13. Phase 8 — MVP validation and release
