@@ -558,6 +558,191 @@ function parseRateLimitResponse(
   return { windows, planType, rateLimitReachedType, resetCreditsAvailable };
 }
 
+function cclimitsPercent(value: JsonValue | undefined): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+  }
+  if (typeof value !== 'string') return null;
+  const match = /^(\\d{1,3}(?:\\.\\d+)?)%$/.exec(value.trim());
+  if (match === null) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
+}
+
+function cclimitsWindow(
+  value: JsonValue | undefined,
+  input: {
+    window: 'primary' | 'secondary';
+    observedAt: string;
+  },
+): HarnessBudgetObservation['windows'][number] | null {
+  if (!isRecord(value)) return null;
+
+  const usedPercent =
+    cclimitsPercent(value['used_percent']) ?? cclimitsPercent(value['used']);
+  const remainingPercent =
+    cclimitsPercent(value['remaining_percent']) ?? cclimitsPercent(value['remaining']);
+  const duration = readNumber(value, 'window_duration_minutes');
+  const resetsAt = readString(value, 'resets_at');
+
+  if (
+    usedPercent === null ||
+    remainingPercent === null ||
+    Math.abs(usedPercent + remainingPercent - 100) > 0.2 ||
+    duration === null ||
+    duration <= 0 ||
+    resetsAt === null ||
+    !Number.isFinite(Date.parse(resetsAt))
+  ) {
+    return null;
+  }
+
+  return {
+    harnessId: CODEX,
+    bucketId: 'codex-subscription',
+    bucketName: 'Codex subscription',
+    window: input.window,
+    scope: scopeForDuration(duration),
+    usedPercent,
+    remainingPercent,
+    windowDurationMinutes: duration,
+    resetsAt: new Date(resetsAt).toISOString(),
+    observedAt: input.observedAt,
+    source: 'companion-cli',
+    confidence: 'reported',
+  };
+}
+
+function parseCclimitsCodexResponse(
+  stdout: string,
+  observedAt: string,
+): Omit<HarnessBudgetObservation, 'harnessId' | 'state' | 'diagnostics'> | null {
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(stdout) as JsonValue;
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !isRecord(parsed['codex'])) return null;
+  const codex = parsed['codex'];
+  if (codex['status'] !== 'ok') return null;
+
+  // Both accepted sources ultimately describe the ChatGPT subscription backend. The native source
+  // is still marked reported here because Token Harness did not observe it directly; cclimits did.
+  if (codex['source'] !== 'codex_app_server' && codex['source'] !== 'chatgpt_wham_fallback') {
+    return null;
+  }
+
+  const primary = cclimitsWindow(codex['primary_window'], {
+    window: 'primary',
+    observedAt,
+  });
+  const secondary = cclimitsWindow(codex['secondary_window'], {
+    window: 'secondary',
+    observedAt,
+  });
+  const windows = [primary, secondary].filter(
+    (window): window is NonNullable<typeof window> => window !== null,
+  );
+  if (windows.length === 0) return null;
+
+  const resetCredits = readNumber(codex, 'reset_credits_available');
+  return {
+    windows,
+    planType: readString(codex, 'plan'),
+    rateLimitReachedType: readString(codex, 'rate_limit_reached_type'),
+    resetCreditsAvailable:
+      resetCredits === null ? null : Math.max(0, Math.trunc(resetCredits)),
+  };
+}
+
+async function observeUsageViaCclimits(
+  context: HarnessContext,
+  observedAt: string,
+  nativeDiagnostic: Diagnostic,
+): Promise<HarnessBudgetObservation> {
+  const outcome = await context.runner.run({
+    executable: 'cclimits',
+    args: ['--codex', '--json', '--no-cache-write', '--no-stale-fallback'],
+    cwd: context.projectRoot,
+    env: { PYTHONDONTWRITEBYTECODE: '1' },
+    timeoutMs: 20_000,
+    maxOutputBytes: 512 * 1024,
+  });
+
+  if (
+    outcome.failure !== null ||
+    outcome.exitCode !== 0 ||
+    outcome.stdoutTruncated
+  ) {
+    const reason =
+      outcome.failure !== null
+        ? outcome.failure.message
+        : outcome.stdoutTruncated
+          ? 'output exceeded the bounded capture'
+          : `exited ${String(outcome.exitCode)}`;
+    return {
+      harnessId: CODEX,
+      state: 'unavailable',
+      windows: [],
+      planType: null,
+      rateLimitReachedType: null,
+      resetCreditsAvailable: null,
+      diagnostics: [
+        nativeDiagnostic,
+        diagnostic({
+          severity: outcome.failure?.reason === 'executable-not-found' ? 'info' : 'warning',
+          code: 'cclimits-codex-usage-unavailable',
+          subject: CODEX,
+          message: 'Optional cclimits Codex quota fallback was unavailable: ' + reason,
+          remediation:
+            'Install a cclimits build with cacheless Codex JSON support, or treat Codex quota as unknown',
+        }),
+      ],
+    };
+  }
+
+  const parsed = parseCclimitsCodexResponse(outcome.stdout, observedAt);
+  if (parsed === null) {
+    return {
+      harnessId: CODEX,
+      state: 'unavailable',
+      windows: [],
+      planType: null,
+      rateLimitReachedType: null,
+      resetCreditsAvailable: null,
+      diagnostics: [
+        nativeDiagnostic,
+        diagnostic({
+          severity: 'warning',
+          code: 'cclimits-codex-schema-unrecognized',
+          subject: CODEX,
+          message:
+            'cclimits returned no strictly validated Codex quota window with an absolute reset time',
+          remediation:
+            'Update the cclimits Codex compatibility fixture before using it for benchmark quota',
+        }),
+      ],
+    };
+  }
+
+  return {
+    harnessId: CODEX,
+    state: 'observed',
+    ...parsed,
+    diagnostics: [
+      diagnostic({
+        severity: 'info',
+        code: 'codex-rate-limits-companion-fallback',
+        subject: CODEX,
+        message:
+          'Native Codex quota was unavailable, so cclimits supplied a read-only reported snapshot',
+        remediation: null,
+      }),
+    ],
+  };
+}
+
 async function observeUsage(
   context: HarnessContext,
   observedAt: string,
@@ -577,7 +762,7 @@ async function observeUsage(
     JSON.stringify({ method: 'initialized', params: {} }),
     JSON.stringify({ method: 'account/rateLimits/read', id: 2, params: {} }),
     '',
-  ].join('\n');
+  ].join('\\n');
 
   const outcome = await context.runner.run({
     executable: 'codex',
@@ -589,87 +774,70 @@ async function observeUsage(
   });
 
   if (outcome.failure !== null) {
-    return {
-      harnessId: CODEX,
-      state: outcome.failure.reason === 'executable-not-found' ? 'absent' : 'unavailable',
-      windows: [],
-      planType: null,
-      rateLimitReachedType: null,
-      resetCreditsAvailable: null,
-      diagnostics: [
-        diagnostic({
-          severity: 'warning',
-          code: 'codex-rate-limits-unavailable',
-          subject: CODEX,
-          message: 'Codex rate limits could not be read: ' + outcome.failure.message,
-          remediation:
-            'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
-        }),
-      ],
-    };
+    return observeUsageViaCclimits(
+      context,
+      observedAt,
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-rate-limits-unavailable',
+        subject: CODEX,
+        message: 'Codex rate limits could not be read natively: ' + outcome.failure.message,
+        remediation: 'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
+      }),
+    );
   }
 
   if (outcome.exitCode !== 0) {
-    return {
-      harnessId: CODEX,
-      state: 'unavailable',
-      windows: [],
-      planType: null,
-      rateLimitReachedType: null,
-      resetCreditsAvailable: null,
-      diagnostics: [
-        diagnostic({
-          severity: 'warning',
-          code: 'codex-rate-limits-unavailable',
-          subject: CODEX,
-          message:
-            'Codex app-server exited ' +
-            String(outcome.exitCode) +
-            ' without a usable rate-limit snapshot',
-          remediation: 'Check codex app-server --help and the installed Codex authentication state',
-        }),
-      ],
-    };
+    return observeUsageViaCclimits(
+      context,
+      observedAt,
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-rate-limits-unavailable',
+        subject: CODEX,
+        message:
+          'Codex app-server exited ' +
+          String(outcome.exitCode) +
+          ' without a usable rate-limit snapshot',
+        remediation: 'Check codex app-server --help and the installed Codex authentication state',
+      }),
+    );
   }
 
   const parsed = parseRateLimitResponse(outcome.stdout, observedAt);
   if (parsed === null) {
-    return {
-      harnessId: CODEX,
-      state: 'unavailable',
-      windows: [],
-      planType: null,
-      rateLimitReachedType: null,
-      resetCreditsAvailable: null,
-      diagnostics: [
-        diagnostic({
-          severity: 'warning',
-          code: 'codex-rate-limits-schema-unrecognized',
-          subject: CODEX,
-          message: 'Codex app-server returned no recognizable account/rateLimits/read response',
-          remediation: 'Refresh the Codex compatibility fixture before relying on this version',
-        }),
-      ],
-    };
+    return observeUsageViaCclimits(
+      context,
+      observedAt,
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-rate-limits-schema-unrecognized',
+        subject: CODEX,
+        message: 'Codex app-server returned no recognizable account/rateLimits/read response',
+        remediation: 'Refresh the Codex compatibility fixture before relying on this version',
+      }),
+    );
+  }
+
+  if (parsed.windows.length === 0) {
+    return observeUsageViaCclimits(
+      context,
+      observedAt,
+      diagnostic({
+        severity: 'warning',
+        code: 'codex-rate-limits-empty',
+        subject: CODEX,
+        message: 'Codex returned a rate-limit response without any readable usage windows',
+        remediation: 'Treat current Codex quota as unknown unless a strict companion snapshot succeeds',
+      }),
+    );
   }
 
   return {
     harnessId: CODEX,
-    state: parsed.windows.length > 0 ? 'observed' : 'unavailable',
+    state: 'observed',
     ...parsed,
-    diagnostics:
-      parsed.windows.length > 0
-        ? []
-        : [
-            diagnostic({
-              severity: 'warning',
-              code: 'codex-rate-limits-empty',
-              subject: CODEX,
-              message: 'Codex returned a rate-limit response without any readable usage windows',
-              remediation:
-                'Treat current Codex quota as unknown and retry after a normal Codex session',
-            }),
-          ],
+    diagnostics: [],
   };
 }
 
