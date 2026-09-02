@@ -254,6 +254,7 @@ describe('Codex native policy planning', () => {
     assert.ok(action);
     assert.equal(action.path, CONFIG);
     assert.equal(action.expectedVersion, 'user-v9');
+    assert.equal(action.policyGuard, 'subscription-safe');
     assert.equal(action.reloadUserConfig, true);
     assert.deepEqual(action.edits, [
       { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
