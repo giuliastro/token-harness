@@ -847,6 +847,49 @@ describe('native events (PLAN §15 item 43d)', () => {
     assert.equal(result.mode, 'native');
   });
 
+  it('imports a fail-open reducer exception as an observed error, not a pass-through or saving', async () => {
+    const target = store();
+    const result = await harnesstrimAdapter.collectMetrics(
+      context({
+        files: {
+          [METRICS]:
+            nativeTrimEvent({
+              beforeChars: 1410,
+              afterChars: 1410,
+              changed: false,
+              reductionFailed: true,
+            }) + '\n',
+        },
+      }),
+      target,
+    );
+
+    const event = target.events[0];
+    assert.ok(event);
+    // A reducer exception happened regardless of active/dryrun mode. The original payload was
+    // preserved, so it is a measured unchanged operation with an error, never a saving.
+    assert.equal(event.measurement.class, 'estimated-local');
+    assert.equal(event.outcome.changed, false);
+    assert.equal(event.outcome.bypassReason, 'reducer-failed');
+    assert.equal(event.outcome.errorCode, 'harnesstrim-reducer-failed:test-output-slim');
+    assert.equal(result.mode, 'native');
+    assert.equal(
+      result.diagnostics.some(
+        (entry) =>
+          entry.code === 'provider-metrics-mode-unresolved' &&
+          entry.severity === 'info',
+      ),
+      false,
+    );
+    const warning = result.diagnostics.find(
+      (entry) => entry.code === 'provider-reducer-failures',
+    );
+    assert.ok(warning);
+    assert.equal(warning.severity, 'warning');
+    assert.match(warning.message, /1 HarnessTrim reducer failure failed open/);
+    assert.match(warning.message, /test-output-slim/);
+  });
+
   it('files a recorded pass-through as a bypass, not as a saving', async () => {
     const target = store();
     await harnesstrimAdapter.collectMetrics(
