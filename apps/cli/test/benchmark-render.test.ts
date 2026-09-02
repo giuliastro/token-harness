@@ -91,7 +91,7 @@ describe('benchmark rendering', () => {
     assert.match(rendered, /^mechanical on codex$/m);
     assert.match(rendered, /Baseline: quality passed/);
     assert.match(rendered, /Optimized: quality passed/);
-    assert.match(rendered, /Backend quota (five-hour, authoritative)/);
+    assert.match(rendered, /Backend quota \(five-hour, authoritative\)/);
     assert.match(rendered, /baseline +10% vs optimized +6%/);
     assert.match(rendered, /Verdict: optimized-better/);
     assert.match(rendered, /evidence quota-backed/);
