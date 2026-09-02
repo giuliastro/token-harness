@@ -142,6 +142,11 @@ Everything else is refused, and that is the design rather than a gap: `doctor` d
 every supported platform, and only the *mutation* is narrower. An uncovered combination exits 9 and
 the diagnostic names what is missing — the reviewed fixture, or the nearest row it does have.
 
+A live Linux check on 2026-09-02 with Codex 0.152.1 confirmed that boundary: the current row covers
+Codex 0.146.0 on Windows only, so `plan` and `apply --yes` refused with exit 9 and wrote nothing.
+That combination can still be observed and benchmarked with a provider installed through its own
+installer; it is not promoted to managed mutation until a real compatibility fixture is recorded.
+
 What is not covered today, and why:
 
 - **macOS and Linux.** No row on either. The recordings a row needs are states of a real machine, and
