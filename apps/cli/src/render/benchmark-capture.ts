@@ -61,7 +61,9 @@ export function renderBenchmarkFinishReport(
       0,
     ),
     `Quota windows: ${String(receipt.usageBefore.length)} before / ${String(receipt.usageAfter.length)} after`,
-    'Local usage: not captured by this slice',
+    receipt.localUsage === null
+      ? 'Local usage: unavailable or ambiguous'
+      : `Local usage: ${String(receipt.localUsage.totalTokens)} tokens (local evidence only)`,
     `Receipt: ${receiptPath}`,
     '',
     ...wrap(
