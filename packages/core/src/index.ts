@@ -8,6 +8,7 @@
 
 export * from './domain/actions.js';
 export * from './domain/budget.js';
+export * from './domain/benchmark.js';
 export * from './domain/context-cost.js';
 export * from './domain/history.js';
 export * from './domain/optimizer.js';
