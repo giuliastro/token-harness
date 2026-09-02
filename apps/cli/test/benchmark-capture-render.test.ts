@@ -24,6 +24,7 @@ const capture = {
   verbosity: 'low',
   startedAt: '2026-09-02T10:00:00.000Z',
   usageBefore: [],
+  localSessionsBefore: null,
 };
 
 describe('benchmark capture rendering', () => {
@@ -82,7 +83,7 @@ describe('benchmark capture rendering', () => {
       home: '/home/dev',
       decorate: false,
     });
-    assert.match(rendered, /Local usage: not captured by this slice/);
+    assert.match(rendered, /Local usage: unavailable or ambiguous/);
     assert.match(rendered, /token-harness benchmark --baseline/);
     for (const line of rendered.trimEnd().split('\n')) {
       assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
