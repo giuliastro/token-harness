@@ -361,6 +361,122 @@ describe('subscription usage', () => {
     assert.equal(result.windows[0]?.scope, 'unknown');
     assert.equal(result.windows[0]?.windowDurationMinutes, 123);
   });
+
+  it('falls back to cacheless cclimits when native Codex returns no quota windows', async () => {
+    const base = context();
+    const requests: ProcessRequest[] = [];
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+          requests.push(request);
+          if (request.executable === 'codex') {
+            return {
+              displayCommand: 'codex app-server --stdio',
+              interpreter: 'direct',
+              executablePath: '/usr/local/bin/codex',
+              exitCode: 0,
+              signal: null,
+              stdout: [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({
+                  id: 2,
+                  result: {
+                    rateLimits: null,
+                    rateLimitsByLimitId: null,
+                    rateLimitResetCredits: null,
+                  },
+                }),
+                '',
+              ].join('\n'),
+              stderr: '',
+              stdoutTruncated: false,
+              stderrTruncated: false,
+              durationMs: 2,
+              timedOut: false,
+              failure: null,
+            };
+          }
+
+          assert.equal(request.executable, 'cclimits');
+          return {
+            displayCommand: 'cclimits --codex --json --no-cache-write --no-stale-fallback',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/cclimits',
+            exitCode: 0,
+            signal: null,
+            stdout: JSON.stringify({
+              codex: {
+                status: 'ok',
+                source: 'chatgpt_wham_fallback',
+                plan: 'Plus',
+                primary_window: {
+                  used: '35%',
+                  remaining: '65%',
+                  window: '5h',
+                  window_duration_minutes: 300,
+                  resets_at: '2026-08-30T16:00:00Z',
+                },
+                secondary_window: {
+                  used: '68%',
+                  remaining: '32%',
+                  window: '7d',
+                  window_duration_minutes: 10080,
+                  resets_at: '2026-09-06T16:00:00Z',
+                },
+              },
+            }),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 4,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+    };
+
+    const result = await codexAdapter.observeUsage?.(observedContext, '2026-08-30T14:00:00.000Z');
+    assert.ok(result);
+    assert.equal(result.state, 'observed');
+    assert.equal(result.planType, 'Plus');
+    assert.deepEqual(
+      result.windows.map((window) => ({
+        scope: window.scope,
+        source: window.source,
+        confidence: window.confidence,
+        used: window.usedPercent,
+        resetsAt: window.resetsAt,
+      })),
+      [
+        {
+          scope: 'five-hour',
+          source: 'companion-cli',
+          confidence: 'reported',
+          used: 35,
+          resetsAt: '2026-08-30T16:00:00.000Z',
+        },
+        {
+          scope: 'weekly',
+          source: 'companion-cli',
+          confidence: 'reported',
+          used: 68,
+          resetsAt: '2026-09-06T16:00:00.000Z',
+        },
+      ],
+    );
+    assert.equal(result.diagnostics[0]?.code, 'codex-rate-limits-companion-fallback');
+
+    assert.equal(requests.length, 2);
+    assert.deepEqual(requests[1]?.args, [
+      '--codex',
+      '--json',
+      '--no-cache-write',
+      '--no-stale-fallback',
+    ]);
+    assert.equal(requests[1]?.env?.PYTHONDONTWRITEBYTECODE, '1');
+  });
 });
 
 describe('context-cost observation', () => {
