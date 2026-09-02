@@ -7,6 +7,7 @@
  */
 
 import type { UsageConfidence, UsageWindowSnapshot } from './budget.js';
+import type { SessionHistoryRow } from './history.js';
 import { isHarnessId, type HarnessId } from './ids.js';
 import { isTaskClass, type TaskClass } from './optimizer.js';
 
@@ -36,6 +37,19 @@ export interface TaskLocalUsage {
   cacheReadTokens: number;
   outputTokens: number;
   totalTokens: number;
+}
+
+/**
+ * Minimal per-session local usage snapshot persisted only in the in-progress capture.
+ *
+ * The session id never reaches the completed receipt. It exists solely to subtract cumulative
+ * ccusage counters across the task boundary without pretending a whole-day total belongs to one
+ * benchmark run.
+ */
+export interface TaskBenchmarkLocalSessionSnapshot extends TaskLocalUsage {
+  sessionId: string;
+  firstActivity: string | null;
+  lastActivity: string | null;
 }
 
 export interface TaskBenchmarkOutcome {
@@ -80,6 +94,12 @@ export interface TaskBenchmarkCapture {
   verbosity: string | null;
   startedAt: string;
   usageBefore: UsageWindowSnapshot[];
+  /**
+   * Cumulative ccusage session counters at start, or null when local history was unavailable.
+   *
+   * Additive within schema 1: old captures without the field parse as null.
+   */
+  localSessionsBefore: TaskBenchmarkLocalSessionSnapshot[] | null;
 }
 
 export interface TaskBenchmarkCaptureStartReport {
@@ -227,6 +247,105 @@ function parseLocalUsage(value: unknown): TaskLocalUsage | null | undefined {
   return { inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens, totalTokens };
 }
 
+function parseLocalSessionSnapshot(value: unknown): TaskBenchmarkLocalSessionSnapshot | null {
+  const row = record(value);
+  if (row === null) return null;
+  const usage = parseLocalUsage(row);
+  const sessionId = row['sessionId'];
+  const firstActivity = optionalText(row['firstActivity']);
+  const lastActivity = optionalText(row['lastActivity']);
+  if (
+    usage === null ||
+    usage === undefined ||
+    typeof sessionId !== 'string' ||
+    sessionId === '' ||
+    firstActivity === undefined ||
+    lastActivity === undefined ||
+    (firstActivity !== null && !validInstant(firstActivity)) ||
+    (lastActivity !== null && !validInstant(lastActivity))
+  ) {
+    return null;
+  }
+  return { sessionId, firstActivity, lastActivity, ...usage };
+}
+
+function parseLocalSessionSnapshots(
+  value: unknown,
+): TaskBenchmarkLocalSessionSnapshot[] | null | undefined {
+  // Additive schema-1 compatibility: captures written before this field existed remain readable.
+  if (value === undefined || value === null) return value === null ? null : undefined;
+  if (!Array.isArray(value)) return undefined;
+  const rows: TaskBenchmarkLocalSessionSnapshot[] = [];
+  for (const item of value) {
+    const parsed = parseLocalSessionSnapshot(item);
+    if (parsed === null) return undefined;
+    rows.push(parsed);
+  }
+  return rows;
+}
+
+/** Strip ccusage's extra fields before persisting an in-progress benchmark capture. */
+export function snapshotTaskLocalSessions(
+  sessions: readonly SessionHistoryRow[],
+): TaskBenchmarkLocalSessionSnapshot[] {
+  return sessions.map((session) => ({
+    sessionId: session.sessionId,
+    firstActivity: session.firstActivity,
+    lastActivity: session.lastActivity,
+    inputTokens: session.inputTokens,
+    cacheCreationTokens: session.cacheCreationTokens,
+    cacheReadTokens: session.cacheReadTokens,
+    outputTokens: session.outputTokens,
+    totalTokens: session.totalTokens,
+  }));
+}
+
+/**
+ * Derive one task's local usage from cumulative ccusage session counters.
+ *
+ * Deliberately conservative: exactly one session must show a positive counter delta and its latest
+ * activity must fall inside the benchmark boundary. Parallel changed sessions are ambiguous and
+ * return null rather than assigning somebody else's work to this task.
+ */
+export function deriveTaskLocalUsage(
+  before: readonly TaskBenchmarkLocalSessionSnapshot[],
+  after: readonly TaskBenchmarkLocalSessionSnapshot[],
+  startedAt: string,
+  completedAt: string,
+): TaskLocalUsage | null {
+  const start = Date.parse(startedAt);
+  const end = Date.parse(completedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+
+  const beforeById = new Map(before.map((session) => [session.sessionId, session]));
+  const changed: TaskLocalUsage[] = [];
+
+  for (const current of after) {
+    const last = current.lastActivity === null ? Number.NaN : Date.parse(current.lastActivity);
+    if (!Number.isFinite(last) || last < start || last > end) continue;
+
+    const previous = beforeById.get(current.sessionId);
+    const base: TaskLocalUsage = previous ?? {
+      inputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
+    const delta: TaskLocalUsage = {
+      inputTokens: current.inputTokens - base.inputTokens,
+      cacheCreationTokens: current.cacheCreationTokens - base.cacheCreationTokens,
+      cacheReadTokens: current.cacheReadTokens - base.cacheReadTokens,
+      outputTokens: current.outputTokens - base.outputTokens,
+      totalTokens: current.totalTokens - base.totalTokens,
+    };
+    if (Object.values(delta).some((value) => value < 0)) return null;
+    if (delta.totalTokens > 0) changed.push(delta);
+  }
+
+  return changed.length === 1 ? (changed[0] ?? null) : null;
+}
+
 function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
   const row = record(value);
   if (row === null) return null;
@@ -281,6 +400,8 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
   const verbosity = optionalText(row['verbosity']);
   const startedAt = row['startedAt'];
   const usageBefore = parseUsageWindows(row['usageBefore']);
+  const parsedLocalSessions = parseLocalSessionSnapshots(row['localSessionsBefore']);
+  const localSessionsBefore = parsedLocalSessions === undefined ? null : parsedLocalSessions;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -297,7 +418,8 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
     reasoningEffort === undefined ||
     verbosity === undefined ||
     !validInstant(startedAt) ||
-    usageBefore === null
+    usageBefore === null ||
+    parsedLocalSessions === undefined
   ) {
     return {
       ok: false,
@@ -320,6 +442,7 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
       verbosity,
       startedAt,
       usageBefore,
+      localSessionsBefore,
     },
   };
 }
