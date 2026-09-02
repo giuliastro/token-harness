@@ -276,11 +276,20 @@ failed attempts, runtime/provider errors, attempt count, and local token volume 
 evidence. Cached/estimated quota is never promoted into a backend comparison, and local token
 volume is never labeled subscription quota.
 
-The first user-facing surface is read-only:
+The first user-facing comparison surface is read-only:
 `token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>`. It parses the
 schema at runtime, rejects malformed/future/wrong-role receipts, and returns the same deterministic
-comparison in human or JSON form. It does not execute either benchmark task; automated collection is
-a separate later step so measurement and execution policy do not arrive entangled.
+comparison in human or JSON form.
+
+Receipt collection is deliberately a separate two-phase surface:
+`benchmark-start` snapshots quota plus discovered model/effort/verbosity before the user runs the
+task, and `benchmark-finish` snapshots quota again and requires an explicit passed/failed quality
+gate and attempt counts. The capture lives only under Token Harness state, stores a machine-local
+project id rather than a raw project path, and never overwrites an existing capture/receipt. Neither
+command executes a harness task or changes harness configuration. The initial slice leaves
+`localUsage` null and `errorCodes` empty rather than pretending that ccusage/provider telemetry
+can already be correlated perfectly to one task; those fields are admitted only after task-level
+attribution exists.
 
 Attribution classes remain strict:
 
