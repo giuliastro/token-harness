@@ -1,0 +1,35 @@
+{
+  "stage": "empty",
+  "harness": "codex",
+  "provider": "harnesstrim",
+  "observed": {
+    "harnessVersion": "0.152.1",
+    "providerVersion": "0.2.1",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "24.13.0"
+    }
+  },
+  "configuration": {
+    "~/.codex/hooks.json": {
+      "present": false
+    },
+    "~/.codex/config.toml": {
+      "present": false
+    },
+    "~/.codex/skills": {
+      "present": false
+    },
+    "<project>/AGENTS.md": {
+      "present": false
+    },
+    "<project>/.codex/skills": {
+      "present": false
+    },
+    "<project>/.codex/hooks.json": {
+      "present": false
+    }
+  }
+}

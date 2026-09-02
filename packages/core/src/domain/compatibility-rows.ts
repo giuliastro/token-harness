@@ -61,22 +61,14 @@ export interface CompatibilityRow {
  * The rows shipped in this build.
  *
  * RFC 0009 §Initial delivery order item 5: "Add matrix rows only after the relevant
- * cross-platform fixtures and verification evidence pass." Two have, both on Windows, and each
- * names the recording that admits it. Every other combination stays refused with the missing schema
- * or fixture named — the table is an admission set, not a list of things that probably work.
+ * cross-platform fixtures and verification evidence pass." Every row below names the recording that
+ * admits it. Every other combination stays refused with the missing schema or fixture named — the
+ * table is an admission set, not a list of things that probably work.
  *
- * ## Why these two, and why Windows alone
- *
- * `rtk × claude` and `harnesstrim × claude` are the only combinations any provider can currently be
- * *planned* for: `rtk-plan.ts` writes a Claude-shaped hook list and nothing else, and HarnessTrim's
- * `delegatedInstallReview` covers Claude only. A row for a combination that produces no action would
- * admit nothing.
- *
- * Windows alone because that is where the fixtures were recorded. The Linux recordings under
- * `tests/fixtures/rows/*-linux` cover harnesses that plan nothing on that machine — Claude is not
- * installed there — so their post-apply stages record no mutation and cannot admit one. macOS has no
- * machine behind it at all. On both, `doctor` still detects and reports; only the mutation is
- * refused, which is the difference RFC 0009 exists to keep.
+ * Windows supplied the first reviewed rows. Linux now has one exact HarnessTrim × Codex row recorded
+ * on a real Zorin machine at Codex 0.152.1 / HarnessTrim 0.2.1. That does not widen any Windows row
+ * and does not imply nearby Linux versions are compatible: the harness range remains a point and the
+ * provider version remains exact. macOS still has no reviewed mutation row.
  *
  * ## What each row is standing on
  *
@@ -123,6 +115,18 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     // layout. A separate id because the directory is `.codex/skills` and the protected paths differ.
     configSchema: 'codex-skills-directory',
     fixture: 'tests/fixtures/rows/harnesstrim-codex-windows',
+    verificationTier: 'config-only',
+  },
+  {
+    harness: 'codex' as HarnessId,
+    harnessVersion: { minimum: '0.152.1', maximum: '0.152.1' },
+    provider: 'harnesstrim' as ProviderId,
+    providerVersion: '0.2.1',
+    platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+    // Real Zorin/Linux recording: skills-only apply, drift + verified rollback, and surgical
+    // uninstall all preserved the user's own skill and AGENTS.md.
+    configSchema: 'codex-skills-directory',
+    fixture: 'tests/fixtures/rows/harnesstrim-codex-linux-0.152.1-0.2.1',
     verificationTier: 'config-only',
   },
 ];
