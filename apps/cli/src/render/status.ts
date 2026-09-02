@@ -33,7 +33,7 @@ export function renderStatusReport(report: StatusReport, context: RenderContext)
 
   lines.push('Pipelines');
   if (report.pipelines.length === 0) {
-    lines.push('  nothing has been applied on this machine');
+    lines.push('  no active payload pipeline recorded');
   } else {
     for (const pipeline of report.pipelines) {
       lines.push(`  ${pipeline.harness} — pipeline ${pipeline.pipelineId}`);
