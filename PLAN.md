@@ -1833,12 +1833,19 @@ records the selected harness's quota windows and discovered model/effort/verbosi
 Harness state before the user runs the task; `benchmark-finish` re-observes quota, requires an
 explicit passed/failed quality gate plus attempt counts, verifies the same machine-local project id,
 and writes an immutable schema-1 receipt. It never executes the coding task or changes harness
-configuration, never stores the raw project path in the capture, and refuses overwrite. Local token
-totals and task-level runtime error correlation remain null/empty until trustworthy attribution is
-implemented. Fully automated task execution and the actual empirical multi-task benchmark matrix
-remain open. The deterministic paired fixture corpus is present for mechanical, standard and hard
-tasks; it pins quota-backed wins, quality regressions and retry-cost losses and is explicitly marked
-contract-not-empirical.
+configuration, never stores the raw project path in the completed receipt, and refuses overwrite.
+When ccusage 20.x is available, capture now snapshots cumulative per-session counters at start and
+finish and derives local token volume only when exactly one harness session changed inside the task
+boundary; parallel changed sessions remain ambiguous and produce null rather than a guessed
+attribution. Session ids stay in the in-progress local capture and do not enter the completed
+receipt. `benchmark-matrix` now scans complete baseline/optimized pairs bound to the current
+machine-local project id, groups deterministic verdicts by task class and evidence strength, and
+aggregates local tokens only where both variants are attributable. It deliberately does not sum
+backend percentages across unrelated windows and does not manufacture a composite efficiency score.
+Fully automated task execution and the collection of enough real provider runs to populate the
+matrix remain open. The deterministic paired fixture corpus is present for mechanical, standard and
+hard tasks; it pins quota-backed wins, quality regressions and retry-cost losses and is explicitly
+marked contract-not-empirical.
 
 Re-score providers against the new KPI: useful work per observed quota delta.
 
@@ -1857,6 +1864,10 @@ Acceptance:
 
 - benchmark fixtures include task success, not token count alone — **done for the deterministic
   mechanical/standard/hard contract corpus; empirical provider runs remain open**;
+- task-boundary local token evidence is captured conservatively and never promoted to backend
+  quota — **done**;
+- the empirical matrix aggregator groups complete project-scoped pairs without inventing a
+  composite score — **done; real runs still need to populate it**;
 - provider marginal savings are still attributable by stage;
 - backend quota deltas are reported separately from reducer token savings;
 - reducer/runtime failures remain attributable by error code, provider, and harness without storing
