@@ -212,5 +212,23 @@ export function renderMetricsReport(report: MetricsReport, _context: RenderConte
     );
   }
 
+  if (report.errorBreakdown.length > 0) {
+    lines.push('');
+    lines.push('Errors by code');
+    for (const error of report.errorBreakdown) {
+      lines.push(...wrap(error.code, 2));
+      const scope: string[] = [];
+      if (error.providerIds.length > 0) scope.push(`providers ${error.providerIds.join(', ')}`);
+      if (error.harnesses.length > 0) scope.push(`harnesses ${error.harnesses.join(', ')}`);
+      lines.push(
+        ...wrap(
+          `${formatCount(error.count)} operation${error.count === 1 ? '' : 's'}` +
+            (scope.length > 0 ? ` - ${scope.join(' - ')}` : ''),
+          4,
+        ),
+      );
+    }
+  }
+
   return document(lines);
 }
