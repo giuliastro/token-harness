@@ -628,7 +628,9 @@ describe('empirical benchmark matrix', () => {
 
     assert.equal(report.overall.quotaBacked, 2);
     assert.equal('quotaUsedPercent' in report.overall, false);
-    assert.equal(report.entries.every((entry) => entry.quota !== null), true);
+    assert.equal(
+      report.entries.every((entry) => entry.quota !== null),
+      true,
+    );
   });
 });
-
