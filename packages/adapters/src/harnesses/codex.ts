@@ -524,9 +524,7 @@ function parseRateLimitResponse(
 
   const response = messages.find(
     (message) =>
-      isRecord(message) &&
-      message['id'] === RATE_LIMIT_REQUEST_ID &&
-      isRecord(message['result']),
+      isRecord(message) && message['id'] === RATE_LIMIT_REQUEST_ID && isRecord(message['result']),
   );
   if (!isRecord(response) || !isRecord(response['result'])) return null;
   const result = response['result'];
