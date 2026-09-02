@@ -280,9 +280,19 @@ const SKILLS_INSTALL: Readonly<
 };
 
 /**
- * The reviewed release that supports the safe Claude skills-only invocation.
+ * Latest HarnessTrim CLI release whose executable + machine-readable capability contract Token
+ * Harness has observed successfully.
+ *
+ * This is deliberately separate from `SKILLS_UPSTREAM`: broad provider-version detection may
+ * advance when the CLI contract remains compatible, while managed mutation still requires an exact
+ * reviewed compatibility row and the delegated write-set review above remains pinned to the
+ * artifact bytes it actually reviewed.
+ *
+ * v0.2.1 is the first corrected npm publication after v0.2.0 shipped without a usable global bin
+ * under npm 11 publish-time normalization. The compatibility matrix is intentionally unchanged:
+ * recognising this provider build must not admit a new harness/provider/platform mutation.
  */
-const TESTED_UPSTREAM = '0.0.7';
+const TESTED_UPSTREAM = '0.2.1';
 const TESTED_VERSIONS = { minimum: '0.0.5', maximum: TESTED_UPSTREAM };
 
 /**

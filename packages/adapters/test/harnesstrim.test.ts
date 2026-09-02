@@ -285,8 +285,19 @@ describe('detection', () => {
     assert.match(detection.evidence.map((entry) => entry.detail).join(' '), /rejects --version/);
   });
 
-  it('judges a version outside the tested range', async () => {
-    const detection = await harnesstrimAdapter.detect(context({ version: '9.9.9' }));
+  it('recognizes HarnessTrim 0.2.1 as an observed provider build', async () => {
+    const detection = await harnesstrimAdapter.detect(
+      context({
+        version: '0.2.1',
+        capabilities: defaultCapabilities().replace('"version":"0.1.0"', '"version":"0.2.1"'),
+      }),
+    );
+    assert.equal(detection.version, '0.2.1');
+    assert.equal(detection.versionVerdict, 'in-range');
+  });
+
+  it('keeps a future HarnessTrim release outside the tested range', async () => {
+    const detection = await harnesstrimAdapter.detect(context({ version: '0.2.2' }));
     assert.equal(detection.versionVerdict, 'unknown-newer');
   });
 
