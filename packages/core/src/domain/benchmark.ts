@@ -83,7 +83,7 @@ function finiteNonNegative(value: unknown): number | null {
 }
 
 function nullableFiniteNonNegative(value: unknown): number | null | undefined {
-  return value === null ? null : finiteNonNegative(value) ?? undefined;
+  return value === null ? null : (finiteNonNegative(value) ?? undefined);
 }
 
 function nullablePercent(value: unknown): number | null | undefined {
