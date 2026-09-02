@@ -1,0 +1,10 @@
+{
+  "name": "mechanical-quota-win",
+  "fixtureKind": "contract-not-empirical",
+  "taskClass": "mechanical",
+  "harnessId": "codex",
+  "expectedVerdict": "optimized-better",
+  "expectedBasis": "backend-quota",
+  "expectedEvidenceLevel": "quota-backed",
+  "note": "Both quality gates pass; the optimized receipt wins only because the same authoritative five-hour window consumed a smaller observed percentage delta."
+}
