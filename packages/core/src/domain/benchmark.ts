@@ -67,7 +67,6 @@ export interface TaskBenchmarkReceipt {
   outcome: TaskBenchmarkOutcome;
 }
 
-
 export interface TaskBenchmarkCapture {
   schemaVersion: typeof TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION;
   benchmarkId: string;
