@@ -12,6 +12,8 @@ First time here
   9  token-harness verify        is it actually intercepting    writes nothing
  10  token-harness metrics       what it saved                  writes nothing
  11  token-harness benchmark     compare paired task receipts   writes nothing
+ 12  token-harness benchmark-start snapshot before a task       writes state only
+ 13  token-harness benchmark-finish close task receipt          writes state only
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -30,6 +32,10 @@ Commands, in the order you would use them
   verify      Check the pipeline actually intercepts, at its declared tier
   metrics     Report what was saved, labelled with how it was measured
   benchmark   Compare baseline/optimized task receipts with quality gates
+  benchmark-start
+              Snapshot quota/policy before one benchmark task into local state
+  benchmark-finish
+              Close that capture with quota-after and an explicit quality gate
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
@@ -46,6 +52,11 @@ Flags
   --plan <id>          Apply a previously computed plan by id
   --baseline <file>     Baseline task benchmark receipt JSON
   --optimized <file>    Optimized task benchmark receipt JSON
+  --benchmark-id <id>    Safe local id for benchmark start/finish
+  --variant <name>       Benchmark variant: baseline or optimized
+  --quality <result>     Finish quality gate: passed or failed
+  --attempts <count>     Total attempts used to complete the task
+  --failed-attempts <n> Failed attempts before the final outcome
   --task <class>        Optimizer task: mechanical, standard, hard, critical
   --profile <name>      Optimizer profile: economy, balanced, quality, custom
   --reserve <percent>   Keep this percent of observed allowance in reserve
@@ -54,5 +65,6 @@ Flags
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
-Only apply, update, rollback and uninstall change anything, and none of
-them do without --yes. Exit codes and JSON are specified in RFC 0006.
+Only apply, update, rollback and uninstall change harness/provider configuration,
+and none of them do without --yes. Metrics and benchmark capture may write only
+Token Harness's own local state. Exit codes and JSON are specified in RFC 0006.
