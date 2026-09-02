@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "standard-quality-regression",
+  "variant": "optimized",
+  "taskClass": "standard",
+  "harnessId": "codex",
+  "model": "gpt-5.6-codex",
+  "reasoningEffort": "low",
+  "verbosity": "low",
+  "startedAt": "2026-09-02T10:30:00.000Z",
+  "completedAt": "2026-09-02T10:45:00.000Z",
+  "usageBefore": [],
+  "usageAfter": [],
+  "localUsage": {
+    "inputTokens": 900,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 300,
+    "outputTokens": 300,
+    "totalTokens": 1500
+  },
+  "outcome": {
+    "qualityGate": "failed",
+    "attempts": 1,
+    "failedAttempts": 1,
+    "errorCodes": []
+  }
+}
