@@ -1568,6 +1568,7 @@ describe('codex-config-batch-write', () => {
       affectedProcesses: ['codex'],
       path,
       edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
+      policyGuard: null,
       expectedVersion,
       reloadUserConfig: true,
     };
