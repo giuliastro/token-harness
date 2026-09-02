@@ -980,7 +980,10 @@ function summarizeMatrixEntries(
   taskClass: TaskClass | null,
 ): TaskBenchmarkMatrixSummary {
   const local = entries.filter(
-    (entry) => entry.baselineLocalTokens !== null && entry.optimizedLocalTokens !== null,
+    (entry) =>
+      entry.localTokenSavingPercent !== null &&
+      entry.baselineLocalTokens !== null &&
+      entry.optimizedLocalTokens !== null,
   );
   const baselineLocalTokens =
     local.length === 0
@@ -1036,6 +1039,8 @@ export function buildTaskBenchmarkMatrix(
       const comparison = compareTaskBenchmarkReceipts(baseline, optimized);
       const baselineLocalTokens = baseline.localUsage?.totalTokens ?? null;
       const optimizedLocalTokens = optimized.localUsage?.totalTokens ?? null;
+      const bothQualityPassed =
+        baseline.outcome.qualityGate === 'passed' && optimized.outcome.qualityGate === 'passed';
       return {
         benchmarkId: baseline.benchmarkId,
         taskClass: baseline.taskClass,
@@ -1046,7 +1051,7 @@ export function buildTaskBenchmarkMatrix(
         baselineLocalTokens,
         optimizedLocalTokens,
         localTokenSavingPercent:
-          baselineLocalTokens === null || optimizedLocalTokens === null
+          !bothQualityPassed || baselineLocalTokens === null || optimizedLocalTokens === null
             ? null
             : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
         quota: comparison.quota,
