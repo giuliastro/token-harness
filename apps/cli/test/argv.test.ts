@@ -180,6 +180,24 @@ describe('argv', () => {
     assert.equal(parsed.options.optimizedReceipt, 'fixtures/optimized.json');
   });
 
+  it('parses benchmark matrix project filters', () => {
+    const parsed = parseArgv([
+      'benchmark-matrix',
+      '--harness',
+      'codex',
+      '--task',
+      'hard',
+      '--project',
+      '/work/project',
+    ]);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.command, 'benchmark-matrix');
+    assert.equal(parsed.options.harness, 'codex');
+    assert.equal(parsed.options.task, 'hard');
+    assert.equal(parsed.options.project, '/work/project');
+  });
+
   it('parses benchmark start and finish capture inputs', () => {
     const start = parseArgv([
       'benchmark-start',
