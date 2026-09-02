@@ -217,6 +217,7 @@ async function appendCodexNativePolicy(
     path: target.path,
     edits,
     policyGuard: 'subscription-safe',
+    modelReference: null,
     expectedVersion: target.version,
     reloadUserConfig: true,
   });

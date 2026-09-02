@@ -1093,6 +1093,154 @@ async function applyCodexConfigBatchWrite(
 
   if (action.edits.length === 0) return outcome(action, 'already-satisfied');
 
+  const modelEdits = action.edits.filter((edit) => edit.keyPath === 'model');
+  if (action.modelReference === null && modelEdits.length > 0) {
+    return refusal(
+      action,
+      'codex-model-reference-required',
+      action.path,
+      'A Codex model edit must carry an apply-time native catalog reference',
+      'Recompute the plan with a build that resolves model references at apply time',
+    );
+  }
+  if (
+    action.modelReference !== null &&
+    (modelEdits.length !== 1 ||
+      typeof modelEdits[0]?.value !== 'string' ||
+      modelEdits[0]?.value !== action.modelReference.requested)
+  ) {
+    return refusal(
+      action,
+      'codex-model-reference-mismatch',
+      action.path,
+      'The reviewed Codex model reference does not match exactly one model edit in the batch',
+      'Recompute the plan; do not edit the stored action by hand',
+    );
+  }
+
+  let effectiveEdits = action.edits;
+  if (action.modelReference !== null) {
+    const modelStdin = [
+      JSON.stringify({
+        method: 'initialize',
+        id: 1,
+        params: {
+          clientInfo: {
+            name: 'token_harness',
+            title: 'Token Harness',
+            version: '0.1',
+          },
+        },
+      }),
+      JSON.stringify({ method: 'initialized', params: {} }),
+      JSON.stringify({
+        method: 'model/list',
+        id: 2,
+        params: { limit: 1000, includeHidden: false },
+      }),
+      '',
+    ].join('\n');
+
+    const modelResult = await context.runner.run({
+      executable: 'codex',
+      args: ['app-server', '--stdio'],
+      cwd: context.cwd ?? context.fs.dirname(action.path),
+      stdin: modelStdin,
+      timeoutMs: 15_000,
+      maxOutputBytes: 4 * 1024 * 1024,
+    });
+    if (modelResult.failure !== null || modelResult.exitCode !== 0) {
+      return outcome(action, 'failed', {
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'codex-model-catalog-unavailable',
+            message:
+              modelResult.failure !== null
+                ? 'Codex model catalog could not be read: ' + modelResult.failure.message
+                : 'Codex app-server exited ' +
+                  String(modelResult.exitCode) +
+                  ' while resolving the reviewed model reference',
+            path: action.path,
+            remediation: 'Check the installed Codex CLI, then recompute the plan',
+          }),
+        ],
+      });
+    }
+
+    const modelMessages: Record<string, unknown>[] = [];
+    for (const line of modelResult.stdout.split(/\r?\n/)) {
+      if (line.trim() === '') continue;
+      try {
+        const parsed = JSON.parse(line) as unknown;
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          modelMessages.push(parsed as Record<string, unknown>);
+        }
+      } catch {
+        // App-server tracing belongs on stderr; unrelated stdout is ignored.
+      }
+    }
+    const modelResponse = modelMessages.find((message) => message['id'] === 2);
+    const modelPayload =
+      modelResponse !== undefined &&
+      typeof modelResponse['result'] === 'object' &&
+      modelResponse['result'] !== null &&
+      !Array.isArray(modelResponse['result'])
+        ? (modelResponse['result'] as Record<string, unknown>)
+        : null;
+    if (modelPayload === null || !Array.isArray(modelPayload['data'])) {
+      return outcome(action, 'failed', {
+        diagnostics: [
+          diagnostic({
+            severity: 'error',
+            code: 'codex-model-catalog-unavailable',
+            message: 'Codex returned no recognizable model/list result while resolving the plan',
+            path: action.path,
+            remediation: 'Recompute the plan with a supported Codex version',
+          }),
+        ],
+      });
+    }
+    if (modelPayload['nextCursor'] !== null && modelPayload['nextCursor'] !== undefined) {
+      return drift(
+        action,
+        action.path,
+        'Codex model catalog is truncated, so the reviewed model reference cannot be resolved uniquely',
+      );
+    }
+
+    const canonicalModels = new Set<string>();
+    for (const item of modelPayload['data']) {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) continue;
+      const record = item as Record<string, unknown>;
+      const id = typeof record['id'] === 'string' ? record['id'] : null;
+      const model = typeof record['model'] === 'string' ? record['model'] : null;
+      if (
+        model !== null &&
+        (id === action.modelReference.requested || model === action.modelReference.requested)
+      ) {
+        canonicalModels.add(model);
+      }
+    }
+    if (canonicalModels.size !== 1) {
+      return drift(
+        action,
+        action.path,
+        canonicalModels.size === 0
+          ? 'The reviewed Codex model reference is not present in the installed model catalog'
+          : 'The reviewed Codex model reference resolves to more than one canonical model',
+      );
+    }
+
+    const resolvedModel = [...canonicalModels][0];
+    if (resolvedModel === undefined) {
+      return drift(action, action.path, 'The reviewed Codex model reference could not be resolved');
+    }
+    effectiveEdits = action.edits.map((edit) =>
+      edit.keyPath === 'model' ? { ...edit, value: resolvedModel } : edit,
+    );
+  }
+
   const snapshot = await context.snapshots.capture(action.path);
   const stdin = [
     JSON.stringify({
@@ -1111,7 +1259,7 @@ async function applyCodexConfigBatchWrite(
       method: 'config/batchWrite',
       id: 2,
       params: {
-        edits: action.edits,
+        edits: effectiveEdits,
         filePath: action.path,
         expectedVersion: action.expectedVersion,
         reloadUserConfig: action.reloadUserConfig,
@@ -1255,7 +1403,7 @@ async function applyCodexConfigBatchWrite(
     });
   }
 
-  for (const edit of action.edits) {
+  for (const edit of effectiveEdits) {
     const segments = parseJsonPointer(edit.keyPath);
     const observed =
       segments === null

@@ -160,6 +160,17 @@ export interface CodexConfigBatchWriteAction extends PlannedActionBase {
    * usable as a generic first-class Codex config transaction for separately reviewed features.
    */
   policyGuard: 'subscription-safe' | null;
+  /**
+   * Apply-time model resolution contract.
+   *
+   * Null means the batch contains no model edit. A non-null reference means a reviewed `model`
+   * edit is a logical reference that must be resolved against the installed Codex `model/list`
+   * catalog immediately before mutation; the raw planned string is never written blindly.
+   */
+  modelReference: {
+    requested: string;
+    resolution: 'native-catalog';
+  } | null;
   /** Config version returned by the read used to build the plan; null only for fresh/unsupported readers. */
   expectedVersion: string | null;
   /** Whether Codex should hot-reload mutable user config after the atomic write. */

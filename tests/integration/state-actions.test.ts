@@ -1569,6 +1569,7 @@ describe('codex-config-batch-write', () => {
       path,
       edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
       policyGuard: null,
+      modelReference: null,
       expectedVersion,
       reloadUserConfig: true,
     };
@@ -1733,6 +1734,214 @@ describe('codex-config-batch-write', () => {
     assert.equal(outcome.status, 'failed');
     assert.equal(outcome.diagnostics[0]?.code, 'codex-config-postcondition-failed');
     assert.equal(outcome.snapshots[0]?.path, path);
+  });
+
+  it('resolves a reviewed model reference against the installed native catalog before writing', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    writeFileSync(path, 'model = "old-model"\n# user comment\n');
+    let calls = 0;
+    const native: ProcessRunner = {
+      async run(request) {
+        calls += 1;
+        const stdin = request.stdin ?? '';
+        if (stdin.includes('model/list')) {
+          assert.equal(calls, 1);
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/fake/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: JSON.stringify({
+              id: 2,
+              result: {
+                data: [
+                  {
+                    id: 'reviewed-alias',
+                    model: 'canonical-model',
+                    displayName: 'Canonical Model',
+                  },
+                ],
+                nextCursor: null,
+              },
+            }),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 1,
+            timedOut: false,
+            failure: null,
+          };
+        }
+
+        assert.equal(calls, 2);
+        assert.ok(stdin.includes('config/batchWrite'));
+        const requests = stdin
+          .split(/\r?\n/)
+          .filter((line) => line.trim() !== '')
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const batch = requests.find((message) => message['id'] === 2);
+        assert.ok(batch);
+        const params = batch['params'];
+        assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
+        const edits = (params as Record<string, unknown>)['edits'];
+        assert.ok(Array.isArray(edits));
+        assert.deepEqual(edits, [
+          { keyPath: 'model', value: 'canonical-model', mergeStrategy: 'replace' },
+        ]);
+        writeFileSync(path, 'model = "canonical-model"\n# user comment\n');
+        return {
+          displayCommand: 'codex app-server --stdio',
+          interpreter: 'direct',
+          executablePath: '/fake/codex',
+          exitCode: 0,
+          signal: null,
+          stdout: [
+            JSON.stringify({ id: 2, result: { version: 'v2' } }),
+            JSON.stringify({ id: 3, result: { config: { model: 'canonical-model' } } }),
+          ].join('\n'),
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        };
+      },
+    };
+    const modelAction: CodexConfigBatchWriteAction = {
+      ...action(path),
+      edits: [{ keyPath: 'model', value: 'reviewed-alias', mergeStrategy: 'replace' }],
+      modelReference: { requested: 'reviewed-alias', resolution: 'native-catalog' },
+    };
+
+    const outcome = await applyAction(modelAction, {
+      ...h.context,
+      runner: native,
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'applied');
+    assert.equal(calls, 2);
+    assert.equal(readFileSync(path, 'utf8'), 'model = "canonical-model"\n# user comment\n');
+  });
+
+  it('refuses a model edit without an apply-time native catalog reference', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model = "old-model"\n';
+    writeFileSync(path, original);
+    const modelAction: CodexConfigBatchWriteAction = {
+      ...action(path),
+      edits: [{ keyPath: 'model', value: 'new-model', mergeStrategy: 'replace' }],
+      modelReference: null,
+    };
+
+    const outcome = await applyAction(modelAction, {
+      ...h.context,
+      runner: {
+        async run() {
+          throw new Error('Codex must not be invoked without a model reference');
+        },
+      },
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'refused');
+    assert.equal(outcome.diagnostics[0]?.code, 'codex-model-reference-required');
+    assert.equal(outcome.snapshots.length, 0);
+    assert.equal(readFileSync(path, 'utf8'), original);
+  });
+
+  it('treats a missing reviewed model in the installed catalog as precondition drift', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model = "old-model"\n';
+    writeFileSync(path, original);
+    const modelAction: CodexConfigBatchWriteAction = {
+      ...action(path),
+      edits: [{ keyPath: 'model', value: 'gone-model', mergeStrategy: 'replace' }],
+      modelReference: { requested: 'gone-model', resolution: 'native-catalog' },
+    };
+
+    const outcome = await applyAction(modelAction, {
+      ...h.context,
+      runner: {
+        async run(request) {
+          assert.ok((request.stdin ?? '').includes('model/list'));
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/fake/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: JSON.stringify({
+              id: 2,
+              result: { data: [], nextCursor: null },
+            }),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 1,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'precondition-drift');
+    assert.equal(outcome.diagnostics[0]?.code, 'action-precondition-drift');
+    assert.equal(outcome.snapshots.length, 0);
+    assert.equal(readFileSync(path, 'utf8'), original);
+  });
+
+  it('refuses to resolve a model from a truncated native catalog', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model = "old-model"\n';
+    writeFileSync(path, original);
+    const modelAction: CodexConfigBatchWriteAction = {
+      ...action(path),
+      edits: [{ keyPath: 'model', value: 'reviewed-model', mergeStrategy: 'replace' }],
+      modelReference: { requested: 'reviewed-model', resolution: 'native-catalog' },
+    };
+
+    const outcome = await applyAction(modelAction, {
+      ...h.context,
+      runner: {
+        async run(request) {
+          assert.ok((request.stdin ?? '').includes('model/list'));
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/fake/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: JSON.stringify({
+              id: 2,
+              result: {
+                data: [{ id: 'reviewed-model', model: 'reviewed-model' }],
+                nextCursor: 'more',
+              },
+            }),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 1,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'precondition-drift');
+    assert.equal(outcome.snapshots.length, 0);
+    assert.equal(readFileSync(path, 'utf8'), original);
   });
 
   it('restores the original config bytes from its snapshot', async () => {
