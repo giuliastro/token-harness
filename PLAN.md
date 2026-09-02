@@ -1840,7 +1840,8 @@ boundary; parallel changed sessions remain ambiguous and produce null rather tha
 attribution. Session ids stay in the in-progress local capture and do not enter the completed
 receipt. `benchmark-matrix` now scans complete baseline/optimized pairs bound to the current
 machine-local project id, groups deterministic verdicts by task class and evidence strength, and
-aggregates local tokens only where both variants are attributable. It deliberately does not sum
+aggregates local tokens only across quality-passed pairs where both variants are attributable. It
+deliberately does not sum
 backend percentages across unrelated windows and does not manufacture a composite efficiency score.
 Fully automated task execution and the collection of enough real provider runs to populate the
 matrix remain open. The deterministic paired fixture corpus is present for mechanical, standard and
