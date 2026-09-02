@@ -307,10 +307,7 @@ describe('subscription usage', () => {
     assert.equal(requests.length, 1);
     assert.deepEqual(requests[0]?.args, ['app-server', '--stdio']);
     assert.match(requests[0]?.stdin ?? '', /account\/rateLimits\/read/);
-    assert.equal(
-      requests[0]?.stdinCloseAfterStdoutLineIncludes,
-      'token-harness-rate-limits',
-    );
+    assert.equal(requests[0]?.stdinCloseAfterStdoutLineIncludes, 'token-harness-rate-limits');
     assert.doesNotMatch(requests[0]?.stdin ?? '', /consume|redeem/i);
   });
 
