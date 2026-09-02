@@ -495,7 +495,6 @@ describe('the real probe and an entry stat cannot follow', () => {
   });
 });
 
-
 describe('executable enumeration for shadow diagnostics', () => {
   it('preserves POSIX PATH order and deduplicates a repeated directory', () => {
     const resolved = resolveExecutables({
