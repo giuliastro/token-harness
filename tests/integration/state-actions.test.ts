@@ -1568,6 +1568,7 @@ describe('codex-config-batch-write', () => {
       affectedProcesses: ['codex'],
       path,
       edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
+      policyGuard: null,
       expectedVersion,
       reloadUserConfig: true,
     };
@@ -1652,6 +1653,33 @@ describe('codex-config-batch-write', () => {
     assert.equal(readFileSync(path, 'utf8'), 'model_reasoning_effort = "low"\n# user comment\n');
     claim('codex-config-batch-write', 'apply');
     if (NATIVE_WINDOWS) claim('codex-config-batch-write', 'windows-path');
+  });
+
+  it('refuses subscription-safe policy edits outside effort and verbosity before invoking Codex', async () => {
+    const h = harness();
+    const path = join(h.project, 'config.toml');
+    const original = 'model_reasoning_effort = "high"\n# user comment\n';
+    writeFileSync(path, original);
+    const unsafe: CodexConfigBatchWriteAction = {
+      ...action(path),
+      policyGuard: 'subscription-safe',
+      edits: [{ keyPath: 'model_provider', value: 'openai', mergeStrategy: 'replace' }],
+    };
+
+    const outcome = await applyAction(unsafe, {
+      ...h.context,
+      runner: {
+        async run() {
+          throw new Error('Codex must not be invoked for an unsafe managed-policy edit');
+        },
+      },
+      cwd: h.project,
+    });
+
+    assert.equal(outcome.status, 'refused');
+    assert.equal(outcome.diagnostics[0]?.code, 'codex-native-policy-unsafe-edit');
+    assert.equal(outcome.snapshots.length, 0);
+    assert.equal(readFileSync(path, 'utf8'), original);
   });
 
   it('is safely repeatable when Codex accepts the same desired value twice', async () => {

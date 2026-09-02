@@ -1721,8 +1721,13 @@ the effective configuration; a missing or mismatched postcondition fails the act
 pre-write snapshot. Planning also refuses a field when the optimizer's current value no longer
 matches the second native observation used to build the versioned write, preventing a recommendation
 from being applied across an observation race. A persisted-plan integration fixture now covers the
-full review/apply path and stale-version refusal. Model switching remains advisory until model-tier
-quota benchmarks exist.
+full review/apply path and stale-version refusal. Optimizer-generated native batches are also marked
+`subscription-safe`; the executor refuses such a batch before snapshot or process invocation if it
+contains anything outside the current quota-safe write set (`model_reasoning_effort` and
+`model_verbosity`). This makes the no-silent-pay-as-you-go acceptance criterion an executable
+invariant rather than a planner convention: provider, auth, model, and service-tier changes require
+a separately reviewed policy path. Model switching remains advisory until model-tier quota
+benchmarks exist.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.

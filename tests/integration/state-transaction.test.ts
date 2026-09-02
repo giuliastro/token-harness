@@ -246,6 +246,7 @@ function codexBatch(path: string, expectedVersion = 'v1'): CodexConfigBatchWrite
     affectedProcesses: ['codex'],
     path,
     edits: [{ keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' }],
+    policyGuard: null,
     expectedVersion,
     reloadUserConfig: true,
   };

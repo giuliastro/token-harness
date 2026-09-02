@@ -216,6 +216,7 @@ async function appendCodexNativePolicy(
       edits.map((edit) => edit.keyPath + '=' + String(edit.value)).join(', '),
     path: target.path,
     edits,
+    policyGuard: 'subscription-safe',
     expectedVersion: target.version,
     reloadUserConfig: true,
   });

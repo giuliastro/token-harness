@@ -152,6 +152,14 @@ export interface CodexConfigBatchWriteAction extends PlannedActionBase {
     value: JsonValue;
     mergeStrategy: 'replace' | 'upsert';
   }>;
+  /**
+   * Additional executor invariant for optimizer-generated quota policy.
+   *
+   * `subscription-safe` means this batch may edit only the narrow settings that cannot select
+   * another provider, auth path, service tier, or other paid API route. Null keeps this action
+   * usable as a generic first-class Codex config transaction for separately reviewed features.
+   */
+  policyGuard: 'subscription-safe' | null;
   /** Config version returned by the read used to build the plan; null only for fresh/unsupported readers. */
   expectedVersion: string | null;
   /** Whether Codex should hot-reload mutable user config after the atomic write. */

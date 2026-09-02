@@ -346,6 +346,7 @@ describe('persisted Codex native policy', () => {
     );
     assert.ok(action);
     assert.equal(action.expectedVersion, 'user-v1');
+    assert.equal(action.policyGuard, 'subscription-safe');
     assert.deepEqual(action.edits, [
       { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
       { keyPath: 'model_verbosity', value: 'low', mergeStrategy: 'replace' },
