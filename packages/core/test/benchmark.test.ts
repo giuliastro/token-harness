@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   compareTaskBenchmarkReceipts,
   comparableQuotaDeltas,
+  parseTaskBenchmarkReceipt,
   harnessId,
   type TaskBenchmarkReceipt,
   type UsageWindowSnapshot,
@@ -68,6 +69,43 @@ function receipt(
     ...overrides,
   };
 }
+
+describe('task benchmark receipt parser', () => {
+  it('round-trips a valid schema-1 receipt', () => {
+    const source = receipt('baseline');
+    const parsed = parseTaskBenchmarkReceipt(JSON.parse(JSON.stringify(source)));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.receipt, source);
+  });
+
+  it('rejects a future schema explicitly', () => {
+    const source = { ...receipt('baseline'), schemaVersion: 2 };
+    const parsed = parseTaskBenchmarkReceipt(source);
+    assert.equal(parsed.ok, false);
+    if (parsed.ok) return;
+    assert.equal(parsed.reason, 'unsupported-schema');
+  });
+
+  it('rejects malformed attempts and invalid window timestamps', () => {
+    const badAttempts = receipt('baseline', {
+      outcome: {
+        qualityGate: 'passed',
+        attempts: 1,
+        failedAttempts: 2,
+        errorCodes: [],
+      },
+    });
+    const parsedAttempts = parseTaskBenchmarkReceipt(badAttempts);
+    assert.equal(parsedAttempts.ok, false);
+
+    const badWindow = receipt('baseline', {
+      usageBefore: [window({ observedAt: 'not-a-date' })],
+    });
+    const parsedWindow = parseTaskBenchmarkReceipt(badWindow);
+    assert.equal(parsedWindow.ok, false);
+  });
+});
 
 describe('comparable quota deltas', () => {
   it('uses one unchanged authoritative backend window', () => {
