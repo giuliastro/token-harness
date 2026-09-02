@@ -12,9 +12,7 @@ import { fileURLToPath } from 'node:url';
 export const FIXTURES_ROOT = fileURLToPath(new URL('../../fixtures/', import.meta.url));
 export const GOLDEN_ROOT = fileURLToPath(new URL('../../fixtures/golden/', import.meta.url));
 export const CLI_ROOT = fileURLToPath(new URL('../../fixtures/cli/', import.meta.url));
-export const BENCHMARK_ROOT = fileURLToPath(
-  new URL('../../fixtures/benchmarks/', import.meta.url),
-);
+export const BENCHMARK_ROOT = fileURLToPath(new URL('../../fixtures/benchmarks/', import.meta.url));
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 export interface ScenarioRoots {
