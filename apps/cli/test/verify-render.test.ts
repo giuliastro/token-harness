@@ -33,10 +33,11 @@ function result(overrides: Partial<VerificationResult> = {}): VerificationResult
 
 describe('verify ownership rendering', () => {
   it('separates a user-installed provider executable from a managed integration', () => {
-    const rendered = renderVerifyReport(
-      report(result({ providerManagedByTokenHarness: false })),
-      { toolVersion: 'test', home: null, decorate: false },
-    );
+    const rendered = renderVerifyReport(report(result({ providerManagedByTokenHarness: false })), {
+      toolVersion: 'test',
+      home: null,
+      decorate: false,
+    });
 
     assert.match(rendered, /Provider executable: user-installed/);
     assert.match(rendered, /integration: managed by Token Harness/);
@@ -44,10 +45,11 @@ describe('verify ownership rendering', () => {
   });
 
   it('keeps legacy verification results byte-compatible with the old ownership wording', () => {
-    const rendered = renderVerifyReport(
-      report(result({ managedByTokenHarness: false })),
-      { toolVersion: 'test', home: null, decorate: false },
-    );
+    const rendered = renderVerifyReport(report(result({ managedByTokenHarness: false })), {
+      toolVersion: 'test',
+      home: null,
+      decorate: false,
+    });
 
     assert.match(rendered, /harnesstrim on codex — set up by you, tier config-only/);
   });
