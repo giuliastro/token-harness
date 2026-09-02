@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "mechanical-quota-win",
+  "variant": "baseline",
+  "taskClass": "mechanical",
+  "harnessId": "codex",
+  "model": "gpt-5.6-codex",
+  "reasoningEffort": "low",
+  "verbosity": "low",
+  "startedAt": "2026-09-02T10:00:00.000Z",
+  "completedAt": "2026-09-02T10:20:00.000Z",
+  "usageBefore": [
+    {
+      "harnessId": "codex",
+      "bucketId": "codex-main",
+      "bucketName": "Codex",
+      "window": "primary",
+      "scope": "five-hour",
+      "usedPercent": 20,
+      "remainingPercent": 80,
+      "windowDurationMinutes": 300,
+      "resetsAt": "2026-09-02T14:00:00.000Z",
+      "observedAt": "2026-09-02T10:00:00.000Z",
+      "source": "native-rpc",
+      "confidence": "authoritative"
+    }
+  ],
+  "usageAfter": [
+    {
+      "harnessId": "codex",
+      "bucketId": "codex-main",
+      "bucketName": "Codex",
+      "window": "primary",
+      "scope": "five-hour",
+      "usedPercent": 30,
+      "remainingPercent": 70,
+      "windowDurationMinutes": 300,
+      "resetsAt": "2026-09-02T14:00:00.000Z",
+      "observedAt": "2026-09-02T10:20:00.000Z",
+      "source": "native-rpc",
+      "confidence": "authoritative"
+    }
+  ],
+  "localUsage": {
+    "inputTokens": 1200,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 500,
+    "outputTokens": 500,
+    "totalTokens": 2200
+  },
+  "outcome": {
+    "qualityGate": "passed",
+    "attempts": 1,
+    "failedAttempts": 0,
+    "errorCodes": []
+  }
+}
