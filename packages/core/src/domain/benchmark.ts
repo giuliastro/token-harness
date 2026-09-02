@@ -271,6 +271,7 @@ export function compareTaskBenchmarkReceipts(
   if (
     baseline.benchmarkId !== optimized.benchmarkId ||
     baseline.taskClass !== optimized.taskClass ||
+    baseline.harnessId !== optimized.harnessId ||
     baseline.variant !== 'baseline' ||
     optimized.variant !== 'optimized'
   ) {
