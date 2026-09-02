@@ -193,11 +193,11 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
   if (
     typeof qualityGate !== 'string' ||
     !QUALITY_GATES.has(qualityGate) ||
-    !Number.isInteger(attempts) ||
     typeof attempts !== 'number' ||
+    !Number.isInteger(attempts) ||
     attempts < 1 ||
-    !Number.isInteger(failedAttempts) ||
     typeof failedAttempts !== 'number' ||
+    !Number.isInteger(failedAttempts) ||
     failedAttempts < 0 ||
     failedAttempts > attempts ||
     !Array.isArray(errorCodes) ||
