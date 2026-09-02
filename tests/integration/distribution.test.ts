@@ -127,6 +127,17 @@ describe('distribution', () => {
     const packaging = readFileSync(join(REPO_ROOT, 'scripts', 'package.mjs'), 'utf8');
     assert.match(packaging, /sbom\.json/, 'the packaging script emits no SBOM');
     assert.match(packaging, /bomFormat: 'CycloneDX'/, 'the SBOM is not in a recognised format');
+    assert.match(
+      packaging,
+      /serialNumber: sbomSerialNumber/,
+      'the CycloneDX SBOM has no serial number for GitHub attestation',
+    );
+    assert.match(
+      packaging,
+      /urn:uuid:/,
+      'the CycloneDX serial number is not emitted as a UUID URN',
+    );
+    assert.match(packaging, /bundleDigest\.slice/, 'the SBOM serial number is not artifact-derived');
     assert.match(packaging, /'SHA-256'/, 'the SBOM records no digest for the artifact');
     assert.match(
       packaging,
