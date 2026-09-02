@@ -29,6 +29,13 @@ export interface MeasurementClassRow {
   note: string | null;
 }
 
+export interface MetricsErrorRow {
+  code: string;
+  count: number;
+  providerIds: ProviderId[];
+  harnesses: HarnessId[];
+}
+
 export interface ProviderSavingsRow {
   providerId: ProviderId;
   saved: number;
@@ -88,6 +95,8 @@ export interface MetricsReport {
    */
   inflatedOperations: number;
   errors: number;
+  /** Error identities retained separately from the headline count for diagnosis. */
+  errorBreakdown: MetricsErrorRow[];
   /**
    * Median overhead the optimization *added*, across events that recorded one.
    *
@@ -158,6 +167,13 @@ interface ClassTotal {
   after: number;
 }
 
+interface ErrorTotal {
+  code: string;
+  count: number;
+  providerIds: Set<string>;
+  harnesses: Set<string>;
+}
+
 interface ProviderTotal {
   providerId: string;
   class: MeasurementClass;
@@ -184,6 +200,7 @@ interface ProviderTotal {
 export function aggregateEvents(input: AggregateInput): MetricsReport {
   const classTotals = new Map<string, ClassTotal>();
   const providerTotals = new Map<string, ProviderTotal>();
+  const errorTotals = new Map<string, ErrorTotal>();
 
   let realized = 0;
   let bypassed = 0;
@@ -206,7 +223,19 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
     if (seen.has(event.eventId)) continue;
     seen.add(event.eventId);
 
-    if (event.outcome.errorCode !== null) errors += 1;
+    if (event.outcome.errorCode !== null) {
+      errors += 1;
+      const total = errorTotals.get(event.outcome.errorCode) ?? {
+        code: event.outcome.errorCode,
+        count: 0,
+        providerIds: new Set<string>(),
+        harnesses: new Set<string>(),
+      };
+      total.count += 1;
+      total.providerIds.add(event.provider.id);
+      if (event.context.harnessId !== 'unknown') total.harnesses.add(event.context.harnessId);
+      errorTotals.set(event.outcome.errorCode, total);
+    }
 
     // A window spanning two pipelines has no single pipeline to name, and naming the first
     // would attribute the whole report to it.
@@ -327,6 +356,15 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
       adapterMode: modes[row.providerId] ?? null,
     }));
 
+  const errorBreakdown: MetricsErrorRow[] = [...errorTotals.values()]
+    .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code))
+    .map((row) => ({
+      code: row.code,
+      count: row.count,
+      providerIds: [...row.providerIds].sort() as ProviderId[],
+      harnesses: [...row.harnesses].sort() as HarnessId[],
+    }));
+
   const operations = realized + bypassed;
   const channels =
     input.channels === undefined
@@ -346,6 +384,7 @@ export function aggregateEvents(input: AggregateInput): MetricsReport {
     bypassed,
     inflatedOperations: inflated,
     errors,
+    errorBreakdown,
     addedMedianLatencyMs: median(latencies),
   };
 }

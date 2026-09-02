@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   MEASUREMENT_CLASSES,
+  aggregateEvents,
   isMeasurementClass,
   isRealizedSaving,
   isSummableWith,
@@ -13,16 +14,20 @@ function event(overrides: {
   class: OptimizationEvent['measurement']['class'];
   tokens?: boolean;
   changed?: boolean;
+  id?: string;
+  provider?: string;
+  harness?: string;
+  errorCode?: string | null;
 }): OptimizationEvent {
   const tokens = overrides.tokens ?? false;
   return {
     schemaVersion: 1,
-    eventId: 'e1',
+    eventId: overrides.id ?? 'e1',
     timestamp: '2026-07-29T10:12:04Z',
-    provider: { id: 'harnesstrim', version: '0.0.5' },
+    provider: { id: overrides.provider ?? 'harnesstrim', version: '0.0.5' },
     context: {
       projectId: 'p_1',
-      harnessId: 'opencode',
+      harnessId: overrides.harness ?? 'opencode',
       sessionId: null,
       operationId: 'op_1',
       pipelineId: 'b41e',
@@ -45,11 +50,79 @@ function event(overrides: {
       bypassReason: null,
       originalReference: null,
       latencyMs: 3,
-      errorCode: null,
+      errorCode: overrides.errorCode ?? null,
     },
     source: { nativeEventId: null, importedAt: '2026-07-29T10:13:00Z' },
   };
 }
+
+describe('metrics error breakdown', () => {
+  it('groups historical errors by code while retaining providers and harnesses', () => {
+    const report = aggregateEvents({
+      events: [
+        event({
+          id: 'failure-1',
+          class: 'estimated-local',
+          changed: false,
+          provider: 'harnesstrim',
+          harness: 'opencode',
+          errorCode: 'harnesstrim-reducer-failed:test-output-slim',
+        }),
+        event({
+          id: 'failure-2',
+          class: 'estimated-local',
+          changed: false,
+          provider: 'harnesstrim',
+          harness: 'pi',
+          errorCode: 'harnesstrim-reducer-failed:test-output-slim',
+        }),
+        event({
+          id: 'other-failure',
+          class: 'estimated-local',
+          changed: false,
+          provider: 'rtk',
+          harness: 'claude',
+          errorCode: 'provider-timeout',
+        }),
+      ],
+      windowStart: '2026-08-26',
+      windowEnd: '2026-09-02',
+    });
+
+    assert.equal(report.errors, 3);
+    assert.deepEqual(report.errorBreakdown, [
+      {
+        code: 'harnesstrim-reducer-failed:test-output-slim',
+        count: 2,
+        providerIds: ['harnesstrim'],
+        harnesses: ['opencode', 'pi'],
+      },
+      {
+        code: 'provider-timeout',
+        count: 1,
+        providerIds: ['rtk'],
+        harnesses: ['claude'],
+      },
+    ]);
+  });
+
+  it('deduplicates repeated event ids before counting errors', () => {
+    const failure = event({
+      id: 'same',
+      class: 'estimated-local',
+      changed: false,
+      errorCode: 'harnesstrim-reducer-failed:lint-output-slim',
+    });
+    const report = aggregateEvents({
+      events: [failure, failure],
+      windowStart: '2026-08-26',
+      windowEnd: '2026-09-02',
+    });
+
+    assert.equal(report.errors, 1);
+    assert.equal(report.errorBreakdown[0]?.count, 1);
+  });
+});
 
 describe('measurement classes', () => {
   it('carries the four RFC 0005 classes', () => {
