@@ -112,13 +112,14 @@ const bundleDigest = createHash('sha256').update(bundleBytes).digest('hex');
  * actions/attest@v4 currently requires it to recognise CycloneDX JSON. Derive it from the bundle
  * digest rather than generating a random UUID so identical artifacts produce identical SBOMs.
  */
-const sbomSerialNumber = `urn:uuid:${[
+const sbomSerialParts = [
   bundleDigest.slice(0, 8),
   bundleDigest.slice(8, 12),
   bundleDigest.slice(12, 16),
   bundleDigest.slice(16, 20),
   bundleDigest.slice(20, 32),
-].join('-')}`;
+];
+const sbomSerialNumber = `urn:uuid:${sbomSerialParts.join('-')}`;
 
 const workspaceComponents = [
   ['@token-harness/core', join(repoRoot, 'packages', 'core', 'package.json')],
