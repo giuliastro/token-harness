@@ -1049,10 +1049,7 @@ async function applyDelegatedProviderInstall(
  * restore that snapshot on any later failure. A configVersionConflict is drift, never a retry
  * against bytes the user did not review.
  */
-const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set([
-  'model_reasoning_effort',
-  'model_verbosity',
-]);
+const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set(['model_reasoning_effort', 'model_verbosity']);
 
 async function applyCodexConfigBatchWrite(
   action: CodexConfigBatchWriteAction,
@@ -1072,9 +1069,7 @@ async function applyCodexConfigBatchWrite(
     action.policyGuard === 'subscription-safe' &&
     action.edits.some((edit) => !SUBSCRIPTION_SAFE_CODEX_KEYS.has(edit.keyPath))
   ) {
-    const unsafe = action.edits.find(
-      (edit) => !SUBSCRIPTION_SAFE_CODEX_KEYS.has(edit.keyPath),
-    );
+    const unsafe = action.edits.find((edit) => !SUBSCRIPTION_SAFE_CODEX_KEYS.has(edit.keyPath));
     return refusal(
       action,
       'codex-native-policy-unsafe-edit',
