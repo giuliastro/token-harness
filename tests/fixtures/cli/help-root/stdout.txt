@@ -12,8 +12,8 @@ First time here
   9  token-harness verify        is it actually intercepting    writes nothing
  10  token-harness metrics       what it saved                  writes nothing
  11  token-harness benchmark     compare paired task receipts   writes nothing
- 12  token-harness benchmark-start snapshot before a task       writes state only
- 13  token-harness benchmark-finish close task receipt          writes state only
+ 12  token-harness benchmark-start  snapshot task start         writes state
+ 13  token-harness benchmark-finish close task receipt          writes state
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -65,6 +65,7 @@ Flags
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
-Only apply, update, rollback and uninstall change harness/provider configuration,
-and none of them do without --yes. Metrics and benchmark capture may write only
-Token Harness's own local state. Exit codes and JSON are specified in RFC 0006.
+Only apply, update, rollback and uninstall change harness/provider
+configuration, and none of them do without --yes. Metrics and benchmark capture
+may write only Token Harness's own local state. Exit codes and JSON are specified
+in RFC 0006.
