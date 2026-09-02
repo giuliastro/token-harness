@@ -563,7 +563,7 @@ function cclimitsPercent(value: JsonValue | undefined): number | null {
     return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
   }
   if (typeof value !== 'string') return null;
-  const match = /^(\\d{1,3}(?:\\.\\d+)?)%$/.exec(value.trim());
+  const match = /^(\d{1,3}(?:\.\d+)?)%$/.exec(value.trim());
   if (match === null) return null;
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
@@ -756,7 +756,7 @@ async function observeUsage(
     JSON.stringify({ method: 'initialized', params: {} }),
     JSON.stringify({ method: 'account/rateLimits/read', id: 2, params: {} }),
     '',
-  ].join('\\n');
+  ].join('\n');
 
   const outcome = await context.runner.run({
     executable: 'codex',
