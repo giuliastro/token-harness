@@ -958,6 +958,7 @@ export interface TaskBenchmarkMatrixSelection {
   incomplete: number;
   invalid: number;
   otherProject: number;
+  filteredOut: number;
 }
 
 export interface TaskBenchmarkMatrixReport {
@@ -1027,6 +1028,7 @@ export function buildTaskBenchmarkMatrix(
     incomplete: 0,
     invalid: 0,
     otherProject: 0,
+    filteredOut: 0,
   },
 ): TaskBenchmarkMatrixReport {
   const entries = pairs
