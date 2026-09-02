@@ -398,7 +398,9 @@ export async function runBenchmarkFinish(
   }
 
   const completedAt = context.now();
-  const budgetResult = await runBudget(fixedContext(context, parsed.capture.harnessId, completedAt));
+  const budgetResult = await runBudget(
+    fixedContext(context, parsed.capture.harnessId, completedAt),
+  );
   const budget = budgetResult.data?.harnesses.find(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
