@@ -1726,8 +1726,13 @@ full review/apply path and stale-version refusal. Optimizer-generated native bat
 contains anything outside the current quota-safe write set (`model_reasoning_effort` and
 `model_verbosity`). This makes the no-silent-pay-as-you-go acceptance criterion an executable
 invariant rather than a planner convention: provider, auth, model, and service-tier changes require
-a separately reviewed policy path. Model switching remains advisory until model-tier quota
-benchmarks exist.
+a separately reviewed policy path. The transaction layer is nevertheless ready for that future
+path: any reviewed top-level `model` edit must carry a native-catalog model reference, and apply
+resolves it against the installed Codex `model/list` immediately before mutation. Missing,
+truncated, or ambiguous catalogs stop before snapshot/write, and the resolved canonical `model`
+value is the value verified after `config/batchWrite`. Model switching remains advisory until
+model-tier quota benchmarks exist, so this resolver is infrastructure rather than an automatic
+optimizer decision.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.
