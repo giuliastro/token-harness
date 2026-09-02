@@ -48,8 +48,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Format oracle
+        run: |
+          pnpm exec prettier --write apps/cli/src/commands/benchmark-capture.ts packages/core/src/domain/benchmark.ts
+          git diff -- apps/cli/src/commands/benchmark-capture.ts packages/core/src/domain/benchmark.ts
+          exit 1
 
       - name: Test
         run: pnpm test
