@@ -6,4 +6,4 @@
  * manifest beside it. `apps/cli/test/version.test.ts` asserts this constant and
  * `package.json` never drift apart.
  */
-export const TOOL_VERSION = '0.1.3';
+export const TOOL_VERSION = '0.1.4';
