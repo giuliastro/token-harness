@@ -578,8 +578,7 @@ function cclimitsWindow(
 ): HarnessBudgetObservation['windows'][number] | null {
   if (!isRecord(value)) return null;
 
-  const usedPercent =
-    cclimitsPercent(value['used_percent']) ?? cclimitsPercent(value['used']);
+  const usedPercent = cclimitsPercent(value['used_percent']) ?? cclimitsPercent(value['used']);
   const remainingPercent =
     cclimitsPercent(value['remaining_percent']) ?? cclimitsPercent(value['remaining']);
   const duration = readNumber(value, 'window_duration_minutes');
@@ -651,8 +650,7 @@ function parseCclimitsCodexResponse(
     windows,
     planType: readString(codex, 'plan'),
     rateLimitReachedType: readString(codex, 'rate_limit_reached_type'),
-    resetCreditsAvailable:
-      resetCredits === null ? null : Math.max(0, Math.trunc(resetCredits)),
+    resetCreditsAvailable: resetCredits === null ? null : Math.max(0, Math.trunc(resetCredits)),
   };
 }
 
@@ -670,11 +668,7 @@ async function observeUsageViaCclimits(
     maxOutputBytes: 512 * 1024,
   });
 
-  if (
-    outcome.failure !== null ||
-    outcome.exitCode !== 0 ||
-    outcome.stdoutTruncated
-  ) {
+  if (outcome.failure !== null || outcome.exitCode !== 0 || outcome.stdoutTruncated) {
     const reason =
       outcome.failure !== null
         ? outcome.failure.message
@@ -782,7 +776,8 @@ async function observeUsage(
         code: 'codex-rate-limits-unavailable',
         subject: CODEX,
         message: 'Codex rate limits could not be read natively: ' + outcome.failure.message,
-        remediation: 'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
+        remediation:
+          'Run Codex once, confirm ChatGPT authentication, then retry token-harness budget',
       }),
     );
   }
@@ -828,7 +823,8 @@ async function observeUsage(
         code: 'codex-rate-limits-empty',
         subject: CODEX,
         message: 'Codex returned a rate-limit response without any readable usage windows',
-        remediation: 'Treat current Codex quota as unknown unless a strict companion snapshot succeeds',
+        remediation:
+          'Treat current Codex quota as unknown unless a strict companion snapshot succeeds',
       }),
     );
   }
