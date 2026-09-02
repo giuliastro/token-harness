@@ -27,6 +27,7 @@ First time here
   8  token-harness apply --yes   make those changes             WRITES
   9  token-harness verify        is it actually intercepting    writes nothing
  10  token-harness metrics       what it saved                  writes nothing
+ 11  token-harness benchmark     compare paired task receipts   writes nothing
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -44,6 +45,7 @@ Commands, in the order you would use them
   apply       Run that plan inside a transaction that can be rolled back
   verify      Check the pipeline actually intercepts, at its declared tier
   metrics     Report what was saved, labelled with how it was measured
+  benchmark   Compare baseline/optimized task receipts with quality gates
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
@@ -58,6 +60,8 @@ Flags
   --since <window>     Report from this point: a duration like 7d, or a date
   --until <window>     Report up to this point; defaults to now
   --plan <id>          Apply a previously computed plan by id
+  --baseline <file>     Baseline task benchmark receipt JSON
+  --optimized <file>    Optimized task benchmark receipt JSON
   --task <class>        Optimizer task: mechanical, standard, hard, critical
   --profile <name>      Optimizer profile: economy, balanced, quality, custom
   --reserve <percent>   Keep this percent of observed allowance in reserve
@@ -70,6 +74,22 @@ Only apply, update, rollback and uninstall change anything, and none of
 them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  benchmark: `token-harness benchmark — compare paired task receipts
+
+Usage
+  token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>
+                          [--json] [--project <dir>]
+
+Read-only. The command reads two schema-1 task receipts and applies the deterministic
+RFC 0011 comparator. Both receipts must carry explicit quality gates. Quality is
+evaluated before efficiency; only matching authoritative/reported backend windows
+that do not cross a reset are compared as subscription quota.
+
+If backend quota is not comparable, failed attempts, runtime/provider errors,
+attempt count and local token volume may separate the receipts as local evidence.
+Local tokens are never relabelled as subscription quota. A malformed receipt,
+unsupported schema or wrong baseline/optimized role is rejected rather than guessed.`,
+
   history: `token-harness history — read local Claude/Codex usage history
 
 Usage
