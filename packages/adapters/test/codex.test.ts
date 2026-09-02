@@ -256,7 +256,7 @@ describe('subscription usage', () => {
             stdout: [
               JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
               JSON.stringify({
-                id: 2,
+                id: 'token-harness-rate-limits',
                 result: {
                   rateLimits: rateLimit,
                   rateLimitsByLimitId: { codex: rateLimit },
@@ -307,6 +307,7 @@ describe('subscription usage', () => {
     assert.equal(requests.length, 1);
     assert.deepEqual(requests[0]?.args, ['app-server', '--stdio']);
     assert.match(requests[0]?.stdin ?? '', /account\/rateLimits\/read/);
+    assert.equal(requests[0]?.stdinCloseAfterStdoutLineIncludes, 'token-harness-rate-limits');
     assert.doesNotMatch(requests[0]?.stdin ?? '', /consume|redeem/i);
   });
 
@@ -324,7 +325,7 @@ describe('subscription usage', () => {
           stdout: [
             JSON.stringify({ id: 1, result: {} }),
             JSON.stringify({
-              id: 2,
+              id: 'token-harness-rate-limits',
               result: {
                 rateLimits: {
                   limitId: 'future-bucket',

@@ -34,6 +34,7 @@ import {
 } from './contract.js';
 
 const CODEX = harnessId('codex');
+const RATE_LIMIT_REQUEST_ID = 'token-harness-rate-limits';
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 const MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -522,7 +523,8 @@ function parseRateLimitResponse(
   }
 
   const response = messages.find(
-    (message) => isRecord(message) && message['id'] === 2 && isRecord(message['result']),
+    (message) =>
+      isRecord(message) && message['id'] === RATE_LIMIT_REQUEST_ID && isRecord(message['result']),
   );
   if (!isRecord(response) || !isRecord(response['result'])) return null;
   const result = response['result'];
@@ -754,7 +756,7 @@ async function observeUsage(
       },
     }),
     JSON.stringify({ method: 'initialized', params: {} }),
-    JSON.stringify({ method: 'account/rateLimits/read', id: 2, params: {} }),
+    JSON.stringify({ method: 'account/rateLimits/read', id: RATE_LIMIT_REQUEST_ID, params: {} }),
     '',
   ].join('\n');
 
@@ -763,6 +765,7 @@ async function observeUsage(
     args: ['app-server', '--stdio'],
     cwd: context.projectRoot,
     stdin,
+    stdinCloseAfterStdoutLineIncludes: RATE_LIMIT_REQUEST_ID,
     timeoutMs: 10_000,
     maxOutputBytes: 1024 * 1024,
   });

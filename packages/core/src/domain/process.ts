@@ -49,8 +49,16 @@ export interface ProcessRequest {
   secretValues?: readonly string[];
   /** Extra flags whose argument is a secret, on top of the defaults. */
   secretArgFlags?: readonly string[];
-  /** Written to the child's stdin, which is then closed. Never inherited. */
+  /** Written to the child's stdin. Never inherited. */
   stdin?: string;
+  /**
+   * Keep stdin open until a complete stdout line contains this marker, then close it.
+   *
+   * Absent by default: ordinary commands still receive EOF immediately after `stdin` is written.
+   * This exists for newline-delimited request/response servers whose asynchronous reply can race
+   * process shutdown when EOF is their transport-close signal.
+   */
+  stdinCloseAfterStdoutLineIncludes?: string;
 }
 
 export type ProcessFailureReason =

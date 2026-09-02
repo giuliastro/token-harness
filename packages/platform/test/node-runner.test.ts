@@ -318,6 +318,34 @@ describe('stdin', () => {
     });
     assert.equal(outcome.stdout, 'PAYLOAD');
   });
+
+  it('can hold stdin open until a complete stdout response line arrives', async () => {
+    const outcome = await runner().run({
+      executable: 'node',
+      args: [
+        '-e',
+        [
+          'let input=""',
+          'let replied=false',
+          'process.stdin.on("data",chunk=>{',
+          '  input+=chunk',
+          '  if (!replied && input.includes("request")) {',
+          '    replied=true',
+          '    setTimeout(()=>process.stdout.write(JSON.stringify({id:"th-response"})+"\\n"),50)',
+          '  }',
+          '})',
+          'process.stdin.on("end",()=>process.exit(0))',
+        ].join(';'),
+      ],
+      cwd: sandbox,
+      stdin: 'request\n',
+      stdinCloseAfterStdoutLineIncludes: 'th-response',
+      timeoutMs: 5_000,
+    });
+    assert.equal(outcome.failure, null);
+    assert.equal(outcome.timedOut, false);
+    assert.match(outcome.stdout, /"id":"th-response"/);
+  });
 });
 
 describe('redaction', () => {
