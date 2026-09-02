@@ -1234,11 +1234,7 @@ async function applyCodexConfigBatchWrite(
 
     const resolvedModel = [...canonicalModels][0];
     if (resolvedModel === undefined) {
-      return drift(
-        action,
-        action.path,
-        'The reviewed Codex model reference could not be resolved',
-      );
+      return drift(action, action.path, 'The reviewed Codex model reference could not be resolved');
     }
     effectiveEdits = action.edits.map((edit) =>
       edit.keyPath === 'model' ? { ...edit, value: resolvedModel } : edit,
