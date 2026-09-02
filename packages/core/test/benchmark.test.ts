@@ -154,7 +154,6 @@ describe('task benchmark capture contract', () => {
   });
 });
 
-
 describe('local benchmark usage attribution', () => {
   function session(
     sessionId: string,
