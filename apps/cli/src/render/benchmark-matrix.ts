@@ -51,10 +51,10 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
 
 function entryLine(entry: TaskBenchmarkMatrixEntry): string {
   const local =
-    entry.localTokenSavingPercent === null ? '' : `; local delta ${percent(entry.localTokenSavingPercent)}`;
-  return (
-    `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`
-  );
+    entry.localTokenSavingPercent === null
+      ? ''
+      : `; local delta ${percent(entry.localTokenSavingPercent)}`;
+  return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
 }
 
 export function renderBenchmarkMatrixReport(
