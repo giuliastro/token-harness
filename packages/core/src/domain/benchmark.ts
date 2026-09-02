@@ -952,10 +952,19 @@ export interface TaskBenchmarkMatrixSummary {
   localTokenSavingPercent: number | null;
 }
 
+export interface TaskBenchmarkMatrixSelection {
+  scanned: number;
+  completePairs: number;
+  incomplete: number;
+  invalid: number;
+  otherProject: number;
+}
+
 export interface TaskBenchmarkMatrixReport {
   entries: TaskBenchmarkMatrixEntry[];
   byTaskClass: TaskBenchmarkMatrixSummary[];
   overall: TaskBenchmarkMatrixSummary;
+  selection: TaskBenchmarkMatrixSelection;
 }
 
 const TASK_CLASS_ORDER: readonly TaskClass[] = ['mechanical', 'standard', 'hard', 'critical'];
@@ -1012,6 +1021,13 @@ function summarizeMatrixEntries(
  */
 export function buildTaskBenchmarkMatrix(
   pairs: readonly TaskBenchmarkMatrixPair[],
+  selection: TaskBenchmarkMatrixSelection = {
+    scanned: pairs.length,
+    completePairs: pairs.length,
+    incomplete: 0,
+    invalid: 0,
+    otherProject: 0,
+  },
 ): TaskBenchmarkMatrixReport {
   const entries = pairs
     .map(({ baseline, optimized }): TaskBenchmarkMatrixEntry => {
@@ -1051,6 +1067,7 @@ export function buildTaskBenchmarkMatrix(
     entries,
     byTaskClass,
     overall: summarizeMatrixEntries(entries, null),
+    selection,
   };
 }
 
