@@ -153,7 +153,8 @@ deterministic comparator used by token-harness benchmark.
 The report groups mechanical, standard, hard and critical tasks; counts optimized
 wins, baseline wins, equal and inconclusive results; and keeps quota-backed,
 local-evidence and quality-only outcomes separate. Local token totals are summed
-only across pairs where both variants have attributable local usage. Backend
+only across quality-passed pairs where both variants have attributable local
+usage. Backend
 quota percentages from different windows are never summed and no composite score
 is invented.`,
 
