@@ -35,9 +35,9 @@ export function renderBenchmarkReport(
     `Benchmark — ${comparison.benchmarkId}`,
     `${baseline.taskClass} on ${baseline.harnessId}`,
     '',
-    ...wrap(receiptLine('Baseline', baseline)),
+    ...wrap(receiptLine('Baseline', baseline), 0),
     ...wrap(policyLine('Baseline', baseline), 2),
-    ...wrap(receiptLine('Optimized', optimized)),
+    ...wrap(receiptLine('Optimized', optimized), 0),
     ...wrap(policyLine('Optimized', optimized), 2),
     '',
   ];
@@ -50,6 +50,7 @@ export function renderBenchmarkReport(
         `Backend quota (${comparison.quota.scope}, ${comparison.quota.confidence}): baseline +${String(
           comparison.quota.baselineDeltaUsedPercent,
         )}% vs optimized +${String(comparison.quota.optimizedDeltaUsedPercent)}%`,
+        0,
       ),
     );
   }
@@ -57,6 +58,7 @@ export function renderBenchmarkReport(
   lines.push(
     ...wrap(
       `Verdict: ${comparison.verdict} — basis ${comparison.basis} — evidence ${comparison.evidenceLevel}`,
+      0,
     ),
   );
 
