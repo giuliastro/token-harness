@@ -55,11 +55,7 @@ function fixedContext(
   };
 }
 
-async function writeJson(
-  context: CommandContext,
-  path: string,
-  value: unknown,
-): Promise<boolean> {
+async function writeJson(context: CommandContext, path: string, value: unknown): Promise<boolean> {
   if (context.adapters === null) return false;
   try {
     await context.adapters.fs.writeFile(
@@ -402,9 +398,7 @@ export async function runBenchmarkFinish(
   }
 
   const completedAt = context.now();
-  const budgetResult = await runBudget(
-    fixedContext(context, parsed.capture.harnessId, completedAt),
-  );
+  const budgetResult = await runBudget(fixedContext(context, parsed.capture.harnessId, completedAt));
   const budget = budgetResult.data?.harnesses.find(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
