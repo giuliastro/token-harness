@@ -1,0 +1,10 @@
+{
+  "name": "hard-retry-cost",
+  "fixtureKind": "contract-not-empirical",
+  "taskClass": "hard",
+  "harnessId": "codex",
+  "expectedVerdict": "baseline-better",
+  "expectedBasis": "failed-attempts",
+  "expectedEvidenceLevel": "local-evidence",
+  "note": "Both quality gates pass and the optimized receipt is locally smaller, but it needed two failed attempts; retry cost outranks local token savings when backend quota is not comparable."
+}
