@@ -132,11 +132,7 @@ describe('distribution', () => {
       /serialNumber: sbomSerialNumber/,
       'the CycloneDX SBOM has no serial number for GitHub attestation',
     );
-    assert.match(
-      packaging,
-      /urn:uuid:/,
-      'the CycloneDX serial number is not emitted as a UUID URN',
-    );
+    assert.match(packaging, /urn:uuid:/, 'the CycloneDX serial number is not a UUID URN');
     assert.match(packaging, /bundleDigest\.slice/, 'the SBOM serial number is not artifact-derived');
     assert.match(packaging, /'SHA-256'/, 'the SBOM records no digest for the artifact');
     assert.match(
