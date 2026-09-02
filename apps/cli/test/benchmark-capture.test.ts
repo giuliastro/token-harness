@@ -43,7 +43,6 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
 function fixture() {
   const files = new Map<string, Uint8Array>();
   const directories = new Set(['/home/dev/project/.git']);
-  const encoder = new TextEncoder();
   let usedPercent = 20;
   let now = '2026-09-02T10:00:00.000Z';
   let projectId = 'p_test';
