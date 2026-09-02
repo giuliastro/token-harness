@@ -286,13 +286,18 @@ export function resolveExecutables(input: ResolveExecutableInput): ResolvedExecu
       if (!nativeWindows && !probe.isExecutable(candidate)) continue;
 
       const key = nativeWindows ? candidate.toLowerCase() : candidate;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      found.push({
-        requested: name,
-        path: candidate,
-        kind: nativeWindows ? classifyWindows(candidate) : classifyPosix(candidate, probe),
-      });
+      if (!seen.has(key)) {
+        seen.add(key);
+        found.push({
+          requested: name,
+          path: candidate,
+          kind: nativeWindows ? classifyWindows(candidate) : classifyPosix(candidate, probe),
+        });
+      }
+      // One executable per PATH directory. On Windows an npm install commonly places
+      // extensionless, .cmd and .ps1 siblings in the same directory; those are one install,
+      // not three shadowing installs. PATHEXT order decides which sibling represents it.
+      break;
     }
   }
   return found;
