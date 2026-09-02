@@ -32,6 +32,7 @@ import {
 export const AVAILABLE_COMMANDS = [
   'apply',
   'budget',
+  'benchmark',
   'context',
   'doctor',
   'history',
@@ -74,6 +75,9 @@ export interface CommandOptions {
   until: string | null;
   /** `--plan <id>`; validated for shape here and for existence by the command. */
   plan: string | null;
+  /** Paired task benchmark receipt paths. */
+  baselineReceipt: string | null;
+  optimizedReceipt: string | null;
   /** RFC 0011 advisory optimizer inputs. */
   task: TaskClass | null;
   profile: BudgetProfile | null;
@@ -98,6 +102,8 @@ const VALUE_FLAGS = new Set([
   '--since',
   '--until',
   '--plan',
+  '--baseline',
+  '--optimized',
   '--task',
   '--profile',
   '--reserve',
@@ -168,6 +174,8 @@ export function parseArgv(
     since: null,
     until: null,
     plan: null,
+    baselineReceipt: null,
+    optimizedReceipt: null,
     task: null,
     profile: null,
     reservePercent: null,
@@ -296,6 +304,12 @@ export function parseArgv(
         break;
       case '--until':
         options.until = value;
+        break;
+      case '--baseline':
+        options.baselineReceipt = value;
+        break;
+      case '--optimized':
+        options.optimizedReceipt = value;
         break;
       case '--task':
         if (!isTaskClass(value)) {
