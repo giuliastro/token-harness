@@ -243,11 +243,7 @@ export async function runBenchmarkStart(
     command: 'benchmark-start',
     exitCode: EXIT_CODES.ok,
     data: { capture, capturePath: paths.capturePath },
-    diagnostics: [
-      ...budgetResult.diagnostics,
-      ...contextResult.diagnostics,
-      ...historyResult.diagnostics,
-    ],
+    diagnostics: [...budgetResult.diagnostics, ...contextResult.diagnostics, ...historyResult.diagnostics],
   });
 }
 
