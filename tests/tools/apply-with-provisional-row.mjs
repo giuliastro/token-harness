@@ -1,6 +1,7 @@
 /**
- * Runs `apply` against a *provisional* compatibility row, so the post-apply stages of a row
- * fixture can be recorded — PLAN §15 item 44, RFC 0009 §Compatibility matrix.
+ * Runs a managed lifecycle operation against a *provisional* compatibility row, so compatibility
+ * row fixtures can record states that would otherwise be blocked by the row they are trying to
+ * establish — PLAN §15 item 44, RFC 0009 §Compatibility matrix.
  *
  * ## The circularity this exists to break
  *
@@ -33,8 +34,10 @@
  * Usage, from a built checkout (`pnpm build` first):
  *
  *   node tests/tools/apply-with-provisional-row.mjs --harness claude --provider rtk --project .
+ *   node tests/tools/apply-with-provisional-row.mjs --operation uninstall --harness codex --provider harnesstrim --project .
  *
- * Record `post-apply` with `record-row-fixture.mjs` immediately afterwards.
+ * `--operation` defaults to `apply`; `uninstall` exists specifically so the fixture can prove
+ * surgical removal before the reviewed row is committed.
  */
 
 import process from 'node:process';
@@ -64,6 +67,10 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+const operation = args.operation ?? 'apply';
+if (operation !== 'apply' && operation !== 'uninstall') {
+  throw new Error('--operation must be apply or uninstall');
+}
 for (const required of ['harness', 'provider', 'project']) {
   if (args[required] === undefined) throw new Error(`--${required} is required`);
 }
@@ -132,7 +139,7 @@ if (!resolution.ok) {
 
   if (harnessVersion === null || providerVersion === null) {
     process.stderr.write(
-      `refusing to apply: ${args.harness}=${String(harnessVersion)} ${args.provider}=${String(providerVersion)}\n` +
+      `refusing to ${operation}: ${args.harness}=${String(harnessVersion)} ${args.provider}=${String(providerVersion)}\n` +
         'A provisional row must name versions this machine actually reports, or the recording ' +
         'describes a combination nobody is standing in.\n',
     );
@@ -159,7 +166,7 @@ if (!resolution.ok) {
 
     const exitCode = await run({
       argv: [
-        'apply',
+        operation,
         '--yes',
         '--harness',
         args.harness,
