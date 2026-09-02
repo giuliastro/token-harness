@@ -4,8 +4,12 @@ import { describe, it } from 'node:test';
 import {
   compareTaskBenchmarkReceipts,
   comparableQuotaDeltas,
+  completeTaskBenchmarkCapture,
+  isTaskBenchmarkId,
+  parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
   harnessId,
+  type TaskBenchmarkCapture,
   type TaskBenchmarkReceipt,
   type UsageWindowSnapshot,
 } from '../src/index.js';
@@ -69,6 +73,83 @@ function receipt(
     ...overrides,
   };
 }
+
+describe('task benchmark capture contract', () => {
+  function capture(): TaskBenchmarkCapture {
+    return {
+      schemaVersion: 1,
+      benchmarkId: 'mechanical-fixture-1',
+      variant: 'baseline',
+      taskClass: 'mechanical',
+      harnessId: CODEX,
+      projectId: 'p_test',
+      model: 'gpt-5',
+      reasoningEffort: 'low',
+      verbosity: 'low',
+      startedAt: '2026-09-02T12:00:00.000Z',
+      usageBefore: [window()],
+    };
+  }
+
+  it('restricts capture ids to one safe path segment', () => {
+    assert.equal(isTaskBenchmarkId('mechanical-1'), true);
+    assert.equal(isTaskBenchmarkId('a.b_c-1'), true);
+    assert.equal(isTaskBenchmarkId('../escape'), false);
+    assert.equal(isTaskBenchmarkId('two/segments'), false);
+    assert.equal(isTaskBenchmarkId('Uppercase'), false);
+  });
+
+  it('round-trips a schema-1 capture without a raw project path', () => {
+    const source = capture();
+    const parsed = parseTaskBenchmarkCapture(JSON.parse(JSON.stringify(source)));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.capture, source);
+    assert.equal('projectRoot' in parsed.capture, false);
+  });
+
+  it('completes a capture into a normal receipt and reuses the receipt validator', () => {
+    const completed = completeTaskBenchmarkCapture(capture(), {
+      completedAt: '2026-09-02T12:20:00.000Z',
+      usageAfter: [
+        window({
+          usedPercent: 26,
+          remainingPercent: 74,
+          observedAt: '2026-09-02T12:20:00.000Z',
+        }),
+      ],
+      qualityGate: 'passed',
+      attempts: 1,
+      failedAttempts: 0,
+    });
+    assert.equal(completed.ok, true);
+    if (!completed.ok) return;
+    assert.equal(completed.receipt.outcome.qualityGate, 'passed');
+    assert.equal(completed.receipt.usageBefore[0]?.usedPercent, 20);
+    assert.equal(completed.receipt.usageAfter[0]?.usedPercent, 26);
+    assert.equal(completed.receipt.localUsage, null);
+  });
+
+  it('rejects an invalid completion instead of persisting a malformed receipt', () => {
+    const invalidAttempts = completeTaskBenchmarkCapture(capture(), {
+      completedAt: '2026-09-02T12:20:00.000Z',
+      usageAfter: [],
+      qualityGate: 'passed',
+      attempts: 1,
+      failedAttempts: 2,
+    });
+    assert.equal(invalidAttempts.ok, false);
+
+    const backwardsTime = completeTaskBenchmarkCapture(capture(), {
+      completedAt: '2026-09-02T11:59:00.000Z',
+      usageAfter: [],
+      qualityGate: 'passed',
+      attempts: 1,
+      failedAttempts: 0,
+    });
+    assert.equal(backwardsTime.ok, false);
+  });
+});
 
 describe('task benchmark receipt parser', () => {
   it('round-trips a valid schema-1 receipt', () => {
