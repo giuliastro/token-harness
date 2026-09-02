@@ -129,7 +129,7 @@ HarnessTrim, or a coding agent.
 ### Managed compatibility rows
 
 Token Harness changes a harness configuration only when a reviewed compatibility row covers the
-exact provider version, harness version, platform, and configuration schema. Three rows ship, and each
+exact provider version, harness version, platform, and configuration schema. Four rows ship, and each
 names the recording it stands on:
 
 | Provider | Harness | Platform | Tested versions | Tier |
@@ -137,21 +137,22 @@ names the recording it stands on:
 | RTK | Claude Code | Windows | rtk 0.44.0, Claude Code 2.1.220 | `canary` |
 | HarnessTrim | Claude Code | Windows | harnesstrim 0.1.0, Claude Code 2.1.220 | `config-only` |
 | HarnessTrim | Codex | Windows | harnesstrim 0.1.0, Codex 0.146.0 | `config-only` |
+| HarnessTrim | Codex | Linux (non-WSL) | harnesstrim 0.2.1, Codex 0.152.1 | `config-only` |
 
 Everything else is refused, and that is the design rather than a gap: `doctor` detects and reports on
 every supported platform, and only the *mutation* is narrower. An uncovered combination exits 9 and
 the diagnostic names what is missing — the reviewed fixture, or the nearest row it does have.
 
-A live Linux check on 2026-09-02 with Codex 0.152.1 confirmed that boundary: the current row covers
-Codex 0.146.0 on Windows only, so `plan` and `apply --yes` refused with exit 9 and wrote nothing.
-That combination can still be observed and benchmarked with a provider installed through its own
-installer; it is not promoted to managed mutation until a real compatibility fixture is recorded.
+A live Linux recording on 2026-09-02 promoted exactly one combination to managed mutation:
+Codex 0.152.1 + HarnessTrim 0.2.1 on non-WSL Linux. The fixture covers an empty state, brownfield
+user-owned files, skills-only apply, drift, verified rollback, and surgical uninstall. Nearby Codex
+or HarnessTrim versions and WSL remain refused.
 
 What is not covered today, and why:
 
-- **macOS and Linux.** No row on either. The recordings a row needs are states of a real machine, and
-  a fixture cannot be written from a machine nobody ran. On those platforms `plan` and `apply` refuse;
-  install the provider with its own installer and Token Harness will detect, verify, and measure it.
+- **macOS, WSL, and other Linux version combinations.** The recordings a row needs are states of a
+  real machine. Only the exact Linux combination above has been reviewed, so all other combinations
+  continue to refuse managed mutation while detection, verification, and measurement still work.
 - **OpenCode, and permanently rather than pending.** Both providers are detected, adopted, verified
   and measured there, and neither is written. RTK reaches OpenCode through a plugin module its own
   installer places globally, which this build has no action for. HarnessTrim's OpenCode installer
