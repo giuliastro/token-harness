@@ -206,6 +206,56 @@ describe('paired task benchmark comparison', () => {
     assert.match(result.reasons.join(' '), /no comparable/i);
   });
 
+  it('can make a token-saving optimized run lose when it needs more failed attempts', () => {
+    const estimatedBefore = window({ confidence: 'estimated', source: 'local-history' });
+    const estimatedAfter = window({
+      confidence: 'estimated',
+      source: 'local-history',
+      usedPercent: 30,
+      observedAt: '2026-09-02T12:20:00.000Z',
+    });
+    const baseline = receipt('baseline', {
+      usageBefore: [estimatedBefore],
+      usageAfter: [estimatedAfter],
+      localUsage: {
+        inputTokens: 1000,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 500,
+        outputTokens: 500,
+        totalTokens: 2000,
+      },
+      outcome: {
+        qualityGate: 'passed',
+        attempts: 1,
+        failedAttempts: 0,
+        errorCodes: [],
+      },
+    });
+    const optimized = receipt('optimized', {
+      usageBefore: [{ ...estimatedBefore }],
+      usageAfter: [{ ...estimatedAfter }],
+      localUsage: {
+        inputTokens: 300,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 100,
+        outputTokens: 100,
+        totalTokens: 500,
+      },
+      outcome: {
+        qualityGate: 'passed',
+        attempts: 3,
+        failedAttempts: 2,
+        errorCodes: [],
+      },
+    });
+
+    const result = compareTaskBenchmarkReceipts(baseline, optimized);
+    assert.equal(result.verdict, 'baseline-better');
+    assert.equal(result.basis, 'failed-attempts');
+    assert.equal(result.evidenceLevel, 'local-evidence');
+    assert.equal(result.quota, null);
+  });
+
   it('uses runtime failures before local token volume when quota ties', () => {
     const baseline = receipt('baseline', {
       usageAfter: [
