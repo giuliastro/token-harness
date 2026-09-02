@@ -7,7 +7,7 @@ import type {
   TaskBenchmarkCaptureStartReport,
 } from '@token-harness/core';
 
-import { displayPath, document, wrap, type RenderContext } from './layout.js';
+import { MAX_WIDTH, displayPath, document, truncatePath, wrap, type RenderContext } from './layout.js';
 
 export function renderBenchmarkStartReport(
   report: TaskBenchmarkCaptureStartReport,
@@ -23,7 +23,7 @@ export function renderBenchmarkStartReport(
       0,
     ),
     `Quota windows captured: ${String(capture.usageBefore.length)}`,
-    ...wrap(`Capture: ${displayPath(report.capturePath, context.home)}`, 0),
+    `Capture: ${truncatePath(displayPath(report.capturePath, context.home), MAX_WIDTH - 'Capture: '.length)}`,
     '',
     ...wrap(
       `Run the task, then finish with: token-harness benchmark-finish --benchmark-id ${capture.benchmarkId} --variant ${capture.variant} --quality passed --attempts 1 --failed-attempts 0`,
@@ -47,7 +47,7 @@ export function renderBenchmarkFinishReport(
     ),
     `Quota windows: ${String(receipt.usageBefore.length)} before / ${String(receipt.usageAfter.length)} after`,
     'Local usage: not captured by this slice',
-    ...wrap(`Receipt: ${displayPath(report.receiptPath, context.home)}`, 0),
+    `Receipt: ${truncatePath(displayPath(report.receiptPath, context.home), MAX_WIDTH - 'Receipt: '.length)}`,
     '',
     ...wrap(
       'After both variants are complete, compare their receipt files with token-harness benchmark --baseline <baseline.json> --optimized <optimized.json>.',
