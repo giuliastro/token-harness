@@ -875,15 +875,11 @@ describe('native events (PLAN §15 item 43d)', () => {
     assert.equal(result.mode, 'native');
     assert.equal(
       result.diagnostics.some(
-        (entry) =>
-          entry.code === 'provider-metrics-mode-unresolved' &&
-          entry.severity === 'info',
+        (entry) => entry.code === 'provider-metrics-mode-unresolved' && entry.severity === 'info',
       ),
       false,
     );
-    const warning = result.diagnostics.find(
-      (entry) => entry.code === 'provider-reducer-failures',
-    );
+    const warning = result.diagnostics.find((entry) => entry.code === 'provider-reducer-failures');
     assert.ok(warning);
     assert.equal(warning.severity, 'warning');
     assert.match(warning.message, /1 HarnessTrim reducer failure failed open/);
