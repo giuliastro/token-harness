@@ -106,6 +106,48 @@ describe('classification of a harness version against the row set', () => {
 });
 
 describe('admitManagedMutation', () => {
+  it('ships the exact Linux Codex 0.152.1 / HarnessTrim 0.2.1 admission and nothing broader', () => {
+    const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('harnesstrim'),
+      providerVersion: '0.2.1',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(exact.state, 'admitted');
+
+    const newerHarness = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('harnesstrim'),
+      providerVersion: '0.2.1',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.2',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(newerHarness.state, 'refused');
+
+    const newerProvider = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('harnesstrim'),
+      providerVersion: '0.2.2',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(newerProvider.state, 'refused');
+
+    const wsl = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('harnesstrim'),
+      providerVersion: '0.2.1',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: true,
+    });
+    assert.equal(wsl.state, 'refused');
+  });
+
   it('admits an exact provider × harness × version × platform match', () => {
     const outcome = admitManagedMutation([row()], combination());
     assert.equal(outcome.state, 'admitted');
