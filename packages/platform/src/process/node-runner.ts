@@ -304,14 +304,39 @@ export class NodeProcessRunner implements ProcessRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
-      child.stdout?.on('data', (chunk: Buffer) => stdout.append(chunk));
+      const stdinMarker = request.stdinCloseAfterStdoutLineIncludes;
+      let stdoutLineBuffer = '';
+      let stdinEnded = false;
+      const endStdin = (): void => {
+        if (stdinEnded) return;
+        stdinEnded = true;
+        child.stdin?.end();
+      };
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdout.append(chunk);
+        if (stdinMarker === undefined || stdinEnded) return;
+
+        stdoutLineBuffer += chunk.toString('utf8');
+        const lines = stdoutLineBuffer.split(/\r?\n/);
+        stdoutLineBuffer = lines.pop() ?? '';
+        if (lines.some((line) => line.includes(stdinMarker))) endStdin();
+
+        // A malformed/non-JSONL child must not turn this tiny transport guard into unbounded memory.
+        // The captured stdout is separately bounded; this buffer only needs enough tail to find the
+        // marker across chunk boundaries.
+        if (stdoutLineBuffer.length > 65_536) {
+          stdoutLineBuffer = stdoutLineBuffer.slice(-Math.max(4096, stdinMarker.length * 2));
+        }
+      });
       child.stderr?.on('data', (chunk: Buffer) => stderr.append(chunk));
 
-      // stdin is never inherited: a child that prompts must see a closed stream
-      // and exit, not block waiting for a user who is not there.
+      // stdin is never inherited. Ordinarily it closes immediately after the payload is written.
+      // Request/response servers may opt into holding it open until a specific JSONL response line
+      // arrives; the process timeout remains the hard bound if that response never comes.
       child.stdin?.on('error', () => {});
       if (request.stdin !== undefined) child.stdin?.write(request.stdin);
-      child.stdin?.end();
+      if (stdinMarker === undefined) endStdin();
 
       if (timeoutMs > 0) {
         timer = setTimeout(() => {
