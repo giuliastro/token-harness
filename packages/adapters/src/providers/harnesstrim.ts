@@ -1080,9 +1080,7 @@ function toEvent(
                 : null,
       originalReference: null,
       latencyMs: null,
-      errorCode: reducerFailure
-        ? `harnesstrim-reducer-failed:${event.reducer ?? 'unknown'}`
-        : null,
+      errorCode: reducerFailure ? `harnesstrim-reducer-failed:${event.reducer ?? 'unknown'}` : null,
     },
     source: { nativeEventId: native ? eventId : null, importedAt: context.now() },
   };
