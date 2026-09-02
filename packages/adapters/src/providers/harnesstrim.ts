@@ -1234,6 +1234,8 @@ async function collectMetrics(
   // diagnostic is one line per import with the count — never one line per event, which on a
   // thousand-line file would destroy the human output and overflow the 78-character budget.
   let unprovableModeEvents = 0;
+  let reducerFailures = 0;
+  const failedReducers = new Set<string>();
 
   for (const path of metricsLocations(context)) {
     const stat = await context.fs.stat(path);
@@ -1309,6 +1311,10 @@ async function collectMetrics(
       }
       if (parsed.schemaVersion === 1) sawNative = true;
       if (event.outcome.bypassReason === 'mode-unresolved') unprovableModeEvents += 1;
+      if (parsed.reductionFailed) {
+        reducerFailures += 1;
+        failedReducers.add(parsed.reducer ?? 'unknown');
+      }
       events.push(event);
       lastLine = trimmed;
       ordinal += 1;
@@ -1387,6 +1393,21 @@ async function collectMetrics(
         message: `${String(unprovableModeEvents)} native event${unprovableModeEvents === 1 ? '' : 's'} from a mode-carrying harness could not be classed as realized: schema 1 carries no reduction mode`,
         remediation:
           'Treat these figures as counterfactual; only OpenCode can later prove its mode from the configured plugin option',
+      }),
+    );
+  }
+
+  if (reducerFailures > 0) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'provider-reducer-failures',
+        subject: HARNESSTRIM,
+        message:
+          `${String(reducerFailures)} HarnessTrim reducer failure${reducerFailures === 1 ? '' : 's'} failed open in newly imported telemetry` +
+          ` (${[...failedReducers].sort().join(', ')})`,
+        remediation:
+          'Inspect HarnessTrim metrics and update or disable the failing reducer before relying on it for savings',
       }),
     );
   }
