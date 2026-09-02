@@ -38,7 +38,7 @@ Commands, in the order you would use them
   benchmark-finish
               Close that capture with quota-after and an explicit quality gate
   benchmark-matrix
-              Aggregate complete local pairs by task class and evidence strength
+              Aggregate complete local pairs by class and evidence
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
