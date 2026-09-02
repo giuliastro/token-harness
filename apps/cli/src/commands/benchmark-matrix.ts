@@ -29,7 +29,9 @@ async function readJson(context: CommandContext, path: string): Promise<unknown 
   const stat = await context.adapters.fs.stat(path);
   if (stat === null || stat.kind !== 'file') return null;
   try {
-    return JSON.parse(new TextDecoder().decode(await context.adapters.fs.readFile(path))) as unknown;
+    return JSON.parse(
+      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+    ) as unknown;
   } catch {
     return null;
   }
