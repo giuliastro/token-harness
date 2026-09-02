@@ -603,11 +603,14 @@ HarnessTrim never depends on Token Harness.
 | 2 | `0.0.7` | `--json` on `doctor`, `metrics`, `install` and `uninstall` |
 | 3 | `0.0.7` | `harnesstrim capabilities` — JSON, per harness: adapter, surfaces, narrowing flags with the state each produces, and write set |
 | 4 | `0.0.7` | `harnesstrim uninstall <harness>`, dry-run by default, removing only what install wrote |
-| 5 | `0.0.7`, extended in `0.1.0` | `schemaVersion`, `eventId`, nullable `beforeTokens`/`afterTokens`; `0.1.0` adds `changed` for pass-through rate |
+| 5 | `0.0.7`, extended in `0.1.0` | `schemaVersion`, `eventId`, nullable `beforeTokens`/`afterTokens`; `0.1.0` adds `changed` for pass-through rate; 2026-09-02 adds additive `reductionFailed` for fail-open reducer exceptions |
 
 So the sentence at the head of this section — "when each lands, the importer prefers the richer
 source and the legacy path becomes the fallback" — is now work rather than a plan, and it is §15
-item 43. The write set in item 3 reaches further than the importer: it is the input to
+item 43. The importer also consumes the additive `reductionFailed` signal: a fail-open exception
+becomes an unchanged OptimizationEvent with `errorCode`, never a saving or ordinary pass-through,
+and freshly imported failures produce one aggregated provider warning without storing exception
+messages or payloads. The write set in item 3 reaches further than the importer: it is the input to
 `delegatedInstallReview`, which is why the manifest could pin one upstream version by hand and had
 to.
 
