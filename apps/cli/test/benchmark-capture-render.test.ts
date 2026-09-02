@@ -30,7 +30,8 @@ describe('benchmark capture rendering', () => {
   it('shows the exact finish command after start', () => {
     const report: TaskBenchmarkCaptureStartReport = {
       capture,
-      capturePath: '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
+      capturePath:
+        '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
     };
     const rendered = renderBenchmarkStartReport(report, {
       toolVersion: 'test',
@@ -50,7 +51,8 @@ describe('benchmark capture rendering', () => {
   it('makes local-usage absence explicit after finish', () => {
     const report: TaskBenchmarkCaptureFinishReport = {
       capturePath: '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
-      receiptPath: '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.json',
+      receiptPath:
+        '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.json',
       receipt: {
         schemaVersion: 1,
         benchmarkId: capture.benchmarkId,
