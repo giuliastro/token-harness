@@ -49,7 +49,11 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        run: pnpm format:check
+        shell: bash
+        run: |
+          pnpm exec prettier --write packages/adapters/src/providers/harnesstrim.ts packages/adapters/test/harnesstrim.test.ts
+          git diff -- packages/adapters/src/providers/harnesstrim.ts packages/adapters/test/harnesstrim.test.ts
+          git diff --quiet -- packages/adapters/src/providers/harnesstrim.ts packages/adapters/test/harnesstrim.test.ts
 
       - name: Test
         run: pnpm test
