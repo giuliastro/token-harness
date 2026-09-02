@@ -180,6 +180,55 @@ describe('argv', () => {
     assert.equal(parsed.options.optimizedReceipt, 'fixtures/optimized.json');
   });
 
+  it('parses benchmark start and finish capture inputs', () => {
+    const start = parseArgv([
+      'benchmark-start',
+      '--benchmark-id',
+      'mechanical-1',
+      '--variant',
+      'baseline',
+      '--task',
+      'mechanical',
+      '--harness',
+      'codex',
+    ]);
+    assert.equal(start.kind, 'command');
+    if (start.kind !== 'command') return;
+    assert.equal(start.command, 'benchmark-start');
+    assert.equal(start.options.benchmarkId, 'mechanical-1');
+    assert.equal(start.options.benchmarkVariant, 'baseline');
+
+    const finish = parseArgv([
+      'benchmark-finish',
+      '--benchmark-id=mechanical-1',
+      '--variant=baseline',
+      '--quality',
+      'passed',
+      '--attempts',
+      '2',
+      '--failed-attempts',
+      '1',
+    ]);
+    assert.equal(finish.kind, 'command');
+    if (finish.kind !== 'command') return;
+    assert.equal(finish.options.benchmarkQuality, 'passed');
+    assert.equal(finish.options.benchmarkAttempts, 2);
+    assert.equal(finish.options.benchmarkFailedAttempts, 1);
+  });
+
+  it('rejects unsafe benchmark ids, variants, quality and attempt counts', () => {
+    for (const argv of [
+      ['benchmark-start', '--benchmark-id', '../escape'],
+      ['benchmark-start', '--variant', 'control'],
+      ['benchmark-finish', '--quality', 'unknown'],
+      ['benchmark-finish', '--attempts', '0'],
+      ['benchmark-finish', '--failed-attempts', '-1'],
+    ]) {
+      const parsed = parseArgv(argv);
+      assert.equal(parsed.kind, 'usage-error');
+    }
+  });
+
   it('parses optimizer task profile and reserve inputs', () => {
     const parsed = parseArgv([
       'optimize',

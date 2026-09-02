@@ -18,6 +18,8 @@ import {
   diagnostic,
   isBudgetProfile,
   isHarnessId,
+  isTaskBenchmarkId,
+  isTaskBenchmarkVariant,
   isPlanId,
   isProviderId,
   isTaskClass,
@@ -25,7 +27,9 @@ import {
   type Diagnostic,
   type HarnessId,
   type ProviderId,
+  type TaskBenchmarkVariant,
   type TaskClass,
+  type TaskQualityGate,
 } from '@token-harness/core';
 
 /** Commands the Phase 1 shell implements. */
@@ -33,6 +37,8 @@ export const AVAILABLE_COMMANDS = [
   'apply',
   'budget',
   'benchmark',
+  'benchmark-finish',
+  'benchmark-start',
   'context',
   'doctor',
   'history',
@@ -75,9 +81,14 @@ export interface CommandOptions {
   until: string | null;
   /** `--plan <id>`; validated for shape here and for existence by the command. */
   plan: string | null;
-  /** Paired task benchmark receipt paths. */
+  /** Paired task benchmark comparison/capture inputs. */
   baselineReceipt: string | null;
   optimizedReceipt: string | null;
+  benchmarkId: string | null;
+  benchmarkVariant: TaskBenchmarkVariant | null;
+  benchmarkQuality: TaskQualityGate | null;
+  benchmarkAttempts: number | null;
+  benchmarkFailedAttempts: number | null;
   /** RFC 0011 advisory optimizer inputs. */
   task: TaskClass | null;
   profile: BudgetProfile | null;
@@ -104,6 +115,11 @@ const VALUE_FLAGS = new Set([
   '--plan',
   '--baseline',
   '--optimized',
+  '--benchmark-id',
+  '--variant',
+  '--quality',
+  '--attempts',
+  '--failed-attempts',
   '--task',
   '--profile',
   '--reserve',
@@ -176,6 +192,11 @@ export function parseArgv(
     plan: null,
     baselineReceipt: null,
     optimizedReceipt: null,
+    benchmarkId: null,
+    benchmarkVariant: null,
+    benchmarkQuality: null,
+    benchmarkAttempts: null,
+    benchmarkFailedAttempts: null,
     task: null,
     profile: null,
     reservePercent: null,
@@ -311,6 +332,80 @@ export function parseArgv(
       case '--optimized':
         options.optimizedReceipt = value;
         break;
+      case '--benchmark-id':
+        if (!isTaskBenchmarkId(value)) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-id',
+              message: `Benchmark id ${JSON.stringify(value)} is not a safe local id`,
+              remediation: 'Use 1-64 lowercase letters, digits, dot, underscore, or hyphen',
+            }),
+          );
+        } else {
+          options.benchmarkId = value;
+        }
+        break;
+      case '--variant':
+        if (!isTaskBenchmarkVariant(value)) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-variant',
+              message: `Benchmark variant ${JSON.stringify(value)} is not supported`,
+              remediation: 'Use baseline or optimized',
+            }),
+          );
+        } else {
+          options.benchmarkVariant = value;
+        }
+        break;
+      case '--quality':
+        if (value !== 'passed' && value !== 'failed') {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-quality',
+              message: `Benchmark quality ${JSON.stringify(value)} is not supported for capture`,
+              remediation: 'Use passed or failed after applying the benchmark quality gate',
+            }),
+          );
+        } else {
+          options.benchmarkQuality = value;
+        }
+        break;
+      case '--attempts': {
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-attempts',
+              message: `Benchmark attempts ${JSON.stringify(value)} must be a positive integer`,
+              remediation: 'Use --attempts 1 or the actual number of attempts',
+            }),
+          );
+        } else {
+          options.benchmarkAttempts = parsed;
+        }
+        break;
+      }
+      case '--failed-attempts': {
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-failed-attempts',
+              message: `Failed attempts ${JSON.stringify(value)} must be a non-negative integer`,
+              remediation: 'Use --failed-attempts 0 or the actual failed-attempt count',
+            }),
+          );
+        } else {
+          options.benchmarkFailedAttempts = parsed;
+        }
+        break;
+      }
       case '--task':
         if (!isTaskClass(value)) {
           diagnostics.push(

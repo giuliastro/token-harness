@@ -64,6 +64,8 @@ describe('exit codes', () => {
       commands: {
         budget: () => Promise.reject(new Error('unused')),
         benchmark: () => Promise.reject(new Error('unused')),
+        'benchmark-finish': () => Promise.reject(new Error('unused')),
+        'benchmark-start': () => Promise.reject(new Error('unused')),
         context: () => Promise.reject(new Error('unused')),
         doctor: () => Promise.reject(new Error('boom')),
         plan: () => Promise.reject(new Error('unused')),
@@ -124,6 +126,8 @@ describe('exit codes', () => {
       commands: {
         budget: () => Promise.reject(new Error('unused')),
         benchmark: () => Promise.reject(new Error('unused')),
+        'benchmark-finish': () => Promise.reject(new Error('unused')),
+        'benchmark-start': () => Promise.reject(new Error('unused')),
         context: () => Promise.reject(new Error('unused')),
         doctor: () =>
           Promise.resolve(
@@ -165,6 +169,8 @@ describe('exit codes', () => {
       commands: {
         budget: () => Promise.reject(new Error('unused')),
         benchmark: () => Promise.reject(new Error('unused')),
+        'benchmark-finish': () => Promise.reject(new Error('unused')),
+        'benchmark-start': () => Promise.reject(new Error('unused')),
         context: () => Promise.reject(new Error('unused')),
         doctor: () => Promise.reject(new Error('unused')),
         plan: () =>

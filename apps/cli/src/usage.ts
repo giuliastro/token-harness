@@ -28,6 +28,8 @@ First time here
   9  token-harness verify        is it actually intercepting    writes nothing
  10  token-harness metrics       what it saved                  writes nothing
  11  token-harness benchmark     compare paired task receipts   writes nothing
+ 12  token-harness benchmark-start  snapshot task start         writes state
+ 13  token-harness benchmark-finish close task receipt          writes state
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -46,6 +48,10 @@ Commands, in the order you would use them
   verify      Check the pipeline actually intercepts, at its declared tier
   metrics     Report what was saved, labelled with how it was measured
   benchmark   Compare baseline/optimized task receipts with quality gates
+  benchmark-start
+              Snapshot quota/policy before one benchmark task into local state
+  benchmark-finish
+              Close that capture with quota-after and an explicit quality gate
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
@@ -62,6 +68,11 @@ Flags
   --plan <id>          Apply a previously computed plan by id
   --baseline <file>     Baseline task benchmark receipt JSON
   --optimized <file>    Optimized task benchmark receipt JSON
+  --benchmark-id <id>    Safe local id for benchmark start/finish
+  --variant <name>       Benchmark variant: baseline or optimized
+  --quality <result>     Finish quality gate: passed or failed
+  --attempts <count>     Total attempts used to complete the task
+  --failed-attempts <n> Failed attempts before the final outcome
   --task <class>        Optimizer task: mechanical, standard, hard, critical
   --profile <name>      Optimizer profile: economy, balanced, quality, custom
   --reserve <percent>   Keep this percent of observed allowance in reserve
@@ -70,10 +81,42 @@ Flags
   --version            Print the version and exit 0
   --help               Print usage and exit 0
 
-Only apply, update, rollback and uninstall change anything, and none of
-them do without --yes. Exit codes and JSON are specified in RFC 0006.`;
+Only apply, update, rollback and uninstall change harness/provider
+configuration, and none of them do without --yes. Metrics and benchmark
+capture may write only Token Harness's own local state. Exit codes and JSON
+are specified in RFC 0006.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  'benchmark-start': `token-harness benchmark-start — snapshot one task before it runs
+
+Usage
+  token-harness benchmark-start --benchmark-id <id> --variant <baseline|optimized>
+                                --task <class> --harness <claude|codex>
+                                [--project <dir>] [--json]
+
+This command does not execute the task or change harness configuration. It records
+the current discovered model/effort/verbosity and current usage windows into Token
+Harness's state directory. The raw project path is not stored in the capture; only
+the machine-local stable project id is persisted.
+
+An existing capture or completed receipt is never overwritten. Missing live quota
+is recorded as an empty window list rather than inferred from local tokens.`,
+
+  'benchmark-finish': `token-harness benchmark-finish — close a started task receipt
+
+Usage
+  token-harness benchmark-finish --benchmark-id <id> --variant <baseline|optimized>
+                                 --quality <passed|failed> --attempts <n>
+                                 --failed-attempts <n> [--project <dir>] [--json]
+
+Run this after the benchmark task. It requires the capture from benchmark-start,
+verifies it belongs to the same project, observes quota again, and writes an
+immutable schema-1 receipt under Token Harness state.
+
+This first capture slice does not guess local token totals or runtime error
+correlation; localUsage remains null and errorCodes remains empty. Those fields
+will be populated only when a trustworthy task-level correlation exists.`,
+
   benchmark: `token-harness benchmark — compare paired task receipts
 
 Usage

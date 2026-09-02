@@ -17,7 +17,9 @@ import type {
   PlatformPaths,
   ProcessRunner,
   ProviderId,
+  TaskBenchmarkVariant,
   TaskClass,
+  TaskQualityGate,
 } from '@token-harness/core';
 
 export interface CommandContext {
@@ -33,6 +35,11 @@ export interface CommandContext {
   /** Paired task benchmark receipt paths, supplied by the CLI. */
   baselineReceipt?: string | null;
   optimizedReceipt?: string | null;
+  benchmarkId?: string | null;
+  benchmarkVariant?: TaskBenchmarkVariant | null;
+  benchmarkQuality?: TaskQualityGate | null;
+  benchmarkAttempts?: number | null;
+  benchmarkFailedAttempts?: number | null;
   /** RFC 0011 optimizer policy inputs; optional for hand-built test contexts. */
   taskClass?: TaskClass | null;
   budgetProfile?: BudgetProfile | null;
