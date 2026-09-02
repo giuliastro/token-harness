@@ -276,6 +276,12 @@ failed attempts, runtime/provider errors, attempt count, and local token volume 
 evidence. Cached/estimated quota is never promoted into a backend comparison, and local token
 volume is never labeled subscription quota.
 
+The first user-facing surface is read-only:
+`token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>`. It parses the
+schema at runtime, rejects malformed/future/wrong-role receipts, and returns the same deterministic
+comparison in human or JSON form. It does not execute either benchmark task; automated collection is
+a separate later step so measurement and execution policy do not arrive entangled.
+
 Attribution classes remain strict:
 
 - exact provider token reduction is still exact only for that measured payload;
