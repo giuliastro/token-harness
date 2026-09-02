@@ -11,9 +11,24 @@ import { isHarnessId, type HarnessId } from './ids.js';
 import { isTaskClass, type TaskClass } from './optimizer.js';
 
 export const TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION = 1;
+export const TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION = 1;
 
 export type TaskBenchmarkVariant = 'baseline' | 'optimized';
 export type TaskQualityGate = 'passed' | 'failed' | 'unknown';
+
+const BENCHMARK_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
+
+export function isTaskBenchmarkId(value: string): boolean {
+  return BENCHMARK_ID.test(value);
+}
+
+export function isTaskBenchmarkVariant(value: string): value is TaskBenchmarkVariant {
+  return value === 'baseline' || value === 'optimized';
+}
+
+export function isTaskQualityGate(value: string): value is TaskQualityGate {
+  return value === 'passed' || value === 'failed' || value === 'unknown';
+}
 
 export interface TaskLocalUsage {
   inputTokens: number;
@@ -51,6 +66,37 @@ export interface TaskBenchmarkReceipt {
   localUsage: TaskLocalUsage | null;
   outcome: TaskBenchmarkOutcome;
 }
+
+
+export interface TaskBenchmarkCapture {
+  schemaVersion: typeof TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION;
+  benchmarkId: string;
+  variant: TaskBenchmarkVariant;
+  taskClass: TaskClass;
+  harnessId: HarnessId;
+  /** Machine-local stable project id; raw project paths are deliberately not persisted. */
+  projectId: string;
+  model: string | null;
+  reasoningEffort: string | null;
+  verbosity: string | null;
+  startedAt: string;
+  usageBefore: UsageWindowSnapshot[];
+}
+
+export interface TaskBenchmarkCaptureStartReport {
+  capture: TaskBenchmarkCapture;
+  capturePath: string;
+}
+
+export interface TaskBenchmarkCaptureFinishReport {
+  receipt: TaskBenchmarkReceipt;
+  capturePath: string;
+  receiptPath: string;
+}
+
+export type TaskBenchmarkCaptureParseResult =
+  | { ok: true; capture: TaskBenchmarkCapture }
+  | { ok: false; reason: 'unsupported-schema' | 'invalid-shape'; message: string };
 
 export type TaskBenchmarkReceiptParseResult =
   | { ok: true; receipt: TaskBenchmarkReceipt }
@@ -192,7 +238,7 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
   const errorCodes = row['errorCodes'];
   if (
     typeof qualityGate !== 'string' ||
-    !QUALITY_GATES.has(qualityGate) ||
+    !isTaskQualityGate(qualityGate) ||
     typeof attempts !== 'number' ||
     !Number.isInteger(attempts) ||
     attempts < 1 ||
@@ -206,10 +252,77 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
     return null;
   }
   return {
-    qualityGate: qualityGate as TaskQualityGate,
+    qualityGate,
     attempts,
     failedAttempts,
     errorCodes: [...errorCodes] as string[],
+  };
+}
+
+/** Runtime parser for a locally persisted in-progress benchmark capture. */
+export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureParseResult {
+  const row = record(value);
+  if (row === null) {
+    return { ok: false, reason: 'invalid-shape', message: 'capture must be a JSON object' };
+  }
+  if (row['schemaVersion'] !== TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION) {
+    return {
+      ok: false,
+      reason: 'unsupported-schema',
+      message: `capture schemaVersion must be ${String(TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION)}`,
+    };
+  }
+
+  const benchmarkId = row['benchmarkId'];
+  const variant = row['variant'];
+  const taskClass = row['taskClass'];
+  const harnessId = row['harnessId'];
+  const projectId = row['projectId'];
+  const model = optionalText(row['model']);
+  const reasoningEffort = optionalText(row['reasoningEffort']);
+  const verbosity = optionalText(row['verbosity']);
+  const startedAt = row['startedAt'];
+  const usageBefore = parseUsageWindows(row['usageBefore']);
+
+  if (
+    typeof benchmarkId !== 'string' ||
+    !isTaskBenchmarkId(benchmarkId) ||
+    typeof variant !== 'string' ||
+    !isTaskBenchmarkVariant(variant) ||
+    typeof taskClass !== 'string' ||
+    !isTaskClass(taskClass) ||
+    typeof harnessId !== 'string' ||
+    !isHarnessId(harnessId) ||
+    typeof projectId !== 'string' ||
+    projectId === '' ||
+    model === undefined ||
+    reasoningEffort === undefined ||
+    verbosity === undefined ||
+    !validInstant(startedAt) ||
+    usageBefore === null
+  ) {
+    return {
+      ok: false,
+      reason: 'invalid-shape',
+      message: 'capture fields do not match the paired task benchmark capture contract',
+    };
+  }
+
+  return {
+    ok: true,
+    capture: {
+      schemaVersion: TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION,
+      benchmarkId,
+      variant,
+      taskClass,
+      harnessId,
+      projectId,
+      model,
+      reasoningEffort,
+      verbosity,
+      startedAt,
+      usageBefore,
+    },
   };
 }
 
@@ -244,7 +357,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   if (
     typeof benchmarkId !== 'string' ||
     benchmarkId === '' ||
-    !(variant === 'baseline' || variant === 'optimized') ||
+    typeof variant !== 'string' ||
+    !isTaskBenchmarkVariant(variant) ||
     typeof taskClass !== 'string' ||
     !isTaskClass(taskClass) ||
     typeof harnessId !== 'string' ||
@@ -286,6 +400,43 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
       outcome,
     },
   };
+}
+
+export interface CompleteTaskBenchmarkCaptureInput {
+  completedAt: string;
+  usageAfter: UsageWindowSnapshot[];
+  qualityGate: TaskQualityGate;
+  attempts: number;
+  failedAttempts: number;
+  errorCodes?: string[];
+  localUsage?: TaskLocalUsage | null;
+}
+
+export function completeTaskBenchmarkCapture(
+  capture: TaskBenchmarkCapture,
+  input: CompleteTaskBenchmarkCaptureInput,
+): TaskBenchmarkReceiptParseResult {
+  return parseTaskBenchmarkReceipt({
+    schemaVersion: TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION,
+    benchmarkId: capture.benchmarkId,
+    variant: capture.variant,
+    taskClass: capture.taskClass,
+    harnessId: capture.harnessId,
+    model: capture.model,
+    reasoningEffort: capture.reasoningEffort,
+    verbosity: capture.verbosity,
+    startedAt: capture.startedAt,
+    completedAt: input.completedAt,
+    usageBefore: capture.usageBefore,
+    usageAfter: input.usageAfter,
+    localUsage: input.localUsage ?? null,
+    outcome: {
+      qualityGate: input.qualityGate,
+      attempts: input.attempts,
+      failedAttempts: input.failedAttempts,
+      errorCodes: input.errorCodes ?? [],
+    },
+  });
 }
 
 export interface ComparableQuotaDelta {
