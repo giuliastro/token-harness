@@ -272,6 +272,14 @@ describe('benchmark capture commands', () => {
     assert.match(world.text(finished.data.receiptPath), /"variant": "baseline"/);
   });
 
+  it('refuses a capture when the project cannot be stably attributed', async () => {
+    const world = fixture();
+    world.setProjectId('p_unattributed');
+    const started = await runBenchmarkStart(world.context());
+    assert.equal(started.exitCode, 9);
+    assert.equal(started.diagnostics[0]?.code, 'benchmark-project-unattributed');
+  });
+
   it('refuses to overwrite an existing capture or completed receipt', async () => {
     const world = fixture();
     const first = await runBenchmarkStart(world.context());
