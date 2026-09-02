@@ -32,10 +32,7 @@ import type {
 
 import { renderApplyReport } from './apply.js';
 import { renderBenchmarkReport } from './benchmark.js';
-import {
-  renderBenchmarkFinishReport,
-  renderBenchmarkStartReport,
-} from './benchmark-capture.js';
+import { renderBenchmarkFinishReport, renderBenchmarkStartReport } from './benchmark-capture.js';
 import { renderBudgetReport } from './budget.js';
 import { renderContextReport } from './context-cost.js';
 import { renderDoctorReport } from './doctor.js';
