@@ -13,6 +13,7 @@ import {
   completeTaskBenchmarkCapture,
   diagnostic,
   harnessId,
+  isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
   type CommandResult,
   type HarnessId,
@@ -106,6 +107,22 @@ export async function runBenchmarkStart(
     });
   }
 
+  if (!isTaskBenchmarkId(benchmarkId)) {
+    return commandResult({
+      command: 'benchmark-start',
+      exitCode: EXIT_CODES['usage-error'],
+      data: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'invalid-benchmark-id',
+          message: 'Benchmark id is not a safe local state identifier',
+          remediation: 'Use 1-64 lowercase letters, digits, dot, underscore, or hyphen',
+        }),
+      ],
+    });
+  }
+
   if (!CAPTURE_HARNESSES.has(harness)) {
     return commandResult({
       command: 'benchmark-start',
@@ -160,6 +177,23 @@ export async function runBenchmarkStart(
     });
   }
 
+  const projectId = context.adapters.projectIdFor(context.projectRoot);
+  if (projectId === 'p_unattributed') {
+    return commandResult({
+      command: 'benchmark-start',
+      exitCode: EXIT_CODES['unsupported-environment'],
+      data: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'benchmark-project-unattributed',
+          message: 'Benchmark capture cannot bind this task to a stable local project id',
+          remediation: 'Repair Token Harness state/project-id initialization before benchmarking',
+        }),
+      ],
+    });
+  }
+
   const startedAt = context.now();
   const observedContext = fixedContext(context, harness, startedAt);
   const [budgetResult, contextResult] = await Promise.all([
@@ -175,7 +209,7 @@ export async function runBenchmarkStart(
     variant,
     taskClass,
     harnessId: harness,
-    projectId: context.adapters.projectIdFor(context.projectRoot),
+    projectId,
     model: policy?.model ?? null,
     reasoningEffort: policy?.reasoningEffort ?? null,
     verbosity: policy?.verbosity ?? null,
@@ -236,6 +270,28 @@ export async function runBenchmarkFinish(
             'Benchmark finish requires --benchmark-id, --variant, --quality, --attempts and --failed-attempts',
           remediation:
             'Finish the same baseline|optimized capture with an explicit passed|failed quality gate and attempt counts',
+        }),
+      ],
+    });
+  }
+
+  if (!isTaskBenchmarkId(benchmarkId) || qualityGate === 'unknown') {
+    return commandResult({
+      command: 'benchmark-finish',
+      exitCode: EXIT_CODES['usage-error'],
+      data: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: !isTaskBenchmarkId(benchmarkId)
+            ? 'invalid-benchmark-id'
+            : 'invalid-benchmark-quality',
+          message: !isTaskBenchmarkId(benchmarkId)
+            ? 'Benchmark id is not a safe local state identifier'
+            : 'Benchmark finish requires a passed or failed quality gate',
+          remediation: !isTaskBenchmarkId(benchmarkId)
+            ? 'Use the same safe benchmark id passed to benchmark-start'
+            : 'Apply the benchmark quality gate and pass --quality passed or --quality failed',
         }),
       ],
     });
