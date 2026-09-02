@@ -82,7 +82,10 @@ function receipt(variant: 'baseline' | 'optimized'): TaskBenchmarkReceipt {
   };
 }
 
-function context(files: Record<string, string>, overrides: Partial<CommandContext> = {}): CommandContext {
+function context(
+  files: Record<string, string>,
+  overrides: Partial<CommandContext> = {},
+): CommandContext {
   const encoded = new TextEncoder();
   return {
     platform: PLATFORM,
