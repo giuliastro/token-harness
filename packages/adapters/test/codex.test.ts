@@ -475,7 +475,7 @@ describe('subscription usage', () => {
       '--no-cache-write',
       '--no-stale-fallback',
     ]);
-    assert.equal(requests[1]?.env?.PYTHONDONTWRITEBYTECODE, '1');
+    assert.equal(requests[1]?.env?.['PYTHONDONTWRITEBYTECODE'], '1');
   });
 });
 
