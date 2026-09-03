@@ -982,9 +982,12 @@ async function observeContext(
   const messages = parseJsonLines(outcome.stdout);
   // Numeric fallbacks keep historical fixtures readable while live requests use distinctive string
   // ids that are safe transport markers regardless of JSON whitespace/field ordering.
-  const configResponse = rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID) ?? rpcResult(messages, 2);
-  let mcpResponse = rpcResult(messages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(messages, 3);
-  const modelResponse = rpcResult(messages, CONTEXT_MODEL_REQUEST_ID) ?? rpcResult(messages, 4);
+  const configResponse =
+    rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID) ?? rpcResult(messages, 2);
+  let mcpResponse =
+    rpcResult(messages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(messages, 3);
+  const modelResponse =
+    rpcResult(messages, CONTEXT_MODEL_REQUEST_ID) ?? rpcResult(messages, 4);
 
   // A slow MCP registry must not hold config/model reads hostage. The primary request opportunistically
   // captures MCP when it is fast; otherwise retry that inventory alone with its own bounded lifecycle.
@@ -1021,7 +1024,8 @@ async function observeContext(
     // A timed-out request may still have produced a complete RPC response before the process failed
     // to shut down. Parse captured stdout first; only absence of a response makes MCP unavailable.
     const mcpMessages = parseJsonLines(mcpOutcome.stdout);
-    mcpResponse = rpcResult(mcpMessages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(mcpMessages, 3);
+    mcpResponse =
+      rpcResult(mcpMessages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(mcpMessages, 3);
   }
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
