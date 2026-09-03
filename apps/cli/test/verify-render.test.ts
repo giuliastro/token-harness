@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { harnessId, providerId, type VerificationResult, type VerifyReport } from '@token-harness/core';
+import {
+  harnessId,
+  providerId,
+  type VerificationResult,
+  type VerifyReport,
+} from '@token-harness/core';
 
 import { renderVerifyReport } from '../src/render/verify.js';
 
@@ -50,10 +55,11 @@ describe('verify ownership rendering', () => {
   });
 
   it('keeps the new ownership detail inside the terminal width contract', () => {
-    const rendered = renderVerifyReport(
-      report(result({ providerManagedByTokenHarness: false })),
-      { toolVersion: 'test', home: null, decorate: false },
-    );
+    const rendered = renderVerifyReport(report(result({ providerManagedByTokenHarness: false })), {
+      toolVersion: 'test',
+      home: null,
+      decorate: false,
+    });
 
     for (const line of rendered.trimEnd().split('\n')) {
       assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
