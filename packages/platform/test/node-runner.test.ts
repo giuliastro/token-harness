@@ -346,6 +346,38 @@ describe('stdin', () => {
     assert.equal(outcome.timedOut, false);
     assert.match(outcome.stdout, /"id":"th-response"/);
   });
+
+  it('waits for every requested stdout marker before closing stdin', async () => {
+    const outcome = await runner().run({
+      executable: 'node',
+      args: [
+        '-e',
+        [
+          'let input=""',
+          'let started=false',
+          'process.stdin.on("data",chunk=>{',
+          '  input+=chunk',
+          '  if (!started && input.includes("request")) {',
+          '    started=true',
+          '    setTimeout(()=>process.stdout.write("second\\n"),10)',
+          '    setTimeout(()=>process.stdout.write("first\\n"),30)',
+          '    setTimeout(()=>process.stdout.write("third\\n"),50)',
+          '  }',
+          '})',
+          'process.stdin.on("end",()=>process.exit(0))',
+        ].join(';'),
+      ],
+      cwd: sandbox,
+      stdin: 'request\n',
+      stdinCloseAfterStdoutLineIncludesAll: ['first', 'second', 'third'],
+      timeoutMs: 5_000,
+    });
+    assert.equal(outcome.failure, null);
+    assert.equal(outcome.timedOut, false);
+    assert.match(outcome.stdout, /first/);
+    assert.match(outcome.stdout, /second/);
+    assert.match(outcome.stdout, /third/);
+  });
 });
 
 describe('redaction', () => {
