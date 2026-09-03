@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  buildTaskBenchmarkMatrix,
   compareTaskBenchmarkReceipts,
   comparableQuotaDeltas,
   completeTaskBenchmarkCapture,
@@ -524,5 +525,112 @@ describe('paired task benchmark comparison', () => {
     const result = compareTaskBenchmarkReceipts(receipt('baseline'), optimized);
     assert.equal(result.verdict, 'incomparable');
     assert.equal(result.basis, 'none');
+  });
+});
+
+describe('empirical benchmark matrix', () => {
+  it('aggregates pair verdicts without manufacturing a composite score', () => {
+    const mechanicalBaseline = receipt('baseline', {
+      benchmarkId: 'mechanical-real-1',
+      taskClass: 'mechanical',
+      usageBefore: [],
+      usageAfter: [],
+      localUsage: {
+        inputTokens: 1200,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 300,
+        outputTokens: 500,
+        totalTokens: 2000,
+      },
+    });
+    const mechanicalOptimized = receipt('optimized', {
+      benchmarkId: 'mechanical-real-1',
+      taskClass: 'mechanical',
+      usageBefore: [],
+      usageAfter: [],
+      localUsage: {
+        inputTokens: 800,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 200,
+        outputTokens: 400,
+        totalTokens: 1400,
+      },
+    });
+    const hardBaseline = receipt('baseline', {
+      benchmarkId: 'hard-real-1',
+      taskClass: 'hard',
+      outcome: {
+        qualityGate: 'passed',
+        attempts: 1,
+        failedAttempts: 0,
+        errorCodes: [],
+      },
+    });
+    const hardOptimized = receipt('optimized', {
+      benchmarkId: 'hard-real-1',
+      taskClass: 'hard',
+      outcome: {
+        qualityGate: 'failed',
+        attempts: 2,
+        failedAttempts: 1,
+        errorCodes: [],
+      },
+    });
+
+    const report = buildTaskBenchmarkMatrix(
+      [
+        { baseline: mechanicalBaseline, optimized: mechanicalOptimized },
+        { baseline: hardBaseline, optimized: hardOptimized },
+      ],
+      {
+        scanned: 3,
+        completePairs: 2,
+        incomplete: 1,
+        invalid: 0,
+        otherProject: 0,
+        filteredOut: 0,
+      },
+    );
+
+    assert.equal(report.entries.length, 2);
+    assert.equal(report.entries[0]?.benchmarkId, 'mechanical-real-1');
+    assert.equal(report.entries[0]?.verdict, 'optimized-better');
+    assert.equal(report.entries[0]?.evidenceLevel, 'local-evidence');
+    assert.equal(report.entries[0]?.localTokenSavingPercent, 30);
+    assert.equal(report.entries[1]?.verdict, 'baseline-better');
+    assert.equal(report.entries[1]?.basis, 'quality');
+
+    assert.equal(report.overall.pairs, 2);
+    assert.equal(report.overall.optimizedBetter, 1);
+    assert.equal(report.overall.baselineBetter, 1);
+    assert.equal(report.overall.localComparablePairs, 1);
+    assert.equal(report.overall.baselineLocalTokens, 2000);
+    assert.equal(report.overall.optimizedLocalTokens, 1400);
+    assert.equal(report.overall.localTokenSavingPercent, 30);
+    assert.equal(report.selection.incomplete, 1);
+    assert.deepEqual(
+      report.byTaskClass.map((row) => row.taskClass),
+      ['mechanical', 'hard'],
+    );
+  });
+
+  it('never sums unrelated backend quota percentages across matrix pairs', () => {
+    const report = buildTaskBenchmarkMatrix([
+      {
+        baseline: receipt('baseline', { benchmarkId: 'mechanical-q1' }),
+        optimized: receipt('optimized', { benchmarkId: 'mechanical-q1' }),
+      },
+      {
+        baseline: receipt('baseline', { benchmarkId: 'mechanical-q2' }),
+        optimized: receipt('optimized', { benchmarkId: 'mechanical-q2' }),
+      },
+    ]);
+
+    assert.equal(report.overall.quotaBacked, 2);
+    assert.equal('quotaUsedPercent' in report.overall, false);
+    assert.equal(
+      report.entries.every((entry) => entry.quota !== null),
+      true,
+    );
   });
 });

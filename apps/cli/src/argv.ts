@@ -37,6 +37,7 @@ export const AVAILABLE_COMMANDS = [
   'apply',
   'budget',
   'benchmark',
+  'benchmark-matrix',
   'benchmark-finish',
   'benchmark-start',
   'context',

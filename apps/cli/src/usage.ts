@@ -30,6 +30,7 @@ First time here
  11  token-harness benchmark     compare paired task receipts   writes nothing
  12  token-harness benchmark-start  snapshot task start         writes state
  13  token-harness benchmark-finish close task receipt          writes state
+ 14  token-harness benchmark-matrix aggregate empirical pairs   writes nothing
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -52,6 +53,8 @@ Commands, in the order you would use them
               Snapshot quota/policy before one benchmark task into local state
   benchmark-finish
               Close that capture with quota-after and an explicit quality gate
+  benchmark-matrix
+              Aggregate complete local pairs by class and evidence
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
@@ -96,8 +99,10 @@ Usage
 
 This command does not execute the task or change harness configuration. It records
 the current discovered model/effort/verbosity and current usage windows into Token
-Harness's state directory. The raw project path is not stored in the capture; only
-the machine-local stable project id is persisted.
+Harness's state directory. When compatible ccusage history is available it also
+snapshots cumulative session counters for conservative finish-time subtraction.
+The raw project path is not stored in the capture; only the machine-local stable
+project id is persisted.
 
 An existing capture or completed receipt is never overwritten. Missing live quota
 is recorded as an empty window list rather than inferred from local tokens.`,
@@ -113,9 +118,11 @@ Run this after the benchmark task. It requires the capture from benchmark-start,
 verifies it belongs to the same project, observes quota again, and writes an
 immutable schema-1 receipt under Token Harness state.
 
-This first capture slice does not guess local token totals or runtime error
-correlation; localUsage remains null and errorCodes remains empty. Those fields
-will be populated only when a trustworthy task-level correlation exists.`,
+When ccusage 20.x is available, start and finish snapshot cumulative session
+counters and record localUsage only when exactly one harness session changed
+inside the task boundary. Parallel changed sessions remain ambiguous and leave
+localUsage null. Local tokens remain local evidence, never subscription quota.
+Runtime errorCodes remain empty until trustworthy task-level correlation exists.`,
 
   benchmark: `token-harness benchmark — compare paired task receipts
 
@@ -132,6 +139,24 @@ If backend quota is not comparable, failed attempts, runtime/provider errors,
 attempt count and local token volume may separate the receipts as local evidence.
 Local tokens are never relabelled as subscription quota. A malformed receipt,
 unsupported schema or wrong baseline/optimized role is rejected rather than guessed.`,
+
+  'benchmark-matrix': `token-harness benchmark-matrix — summarize real paired task evidence
+
+Usage
+  token-harness benchmark-matrix [--json] [--project <dir>]
+                                 [--harness <claude|codex>] [--task <class>]
+
+Read-only. Scans completed benchmark pairs in Token Harness local state, requires
+their captures to bind both variants to the current project, and applies the same
+deterministic comparator used by token-harness benchmark.
+
+The report groups mechanical, standard, hard and critical tasks; counts optimized
+wins, baseline wins, equal and inconclusive results; and keeps quota-backed,
+local-evidence and quality-only outcomes separate. Local token totals are summed
+only across quality-passed pairs where both variants have attributable local
+usage. Backend
+quota percentages from different windows are never summed and no composite score
+is invented.`,
 
   history: `token-harness history — read local Claude/Codex usage history
 

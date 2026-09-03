@@ -916,3 +916,164 @@ export function compareTaskBenchmarkReceipts(
     'quality matched but no efficiency evidence separated the receipts',
   ]);
 }
+
+export interface TaskBenchmarkMatrixPair {
+  baseline: TaskBenchmarkReceipt;
+  optimized: TaskBenchmarkReceipt;
+}
+
+export interface TaskBenchmarkMatrixEntry {
+  benchmarkId: string;
+  taskClass: TaskClass;
+  harnessId: HarnessId;
+  verdict: TaskBenchmarkVerdict;
+  basis: TaskBenchmarkBasis;
+  evidenceLevel: TaskBenchmarkEvidenceLevel;
+  baselineLocalTokens: number | null;
+  optimizedLocalTokens: number | null;
+  localTokenSavingPercent: number | null;
+  quota: TaskBenchmarkQuotaComparison | null;
+}
+
+export interface TaskBenchmarkMatrixSummary {
+  taskClass: TaskClass | null;
+  pairs: number;
+  optimizedBetter: number;
+  baselineBetter: number;
+  equivalent: number;
+  inconclusive: number;
+  incomparable: number;
+  quotaBacked: number;
+  localEvidence: number;
+  qualityOnly: number;
+  localComparablePairs: number;
+  baselineLocalTokens: number | null;
+  optimizedLocalTokens: number | null;
+  localTokenSavingPercent: number | null;
+}
+
+export interface TaskBenchmarkMatrixSelection {
+  scanned: number;
+  completePairs: number;
+  incomplete: number;
+  invalid: number;
+  otherProject: number;
+  filteredOut: number;
+}
+
+export interface TaskBenchmarkMatrixReport {
+  entries: TaskBenchmarkMatrixEntry[];
+  byTaskClass: TaskBenchmarkMatrixSummary[];
+  overall: TaskBenchmarkMatrixSummary;
+  selection: TaskBenchmarkMatrixSelection;
+}
+
+const TASK_CLASS_ORDER: readonly TaskClass[] = ['mechanical', 'standard', 'hard', 'critical'];
+
+function roundedPercent(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+function summarizeMatrixEntries(
+  entries: readonly TaskBenchmarkMatrixEntry[],
+  taskClass: TaskClass | null,
+): TaskBenchmarkMatrixSummary {
+  const local = entries.filter(
+    (entry) =>
+      entry.localTokenSavingPercent !== null &&
+      entry.baselineLocalTokens !== null &&
+      entry.optimizedLocalTokens !== null,
+  );
+  const baselineLocalTokens =
+    local.length === 0
+      ? null
+      : local.reduce((total, entry) => total + (entry.baselineLocalTokens ?? 0), 0);
+  const optimizedLocalTokens =
+    local.length === 0
+      ? null
+      : local.reduce((total, entry) => total + (entry.optimizedLocalTokens ?? 0), 0);
+
+  return {
+    taskClass,
+    pairs: entries.length,
+    optimizedBetter: entries.filter((entry) => entry.verdict === 'optimized-better').length,
+    baselineBetter: entries.filter((entry) => entry.verdict === 'baseline-better').length,
+    equivalent: entries.filter((entry) => entry.verdict === 'equivalent').length,
+    inconclusive: entries.filter((entry) => entry.verdict === 'inconclusive').length,
+    incomparable: entries.filter((entry) => entry.verdict === 'incomparable').length,
+    quotaBacked: entries.filter((entry) => entry.evidenceLevel === 'quota-backed').length,
+    localEvidence: entries.filter((entry) => entry.evidenceLevel === 'local-evidence').length,
+    qualityOnly: entries.filter((entry) => entry.evidenceLevel === 'quality-only').length,
+    localComparablePairs: local.length,
+    baselineLocalTokens,
+    optimizedLocalTokens,
+    localTokenSavingPercent:
+      baselineLocalTokens === null || optimizedLocalTokens === null
+        ? null
+        : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
+  };
+}
+
+/**
+ * Aggregate already-paired empirical receipts without inventing a composite efficiency score.
+ *
+ * Each row keeps the deterministic pair verdict. Summary counts say how often optimized won or
+ * lost and how strong the evidence was; local token totals are aggregated only across pairs where
+ * both variants have attributable local usage. Backend quota percentages are deliberately not
+ * summed across different windows/resets.
+ */
+export function buildTaskBenchmarkMatrix(
+  pairs: readonly TaskBenchmarkMatrixPair[],
+  selection: TaskBenchmarkMatrixSelection = {
+    scanned: pairs.length,
+    completePairs: pairs.length,
+    incomplete: 0,
+    invalid: 0,
+    otherProject: 0,
+    filteredOut: 0,
+  },
+): TaskBenchmarkMatrixReport {
+  const entries = pairs
+    .map(({ baseline, optimized }): TaskBenchmarkMatrixEntry => {
+      const comparison = compareTaskBenchmarkReceipts(baseline, optimized);
+      const baselineLocalTokens = baseline.localUsage?.totalTokens ?? null;
+      const optimizedLocalTokens = optimized.localUsage?.totalTokens ?? null;
+      const bothQualityPassed =
+        baseline.outcome.qualityGate === 'passed' && optimized.outcome.qualityGate === 'passed';
+      return {
+        benchmarkId: baseline.benchmarkId,
+        taskClass: baseline.taskClass,
+        harnessId: baseline.harnessId,
+        verdict: comparison.verdict,
+        basis: comparison.basis,
+        evidenceLevel: comparison.evidenceLevel,
+        baselineLocalTokens,
+        optimizedLocalTokens,
+        localTokenSavingPercent:
+          !bothQualityPassed || baselineLocalTokens === null || optimizedLocalTokens === null
+            ? null
+            : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
+        quota: comparison.quota,
+      };
+    })
+    .sort(
+      (left, right) =>
+        TASK_CLASS_ORDER.indexOf(left.taskClass) - TASK_CLASS_ORDER.indexOf(right.taskClass) ||
+        left.benchmarkId.localeCompare(right.benchmarkId),
+    );
+
+  const byTaskClass = TASK_CLASS_ORDER.map((taskClass) => ({
+    taskClass,
+    rows: entries.filter((entry) => entry.taskClass === taskClass),
+  }))
+    .filter(({ rows }) => rows.length > 0)
+    .map(({ taskClass, rows }) => summarizeMatrixEntries(rows, taskClass));
+
+  return {
+    entries,
+    byTaskClass,
+    overall: summarizeMatrixEntries(entries, null),
+    selection,
+  };
+}

@@ -14,6 +14,7 @@ First time here
  11  token-harness benchmark     compare paired task receipts   writes nothing
  12  token-harness benchmark-start  snapshot task start         writes state
  13  token-harness benchmark-finish close task receipt          writes state
+ 14  token-harness benchmark-matrix aggregate empirical pairs   writes nothing
 
   Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
 
@@ -36,6 +37,8 @@ Commands, in the order you would use them
               Snapshot quota/policy before one benchmark task into local state
   benchmark-finish
               Close that capture with quota-after and an explicit quality gate
+  benchmark-matrix
+              Aggregate complete local pairs by class and evidence
   optimize    Combine quota and context evidence into read-only policy advice
   status      Report applied pipelines, drift, and importer modes
   update      Update installed providers to what their channel offers
