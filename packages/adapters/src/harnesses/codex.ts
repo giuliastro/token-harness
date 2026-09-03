@@ -1018,14 +1018,14 @@ async function observeContext(
       cwd: context.projectRoot,
       stdin: mcpStdin,
       stdinCloseAfterStdoutLineIncludes: CONTEXT_MCP_REQUEST_ID,
-      timeoutMs: 5_000,
+      timeoutMs: 15_000,
       maxOutputBytes: 2 * 1024 * 1024,
     });
-    if (mcpOutcome.failure === null && mcpOutcome.exitCode === 0) {
-      const mcpMessages = parseJsonLines(mcpOutcome.stdout);
-      mcpResponse =
-        rpcResult(mcpMessages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(mcpMessages, 3);
-    }
+    // A timed-out request may still have produced a complete RPC response before the process failed
+    // to shut down. Parse captured stdout first; only absence of a response makes MCP unavailable.
+    const mcpMessages = parseJsonLines(mcpOutcome.stdout);
+    mcpResponse =
+      rpcResult(mcpMessages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(mcpMessages, 3);
   }
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
@@ -1207,7 +1207,8 @@ async function observeContext(
         code: 'codex-mcp-inventory-unavailable',
         subject: CODEX,
         message: 'Codex returned no recognizable mcpServerStatus/list result',
-        remediation: 'Treat Codex MCP overhead as unknown',
+        remediation:
+          'Treat Codex MCP overhead as unknown; config/model optimization remains available',
       }),
     );
   }
