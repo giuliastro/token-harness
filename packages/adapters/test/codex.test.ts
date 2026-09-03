@@ -853,10 +853,7 @@ describe('context-cost observation', () => {
       },
     };
 
-    const result = await codexAdapter.observeContext?.(
-      observedContext,
-      '2026-09-03T09:00:00.000Z',
-    );
+    const result = await codexAdapter.observeContext?.(observedContext, '2026-09-03T09:00:00.000Z');
     assert.ok(result);
     assert.equal(result.mcpServers.length, 0);
     assert.equal(
