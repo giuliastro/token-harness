@@ -769,7 +769,7 @@ describe('context-cost observation', () => {
 
     const result = await codexAdapter.observeContext?.(observedContext, '2026-09-03T09:00:00.000Z');
     assert.ok(result);
-    assert.equal(result.state, 'partial');
+    assert.equal(result.state, 'observed');
     assert.equal(result.model, 'gpt-5.6-luna');
     assert.equal(result.mcpServers.length, 1);
     assert.equal(result.mcpServers[0]?.toolCount, 2);
