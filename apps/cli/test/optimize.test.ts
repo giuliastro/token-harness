@@ -282,6 +282,11 @@ describe('optimize command', () => {
     assert.ok(mcpAdvice);
     assert.match(mcpAdvice.action, /do not remove/i);
     assert.match(mcpAdvice.evidence[0]?.summary ?? '', /25 known tools/i);
+    assert.equal(
+      result.diagnostics.filter((item) => item.code === 'codex-managed-config-target-unavailable')
+        .length,
+      1,
+    );
   });
 
   it('requires an explicit reserve for the custom profile', async () => {
