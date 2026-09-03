@@ -35,12 +35,9 @@ import {
 
 const CODEX = harnessId('codex');
 const RATE_LIMIT_REQUEST_ID = 'token-harness-rate-limits';
-const CONTEXT_CONFIG_REQUEST_ID = 2;
-const CONTEXT_MCP_REQUEST_ID = 3;
-const CONTEXT_MODEL_REQUEST_ID = 4;
-const CONTEXT_CONFIG_RESPONSE_MARKER = '"id":2';
-const CONTEXT_MCP_RESPONSE_MARKER = '"id":3';
-const CONTEXT_MODEL_RESPONSE_MARKER = '"id":4';
+const CONTEXT_CONFIG_REQUEST_ID = 'token-harness-context-config';
+const CONTEXT_MCP_REQUEST_ID = 'token-harness-context-mcp';
+const CONTEXT_MODEL_REQUEST_ID = 'token-harness-context-models';
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 const MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -921,13 +918,13 @@ async function observeContext(
     args: ['app-server', '--stdio'],
     cwd: context.projectRoot,
     stdin,
-    // Recent Codex app-server builds may stop processing queued RPCs as soon as stdin reaches EOF.
-    // Hold the transport open until every context reply has actually arrived; replies are allowed
-    // to arrive out of order, so waiting for only one request id is not sufficient.
+    // Keep the transport alive for the two context reads required to make optimizer advice.
+    // MCP inventory is deliberately best-effort: a slow configured server must not make effective
+    // config and the model catalog unavailable. If MCP finishes before these two replies, we use it;
+    // otherwise EOF cancels that inventory and the observation becomes partial instead of timing out.
     stdinCloseAfterStdoutLineIncludesAll: [
-      CONTEXT_CONFIG_RESPONSE_MARKER,
-      CONTEXT_MCP_RESPONSE_MARKER,
-      CONTEXT_MODEL_RESPONSE_MARKER,
+      CONTEXT_CONFIG_REQUEST_ID,
+      CONTEXT_MODEL_REQUEST_ID,
     ],
     timeoutMs: 15_000,
     maxOutputBytes: 4 * 1024 * 1024,
@@ -983,9 +980,14 @@ async function observeContext(
   }
 
   const messages = parseJsonLines(outcome.stdout);
-  const configResponse = rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID);
-  const mcpResponse = rpcResult(messages, CONTEXT_MCP_REQUEST_ID);
-  const modelResponse = rpcResult(messages, CONTEXT_MODEL_REQUEST_ID);
+  // Numeric fallbacks keep historical fixtures readable while live requests use distinctive string
+  // ids that are safe transport markers regardless of JSON whitespace/field ordering.
+  const configResponse =
+    rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID) ?? rpcResult(messages, 2);
+  const mcpResponse =
+    rpcResult(messages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(messages, 3);
+  const modelResponse =
+    rpcResult(messages, CONTEXT_MODEL_REQUEST_ID) ?? rpcResult(messages, 4);
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
 
