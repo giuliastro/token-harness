@@ -29,6 +29,7 @@
 import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 import {
   EXIT_CODES,
+  FileJournalStore,
   commandResult,
   contributesToProblems,
   diagnostic,
@@ -40,9 +41,6 @@ import {
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
-
-/** Kept in step with `plan.ts` and `status.ts`. */
-const MANAGED_PROVIDERS: readonly string[] = [];
 
 export async function runVerify(context: CommandContext): Promise<CommandResult<VerifyReport>> {
   const diagnostics: Diagnostic[] = [];
@@ -115,6 +113,8 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
     diagnostics.push(...inspection.diagnostics);
   }
 
+  const managedIntegrations = await readManagedIntegrations(context);
+
   const providerContext = {
     ...detectionContext,
     harnessConfigs,
@@ -168,7 +168,8 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
         harnessId: harnessId as VerificationResult['harnessId'],
         status: statusFor(verification.achievedTier, declaredTier),
         declaredTier,
-        managedByTokenHarness: MANAGED_PROVIDERS.includes(adapter.manifest.id),
+        managedByTokenHarness: managedIntegrations.has(`${adapter.manifest.id}\0${harnessId}`),
+        providerManagedByTokenHarness: detection.managedByTokenHarness,
         checks: verification.checks,
       });
     }
@@ -201,6 +202,29 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
     data: report,
     diagnostics,
   });
+}
+
+async function readManagedIntegrations(context: CommandContext): Promise<Set<string>> {
+  const managed = new Set<string>();
+  if (context.adapters === null || context.stateRoot === null) return managed;
+
+  const journalRoot = context.adapters.fs.join(context.stateRoot, 'journals');
+  if ((await context.adapters.fs.stat(journalRoot)) === null) return managed;
+
+  const projectId = context.adapters.projectIdFor(context.projectRoot);
+  const store = new FileJournalStore({
+    fs: context.adapters.fs,
+    journalRoot,
+    backupRoot: context.adapters.fs.join(context.stateRoot, 'backups'),
+  });
+
+  for (const journal of await store.list()) {
+    if (journal.outcome !== 'committed' || journal.projectId !== projectId) continue;
+    for (const integration of journal.managedIntegrations ?? []) {
+      managed.add(`${integration.providerId}\0${integration.harnessId}`);
+    }
+  }
+  return managed;
 }
 
 /**

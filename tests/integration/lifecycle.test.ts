@@ -429,9 +429,10 @@ describe('verify', () => {
     assert.ok(row);
     assert.equal(row.harnessId, 'claude');
     assert.equal(row.declaredTier, 'canary');
-    // RFC 0004 §Brownfield adoption: nothing has been applied *by* Token Harness in the sense of
-    // an owned installation, so it says so rather than claiming management.
-    assert.equal(row.managedByTokenHarness, false);
+    // Token Harness owns the reviewed RTK × Claude integration created by apply, while the
+    // provider executable remains user-installed. These are deliberately separate ownership facts.
+    assert.equal(row.managedByTokenHarness, true);
+    assert.equal(row.providerManagedByTokenHarness, false);
   });
 
   it('reports a harness finding as a diagnostic rather than as a row', async () => {
