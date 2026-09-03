@@ -267,10 +267,14 @@ function fakeCodexConfigRunner(
         .split(/\r?\n/)
         .filter((line) => line.trim() !== '')
         .map((line) => JSON.parse(line) as Record<string, unknown>);
-      const batch = requests.find((message) => message['id'] === 2);
-      const read = requests.find((message) => message['id'] === 3);
+      const batch = requests.find((message) => message['method'] === 'config/batchWrite');
+      const read = requests.find((message) => message['method'] === 'config/read');
       assert.ok(batch);
       assert.ok(read);
+      const batchId = batch['id'];
+      const readId = read['id'];
+      assert.ok(typeof batchId === 'string' || typeof batchId === 'number');
+      assert.ok(typeof readId === 'string' || typeof readId === 'number');
       const params = batch['params'];
       assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
       assert.equal((params as Record<string, unknown>)['filePath'], path);
@@ -290,7 +294,7 @@ function fakeCodexConfigRunner(
             ? [
                 JSON.stringify({ id: 1, result: {} }),
                 JSON.stringify({
-                  id: 2,
+                  id: batchId,
                   error: {
                     code: -32600,
                     message: 'configVersionConflict: Configuration was modified since last read',
@@ -299,9 +303,9 @@ function fakeCodexConfigRunner(
               ].join('\n')
             : [
                 JSON.stringify({ id: 1, result: {} }),
-                JSON.stringify({ id: 2, result: { version: 'v2' } }),
+                JSON.stringify({ id: batchId, result: { version: 'v2' } }),
                 JSON.stringify({
-                  id: 3,
+                  id: readId,
                   result: {
                     config: {
                       model_reasoning_effort: response === 'mismatch' ? 'high' : 'low',
@@ -395,6 +399,18 @@ describe('Codex native config transaction', () => {
     const runner: ProcessRunner = {
       async run(request) {
         assert.match(request.stdin ?? '', /config\/batchWrite/);
+        const messages = (request.stdin ?? '')
+          .split(/\r?\n/)
+          .filter((line) => line.trim() !== '')
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const batch = messages.find((message) => message['method'] === 'config/batchWrite');
+        const read = messages.find((message) => message['method'] === 'config/read');
+        assert.ok(batch);
+        assert.ok(read);
+        const batchId = batch['id'];
+        const readId = read['id'];
+        assert.ok(typeof batchId === 'string' || typeof batchId === 'number');
+        assert.ok(typeof readId === 'string' || typeof readId === 'number');
         writeFileSync(
           config,
           'model_reasoning_effort = "low"\nmodel_verbosity = "low"\n# preserve both fields\n',
@@ -406,9 +422,9 @@ describe('Codex native config transaction', () => {
           exitCode: 0,
           signal: null,
           stdout: [
-            JSON.stringify({ id: 2, result: { version: 'v2' } }),
+            JSON.stringify({ id: batchId, result: { version: 'v2' } }),
             JSON.stringify({
-              id: 3,
+              id: readId,
               result: {
                 config: {
                   model_reasoning_effort: 'low',
