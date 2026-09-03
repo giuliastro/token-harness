@@ -16,6 +16,7 @@ import type {
   PlatformFacts,
   PlatformPaths,
   ProcessRunner,
+  ResolvedExecutable,
   ProviderId,
   TaskBenchmarkVariant,
   TaskClass,
@@ -93,6 +94,8 @@ export interface CommandContext {
 export interface AdapterAccess {
   fs: FileSystemPort;
   runner: ProcessRunner;
+  /** All same-name executable matches in PATH resolution order. */
+  resolveExecutables?: (name: string) => ResolvedExecutable[];
   paths: PlatformPaths;
   /**
    * A reader for a provider's own local database, or null when this host has none —

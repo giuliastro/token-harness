@@ -257,23 +257,24 @@ function systemUtilityPath(
   return probe.entryKind(candidate) === 'file' ? candidate : null;
 }
 
-export function resolveExecutable(input: ResolveExecutableInput): ResolvedExecutable | null {
+export function resolveExecutables(input: ResolveExecutableInput): ResolvedExecutable[] {
   const { name, facts, env, probe } = input;
-  if (name.trim() === '') return null;
+  if (name.trim() === '') return [];
 
   const nativeWindows = facts.os === 'windows' && !facts.isWsl;
   const flavor = pathFlavor(facts);
   const extensions = nativeWindows ? pathExtensions(env) : [];
   const names = candidatesFor(name, nativeWindows, extensions);
-
   const hasSeparator = name.includes('/') || (nativeWindows && name.includes('\\'));
 
   if (nativeWindows && !hasSeparator) {
     const system = systemUtilityPath(name, env, probe);
-    if (system !== null) return { requested: name, path: system, kind: 'native' };
+    if (system !== null) return [{ requested: name, path: system, kind: 'native' }];
   }
 
   const directories = hasSeparator ? [null] : searchPath(env, facts);
+  const found: ResolvedExecutable[] = [];
+  const seen = new Set<string>();
 
   for (const directory of directories) {
     for (const candidateName of names) {
@@ -283,14 +284,27 @@ export function resolveExecutable(input: ResolveExecutableInput): ResolvedExecut
           : flavor.join(directory, candidateName);
       if (probe.entryKind(candidate) !== 'file') continue;
       if (!nativeWindows && !probe.isExecutable(candidate)) continue;
-      return {
-        requested: name,
-        path: candidate,
-        kind: nativeWindows ? classifyWindows(candidate) : classifyPosix(candidate, probe),
-      };
+
+      const key = nativeWindows ? candidate.toLowerCase() : candidate;
+      if (!seen.has(key)) {
+        seen.add(key);
+        found.push({
+          requested: name,
+          path: candidate,
+          kind: nativeWindows ? classifyWindows(candidate) : classifyPosix(candidate, probe),
+        });
+      }
+      // One executable per PATH directory. On Windows an npm install commonly places
+      // extensionless, .cmd and .ps1 siblings in the same directory; those are one install,
+      // not three shadowing installs. PATHEXT order decides which sibling represents it.
+      break;
     }
   }
-  return null;
+  return found;
+}
+
+export function resolveExecutable(input: ResolveExecutableInput): ResolvedExecutable | null {
+  return resolveExecutables(input)[0] ?? null;
 }
 
 /**
@@ -302,4 +316,11 @@ export function createExecutableResolver(
   context: Omit<ResolveExecutableInput, 'name'>,
 ): (name: string) => ResolvedExecutable | null {
   return (name) => resolveExecutable({ ...context, name });
+}
+
+/** Same environment binding as createExecutableResolver, but preserves every PATH match in order. */
+export function createExecutableEnumerator(
+  context: Omit<ResolveExecutableInput, 'name'>,
+): (name: string) => ResolvedExecutable[] {
+  return (name) => resolveExecutables({ ...context, name });
 }

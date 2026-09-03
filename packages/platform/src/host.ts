@@ -19,7 +19,11 @@ import type {
 } from '@token-harness/core';
 
 import { detectPlatform } from './platform/detect.js';
-import { createExecutableResolver, nodeExecutableProbe } from './platform/executable.js';
+import {
+  createExecutableEnumerator,
+  createExecutableResolver,
+  nodeExecutableProbe,
+} from './platform/executable.js';
 import { discoverPackageManagers } from './platform/package-managers.js';
 import { resolvePlatformPaths } from './platform/paths.js';
 import { nodeSystemProbe, type SystemProbe } from './platform/probe.js';
@@ -30,6 +34,7 @@ export interface HostEnvironment {
   paths: PlatformPaths;
   runner: ProcessRunner;
   resolveExecutable(name: string): ResolvedExecutable | null;
+  resolveExecutables(name: string): ResolvedExecutable[];
   /**
    * Deferred rather than eager: it is a `PATH` scan per candidate, and `--version`
    * has no business doing ten of them.
@@ -75,6 +80,13 @@ export function resolveHostEnvironment(
     probe: nodeExecutableProbe(),
   });
 
+  const enumerate = createExecutableEnumerator({
+    facts,
+    env: probe.env,
+    cwd: paths.paths.home,
+    probe: nodeExecutableProbe(),
+  });
+
   const runner = new NodeProcessRunner({
     facts,
     env: probe.env,
@@ -89,6 +101,7 @@ export function resolveHostEnvironment(
       paths: paths.paths,
       runner,
       resolveExecutable: resolve,
+      resolveExecutables: enumerate,
       discoverPackageManagers: () => discoverPackageManagers({ facts, resolve }),
     },
   };

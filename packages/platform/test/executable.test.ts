@@ -20,6 +20,7 @@ import {
   WINDOWS_SYSTEM_UTILITIES,
   nodeExecutableProbe,
   resolveExecutable,
+  resolveExecutables,
   type ExecutableProbe,
 } from '../src/index.js';
 
@@ -491,5 +492,52 @@ describe('the real probe and an entry stat cannot follow', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('executable enumeration for shadow diagnostics', () => {
+  it('preserves POSIX PATH order and deduplicates a repeated directory', () => {
+    const resolved = resolveExecutables({
+      name: 'harnesstrim',
+      facts: LINUX,
+      env: { PATH: '/old/bin:/new/bin:/old/bin' },
+      cwd: '/work',
+      probe: fakeProbe({
+        '/old/bin/harnesstrim': { magic: SHEBANG, executable: true },
+        '/new/bin/harnesstrim': { magic: SHEBANG, executable: true },
+      }),
+    });
+
+    assert.deepEqual(
+      resolved.map((entry) => entry.path),
+      ['/old/bin/harnesstrim', '/new/bin/harnesstrim'],
+    );
+  });
+
+  it('treats a Windows npm shim triple as one install per PATH directory', () => {
+    const resolved = resolveExecutables({
+      name: 'harnesstrim',
+      facts: WINDOWS,
+      env: {
+        PATH: 'C:\\old\\npm;C:\\new\\npm',
+        PATHEXT: '.COM;.EXE;.BAT;.CMD;.PS1',
+      },
+      cwd: 'C:\\work',
+      probe: fakeProbe({
+        'C:\\old\\npm\\harnesstrim': {},
+        'C:\\old\\npm\\harnesstrim.cmd': {},
+        'C:\\old\\npm\\harnesstrim.ps1': {},
+        'C:\\new\\npm\\harnesstrim.cmd': {},
+        'C:\\new\\npm\\harnesstrim.ps1': {},
+      }),
+    });
+
+    assert.deepEqual(
+      resolved.map((entry) => [entry.path, entry.kind]),
+      [
+        ['C:\\old\\npm\\harnesstrim.cmd', 'windows-batch-shim'],
+        ['C:\\new\\npm\\harnesstrim.cmd', 'windows-batch-shim'],
+      ],
+    );
   });
 });
