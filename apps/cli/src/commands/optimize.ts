@@ -15,6 +15,7 @@ import {
   type CommandResult,
   type ContextPressure,
   type ContextReport,
+  type Diagnostic,
   type HarnessContextObservation,
   type HarnessOptimizationAdvice,
   type LocalBurnTrend,
@@ -32,6 +33,20 @@ import { runContext } from './context-cost.js';
 import { runHistory } from './history.js';
 
 const DEFAULT_RESERVE = 20;
+
+function dedupeDiagnostics(items: readonly Diagnostic[]): Diagnostic[] {
+  const seen = new Set<string>();
+  const result: Diagnostic[] = [];
+  for (const item of items) {
+    const key = [item.severity, item.code, item.subject ?? '', item.path ?? '', item.message].join(
+      '\0',
+    );
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
 
 function contextEvidence(
   context: ContextReport,
@@ -487,11 +502,11 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
       command: 'optimize',
       exitCode: EXIT_CODES.ok,
       data: report,
-      diagnostics: [
+      diagnostics: dedupeDiagnostics([
         ...budgetResult.diagnostics,
         ...contextResult.diagnostics,
         ...historyResult.diagnostics,
-      ],
+      ]),
     });
   }
 
@@ -524,11 +539,11 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
     command: 'optimize',
     exitCode: EXIT_CODES.ok,
     data: report,
-    diagnostics: [
+    diagnostics: dedupeDiagnostics([
       ...budgetResult.diagnostics,
       ...contextResult.diagnostics,
       ...historyResult.diagnostics,
       ...report.harnesses.flatMap((item) => item.diagnostics),
-    ],
+    ]),
   });
 }
