@@ -672,6 +672,115 @@ describe('context-cost observation', () => {
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
   });
 
+  it('retries MCP inventory separately when config and model finish first', async () => {
+    const base = context();
+    const requests: ProcessRequest[] = [];
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+          requests.push(request);
+          const mcpOnly =
+            (request.stdin ?? '').includes('mcpServerStatus/list') &&
+            !(request.stdin ?? '').includes('config/read');
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/codex',
+            exitCode: 0,
+            signal: null,
+            stdout: mcpOnly
+              ? [
+                  JSON.stringify({ id: 1, result: {} }),
+                  JSON.stringify({
+                    id: 'token-harness-context-mcp',
+                    result: {
+                      data: [
+                        {
+                          name: 'github',
+                          runtimeStatus: null,
+                          pluginId: null,
+                          serverInfo: null,
+                          tools: { search: {}, issue: {} },
+                          resources: [],
+                          resourceTemplates: [],
+                          authStatus: 'oAuth',
+                        },
+                      ],
+                      nextCursor: null,
+                    },
+                  }),
+                ].join('\n')
+              : [
+                  JSON.stringify({ id: 1, result: {} }),
+                  JSON.stringify({
+                    id: 'token-harness-context-config',
+                    result: {
+                      config: {
+                        model: 'gpt-5.6-luna',
+                        model_reasoning_effort: 'xhigh',
+                      },
+                      origins: {},
+                      layers: [],
+                    },
+                  }),
+                  JSON.stringify({
+                    id: 'token-harness-context-models',
+                    result: {
+                      data: [
+                        {
+                          id: 'gpt-5.6-luna',
+                          model: 'gpt-5.6-luna',
+                          displayName: 'GPT-5.6-Luna',
+                          modelSpecialty: null,
+                          hidden: false,
+                          supportedReasoningEfforts: [
+                            { reasoningEffort: 'medium', description: 'Medium' },
+                            { reasoningEffort: 'xhigh', description: 'Extra high' },
+                          ],
+                          defaultReasoningEffort: 'medium',
+                          inputModalities: ['text'],
+                          supportsPersonality: true,
+                          multiAgentVersion: null,
+                          additionalSpeedTiers: [],
+                          serviceTiers: [],
+                          defaultServiceTier: null,
+                          isDefault: true,
+                          upgrade: null,
+                          upgradeInfo: null,
+                          availabilityNux: null,
+                          description: 'test model',
+                        },
+                      ],
+                      nextCursor: null,
+                    },
+                  }),
+                ].join('\n'),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 2,
+            timedOut: false,
+            failure: null,
+          };
+        },
+      },
+    };
+
+    const result = await codexAdapter.observeContext?.(observedContext, '2026-09-03T09:00:00.000Z');
+    assert.ok(result);
+    assert.equal(result.state, 'partial');
+    assert.equal(result.model, 'gpt-5.6-luna');
+    assert.equal(result.mcpServers.length, 1);
+    assert.equal(result.mcpServers[0]?.toolCount, 2);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'codex-mcp-inventory-unavailable'),
+      false,
+    );
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1]?.stdinCloseAfterStdoutLineIncludes, 'token-harness-context-mcp');
+  });
+
   it('does not adopt a selected Codex profile as the writable managed target', async () => {
     const base = context();
     const observedContext: HarnessContext = {
