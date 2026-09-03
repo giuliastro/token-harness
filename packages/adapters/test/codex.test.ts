@@ -767,7 +767,10 @@ describe('context-cost observation', () => {
       },
     };
 
-    const result = await codexAdapter.observeContext?.(observedContext, '2026-09-03T09:00:00.000Z');
+    const result = await codexAdapter.observeContext?.(
+      observedContext,
+      '2026-09-03T09:00:00.000Z',
+    );
     assert.ok(result);
     assert.equal(result.state, 'partial');
     assert.equal(result.model, 'gpt-5.6-luna');
@@ -778,9 +781,11 @@ describe('context-cost observation', () => {
       false,
     );
     assert.equal(requests.length, 2);
-    assert.equal(requests[1]?.stdinCloseAfterStdoutLineIncludes, 'token-harness-context-mcp');
+    assert.equal(
+      requests[1]?.stdinCloseAfterStdoutLineIncludes,
+      'token-harness-context-mcp',
+    );
   });
-
 
   it('uses a complete MCP reply captured before the isolated request timeout', async () => {
     const base = context();
