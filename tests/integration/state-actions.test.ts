@@ -1751,6 +1751,14 @@ describe('codex-config-batch-write', () => {
         const stdin = request.stdin ?? '';
         if (stdin.includes('model/list')) {
           assert.equal(calls, 1);
+          const modelRequest = stdin
+            .split(/\r?\n/)
+            .filter((line) => line.trim() !== '')
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+            .find((message) => message['method'] === 'model/list');
+          assert.ok(modelRequest);
+          const modelRequestId = modelRequest['id'];
+          assert.ok(typeof modelRequestId === 'string' || typeof modelRequestId === 'number');
           return {
             displayCommand: 'codex app-server --stdio',
             interpreter: 'direct',
@@ -1758,7 +1766,7 @@ describe('codex-config-batch-write', () => {
             exitCode: 0,
             signal: null,
             stdout: JSON.stringify({
-              id: (JSON.parse((request.stdin ?? '').split(/\r?\n/).find((line) => line.includes('model/list')) ?? '{}') as Record<string, unknown>)['id'],
+              id: modelRequestId,
               result: {
                 data: [
                   {
