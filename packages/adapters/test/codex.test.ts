@@ -498,7 +498,7 @@ describe('context-cost observation', () => {
             stdout: [
               JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
               JSON.stringify({
-                id: 2,
+                id: 'token-harness-context-config',
                 result: {
                   config: {
                     model: 'gpt-5.6-codex',
@@ -536,7 +536,7 @@ describe('context-cost observation', () => {
                 },
               }),
               JSON.stringify({
-                id: 3,
+                id: 'token-harness-context-mcp',
                 result: {
                   data: [
                     {
@@ -554,7 +554,7 @@ describe('context-cost observation', () => {
                 },
               }),
               JSON.stringify({
-                id: 4,
+                id: 'token-harness-context-models',
                 result: {
                   data: [
                     {
@@ -687,7 +687,7 @@ describe('context-cost observation', () => {
           stdout: [
             JSON.stringify({ id: 1, result: {} }),
             JSON.stringify({
-              id: 2,
+              id: 'token-harness-context-config',
               result: {
                 config: { model: 'gpt-5.6-codex' },
                 origins: {},
@@ -700,8 +700,14 @@ describe('context-cost observation', () => {
                 ],
               },
             }),
-            JSON.stringify({ id: 'token-harness-context-mcp', result: { data: [], nextCursor: null } }),
-            JSON.stringify({ id: 'token-harness-context-models', result: { data: [], nextCursor: null } }),
+            JSON.stringify({
+              id: 'token-harness-context-mcp',
+              result: { data: [], nextCursor: null },
+            }),
+            JSON.stringify({
+              id: 'token-harness-context-models',
+              result: { data: [], nextCursor: null },
+            }),
           ].join('\n'),
           stderr: '',
           stdoutTruncated: false,
