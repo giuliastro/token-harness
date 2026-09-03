@@ -498,7 +498,7 @@ describe('context-cost observation', () => {
             stdout: [
               JSON.stringify({ id: 1, result: { userAgent: 'codex-test' } }),
               JSON.stringify({
-                id: 'token-harness-context-config',
+                id: 2,
                 result: {
                   config: {
                     model: 'gpt-5.6-codex',
@@ -536,7 +536,7 @@ describe('context-cost observation', () => {
                 },
               }),
               JSON.stringify({
-                id: 'token-harness-context-mcp',
+                id: 3,
                 result: {
                   data: [
                     {
@@ -554,7 +554,7 @@ describe('context-cost observation', () => {
                 },
               }),
               JSON.stringify({
-                id: 'token-harness-context-models',
+                id: 4,
                 result: {
                   data: [
                     {
@@ -666,9 +666,9 @@ describe('context-cost observation', () => {
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
     assert.match(requests[0]?.stdin ?? '', /model\/list/);
     assert.deepEqual(requests[0]?.stdinCloseAfterStdoutLineIncludesAll, [
-      'token-harness-context-config',
-      'token-harness-context-mcp',
-      'token-harness-context-models',
+      '"id":2',
+      '"id":3',
+      '"id":4',
     ]);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
   });
@@ -687,7 +687,7 @@ describe('context-cost observation', () => {
           stdout: [
             JSON.stringify({ id: 1, result: {} }),
             JSON.stringify({
-              id: 'token-harness-context-config',
+              id: 2,
               result: {
                 config: { model: 'gpt-5.6-codex' },
                 origins: {},
@@ -701,11 +701,11 @@ describe('context-cost observation', () => {
               },
             }),
             JSON.stringify({
-              id: 'token-harness-context-mcp',
+              id: 3,
               result: { data: [], nextCursor: null },
             }),
             JSON.stringify({
-              id: 'token-harness-context-models',
+              id: 4,
               result: { data: [], nextCursor: null },
             }),
           ].join('\n'),
