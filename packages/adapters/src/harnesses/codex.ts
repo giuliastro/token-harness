@@ -35,6 +35,9 @@ import {
 
 const CODEX = harnessId('codex');
 const RATE_LIMIT_REQUEST_ID = 'token-harness-rate-limits';
+const CONTEXT_CONFIG_REQUEST_ID = 'token-harness-context-config';
+const CONTEXT_MCP_REQUEST_ID = 'token-harness-context-mcp';
+const CONTEXT_MODEL_REQUEST_ID = 'token-harness-context-models';
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 const MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -855,7 +858,7 @@ function utf8Bytes(value: string | null): number {
   return value === null ? 0 : new TextEncoder().encode(value).byteLength;
 }
 
-function rpcResult(messages: JsonValue[], id: number): Record<string, JsonValue> | null {
+function rpcResult(messages: JsonValue[], id: string | number): Record<string, JsonValue> | null {
   const response = messages.find(
     (message) => isRecord(message) && message['id'] === id && isRecord(message['result']),
   );
@@ -894,17 +897,17 @@ async function observeContext(
     JSON.stringify({ method: 'initialized', params: {} }),
     JSON.stringify({
       method: 'config/read',
-      id: 2,
+      id: CONTEXT_CONFIG_REQUEST_ID,
       params: { cwd: context.projectRoot, includeLayers: true },
     }),
     JSON.stringify({
       method: 'mcpServerStatus/list',
-      id: 3,
+      id: CONTEXT_MCP_REQUEST_ID,
       params: { limit: 1000, detail: 'toolsAndAuthOnly' },
     }),
     JSON.stringify({
       method: 'model/list',
-      id: 4,
+      id: CONTEXT_MODEL_REQUEST_ID,
       params: { limit: 1000, includeHidden: false },
     }),
     '',
@@ -915,6 +918,14 @@ async function observeContext(
     args: ['app-server', '--stdio'],
     cwd: context.projectRoot,
     stdin,
+    // Recent Codex app-server builds may stop processing queued RPCs as soon as stdin reaches EOF.
+    // Hold the transport open until every context reply has actually arrived; replies are allowed
+    // to arrive out of order, so waiting for only one request id is not sufficient.
+    stdinCloseAfterStdoutLineIncludesAll: [
+      CONTEXT_CONFIG_REQUEST_ID,
+      CONTEXT_MCP_REQUEST_ID,
+      CONTEXT_MODEL_REQUEST_ID,
+    ],
     timeoutMs: 15_000,
     maxOutputBytes: 4 * 1024 * 1024,
   });
@@ -969,9 +980,9 @@ async function observeContext(
   }
 
   const messages = parseJsonLines(outcome.stdout);
-  const configResponse = rpcResult(messages, 2);
-  const mcpResponse = rpcResult(messages, 3);
-  const modelResponse = rpcResult(messages, 4);
+  const configResponse = rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID);
+  const mcpResponse = rpcResult(messages, CONTEXT_MCP_REQUEST_ID);
+  const modelResponse = rpcResult(messages, CONTEXT_MODEL_REQUEST_ID);
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
 
