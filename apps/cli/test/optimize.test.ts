@@ -167,7 +167,7 @@ describe('optimize command', () => {
                 [
                   JSON.stringify({ id: 1, result: {} }),
                   JSON.stringify({
-                    id: 'token-harness-context-config',
+                    id: 2,
                     result: {
                       config: {
                         model: 'gpt-5.6-codex',
@@ -182,7 +182,7 @@ describe('optimize command', () => {
                     },
                   }),
                   JSON.stringify({
-                    id: 'token-harness-context-mcp',
+                    id: 3,
                     result: {
                       data: [
                         {
@@ -202,7 +202,7 @@ describe('optimize command', () => {
                     },
                   }),
                   JSON.stringify({
-                    id: 'token-harness-context-models',
+                    id: 4,
                     result: {
                       data: [
                         {
