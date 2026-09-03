@@ -984,10 +984,49 @@ async function observeContext(
   // ids that are safe transport markers regardless of JSON whitespace/field ordering.
   const configResponse =
     rpcResult(messages, CONTEXT_CONFIG_REQUEST_ID) ?? rpcResult(messages, 2);
-  const mcpResponse =
+  let mcpResponse =
     rpcResult(messages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(messages, 3);
   const modelResponse =
     rpcResult(messages, CONTEXT_MODEL_REQUEST_ID) ?? rpcResult(messages, 4);
+
+  // A slow MCP registry must not hold config/model reads hostage. The primary request opportunistically
+  // captures MCP when it is fast; otherwise retry that inventory alone with its own bounded lifecycle.
+  if (mcpResponse === null) {
+    const mcpStdin = [
+      JSON.stringify({
+        method: 'initialize',
+        id: 1,
+        params: {
+          clientInfo: {
+            name: 'token_harness',
+            title: 'Token Harness',
+            version: '0.1',
+          },
+        },
+      }),
+      JSON.stringify({ method: 'initialized', params: {} }),
+      JSON.stringify({
+        method: 'mcpServerStatus/list',
+        id: CONTEXT_MCP_REQUEST_ID,
+        params: { limit: 1000, detail: 'toolsAndAuthOnly' },
+      }),
+      '',
+    ].join('\n');
+    const mcpOutcome = await context.runner.run({
+      executable: 'codex',
+      args: ['app-server', '--stdio'],
+      cwd: context.projectRoot,
+      stdin: mcpStdin,
+      stdinCloseAfterStdoutLineIncludes: CONTEXT_MCP_REQUEST_ID,
+      timeoutMs: 5_000,
+      maxOutputBytes: 2 * 1024 * 1024,
+    });
+    if (mcpOutcome.failure === null && mcpOutcome.exitCode === 0) {
+      const mcpMessages = parseJsonLines(mcpOutcome.stdout);
+      mcpResponse =
+        rpcResult(mcpMessages, CONTEXT_MCP_REQUEST_ID) ?? rpcResult(mcpMessages, 3);
+    }
+  }
   const config =
     configResponse !== null && isRecord(configResponse['config']) ? configResponse['config'] : null;
 
