@@ -666,9 +666,8 @@ describe('context-cost observation', () => {
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
     assert.match(requests[0]?.stdin ?? '', /model\/list/);
     assert.deepEqual(requests[0]?.stdinCloseAfterStdoutLineIncludesAll, [
-      '"id":2',
-      '"id":3',
-      '"id":4',
+      'token-harness-context-config',
+      'token-harness-context-models',
     ]);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
   });
