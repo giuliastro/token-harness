@@ -35,9 +35,12 @@ import {
 
 const CODEX = harnessId('codex');
 const RATE_LIMIT_REQUEST_ID = 'token-harness-rate-limits';
-const CONTEXT_CONFIG_REQUEST_ID = 'token-harness-context-config';
-const CONTEXT_MCP_REQUEST_ID = 'token-harness-context-mcp';
-const CONTEXT_MODEL_REQUEST_ID = 'token-harness-context-models';
+const CONTEXT_CONFIG_REQUEST_ID = 2;
+const CONTEXT_MCP_REQUEST_ID = 3;
+const CONTEXT_MODEL_REQUEST_ID = 4;
+const CONTEXT_CONFIG_RESPONSE_MARKER = '"id":2';
+const CONTEXT_MCP_RESPONSE_MARKER = '"id":3';
+const CONTEXT_MODEL_RESPONSE_MARKER = '"id":4';
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 const MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -922,9 +925,9 @@ async function observeContext(
     // Hold the transport open until every context reply has actually arrived; replies are allowed
     // to arrive out of order, so waiting for only one request id is not sufficient.
     stdinCloseAfterStdoutLineIncludesAll: [
-      CONTEXT_CONFIG_REQUEST_ID,
-      CONTEXT_MCP_REQUEST_ID,
-      CONTEXT_MODEL_REQUEST_ID,
+      CONTEXT_CONFIG_RESPONSE_MARKER,
+      CONTEXT_MCP_RESPONSE_MARKER,
+      CONTEXT_MODEL_RESPONSE_MARKER,
     ],
     timeoutMs: 15_000,
     maxOutputBytes: 4 * 1024 * 1024,
