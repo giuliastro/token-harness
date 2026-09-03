@@ -665,6 +665,11 @@ describe('context-cost observation', () => {
     assert.match(requests[0]?.stdin ?? '', /config\/read/);
     assert.match(requests[0]?.stdin ?? '', /mcpServerStatus\/list/);
     assert.match(requests[0]?.stdin ?? '', /model\/list/);
+    assert.deepEqual(requests[0]?.stdinCloseAfterStdoutLineIncludesAll, [
+      'token-harness-context-config',
+      'token-harness-context-mcp',
+      'token-harness-context-models',
+    ]);
     assert.doesNotMatch(requests[0]?.stdin ?? '', /config\/write|mcpServer\/tool\/call/);
   });
 
@@ -695,8 +700,8 @@ describe('context-cost observation', () => {
                 ],
               },
             }),
-            JSON.stringify({ id: 3, result: { data: [], nextCursor: null } }),
-            JSON.stringify({ id: 4, result: { data: [], nextCursor: null } }),
+            JSON.stringify({ id: 'token-harness-context-mcp', result: { data: [], nextCursor: null } }),
+            JSON.stringify({ id: 'token-harness-context-models', result: { data: [], nextCursor: null } }),
           ].join('\n'),
           stderr: '',
           stdoutTruncated: false,
