@@ -781,6 +781,87 @@ describe('context-cost observation', () => {
     assert.equal(requests[1]?.stdinCloseAfterStdoutLineIncludes, 'token-harness-context-mcp');
   });
 
+
+  it('uses a complete MCP reply captured before the isolated request timeout', async () => {
+    const base = context();
+    let calls = 0;
+    const observedContext: HarnessContext = {
+      ...base,
+      runner: {
+        run: async (): Promise<ProcessOutcome> => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              displayCommand: 'codex app-server --stdio',
+              interpreter: 'direct',
+              executablePath: '/usr/local/bin/codex',
+              exitCode: 0,
+              signal: null,
+              stdout: [
+                JSON.stringify({ id: 1, result: {} }),
+                JSON.stringify({
+                  id: 'token-harness-context-config',
+                  result: {
+                    config: {
+                      model: 'gpt-5.6-luna',
+                      model_reasoning_effort: 'xhigh',
+                    },
+                    origins: {},
+                    layers: [],
+                  },
+                }),
+                JSON.stringify({
+                  id: 'token-harness-context-models',
+                  result: {
+                    data: [],
+                    nextCursor: null,
+                  },
+                }),
+              ].join('\n'),
+              stderr: '',
+              stdoutTruncated: false,
+              stderrTruncated: false,
+              durationMs: 2,
+              timedOut: false,
+              failure: null,
+            };
+          }
+          return {
+            displayCommand: 'codex app-server --stdio',
+            interpreter: 'direct',
+            executablePath: '/usr/local/bin/codex',
+            exitCode: null,
+            signal: 'SIGTERM',
+            stdout: JSON.stringify({
+              id: 'token-harness-context-mcp',
+              result: {
+                data: [],
+                nextCursor: null,
+              },
+            }),
+            stderr: '',
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 15_000,
+            timedOut: true,
+            failure: {
+              reason: 'timed-out',
+              message: 'The command did not finish within 15000ms and its process tree was terminated',
+            },
+          };
+        },
+      },
+    };
+
+    const result = await codexAdapter.observeContext?.(observedContext, '2026-09-03T09:00:00.000Z');
+    assert.ok(result);
+    assert.equal(result.mcpServers.length, 0);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'codex-mcp-inventory-unavailable'),
+      false,
+    );
+  });
+
   it('does not adopt a selected Codex profile as the writable managed target', async () => {
     const base = context();
     const observedContext: HarnessContext = {
