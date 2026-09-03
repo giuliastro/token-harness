@@ -118,7 +118,7 @@ function success(request: ProcessRequest, stdout: string): ProcessOutcome {
   };
 }
 
-function configReadResult(place: World, id: number): Record<string, unknown> {
+function configReadResult(place: World, id: string | number): Record<string, unknown> {
   return {
     id,
     result: {
@@ -181,8 +181,18 @@ function runner(place: World): ProcessRunner {
       }
 
       if (stdin.includes('config/batchWrite')) {
-        const batch = messages.find((message) => message['id'] === 2);
+        const batch = messages.find((message) => message['method'] === 'config/batchWrite');
         assert.ok(batch);
+        const batchId = batch['id'];
+        assert.ok(typeof batchId === 'string' || typeof batchId === 'number');
+        const verification = messages.find((message) => message['method'] === 'config/read');
+        assert.ok(verification);
+        const verificationId = verification['id'];
+        assert.ok(typeof verificationId === 'string' || typeof verificationId === 'number');
+        assert.deepEqual(request.stdinCloseAfterStdoutLineIncludesAll, [
+          'token-harness-config-batch-write',
+          'token-harness-config-verify',
+        ]);
         const params = batch['params'];
         assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
         const record = params as Record<string, unknown>;
@@ -192,7 +202,7 @@ function runner(place: World): ProcessRunner {
           return success(
             request,
             JSON.stringify({
-              id: 2,
+              id: batchId,
               error: {
                 code: -32600,
                 message: 'configVersionConflict: Configuration was modified since last read',
@@ -226,8 +236,8 @@ function runner(place: World): ProcessRunner {
         return success(
           request,
           [
-            JSON.stringify({ id: 2, result: { version: place.version } }),
-            JSON.stringify(configReadResult(place, 3)),
+            JSON.stringify({ id: batchId, result: { version: place.version } }),
+            JSON.stringify(configReadResult(place, verificationId)),
           ].join('\n'),
         );
       }

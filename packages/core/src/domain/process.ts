@@ -59,6 +59,13 @@ export interface ProcessRequest {
    * process shutdown when EOF is their transport-close signal.
    */
   stdinCloseAfterStdoutLineIncludes?: string;
+  /**
+   * Keep stdin open until every marker has appeared on a complete stdout line.
+   *
+   * Use this for a batched request/response transport where replies may arrive out of order.
+   * The single-marker option above remains the compact form for one awaited response.
+   */
+  stdinCloseAfterStdoutLineIncludesAll?: readonly string[];
 }
 
 export type ProcessFailureReason =

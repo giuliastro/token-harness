@@ -304,7 +304,13 @@ export class NodeProcessRunner implements ProcessRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
-      const stdinMarker = request.stdinCloseAfterStdoutLineIncludes;
+      const stdinMarkers = [
+        ...(request.stdinCloseAfterStdoutLineIncludes === undefined
+          ? []
+          : [request.stdinCloseAfterStdoutLineIncludes]),
+        ...(request.stdinCloseAfterStdoutLineIncludesAll ?? []),
+      ];
+      const pendingStdinMarkers = new Set(stdinMarkers);
       let stdoutLineBuffer = '';
       let stdinEnded = false;
       const endStdin = (): void => {
@@ -315,28 +321,34 @@ export class NodeProcessRunner implements ProcessRunner {
 
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout.append(chunk);
-        if (stdinMarker === undefined || stdinEnded) return;
+        if (pendingStdinMarkers.size === 0 || stdinEnded) return;
 
         stdoutLineBuffer += chunk.toString('utf8');
         const lines = stdoutLineBuffer.split(/\r?\n/);
         stdoutLineBuffer = lines.pop() ?? '';
-        if (lines.some((line) => line.includes(stdinMarker))) endStdin();
+        for (const line of lines) {
+          for (const marker of pendingStdinMarkers) {
+            if (line.includes(marker)) pendingStdinMarkers.delete(marker);
+          }
+        }
+        if (pendingStdinMarkers.size === 0) endStdin();
 
         // A malformed/non-JSONL child must not turn this tiny transport guard into unbounded memory.
         // The captured stdout is separately bounded; this buffer only needs enough tail to find the
-        // marker across chunk boundaries.
+        // markers across chunk boundaries.
         if (stdoutLineBuffer.length > 65_536) {
-          stdoutLineBuffer = stdoutLineBuffer.slice(-Math.max(4096, stdinMarker.length * 2));
+          const longestMarker = Math.max(0, ...stdinMarkers.map((marker) => marker.length));
+          stdoutLineBuffer = stdoutLineBuffer.slice(-Math.max(4096, longestMarker * 2));
         }
       });
       child.stderr?.on('data', (chunk: Buffer) => stderr.append(chunk));
 
       // stdin is never inherited. Ordinarily it closes immediately after the payload is written.
-      // Request/response servers may opt into holding it open until a specific JSONL response line
-      // arrives; the process timeout remains the hard bound if that response never comes.
+      // Request/response servers may opt into holding it open until specific JSONL response lines
+      // arrive; the process timeout remains the hard bound if those responses never come.
       child.stdin?.on('error', () => {});
       if (request.stdin !== undefined) child.stdin?.write(request.stdin);
-      if (stdinMarker === undefined) endStdin();
+      if (pendingStdinMarkers.size === 0) endStdin();
 
       if (timeoutMs > 0) {
         timer = setTimeout(() => {

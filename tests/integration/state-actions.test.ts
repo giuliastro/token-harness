@@ -1589,10 +1589,14 @@ describe('codex-config-batch-write', () => {
           .split(/\r?\n/)
           .filter((line) => line.trim() !== '')
           .map((line) => JSON.parse(line) as Record<string, unknown>);
-        const batch = messages.find((message) => message['id'] === 2);
-        const read = messages.find((message) => message['id'] === 3);
+        const batch = messages.find((message) => message['method'] === 'config/batchWrite');
+        const read = messages.find((message) => message['method'] === 'config/read');
         assert.ok(batch);
         assert.ok(read);
+        const batchId = batch['id'];
+        const readId = read['id'];
+        assert.ok(typeof batchId === 'string' || typeof batchId === 'number');
+        assert.ok(typeof readId === 'string' || typeof readId === 'number');
         const params = batch['params'];
         assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
         assert.equal((params as Record<string, unknown>)['filePath'], path);
@@ -1610,16 +1614,16 @@ describe('codex-config-batch-write', () => {
           stdout:
             mode === 'conflict'
               ? JSON.stringify({
-                  id: 2,
+                  id: batchId,
                   error: {
                     code: -32600,
                     message: 'configVersionConflict: Configuration was modified since last read',
                   },
                 })
               : [
-                  JSON.stringify({ id: 2, result: { version: 'v2' } }),
+                  JSON.stringify({ id: batchId, result: { version: 'v2' } }),
                   JSON.stringify({
-                    id: 3,
+                    id: readId,
                     result: {
                       config: {
                         model_reasoning_effort: mode === 'mismatch' ? 'high' : 'low',
@@ -1747,6 +1751,14 @@ describe('codex-config-batch-write', () => {
         const stdin = request.stdin ?? '';
         if (stdin.includes('model/list')) {
           assert.equal(calls, 1);
+          const modelRequest = stdin
+            .split(/\r?\n/)
+            .filter((line) => line.trim() !== '')
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+            .find((message) => message['method'] === 'model/list');
+          assert.ok(modelRequest);
+          const modelRequestId = modelRequest['id'];
+          assert.ok(typeof modelRequestId === 'string' || typeof modelRequestId === 'number');
           return {
             displayCommand: 'codex app-server --stdio',
             interpreter: 'direct',
@@ -1754,7 +1766,7 @@ describe('codex-config-batch-write', () => {
             exitCode: 0,
             signal: null,
             stdout: JSON.stringify({
-              id: 2,
+              id: modelRequestId,
               result: {
                 data: [
                   {
@@ -1781,8 +1793,14 @@ describe('codex-config-batch-write', () => {
           .split(/\r?\n/)
           .filter((line) => line.trim() !== '')
           .map((line) => JSON.parse(line) as Record<string, unknown>);
-        const batch = requests.find((message) => message['id'] === 2);
+        const batch = requests.find((message) => message['method'] === 'config/batchWrite');
+        const read = requests.find((message) => message['method'] === 'config/read');
         assert.ok(batch);
+        assert.ok(read);
+        const batchId = batch['id'];
+        const readId = read['id'];
+        assert.ok(typeof batchId === 'string' || typeof batchId === 'number');
+        assert.ok(typeof readId === 'string' || typeof readId === 'number');
         const params = batch['params'];
         assert.ok(typeof params === 'object' && params !== null && !Array.isArray(params));
         const edits = (params as Record<string, unknown>)['edits'];
@@ -1798,8 +1816,8 @@ describe('codex-config-batch-write', () => {
           exitCode: 0,
           signal: null,
           stdout: [
-            JSON.stringify({ id: 2, result: { version: 'v2' } }),
-            JSON.stringify({ id: 3, result: { config: { model: 'canonical-model' } } }),
+            JSON.stringify({ id: batchId, result: { version: 'v2' } }),
+            JSON.stringify({ id: readId, result: { config: { model: 'canonical-model' } } }),
           ].join('\n'),
           stderr: '',
           stdoutTruncated: false,
