@@ -1050,6 +1050,9 @@ async function applyDelegatedProviderInstall(
  * against bytes the user did not review.
  */
 const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set(['model_reasoning_effort', 'model_verbosity']);
+const CODEX_APPLY_MODEL_REQUEST_ID = 'token-harness-apply-model-list';
+const CODEX_CONFIG_WRITE_REQUEST_ID = 'token-harness-config-batch-write';
+const CODEX_CONFIG_VERIFY_REQUEST_ID = 'token-harness-config-verify';
 
 async function applyCodexConfigBatchWrite(
   action: CodexConfigBatchWriteAction,
@@ -1135,7 +1138,7 @@ async function applyCodexConfigBatchWrite(
       JSON.stringify({ method: 'initialized', params: {} }),
       JSON.stringify({
         method: 'model/list',
-        id: 2,
+        id: CODEX_APPLY_MODEL_REQUEST_ID,
         params: { limit: 1000, includeHidden: false },
       }),
       '',
@@ -1146,6 +1149,7 @@ async function applyCodexConfigBatchWrite(
       args: ['app-server', '--stdio'],
       cwd: context.cwd ?? context.fs.dirname(action.path),
       stdin: modelStdin,
+      stdinCloseAfterStdoutLineIncludes: CODEX_APPLY_MODEL_REQUEST_ID,
       timeoutMs: 15_000,
       maxOutputBytes: 4 * 1024 * 1024,
     });
@@ -1180,7 +1184,9 @@ async function applyCodexConfigBatchWrite(
         // App-server tracing belongs on stderr; unrelated stdout is ignored.
       }
     }
-    const modelResponse = modelMessages.find((message) => message['id'] === 2);
+    const modelResponse = modelMessages.find(
+      (message) => message['id'] === CODEX_APPLY_MODEL_REQUEST_ID || message['id'] === 2,
+    );
     const modelPayload =
       modelResponse !== undefined &&
       typeof modelResponse['result'] === 'object' &&
@@ -1257,7 +1263,7 @@ async function applyCodexConfigBatchWrite(
     JSON.stringify({ method: 'initialized', params: {} }),
     JSON.stringify({
       method: 'config/batchWrite',
-      id: 2,
+      id: CODEX_CONFIG_WRITE_REQUEST_ID,
       params: {
         edits: effectiveEdits,
         filePath: action.path,
@@ -1267,7 +1273,7 @@ async function applyCodexConfigBatchWrite(
     }),
     JSON.stringify({
       method: 'config/read',
-      id: 3,
+      id: CODEX_CONFIG_VERIFY_REQUEST_ID,
       params: {
         cwd: context.cwd ?? context.fs.dirname(action.path),
         includeLayers: true,
@@ -1281,6 +1287,12 @@ async function applyCodexConfigBatchWrite(
     args: ['app-server', '--stdio'],
     cwd: context.cwd ?? context.fs.dirname(action.path),
     stdin,
+    // Recent Codex app-server builds may stop processing queued RPCs as soon as stdin reaches EOF.
+    // Keep the transport alive until both the mutation receipt and its read-back verification arrive.
+    stdinCloseAfterStdoutLineIncludesAll: [
+      CODEX_CONFIG_WRITE_REQUEST_ID,
+      CODEX_CONFIG_VERIFY_REQUEST_ID,
+    ],
     timeoutMs: 15_000,
     maxOutputBytes: 1024 * 1024,
   });
@@ -1315,7 +1327,8 @@ async function applyCodexConfigBatchWrite(
       typeof message === 'object' &&
       message !== null &&
       !Array.isArray(message) &&
-      (message as Record<string, unknown>)['id'] === 2,
+      ((message as Record<string, unknown>)['id'] === CODEX_CONFIG_WRITE_REQUEST_ID ||
+        (message as Record<string, unknown>)['id'] === 2),
   );
 
   const error =
@@ -1370,7 +1383,8 @@ async function applyCodexConfigBatchWrite(
       typeof message === 'object' &&
       message !== null &&
       !Array.isArray(message) &&
-      (message as Record<string, unknown>)['id'] === 3,
+      ((message as Record<string, unknown>)['id'] === CODEX_CONFIG_VERIFY_REQUEST_ID ||
+        (message as Record<string, unknown>)['id'] === 3),
   );
   const verificationResult =
     verification !== undefined &&
