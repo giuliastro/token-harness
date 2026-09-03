@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import {
-  harnessId,
-  providerId,
-  type VerificationResult,
-  type VerifyReport,
-} from '@token-harness/core';
+import { harnessId, providerId, type VerificationResult, type VerifyReport } from '@token-harness/core';
 
 import { renderVerifyReport } from '../src/render/verify.js';
 
