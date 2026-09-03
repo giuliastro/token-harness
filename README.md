@@ -117,6 +117,57 @@ token-harness metrics --since 7d
 `doctor` ends with a `NEXT` section. If you are unsure what to do, run the command shown
 there.
 
+### Codex: quota-aware optimization example
+
+For a concrete Codex workflow, keep observation and mutation separate:
+
+```sh
+# Read-only: inspect live subscription windows.
+token-harness budget --harness codex
+
+# Read-only: inspect the effective model, reasoning effort, project instructions,
+# MCP servers, and visible tool inventory.
+token-harness context --harness codex
+
+# Read-only: combine quota pacing and context pressure into task-specific advice.
+token-harness optimize --harness codex --task standard --profile balanced
+
+# Dry run: preview supported Codex-native policy changes.
+token-harness plan --harness codex --native-policy
+```
+
+A typical optimization can recommend lowering reasoning effort for routine work when quota is
+under-pace, while keeping the current model until empirical model-tier evidence exists. A plan may
+also include reviewed provider actions such as a HarnessTrim skill install.
+
+Apply the exact stored plan only after reviewing it:
+
+```sh
+token-harness apply --plan <plan-id> --yes
+token-harness context --harness codex
+token-harness verify --harness codex
+```
+
+On supported recent Codex builds, Token Harness uses Codex's native app-server for authoritative
+rate-limit windows, effective configuration, model catalog, MCP inventory, and reviewed native
+configuration writes. It does not infer quota from local token counts.
+
+Useful variants:
+
+```sh
+# More conservative reasoning for routine work.
+token-harness optimize --harness codex --task mechanical --profile economy
+
+# Preserve more quality headroom for difficult work.
+token-harness optimize --harness codex --task hard --profile quality
+
+# Inspect MCP exposure directly.
+token-harness mcp --harness codex
+
+# Compare recent local history when available.
+token-harness history --harness codex --since 7d
+```
+
 To try the read-only diagnosis without installing Token Harness globally:
 
 ```sh
@@ -520,12 +571,20 @@ Neither command removes user-owned RTK or HarnessTrim configuration.
 
 | Command | Purpose | Changes agent/project configuration? |
 | --- | --- | --- |
-| `doctor` | Detect agents, providers, ownership, and problems | No |
-| `plan` | Resolve ownership and preview exact actions | No; stores the plan in private state |
-| `apply` | Apply a plan transactionally | Yes, only with `--yes` |
+| `doctor` | Detect agents, providers, ownership, versions, and problems | No |
+| `budget` | Read live quota/headroom windows where the harness exposes them | No |
+| `context` | Inspect effective model/config, instructions, MCP exposure, and tool inventory | No |
+| `mcp` | Inspect MCP servers and tool-schema exposure | No |
+| `history` | Summarize attributable local usage history | No |
+| `optimize` | Combine quota pacing, context pressure, and task/profile policy into advice | No |
+| `plan` | Resolve ownership and preview exact actions; use `--native-policy` for supported harness-native changes | No; stores the plan in private state |
+| `apply` | Apply a reviewed plan transactionally | Yes, only with `--yes` |
 | `status` | Detect drift and competing hooks | No |
 | `verify` | Check the declared verification tier | No |
 | `metrics` | Import provider records and report savings | No; updates only Token Harness state |
+| `benchmark` | Inspect benchmark evidence and comparable captures | No |
+| `benchmark-start` | Start an empirical task capture | No agent/project config change; records Token Harness benchmark state |
+| `benchmark-finish` | Finish an empirical task capture and record the outcome | No agent/project config change; records Token Harness benchmark state |
 | `update` | Query channels and update installed providers | Yes, only with `--yes` |
 | `rollback` | Restore files from the latest committed transaction | Yes, only with `--yes` |
 | `uninstall` | Remove owned integration entries | Yes, only with `--yes` |
@@ -533,9 +592,14 @@ Neither command removes user-owned RTK or HarnessTrim configuration.
 Every command supports `--help`. Common filters are:
 
 ```text
---harness claude|codex|opencode
---provider rtk|harnesstrim
+--harness <id>
+--provider <id>
 --project <directory>
+--task mechanical|standard|hard|critical
+--profile economy|balanced|quality|custom
+--reserve <percent>
+--native-policy
+--plan <plan-id>
 --json
 ```
 
