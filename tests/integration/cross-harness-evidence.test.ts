@@ -29,10 +29,7 @@ function window(input: {
     usedPercent: input.usedPercent,
     remainingPercent: 100 - input.usedPercent,
     windowDurationMinutes: input.scope === 'five-hour' ? 300 : 10_080,
-    resetsAt:
-      input.scope === 'five-hour'
-        ? '2026-09-04T15:00:00.000Z'
-        : '2026-09-08T10:00:00.000Z',
+    resetsAt: input.scope === 'five-hour' ? '2026-09-04T15:00:00.000Z' : '2026-09-08T10:00:00.000Z',
     observedAt: OBSERVED_AT,
     source: 'native-rpc',
     confidence: input.confidence ?? 'authoritative',
