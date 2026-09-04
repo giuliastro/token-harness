@@ -71,13 +71,7 @@ describe('handoff CLI', () => {
   it('emits the standard JSON envelope with handoff metadata', async () => {
     const output = capture();
     const exitCode = await handoffMain(
-      [
-        '--objective',
-        'Move the task',
-        '--next-action',
-        'Continue implementation',
-        '--json',
-      ],
+      ['--objective', 'Move the task', '--next-action', 'Continue implementation', '--json'],
       output.streams,
     );
 
