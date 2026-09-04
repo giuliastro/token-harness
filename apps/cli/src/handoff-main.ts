@@ -26,6 +26,7 @@ Flags
   --unresolved <text>     Repeatable unresolved item to preserve
   --max-bytes <n>         Hard UTF-8 byte ceiling; default 2048, minimum 256
   --json                  Emit one RFC 0006 JSON envelope
+  --version               Print the Token Harness version and exit 0
   --help                  Print this help and exit 0
 
 The command is read-only. It never reads a transcript, calls a model, infers quota,
@@ -47,6 +48,7 @@ interface ParsedHandoffArgs {
   maxBytes: number;
   json: boolean;
   help: boolean;
+  version: boolean;
 }
 
 function parseValue(
@@ -78,6 +80,7 @@ function parseArgs(argv: readonly string[]): {
     maxBytes: DEFAULT_MAX_BYTES,
     json: false,
     help: false,
+    version: false,
   };
   const diagnostics: Diagnostic[] = [];
 
@@ -88,6 +91,10 @@ function parseArgs(argv: readonly string[]): {
 
     if (name === '--help') {
       args.help = true;
+      continue;
+    }
+    if (name === '--version') {
+      args.version = true;
       continue;
     }
     if (name === '--json') {
@@ -181,7 +188,7 @@ function parseArgs(argv: readonly string[]): {
     }
   }
 
-  if (!args.help) {
+  if (!args.help && !args.version) {
     if (args.objective === null) {
       diagnostics.push(
         diagnostic({
@@ -219,6 +226,40 @@ function successResult(data: CompactHandoffResult) {
   });
 }
 
+function emitHelp(json: boolean, output: HandoffStreams): void {
+  if (json) {
+    output.out(
+      serializeEnvelope(
+        toEnvelope(
+          commandResult({ command: 'help', exitCode: EXIT_CODES.ok, data: { usage: HELP } }),
+          TOOL_VERSION,
+        ),
+      ),
+    );
+  } else {
+    output.out(`${HELP}\n`);
+  }
+}
+
+function emitVersion(json: boolean, output: HandoffStreams): void {
+  if (json) {
+    output.out(
+      serializeEnvelope(
+        toEnvelope(
+          commandResult({
+            command: 'version',
+            exitCode: EXIT_CODES.ok,
+            data: { version: TOOL_VERSION },
+          }),
+          TOOL_VERSION,
+        ),
+      ),
+    );
+  } else {
+    output.out(`${TOOL_VERSION}\n`);
+  }
+}
+
 export async function handoffMain(
   argv: readonly string[],
   streams?: HandoffStreams,
@@ -231,8 +272,15 @@ export async function handoffMain(
     } satisfies HandoffStreams);
 
   const parsed = parseArgs(argv);
+
+  // RFC 0006 global-flag precedence: help/version win over every other
+  // command-line error. Help wins when both are present, matching parseArgv.
   if (parsed.args.help) {
-    output.out(`${HELP}\n`);
+    emitHelp(parsed.args.json, output);
+    return EXIT_CODES.ok;
+  }
+  if (parsed.args.version) {
+    emitVersion(parsed.args.json, output);
     return EXIT_CODES.ok;
   }
 

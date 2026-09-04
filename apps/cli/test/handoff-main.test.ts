@@ -135,4 +135,50 @@ describe('handoff CLI', () => {
     assert.match(output.stdout(), /token-harness handoff/);
     assert.match(output.stdout(), /--max-bytes/);
   });
+
+  it('lets help win over otherwise invalid handoff arguments', async () => {
+    const output = capture();
+    const exitCode = await handoffMain(['--unknown', '--help'], output.streams);
+
+    assert.equal(exitCode, 0);
+    assert.equal(output.stderr(), '');
+    assert.match(output.stdout(), /token-harness handoff/);
+  });
+
+  it('emits help as the standard JSON envelope', async () => {
+    const output = capture();
+    const exitCode = await handoffMain(['--help', '--json'], output.streams);
+
+    assert.equal(exitCode, 0);
+    assert.equal(output.stderr(), '');
+    const envelope = JSON.parse(output.stdout()) as {
+      command: string;
+      status: string;
+      data: { usage: string };
+    };
+    assert.equal(envelope.command, 'help');
+    assert.equal(envelope.status, 'ok');
+    assert.match(envelope.data.usage, /token-harness handoff/);
+  });
+
+  it('lets version win over invalid handoff arguments and supports JSON', async () => {
+    const human = capture();
+    const humanExit = await handoffMain(['--unknown', '--version'], human.streams);
+    assert.equal(humanExit, 0);
+    assert.equal(human.stderr(), '');
+    assert.match(human.stdout(), /^0\.1\.5\n$/);
+
+    const json = capture();
+    const jsonExit = await handoffMain(['--version', '--json'], json.streams);
+    assert.equal(jsonExit, 0);
+    assert.equal(json.stderr(), '');
+    const envelope = JSON.parse(json.stdout()) as {
+      command: string;
+      status: string;
+      data: { version: string };
+    };
+    assert.equal(envelope.command, 'version');
+    assert.equal(envelope.status, 'ok');
+    assert.equal(envelope.data.version, '0.1.5');
+  });
 });
