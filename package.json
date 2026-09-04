@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write packages/core/src/domain/cross-harness-quality.ts && git diff -- packages/core/src/domain/cross-harness-quality.ts && exit 1"
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
