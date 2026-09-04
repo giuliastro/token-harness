@@ -7,20 +7,23 @@ const argv = process.argv.slice(2);
 if (argv[0] === 'handoff') {
   const { handoffMain } = await import('../dist/src/handoff-main.js');
   process.exitCode = await handoffMain(argv.slice(1));
+} else if (argv[0] === 'schedule') {
+  const { scheduleMain } = await import('../dist/src/schedule-main.js');
+  process.exitCode = await scheduleMain(argv.slice(1));
 } else {
   const { main } = await import('../dist/src/main.js');
   await main(argv);
 
-  // `handoff` deliberately stays outside the historical parser/dispatcher so
-  // adding it cannot widen CommandTable or mutate existing command semantics.
-  // Surface that isolated command in human root help without corrupting RFC 0006
-  // JSON help or command-specific help output.
+  // These Phase 18.7 read-only surfaces deliberately stay outside the historical
+  // parser/dispatcher so they cannot widen CommandTable or mutate existing command semantics.
   const positional = argv.find((token) => !token.startsWith('-'));
   const rootHumanHelp =
     argv.includes('--help') && !argv.includes('--json') && positional === undefined;
   if (rootHumanHelp) {
     process.stdout.write(
-      '\nAdditional read-only command\n  handoff     Build a bounded compact handoff for another harness\n',
+      '\nAdditional read-only commands\n' +
+        '  handoff     Build a bounded compact handoff for another harness\n' +
+        '  schedule    Evaluate a Claude Code ↔ Codex switch from explicit evidence\n',
     );
   }
 }

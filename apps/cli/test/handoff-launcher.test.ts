@@ -12,7 +12,7 @@ function run(args: readonly string[]) {
   });
 }
 
-describe('handoff launcher routing', () => {
+describe('Phase 18.7 launcher routing', () => {
   it('routes token-harness handoff through the dedicated command', () => {
     const child = run([
       'handoff',
@@ -28,6 +28,22 @@ describe('handoff launcher routing', () => {
     assert.match(child.stdout, /Transfer only explicit state/);
   });
 
+  it('routes token-harness schedule without guessing missing evidence', () => {
+    const child = run([
+      'schedule',
+      '--current',
+      'claude',
+      '--candidate',
+      'codex',
+      '--task-class',
+      'hard',
+    ]);
+
+    assert.equal(child.status, 0, child.stderr);
+    assert.equal(child.stderr, '');
+    assert.match(child.stdout, /recommendation: insufficient-evidence/);
+  });
+
   it('keeps the existing launcher path unchanged for other commands', () => {
     const child = run(['--version']);
 
@@ -36,25 +52,31 @@ describe('handoff launcher routing', () => {
     assert.match(child.stdout, /^0\.1\.5\n$/);
   });
 
-  it('surfaces handoff from human root help only', () => {
+  it('surfaces both read-only Phase 18.7 commands from human root help only', () => {
     const root = run(['--help']);
     assert.equal(root.status, 0, root.stderr);
     assert.equal(root.stderr, '');
-    assert.match(root.stdout, /Additional read-only command/);
+    assert.match(root.stdout, /Additional read-only commands/);
     assert.match(root.stdout, /handoff\s+Build a bounded compact handoff/);
+    assert.match(root.stdout, /schedule\s+Evaluate a Claude Code/);
 
     const commandHelp = run(['doctor', '--help']);
     assert.equal(commandHelp.status, 0, commandHelp.stderr);
-    assert.doesNotMatch(commandHelp.stdout, /Additional read-only command/);
+    assert.doesNotMatch(commandHelp.stdout, /Additional read-only commands/);
   });
 
-  it('keeps handoff help/version on the dedicated path with RFC 0006 precedence', () => {
-    const help = run(['handoff', '--bad-flag', '--help']);
-    assert.equal(help.status, 0, help.stderr);
-    assert.equal(help.stderr, '');
-    assert.match(help.stdout, /token-harness handoff/);
+  it('keeps read-only command help/version on dedicated paths with RFC 0006 precedence', () => {
+    const handoffHelp = run(['handoff', '--bad-flag', '--help']);
+    assert.equal(handoffHelp.status, 0, handoffHelp.stderr);
+    assert.equal(handoffHelp.stderr, '');
+    assert.match(handoffHelp.stdout, /token-harness handoff/);
 
-    const version = run(['handoff', '--bad-flag', '--version']);
+    const scheduleHelp = run(['schedule', '--bad-flag', '--help']);
+    assert.equal(scheduleHelp.status, 0, scheduleHelp.stderr);
+    assert.equal(scheduleHelp.stderr, '');
+    assert.match(scheduleHelp.stdout, /token-harness schedule/);
+
+    const version = run(['schedule', '--bad-flag', '--version']);
     assert.equal(version.status, 0, version.stderr);
     assert.equal(version.stderr, '');
     assert.match(version.stdout, /^0\.1\.5\n$/);
