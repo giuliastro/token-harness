@@ -218,12 +218,20 @@ export async function recordProjectTransferEvidence(input: {
   recordedAt: string;
 }): Promise<TransferRecordResult> {
   const observation = await readProjectTransferExperiment(input);
-  if (observation.status !== 'observed' || observation.experiment === null) {
+  if (observation.status !== 'observed') {
     return {
       status: observation.status,
       receipt: null,
       receiptPath: null,
       reason: observation.reason,
+    };
+  }
+  if (observation.experiment === null) {
+    return {
+      status: 'invalid',
+      receipt: null,
+      receiptPath: null,
+      reason: 'observed transfer experiment is missing its measured payload',
     };
   }
 
