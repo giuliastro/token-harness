@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import {
-  harnessId,
-  type TaskBenchmarkReceipt,
-  type TaskQualityGate,
-} from '@token-harness/core';
+import { harnessId, type TaskBenchmarkReceipt, type TaskQualityGate } from '@token-harness/core';
 
 import { transferMain } from '../src/transfer-main.js';
 import type { TransferObservation } from '../src/transfer-runtime.js';
@@ -72,12 +68,7 @@ function observed(): TransferObservation {
   };
 }
 
-const args = [
-  '--benchmark-id',
-  'transfer-hard-a',
-  '--handoff-file',
-  'handoff.md',
-] as const;
+const args = ['--benchmark-id', 'transfer-hard-a', '--handoff-file', 'handoff.md'] as const;
 
 describe('transfer CLI', () => {
   it('evaluates an observed project transfer experiment', async () => {
