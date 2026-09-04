@@ -16,11 +16,24 @@ import {
   type HarnessBudgetObservation,
 } from '@token-harness/core';
 
-import type { CommandContext } from './context.js';
+import type { AdapterAccess, CommandContext } from './context.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const BUDGET_HARNESSES = new Set([CLAUDE, CODEX]);
+
+/**
+ * The live-budget observer only needs detection/runtime ports, not the full CLI command context.
+ * Keeping this contract narrow lets other read-only surfaces reuse the same observer without
+ * manufacturing metrics, state, benchmark, or mutation dependencies they never consume.
+ */
+export interface BudgetCommandContext {
+  platform: CommandContext['platform'];
+  projectRoot: string;
+  harness: CommandContext['harness'];
+  adapters: Pick<AdapterAccess, 'fs' | 'runner' | 'paths'> | null;
+  now(): string;
+}
 
 function unavailable(id: typeof CLAUDE, message: string): HarnessBudgetObservation {
   return {
@@ -43,7 +56,9 @@ function unavailable(id: typeof CLAUDE, message: string): HarnessBudgetObservati
   };
 }
 
-export async function runBudget(context: CommandContext): Promise<CommandResult<BudgetReport>> {
+export async function runBudget(
+  context: BudgetCommandContext,
+): Promise<CommandResult<BudgetReport>> {
   const observedAt = context.now();
   const report: BudgetReport = {
     platform: context.platform,
