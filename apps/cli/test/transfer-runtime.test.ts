@@ -149,7 +149,9 @@ test('records one parseable immutable transfer receipt beside the benchmark pair
   assert.equal(result.receipt?.basis, 'failed-attempts');
   assert.deepEqual(f.writes, [`${DIR}/transfer.json`]);
 
-  const stored = JSON.parse(new TextDecoder().decode(f.files.get(`${DIR}/transfer.json`))) as unknown;
+  const stored = JSON.parse(
+    new TextDecoder().decode(f.files.get(`${DIR}/transfer.json`)),
+  ) as unknown;
   const parsed = parseCrossHarnessTransferReceipt(stored);
   assert.equal(parsed.ok, true);
   if (parsed.ok) {
