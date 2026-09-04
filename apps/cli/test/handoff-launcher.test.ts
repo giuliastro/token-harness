@@ -52,12 +52,13 @@ describe('Phase 18.7 launcher routing', () => {
     assert.match(child.stdout, /^0\.1\.5\n$/);
   });
 
-  it('surfaces both read-only Phase 18.7 commands from human root help only', () => {
+  it('surfaces all read-only Phase 18.7 commands from human root help only', () => {
     const root = run(['--help']);
     assert.equal(root.status, 0, root.stderr);
     assert.equal(root.stderr, '');
     assert.match(root.stdout, /Additional read-only commands/);
     assert.match(root.stdout, /handoff\s+Build a bounded compact handoff/);
+    assert.match(root.stdout, /transfer\s+Evaluate a measured cross-harness handoff experiment/);
     assert.match(root.stdout, /schedule\s+Evaluate a Claude Code/);
 
     const commandHelp = run(['doctor', '--help']);
@@ -71,12 +72,17 @@ describe('Phase 18.7 launcher routing', () => {
     assert.equal(handoffHelp.stderr, '');
     assert.match(handoffHelp.stdout, /token-harness handoff/);
 
+    const transferHelp = run(['transfer', '--bad-flag', '--help']);
+    assert.equal(transferHelp.status, 0, transferHelp.stderr);
+    assert.equal(transferHelp.stderr, '');
+    assert.match(transferHelp.stdout, /token-harness transfer/);
+
     const scheduleHelp = run(['schedule', '--bad-flag', '--help']);
     assert.equal(scheduleHelp.status, 0, scheduleHelp.stderr);
     assert.equal(scheduleHelp.stderr, '');
     assert.match(scheduleHelp.stdout, /token-harness schedule/);
 
-    const version = run(['schedule', '--bad-flag', '--version']);
+    const version = run(['transfer', '--bad-flag', '--version']);
     assert.equal(version.status, 0, version.stderr);
     assert.equal(version.stderr, '');
     assert.match(version.stdout, /^0\.1\.5\n$/);
