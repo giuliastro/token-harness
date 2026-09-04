@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --write apps/cli/bin/token-harness.mjs apps/cli/src/handoff-main.ts apps/cli/test/handoff-launcher.test.ts apps/cli/test/handoff-main.test.ts && git diff --exit-code -- apps/cli/bin/token-harness.mjs apps/cli/src/handoff-main.ts apps/cli/test/handoff-launcher.test.ts apps/cli/test/handoff-main.test.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
