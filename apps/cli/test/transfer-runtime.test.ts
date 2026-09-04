@@ -117,7 +117,10 @@ test('admits a complete cross-harness pair from the current project and measures
   assert.equal(result.status, 'observed');
   assert.equal(result.experiment?.stay.harnessId, CLAUDE);
   assert.equal(result.experiment?.switched.harnessId, CODEX);
-  assert.equal(result.experiment?.handoffBytes, new TextEncoder().encode('# Compact handoff\nnext action\n').byteLength);
+  assert.equal(
+    result.experiment?.handoffBytes,
+    new TextEncoder().encode('# Compact handoff\nnext action\n').byteLength,
+  );
 });
 
 test('rejects a pair attributed to another project', async () => {
