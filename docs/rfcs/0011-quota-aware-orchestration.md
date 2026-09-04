@@ -376,3 +376,28 @@ measure actual burn → adapt the next task.**
 
 That loop is specific to how coding subscriptions are consumed and is therefore more useful than
 maximizing a synthetic token-saving percentage.
+
+## Amendment — 2026-09-04 cross-harness transfer evidence
+
+The Phase 18.7 scheduler keeps Claude Code and Codex as independent quota domains. A cross-harness
+transfer experiment therefore MUST NOT decide benefit by subtracting or ranking the two harnesses'
+backend quota percentages, and MUST NOT use local token counts as a proxy conversion between them.
+
+The first deterministic transfer comparator uses an explicitly paired task experiment:
+
+- `baseline` is the comparable control that stays on the current harness;
+- `optimized` is the comparable run that switches to a different candidate harness using the compact
+  handoff;
+- both receipts identify the same benchmark id and task class;
+- the compact handoff must fit the experiment's configured byte budget.
+
+After identity and handoff-budget checks, only evidence with a common meaning across harnesses may
+produce a transfer verdict: explicit quality gate, failed-attempt count, normalized runtime/provider
+error count, and total attempt count, in that order. An improvement can produce `proven-positive`; a
+regression or an over-budget handoff produces `non-positive`; unknown quality, invalid pairing, or a
+tie across all comparable observations produces `unknown`.
+
+This comparator does not by itself claim cross-provider quota savings. Live independently assessed
+pacing remains the scheduler's budget evidence; the transfer experiment answers only whether a
+bounded handoff has demonstrated a useful-work advantage rather than manufacturing a common quota
+unit that the providers do not expose.
