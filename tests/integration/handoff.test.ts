@@ -11,7 +11,8 @@ const base = {
   changedFiles: ['packages/core/src/domain/optimizer.ts', 'apps/cli/src/commands/optimize.ts'],
   validation: ['unit tests pass', 'typecheck passes'],
   unresolved: ['empirical model-tier ranking still needs real benchmark receipts'],
-  nextAction: 'Implement the next reversible optimizer slice and run the existing integration suite.',
+  nextAction:
+    'Implement the next reversible optimizer slice and run the existing integration suite.',
 };
 
 test('buildCompactHandoff renders all supplied state when it fits', () => {
