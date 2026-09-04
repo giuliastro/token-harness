@@ -83,11 +83,7 @@ function deriveScopePace(input: {
     };
   }
 
-  const assessment = assessWindowPace(
-    windows[0]!,
-    input.report.observedAt,
-    input.reservePercent,
-  );
+  const assessment = assessWindowPace(windows[0]!, input.report.observedAt, input.reservePercent);
   return {
     state: assessment.state,
     note: note(
