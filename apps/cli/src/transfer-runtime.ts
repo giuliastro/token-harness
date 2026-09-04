@@ -1,8 +1,12 @@
 import {
+  assessCrossHarnessTransferBenefit,
+  buildCrossHarnessTransferReceipt,
   deriveProjectId,
+  digestBytes,
   isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
+  type CrossHarnessTransferReceipt,
   type FileSystemPort,
   type TaskBenchmarkCapture,
   type TaskBenchmarkReceipt,
@@ -14,6 +18,7 @@ import {
 } from '@token-harness/platform';
 
 type TransferFileSystem = Pick<FileSystemPort, 'join' | 'stat' | 'readFile'>;
+type TransferWritableFileSystem = Pick<FileSystemPort, 'join' | 'stat' | 'readFile' | 'writeFile'>;
 
 export type TransferObservationStatus =
   | 'observed'
@@ -24,9 +29,11 @@ export type TransferObservationStatus =
   | 'unavailable';
 
 export interface ObservedTransferExperiment {
+  projectId: string;
   stay: TaskBenchmarkReceipt;
   switched: TaskBenchmarkReceipt;
   handoffBytes: number;
+  handoffDigest: string;
 }
 
 export interface TransferObservation {
@@ -41,6 +48,19 @@ export interface ProjectTransferReaderInput {
   projectId: string;
   benchmarkId: string;
   handoffFile: string;
+}
+
+export type TransferRecordStatus =
+  | 'recorded'
+  | 'exists'
+  | Exclude<TransferObservationStatus, 'observed'>
+  | 'write-failed';
+
+export interface TransferRecordResult {
+  status: TransferRecordStatus;
+  receipt: CrossHarnessTransferReceipt | null;
+  receiptPath: string | null;
+  reason: string | null;
 }
 
 async function readJson(fs: TransferFileSystem, path: string): Promise<unknown | null> {
@@ -157,9 +177,9 @@ export async function readProjectTransferExperiment(
     return { status: 'handoff-missing', experiment: null, reason: 'handoff file was not found' };
   }
 
-  let handoffBytes: number;
+  let handoff: Uint8Array;
   try {
-    handoffBytes = (await input.fs.readFile(input.handoffFile)).byteLength;
+    handoff = await input.fs.readFile(input.handoffFile);
   } catch {
     return {
       status: 'handoff-missing',
@@ -171,11 +191,117 @@ export async function readProjectTransferExperiment(
   return {
     status: 'observed',
     experiment: {
+      projectId: input.projectId,
       stay: baselineReceipt.receipt,
       switched: optimizedReceipt.receipt,
-      handoffBytes,
+      handoffBytes: handoff.byteLength,
+      handoffDigest: digestBytes(handoff),
     },
     reason: null,
+  };
+}
+
+/**
+ * Persist one transfer assessment beside its paired benchmark state.
+ *
+ * The receipt is immutable: an existing `transfer.json` is never overwritten. The exact handoff
+ * content is represented by SHA-256 plus byte length; no raw project path or conversation content is
+ * copied into Token Harness state.
+ */
+export async function recordProjectTransferEvidence(input: {
+  fs: TransferWritableFileSystem;
+  stateRoot: string;
+  projectId: string;
+  benchmarkId: string;
+  handoffFile: string;
+  maxHandoffBytes: number;
+  recordedAt: string;
+}): Promise<TransferRecordResult> {
+  const observation = await readProjectTransferExperiment(input);
+  if (observation.status !== 'observed' || observation.experiment === null) {
+    return {
+      status: observation.status,
+      receipt: null,
+      receiptPath: null,
+      reason: observation.reason,
+    };
+  }
+
+  const receiptPath = input.fs.join(
+    input.stateRoot,
+    'benchmarks',
+    input.benchmarkId,
+    'transfer.json',
+  );
+  if ((await input.fs.stat(receiptPath)) !== null) {
+    return {
+      status: 'exists',
+      receipt: null,
+      receiptPath,
+      reason: 'transfer evidence receipt already exists and is immutable',
+    };
+  }
+
+  const experiment = observation.experiment;
+  const assessment = assessCrossHarnessTransferBenefit({
+    stay: experiment.stay,
+    switched: experiment.switched,
+    handoffBytes: experiment.handoffBytes,
+    maxHandoffBytes: input.maxHandoffBytes,
+  });
+  const receipt = buildCrossHarnessTransferReceipt({
+    projectId: experiment.projectId,
+    handoffDigest: experiment.handoffDigest,
+    recordedAt: input.recordedAt,
+    assessment,
+    taskClass: experiment.stay.taskClass,
+  });
+
+  try {
+    await input.fs.writeFile(
+      receiptPath,
+      new TextEncoder().encode(`${JSON.stringify(receipt, null, 2)}\n`),
+    );
+  } catch {
+    return {
+      status: 'write-failed',
+      receipt: null,
+      receiptPath,
+      reason: 'transfer evidence receipt could not be written',
+    };
+  }
+
+  return { status: 'recorded', receipt, receiptPath, reason: null };
+}
+
+async function resolveLocalTransferContext(cwd: string): Promise<
+  | {
+      ok: true;
+      fs: NodeFileSystem;
+      stateRoot: string;
+      projectId: string;
+    }
+  | { ok: false; reason: string }
+> {
+  const resolution = resolveHostEnvironment();
+  if (!resolution.ok) return { ok: false, reason: 'local host state is unavailable' };
+
+  const fs = new NodeFileSystem(resolution.environment.facts);
+  const attribution = await resolveAttributionSalt(fs, resolution.environment.paths.state);
+  if (attribution.salt === null) {
+    return { ok: false, reason: 'project attribution could not be established' };
+  }
+
+  const projectId = deriveProjectId(
+    cwd,
+    attribution.salt,
+    resolution.environment.facts.os === 'windows',
+  );
+  return {
+    ok: true,
+    fs,
+    stateRoot: resolution.environment.paths.state,
+    projectId,
   };
 }
 
@@ -184,31 +310,36 @@ export async function observeProjectTransferExperiment(input: {
   benchmarkId: string;
   handoffFile: string;
 }): Promise<TransferObservation> {
-  const resolution = resolveHostEnvironment();
-  if (!resolution.ok) {
-    return { status: 'unavailable', experiment: null, reason: 'local host state is unavailable' };
-  }
+  const local = await resolveLocalTransferContext(input.cwd);
+  if (!local.ok) return { status: 'unavailable', experiment: null, reason: local.reason };
 
-  const fs = new NodeFileSystem(resolution.environment.facts);
-  const attribution = await resolveAttributionSalt(fs, resolution.environment.paths.state);
-  if (attribution.salt === null) {
-    return {
-      status: 'unavailable',
-      experiment: null,
-      reason: 'project attribution could not be established',
-    };
-  }
-
-  const projectId = deriveProjectId(
-    input.cwd,
-    attribution.salt,
-    resolution.environment.facts.os === 'windows',
-  );
   return readProjectTransferExperiment({
-    fs,
-    stateRoot: resolution.environment.paths.state,
-    projectId,
+    fs: local.fs,
+    stateRoot: local.stateRoot,
+    projectId: local.projectId,
     benchmarkId: input.benchmarkId,
     handoffFile: input.handoffFile,
+  });
+}
+
+export async function recordObservedProjectTransferEvidence(input: {
+  cwd: string;
+  benchmarkId: string;
+  handoffFile: string;
+  maxHandoffBytes: number;
+  recordedAt: string;
+}): Promise<TransferRecordResult> {
+  const local = await resolveLocalTransferContext(input.cwd);
+  if (!local.ok) {
+    return { status: 'unavailable', receipt: null, receiptPath: null, reason: local.reason };
+  }
+  return recordProjectTransferEvidence({
+    fs: local.fs,
+    stateRoot: local.stateRoot,
+    projectId: local.projectId,
+    benchmarkId: input.benchmarkId,
+    handoffFile: input.handoffFile,
+    maxHandoffBytes: input.maxHandoffBytes,
+    recordedAt: input.recordedAt,
   });
 }
