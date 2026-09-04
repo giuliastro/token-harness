@@ -131,7 +131,7 @@ describe('transfer CLI', () => {
       }),
     });
 
-    assert.equal(exitCode, 6);
+    assert.equal(exitCode, 5);
     assert.equal(output.stdout(), '');
     assert.match(output.stderr(), /transfer-other-project/);
   });
