@@ -27,9 +27,8 @@ test('buildCompactHandoff renders all supplied state when it fits', () => {
 });
 
 test('buildCompactHandoff enforces the configured UTF-8 byte ceiling', () => {
-  const noisy = Array.from(
-    { length: 24 },
-    (_, index) => `decision ${index}: preserve only explicit state and never copy the full transcript`,
+  const noisy = Array.from({ length: 24 }, (_, index) =>
+    `decision ${index}: preserve only explicit state and never copy the full transcript`,
   );
   const result = buildCompactHandoff({
     ...base,
