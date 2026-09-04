@@ -31,7 +31,7 @@ if (argv[0] === 'handoff') {
     process.stdout.write(
       '\nAdditional read-only commands\n' +
         '  handoff     Build a bounded compact handoff for another harness\n' +
-        '  schedule    Evaluate Claude Code ↔ Codex with live quota + local quality evidence\n',
+        '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality evidence\n',
     );
   }
 }
