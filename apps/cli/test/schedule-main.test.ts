@@ -200,13 +200,17 @@ describe('schedule CLI', () => {
   it('does not override explicitly supplied unknown quality', async () => {
     const output = capture();
     let observations = 0;
-    const exitCode = await scheduleMain([...base, '--candidate-quality', 'unknown'], output.streams, {
-      observeBudget: async () => liveBudget(),
-      observeQualityReceipts: async () => {
-        observations += 1;
-        return [qualityReceipt('hard-a', 'passed')];
+    const exitCode = await scheduleMain(
+      [...base, '--candidate-quality', 'unknown'],
+      output.streams,
+      {
+        observeBudget: async () => liveBudget(),
+        observeQualityReceipts: async () => {
+          observations += 1;
+          return [qualityReceipt('hard-a', 'passed')];
+        },
       },
-    });
+    );
 
     assert.equal(exitCode, 0);
     assert.equal(observations, 0);
