@@ -118,7 +118,7 @@ describe('schedule CLI', () => {
   it('rejects malformed evidence as usage errors', async () => {
     const output = capture();
     const exitCode = await scheduleMain(
-      [...base, '--candidate-quality-samples', '-1'],
+      [...base, '--candidate-quality-samples', '1.5'],
       output.streams,
     );
 
