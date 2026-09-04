@@ -20,14 +20,7 @@ function capture() {
   };
 }
 
-const base = [
-  '--current',
-  'claude',
-  '--candidate',
-  'codex',
-  '--task-class',
-  'hard',
-] as const;
+const base = ['--current', 'claude', '--candidate', 'codex', '--task-class', 'hard'] as const;
 
 describe('schedule CLI', () => {
   it('returns insufficient evidence instead of inventing a switch', async () => {
