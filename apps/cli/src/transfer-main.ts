@@ -159,7 +159,8 @@ function emitError(
     severity: 'error',
     code,
     message,
-    remediation: 'Run `token-harness transfer --help` and verify the benchmark pair and handoff file',
+    remediation:
+      'Run `token-harness transfer --help` and verify the benchmark pair and handoff file',
   });
   const result = commandResult({ command: 'transfer', exitCode, data: null, diagnostics: [entry] });
   if (json) streams.out(serializeEnvelope(toEnvelope(result, TOOL_VERSION)));
