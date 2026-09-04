@@ -37,7 +37,12 @@ async function readJson(context: CommandContext, path: string): Promise<unknown 
   }
 }
 
-function pairIsConsistent(input: {
+/**
+ * Validate a complete pair without requiring the two variants to use the same harness.
+ * Same-harness is a matrix policy applied after project attribution; cross-harness pairs are valid
+ * transfer experiments and must not be mislabeled as corrupt benchmark state.
+ */
+function pairShapeIsConsistent(input: {
   baseline: TaskBenchmarkReceipt;
   optimized: TaskBenchmarkReceipt;
   baselineCapture: TaskBenchmarkCapture;
@@ -55,9 +60,8 @@ function pairIsConsistent(input: {
     baseline.taskClass === optimized.taskClass &&
     baseline.taskClass === baselineCapture.taskClass &&
     baseline.taskClass === optimizedCapture.taskClass &&
-    baseline.harnessId === optimized.harnessId &&
     baseline.harnessId === baselineCapture.harnessId &&
-    baseline.harnessId === optimizedCapture.harnessId &&
+    optimized.harnessId === optimizedCapture.harnessId &&
     baselineCapture.projectId === optimizedCapture.projectId
   );
 }
@@ -124,6 +128,7 @@ export async function runBenchmarkMatrix(
     otherProject: 0,
     filteredOut: 0,
   };
+  let crossHarnessSkipped = 0;
   const pairs: TaskBenchmarkMatrixPair[] = [];
 
   for (const name of (await context.adapters.fs.readDirectory(root)).sort()) {
@@ -169,7 +174,7 @@ export async function runBenchmarkMatrix(
       !optimizedReceipt.ok ||
       !baselineCapture.ok ||
       !optimizedCapture.ok ||
-      !pairIsConsistent({
+      !pairShapeIsConsistent({
         baseline: baselineReceipt.receipt,
         optimized: optimizedReceipt.receipt,
         baselineCapture: baselineCapture.capture,
@@ -182,6 +187,14 @@ export async function runBenchmarkMatrix(
 
     if (baselineCapture.capture.projectId !== projectId) {
       selection.otherProject += 1;
+      continue;
+    }
+
+    if (baselineReceipt.receipt.harnessId !== optimizedReceipt.receipt.harnessId) {
+      // A valid transfer experiment is intentionally outside the same-harness benchmark matrix.
+      // Keep it out without calling it invalid; `token-harness transfer` evaluates that evidence.
+      selection.filteredOut += 1;
+      crossHarnessSkipped += 1;
       continue;
     }
 
@@ -204,5 +217,16 @@ export async function runBenchmarkMatrix(
     command: 'benchmark-matrix',
     exitCode: EXIT_CODES.ok,
     data: buildTaskBenchmarkMatrix(pairs, selection),
+    diagnostics:
+      crossHarnessSkipped === 0
+        ? []
+        : [
+            diagnostic({
+              severity: 'info',
+              code: 'benchmark-matrix-transfer-pairs-skipped',
+              message: `${String(crossHarnessSkipped)} cross-harness transfer pair(s) were excluded from the same-harness matrix`,
+              remediation: 'Evaluate those pairs with `token-harness transfer`',
+            }),
+          ],
   });
 }
