@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   harnessId,
   type FileStat,
+  type HarnessId,
   type PlatformFacts,
   type ProcessOutcome,
   type ProcessRequest,
@@ -21,6 +22,7 @@ const PLATFORM: PlatformFacts = {
   nodeVersion: '22.14.0',
   isWsl: false,
 };
+const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const ROOT = '/home/dev/.local/state/token-harness/benchmarks';
 
@@ -28,13 +30,14 @@ function receipt(
   benchmarkId: string,
   variant: 'baseline' | 'optimized',
   taskClass: 'mechanical' | 'standard' | 'hard' = 'mechanical',
+  harness: HarnessId = CODEX,
 ): TaskBenchmarkReceipt {
   return {
     schemaVersion: 1,
     benchmarkId,
     variant,
     taskClass,
-    harnessId: CODEX,
+    harnessId: harness,
     model: 'gpt-test',
     reasoningEffort: 'medium',
     verbosity: 'low',
@@ -63,13 +66,14 @@ function capture(
   variant: 'baseline' | 'optimized',
   projectId: string,
   taskClass: 'mechanical' | 'standard' | 'hard' = 'mechanical',
+  harness: HarnessId = CODEX,
 ): TaskBenchmarkCapture {
   return {
     schemaVersion: 1,
     benchmarkId,
     variant,
     taskClass,
-    harnessId: CODEX,
+    harnessId: harness,
     projectId,
     model: 'gpt-test',
     reasoningEffort: 'medium',
@@ -89,22 +93,27 @@ function fixture() {
     benchmarkId: string,
     projectId: string,
     taskClass: 'mechanical' | 'standard' | 'hard' = 'mechanical',
+    baselineHarness: HarnessId = CODEX,
+    optimizedHarness: HarnessId = baselineHarness,
   ): void {
     const dir = `${ROOT}/${benchmarkId}`;
     directories.add(dir);
     children.set(ROOT, [...(children.get(ROOT) ?? []), benchmarkId]);
-    files.set(`${dir}/baseline.json`, JSON.stringify(receipt(benchmarkId, 'baseline', taskClass)));
+    files.set(
+      `${dir}/baseline.json`,
+      JSON.stringify(receipt(benchmarkId, 'baseline', taskClass, baselineHarness)),
+    );
     files.set(
       `${dir}/optimized.json`,
-      JSON.stringify(receipt(benchmarkId, 'optimized', taskClass)),
+      JSON.stringify(receipt(benchmarkId, 'optimized', taskClass, optimizedHarness)),
     );
     files.set(
       `${dir}/baseline.capture.json`,
-      JSON.stringify(capture(benchmarkId, 'baseline', projectId, taskClass)),
+      JSON.stringify(capture(benchmarkId, 'baseline', projectId, taskClass, baselineHarness)),
     );
     files.set(
       `${dir}/optimized.capture.json`,
-      JSON.stringify(capture(benchmarkId, 'optimized', projectId, taskClass)),
+      JSON.stringify(capture(benchmarkId, 'optimized', projectId, taskClass, optimizedHarness)),
     );
   }
 
@@ -226,6 +235,29 @@ describe('benchmark-matrix command', () => {
       otherProject: 1,
       filteredOut: 0,
     });
+  });
+
+  it('skips valid cross-harness transfer pairs without marking them invalid', async () => {
+    const world = fixture();
+    world.addPair('mechanical-real-1', 'p_test');
+    world.addPair('transfer-hard-1', 'p_test', 'hard', CLAUDE, CODEX);
+
+    const result = await runBenchmarkMatrix(world.context());
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data);
+    assert.deepEqual(
+      result.data.entries.map((entry) => entry.benchmarkId),
+      ['mechanical-real-1'],
+    );
+    assert.deepEqual(result.data.selection, {
+      scanned: 2,
+      completePairs: 1,
+      incomplete: 0,
+      invalid: 0,
+      otherProject: 0,
+      filteredOut: 1,
+    });
+    assert.equal(result.diagnostics[0]?.code, 'benchmark-matrix-transfer-pairs-skipped');
   });
 
   it('honours the existing --task filter without changing stored evidence', async () => {
