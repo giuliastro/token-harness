@@ -21,8 +21,10 @@ export interface HarnessSchedulingEvidence {
   fiveHourPace: PaceState;
   /** Independently assessed against this harness's own weekly allowance. */
   weeklyPace: PaceState;
-  /** Quality-gated evidence for this exact task class. */
+  /** Quality-gated evidence, if any. */
   quality: QualityEvidenceState;
+  /** Task class that the quality evidence actually measured. Null means no attributable evidence. */
+  qualityTaskClass: TaskClass | null;
   /** Number of empirical quality-passed/failed observations behind `quality`. */
   qualitySamples: number;
 }
@@ -91,6 +93,29 @@ function validateTransfer(transfer: CrossHarnessTransferEvidence): CrossHarnessD
   return null;
 }
 
+function validateQuality(
+  evidence: HarnessSchedulingEvidence,
+  taskClass: TaskClass,
+): CrossHarnessDecisionReason | null {
+  if (!Number.isInteger(evidence.qualitySamples) || evidence.qualitySamples < 0) {
+    return reason('invalid-quality-evidence', 'quality sample count is invalid');
+  }
+  if (evidence.quality === 'unknown') return null;
+  if (evidence.qualitySamples < 1 || evidence.qualityTaskClass === null) {
+    return reason(
+      'candidate-quality-unattributed',
+      'candidate quality evidence is not attributable to a measured task class',
+    );
+  }
+  if (evidence.qualityTaskClass !== taskClass) {
+    return reason(
+      'candidate-quality-task-mismatch',
+      `candidate quality evidence covers ${evidence.qualityTaskClass}, not ${taskClass}`,
+    );
+  }
+  return null;
+}
+
 /**
  * Recommend switching only when every required dimension is positively evidenced:
  *
@@ -100,9 +125,12 @@ function validateTransfer(transfer: CrossHarnessTransferEvidence): CrossHarnessD
  * - the compact handoff fits its configured budget;
  * - comparable evidence says the transfer benefit exceeds the transfer cost.
  *
- * Unknown evidence does not become a negative recommendation; it becomes `insufficient-evidence`.
+ * Unknown or malformed evidence does not become a negative recommendation; it becomes
+ * `insufficient-evidence`.
  */
-export function scheduleCrossHarness(input: CrossHarnessSchedulerInput): CrossHarnessSchedulerDecision {
+export function scheduleCrossHarness(
+  input: CrossHarnessSchedulerInput,
+): CrossHarnessSchedulerDecision {
   const base = {
     currentHarness: input.current.harnessId,
     candidateHarness: input.candidate.harnessId,
@@ -119,7 +147,12 @@ export function scheduleCrossHarness(input: CrossHarnessSchedulerInput): CrossHa
 
   const transferProblem = validateTransfer(input.transfer);
   if (transferProblem !== null) {
-    return { ...base, decision: 'stay', reasons: [transferProblem] };
+    return {
+      ...base,
+      decision:
+        transferProblem.code === 'handoff-over-budget' ? 'stay' : 'insufficient-evidence',
+      reasons: [transferProblem],
+    };
   }
 
   if (!input.candidate.available) {
@@ -130,11 +163,25 @@ export function scheduleCrossHarness(input: CrossHarnessSchedulerInput): CrossHa
     };
   }
 
+  const qualityProblem = validateQuality(input.candidate, input.taskClass);
+  if (qualityProblem !== null) {
+    return {
+      ...base,
+      decision: 'insufficient-evidence',
+      reasons: [qualityProblem],
+    };
+  }
+
   if (input.candidate.quality === 'failed') {
     return {
       ...base,
       decision: 'stay',
-      reasons: [reason('candidate-quality-failed', 'quality-gated evidence rejects the candidate for this task class')],
+      reasons: [
+        reason(
+          'candidate-quality-failed',
+          'quality-gated evidence rejects the candidate for this task class',
+        ),
+      ],
     };
   }
 
@@ -174,7 +221,12 @@ export function scheduleCrossHarness(input: CrossHarnessSchedulerInput): CrossHa
     return {
       ...base,
       decision: 'stay',
-      reasons: [reason('candidate-over-pace', 'the candidate is already over pace in an observed allowance window')],
+      reasons: [
+        reason(
+          'candidate-over-pace',
+          'the candidate is already over pace in an observed allowance window',
+        ),
+      ],
     };
   }
 
@@ -221,10 +273,22 @@ export function scheduleCrossHarness(input: CrossHarnessSchedulerInput): CrossHa
     ...base,
     decision: 'switch',
     reasons: [
-      reason('current-over-pace', 'the current harness is over pace in at least one observed allowance window'),
-      reason('candidate-headroom', 'the candidate is on pace or under pace in its observed allowance windows'),
-      reason('candidate-quality-passed', 'quality-gated empirical evidence passes for this task class'),
-      reason('transfer-benefit-positive', 'comparable evidence says expected switch benefit exceeds handoff cost'),
+      reason(
+        'current-over-pace',
+        'the current harness is over pace in at least one observed allowance window',
+      ),
+      reason(
+        'candidate-headroom',
+        'the candidate is on pace or under pace in its observed allowance windows',
+      ),
+      reason(
+        'candidate-quality-passed',
+        'quality-gated empirical evidence passes for this task class',
+      ),
+      reason(
+        'transfer-benefit-positive',
+        'comparable evidence says expected switch benefit exceeds handoff cost',
+      ),
     ],
   };
 }
