@@ -7,6 +7,7 @@ import {
   serializeEnvelope,
   toEnvelope,
   type CrossHarnessTransferAssessment,
+  type ExitCode,
 } from '@token-harness/core';
 
 import type { TransferObservation } from './transfer-runtime.js';
@@ -150,10 +151,10 @@ function render(report: TransferEvaluationReport): string {
 function emitError(
   code: string,
   message: string,
-  exitCode: number,
+  exitCode: ExitCode,
   json: boolean,
   streams: Streams,
-): number {
+): ExitCode {
   const entry = diagnostic({
     severity: 'error',
     code,
@@ -170,7 +171,7 @@ export async function transferMain(
   argv: readonly string[],
   streams?: Streams,
   runtime?: TransferRuntime,
-): Promise<number> {
+): Promise<ExitCode> {
   const output =
     streams ??
     ({
