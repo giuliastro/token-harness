@@ -228,7 +228,11 @@ export async function transferRecordMain(
     };
   }
 
-  if (recorded.status !== 'recorded' || recorded.receipt === null || recorded.receiptPath === null) {
+  if (
+    recorded.status !== 'recorded' ||
+    recorded.receipt === null ||
+    recorded.receiptPath === null
+  ) {
     return emitError(
       `transfer-record-${recorded.status}`,
       recorded.reason ?? 'transfer evidence could not be recorded safely',
@@ -242,7 +246,11 @@ export async function transferRecordMain(
     receipt: recorded.receipt,
     receiptPath: recorded.receiptPath,
   };
-  const result = commandResult({ command: 'transfer-record', exitCode: EXIT_CODES.ok, data: report });
+  const result = commandResult({
+    command: 'transfer-record',
+    exitCode: EXIT_CODES.ok,
+    data: report,
+  });
   if (parsed.args.json) output.out(serializeEnvelope(toEnvelope(result, TOOL_VERSION)));
   else output.out(render(report));
   return EXIT_CODES.ok;
