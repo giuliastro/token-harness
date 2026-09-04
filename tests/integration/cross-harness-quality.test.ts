@@ -5,6 +5,7 @@ import {
   harnessId,
   hydrateCandidateQualityFromBenchmarkReceipts,
   type CrossHarnessSchedulerInput,
+  type HarnessId,
   type TaskBenchmarkReceipt,
   type TaskQualityGate,
 } from '@token-harness/core';
@@ -43,7 +44,7 @@ function schedulerInput(): CrossHarnessSchedulerInput {
 
 function receipt(input: {
   benchmarkId: string;
-  harness?: typeof CODEX;
+  harness?: HarnessId;
   taskClass?: 'mechanical' | 'standard' | 'hard' | 'critical';
   variant?: 'baseline' | 'optimized';
   quality: TaskQualityGate;
@@ -108,7 +109,7 @@ test('conflicting passed and failed observations remain unknown', () => {
 
 test('ignores other harnesses, task classes, and unknown quality gates', () => {
   const hydrated = hydrateCandidateQualityFromBenchmarkReceipts(schedulerInput(), [
-    receipt({ benchmarkId: 'claude-hard', harness: CLAUDE as typeof CODEX, quality: 'passed' }),
+    receipt({ benchmarkId: 'claude-hard', harness: CLAUDE, quality: 'passed' }),
     receipt({ benchmarkId: 'codex-standard', taskClass: 'standard', quality: 'passed' }),
     receipt({ benchmarkId: 'codex-hard-unknown', quality: 'unknown' }),
   ]);
