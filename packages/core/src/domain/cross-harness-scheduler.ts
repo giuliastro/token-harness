@@ -151,8 +151,7 @@ export function scheduleCrossHarness(
   if (transferProblem !== null) {
     return {
       ...base,
-      decision:
-        transferProblem.code === 'handoff-over-budget' ? 'stay' : 'insufficient-evidence',
+      decision: transferProblem.code === 'handoff-over-budget' ? 'stay' : 'insufficient-evidence',
       reasons: [transferProblem],
     };
   }
