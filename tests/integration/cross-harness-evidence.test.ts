@@ -44,6 +44,12 @@ function report(input?: {
   duplicateCandidateWeekly?: boolean;
 }): BudgetReport {
   const candidateWeekly = window({ harnessId: CODEX, scope: 'weekly', usedPercent: 20 });
+  const currentFiveHour = window({
+    harnessId: CLAUDE,
+    scope: 'five-hour',
+    usedPercent: 70,
+    ...(input?.currentConfidence === undefined ? {} : { confidence: input.currentConfidence }),
+  });
   return {
     platform: {
       os: 'linux',
@@ -57,15 +63,7 @@ function report(input?: {
       {
         harnessId: CLAUDE,
         state: 'observed',
-        windows: [
-          window({
-            harnessId: CLAUDE,
-            scope: 'five-hour',
-            usedPercent: 70,
-            confidence: input?.currentConfidence,
-          }),
-          window({ harnessId: CLAUDE, scope: 'weekly', usedPercent: 60 }),
-        ],
+        windows: [currentFiveHour, window({ harnessId: CLAUDE, scope: 'weekly', usedPercent: 60 })],
         planType: null,
         rateLimitReachedType: null,
         resetCreditsAvailable: null,
