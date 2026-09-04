@@ -13,6 +13,7 @@ export * from './domain/context-cost.js';
 export * from './domain/cross-harness-evidence.js';
 export * from './domain/cross-harness-quality.js';
 export * from './domain/cross-harness-scheduler.js';
+export * from './domain/cross-harness-transfer.js';
 export * from './domain/handoff.js';
 export * from './domain/history.js';
 export * from './domain/optimizer.js';
