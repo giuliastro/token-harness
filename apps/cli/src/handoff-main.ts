@@ -219,7 +219,10 @@ function successResult(data: CompactHandoffResult) {
   });
 }
 
-export async function handoffMain(argv: readonly string[], streams?: HandoffStreams): Promise<number> {
+export async function handoffMain(
+  argv: readonly string[],
+  streams?: HandoffStreams,
+): Promise<number> {
   const output: HandoffStreams =
     streams ??
     ({
