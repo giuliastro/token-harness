@@ -16,7 +16,8 @@ if (argv[0] === 'handoff') {
   // Surface that isolated command in human root help without corrupting RFC 0006
   // JSON help or command-specific help output.
   const positional = argv.find((token) => !token.startsWith('-'));
-  const rootHumanHelp = argv.includes('--help') && !argv.includes('--json') && positional === undefined;
+  const rootHumanHelp =
+    argv.includes('--help') && !argv.includes('--json') && positional === undefined;
   if (rootHumanHelp) {
     process.stdout.write(
       '\nAdditional read-only command\n  handoff     Build a bounded compact handoff for another harness\n',
