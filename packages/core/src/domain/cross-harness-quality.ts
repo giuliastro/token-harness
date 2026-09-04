@@ -52,7 +52,8 @@ function uniqueMatchingReceipts(
   }
   return [...unique.values()].sort(
     (left, right) =>
-      left.benchmarkId.localeCompare(right.benchmarkId) || left.variant.localeCompare(right.variant),
+      left.benchmarkId.localeCompare(right.benchmarkId) ||
+      left.variant.localeCompare(right.variant),
   );
 }
 
