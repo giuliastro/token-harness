@@ -3,14 +3,18 @@ import {
   commandResult,
   diagnostic,
   harnessId,
+  hydrateCrossHarnessPaceFromBudget,
   isTaskClass,
   scheduleCrossHarness,
   serializeEnvelope,
   toEnvelope,
+  type BudgetReport,
   type CrossHarnessSchedulerDecision,
+  type CrossHarnessSchedulerInput,
   type Diagnostic,
   type PaceState,
   type QualityEvidenceState,
+  type SchedulerPaceEvidenceNote,
   type TransferBenefitState,
 } from '@token-harness/core';
 
@@ -46,13 +50,38 @@ Evidence flags
   --version                                                    print version and exit 0
   --help                                                       print help and exit 0
 
-This is a read-only evidence evaluator. It never compares raw Claude and Codex quota percentages,
-never invents a token-to-quota conversion, never launches a harness, and never switches automatically.
-Missing evidence produces insufficient-evidence rather than a guessed recommendation.`;
+In the installed CLI, unknown five-hour/weekly pace fields are hydrated from the same live budget
+observer used by token-harness budget, using the standard 20% reserve. Explicit pace flags always win.
+Quality and transfer benefit are never inferred from quota percentages or same-harness benchmark data.
+This command never launches a harness and never switches automatically. Missing evidence produces
+insufficient-evidence rather than a guessed recommendation.`;
 
 interface Streams {
   out(text: string): void;
   err(text: string): void;
+}
+
+export interface ScheduleRuntime {
+  observeBudget?: () => Promise<BudgetReport | null>;
+}
+
+type BudgetEvidenceStatus =
+  | 'not-configured'
+  | 'not-needed'
+  | 'observed'
+  | 'no-usable-pace'
+  | 'unavailable'
+  | 'failed';
+
+interface ScheduleReport extends CrossHarnessSchedulerDecision {
+  evidence: {
+    current: { fiveHourPace: PaceState; weeklyPace: PaceState };
+    candidate: { fiveHourPace: PaceState; weeklyPace: PaceState };
+  };
+  budgetEvidence: {
+    status: BudgetEvidenceStatus;
+    notes: SchedulerPaceEvidenceNote[];
+  };
 }
 
 interface Args {
@@ -321,15 +350,66 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
   return { args, diagnostics };
 }
 
-function render(decision: CrossHarnessSchedulerDecision): string {
+function needsBudgetHydration(input: CrossHarnessSchedulerInput): boolean {
+  return [
+    input.current.fiveHourPace,
+    input.current.weeklyPace,
+    input.candidate.fiveHourPace,
+    input.candidate.weeklyPace,
+  ].some((pace) => pace === 'unknown');
+}
+
+async function applyBudgetEvidence(
+  input: CrossHarnessSchedulerInput,
+  runtime: ScheduleRuntime | undefined,
+): Promise<{
+  input: CrossHarnessSchedulerInput;
+  status: BudgetEvidenceStatus;
+  notes: SchedulerPaceEvidenceNote[];
+}> {
+  if (!needsBudgetHydration(input)) return { input, status: 'not-needed', notes: [] };
+  if (runtime?.observeBudget === undefined) {
+    return { input, status: 'not-configured', notes: [] };
+  }
+
+  try {
+    const report = await runtime.observeBudget();
+    if (report === null) return { input, status: 'unavailable', notes: [] };
+    const hydrated = hydrateCrossHarnessPaceFromBudget(input, report);
+    return {
+      input: hydrated.input,
+      status: hydrated.notes.some((entry) => entry.code === 'budget-pace-observed')
+        ? 'observed'
+        : 'no-usable-pace',
+      notes: hydrated.notes,
+    };
+  } catch {
+    return { input, status: 'failed', notes: [] };
+  }
+}
+
+function render(report: ScheduleReport): string {
   const lines = [
-    `Cross-harness recommendation: ${decision.decision}`,
-    `Current: ${decision.currentHarness}`,
-    `Candidate: ${decision.candidateHarness}`,
-    `Task class: ${decision.taskClass}`,
-    'Reasons:',
-    ...decision.reasons.map((entry) => `- ${entry.code}: ${entry.summary}`),
+    `Cross-harness recommendation: ${report.decision}`,
+    `Current: ${report.currentHarness}`,
+    `Candidate: ${report.candidateHarness}`,
+    `Task class: ${report.taskClass}`,
+    `Budget evidence: ${report.budgetEvidence.status}`,
+    'Pace evidence:',
+    `- current five-hour: ${report.evidence.current.fiveHourPace}`,
+    `- current weekly: ${report.evidence.current.weeklyPace}`,
+    `- candidate five-hour: ${report.evidence.candidate.fiveHourPace}`,
+    `- candidate weekly: ${report.evidence.candidate.weeklyPace}`,
   ];
+  if (report.budgetEvidence.notes.length > 0) {
+    lines.push(
+      'Budget notes:',
+      ...report.budgetEvidence.notes.map(
+        (entry) => `- ${entry.harnessId}/${entry.scope}: ${entry.code}: ${entry.summary}`,
+      ),
+    );
+  }
+  lines.push('Reasons:', ...report.reasons.map((entry) => `- ${entry.code}: ${entry.summary}`));
   return `${lines.join('\n')}\n`;
 }
 
@@ -346,7 +426,11 @@ function emitSpecial(kind: 'help' | 'version', json: boolean, streams: Streams):
   }
 }
 
-export async function scheduleMain(argv: readonly string[], streams?: Streams): Promise<number> {
+export async function scheduleMain(
+  argv: readonly string[],
+  streams?: Streams,
+  runtime?: ScheduleRuntime,
+): Promise<number> {
   const output =
     streams ??
     ({
@@ -377,7 +461,7 @@ export async function scheduleMain(argv: readonly string[], streams?: Streams): 
   const taskClass = parsed.args.taskClass!;
   if (!isTaskClass(taskClass)) return EXIT_CODES['usage-error'];
   const qualityTask = parsed.args.candidateQualityTask;
-  const decision = scheduleCrossHarness({
+  const initialInput: CrossHarnessSchedulerInput = {
     taskClass,
     current: {
       harnessId: harnessId(parsed.args.current!),
@@ -402,10 +486,27 @@ export async function scheduleMain(argv: readonly string[], streams?: Streams): 
       maxHandoffBytes: parsed.args.maxHandoffBytes,
       benefit: parsed.args.transferBenefit,
     },
-  });
+  };
 
-  const result = commandResult({ command: 'schedule', exitCode: EXIT_CODES.ok, data: decision });
+  const budget = await applyBudgetEvidence(initialInput, runtime);
+  const decision = scheduleCrossHarness(budget.input);
+  const report: ScheduleReport = {
+    ...decision,
+    evidence: {
+      current: {
+        fiveHourPace: budget.input.current.fiveHourPace,
+        weeklyPace: budget.input.current.weeklyPace,
+      },
+      candidate: {
+        fiveHourPace: budget.input.candidate.fiveHourPace,
+        weeklyPace: budget.input.candidate.weeklyPace,
+      },
+    },
+    budgetEvidence: { status: budget.status, notes: budget.notes },
+  };
+
+  const result = commandResult({ command: 'schedule', exitCode: EXIT_CODES.ok, data: report });
   if (parsed.args.json) output.out(serializeEnvelope(toEnvelope(result, TOOL_VERSION)));
-  else output.out(render(decision));
+  else output.out(render(report));
   return EXIT_CODES.ok;
 }
