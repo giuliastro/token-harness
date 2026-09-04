@@ -3,6 +3,7 @@ import {
   commandResult,
   diagnostic,
   harnessId,
+  hydrateCandidateQualityFromBenchmarkReceipts,
   hydrateCrossHarnessPaceFromBudget,
   isTaskClass,
   scheduleCrossHarness,
@@ -15,6 +16,8 @@ import {
   type PaceState,
   type QualityEvidenceState,
   type SchedulerPaceEvidenceNote,
+  type SchedulerQualityEvidenceNote,
+  type TaskBenchmarkReceipt,
   type TransferBenefitState,
 } from '@token-harness/core';
 
@@ -51,8 +54,10 @@ Evidence flags
   --help                                                       print help and exit 0
 
 In the installed CLI, unknown five-hour/weekly pace fields are hydrated from the same live budget
-observer used by token-harness budget, using the standard 20% reserve. Explicit pace flags always win.
-Quality and transfer benefit are never inferred from quota percentages or same-harness benchmark data.
+observer used by token-harness budget. When candidate quality is not supplied, quality-gated local
+benchmark receipts for the current project and exact task class are used conservatively: unanimous
+known observations may pass/fail, conflicting observations remain unknown. Explicit evidence flags
+always win. Transfer benefit is never inferred from tokens or raw provider quota percentages.
 This command never launches a harness and never switches automatically. Missing evidence produces
 insufficient-evidence rather than a guessed recommendation.`;
 
@@ -63,6 +68,7 @@ interface Streams {
 
 export interface ScheduleRuntime {
   observeBudget?: () => Promise<BudgetReport | null>;
+  observeQualityReceipts?: () => Promise<readonly TaskBenchmarkReceipt[] | null>;
 }
 
 type BudgetEvidenceStatus =
@@ -73,14 +79,33 @@ type BudgetEvidenceStatus =
   | 'unavailable'
   | 'failed';
 
+type QualityEvidenceStatus =
+  | 'not-configured'
+  | 'not-needed'
+  | 'observed'
+  | 'conflicting'
+  | 'no-evidence'
+  | 'unavailable'
+  | 'failed';
+
 interface ScheduleReport extends CrossHarnessSchedulerDecision {
   evidence: {
     current: { fiveHourPace: PaceState; weeklyPace: PaceState };
-    candidate: { fiveHourPace: PaceState; weeklyPace: PaceState };
+    candidate: {
+      fiveHourPace: PaceState;
+      weeklyPace: PaceState;
+      quality: QualityEvidenceState;
+      qualityTaskClass: string | null;
+      qualitySamples: number;
+    };
   };
   budgetEvidence: {
     status: BudgetEvidenceStatus;
     notes: SchedulerPaceEvidenceNote[];
+  };
+  qualityEvidence: {
+    status: QualityEvidenceStatus;
+    notes: SchedulerQualityEvidenceNote[];
   };
 }
 
@@ -95,6 +120,7 @@ interface Args {
   candidateQuality: QualityEvidenceState;
   candidateQualityTask: string | null;
   candidateQualitySamples: number;
+  qualityExplicit: boolean;
   candidateAvailable: boolean;
   handoffBytes: number;
   maxHandoffBytes: number;
@@ -152,6 +178,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
     candidateQuality: 'unknown',
     candidateQualityTask: null,
     candidateQualitySamples: 0,
+    qualityExplicit: false,
     candidateAvailable: true,
     handoffBytes: 0,
     maxHandoffBytes: DEFAULT_MAX_HANDOFF_BYTES,
@@ -268,6 +295,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
         break;
       }
       case '--candidate-quality':
+        args.qualityExplicit = true;
         if (!QUALITY_STATES.has(value as QualityEvidenceState)) {
           diagnostics.push(
             diagnostic({
@@ -280,9 +308,11 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
         } else args.candidateQuality = value as QualityEvidenceState;
         break;
       case '--candidate-quality-task':
+        args.qualityExplicit = true;
         args.candidateQualityTask = value;
         break;
       case '--candidate-quality-samples': {
+        args.qualityExplicit = true;
         const n = parseInteger(name, value, 0, diagnostics);
         if (n !== null) args.candidateQualitySamples = n;
         break;
@@ -388,6 +418,39 @@ async function applyBudgetEvidence(
   }
 }
 
+async function applyQualityEvidence(
+  input: CrossHarnessSchedulerInput,
+  runtime: ScheduleRuntime | undefined,
+  explicit: boolean,
+): Promise<{
+  input: CrossHarnessSchedulerInput;
+  status: QualityEvidenceStatus;
+  notes: SchedulerQualityEvidenceNote[];
+}> {
+  if (explicit) return { input, status: 'not-needed', notes: [] };
+  if (runtime?.observeQualityReceipts === undefined) {
+    return { input, status: 'not-configured', notes: [] };
+  }
+
+  try {
+    const receipts = await runtime.observeQualityReceipts();
+    if (receipts === null) return { input, status: 'unavailable', notes: [] };
+    const hydrated = hydrateCandidateQualityFromBenchmarkReceipts(input, receipts);
+    const code = hydrated.notes[0]?.code;
+    const status: QualityEvidenceStatus =
+      code === 'benchmark-quality-conflicting'
+        ? 'conflicting'
+        : code === 'benchmark-quality-unavailable'
+          ? 'no-evidence'
+          : code === 'benchmark-quality-passed' || code === 'benchmark-quality-failed'
+            ? 'observed'
+            : 'no-evidence';
+    return { input: hydrated.input, status, notes: hydrated.notes };
+  } catch {
+    return { input, status: 'failed', notes: [] };
+  }
+}
+
 function render(report: ScheduleReport): string {
   const lines = [
     `Cross-harness recommendation: ${report.decision}`,
@@ -395,17 +458,30 @@ function render(report: ScheduleReport): string {
     `Candidate: ${report.candidateHarness}`,
     `Task class: ${report.taskClass}`,
     `Budget evidence: ${report.budgetEvidence.status}`,
+    `Quality evidence: ${report.qualityEvidence.status}`,
     'Pace evidence:',
     `- current five-hour: ${report.evidence.current.fiveHourPace}`,
     `- current weekly: ${report.evidence.current.weeklyPace}`,
     `- candidate five-hour: ${report.evidence.candidate.fiveHourPace}`,
     `- candidate weekly: ${report.evidence.candidate.weeklyPace}`,
+    'Candidate quality:',
+    `- state: ${report.evidence.candidate.quality}`,
+    `- task class: ${report.evidence.candidate.qualityTaskClass ?? 'unknown'}`,
+    `- samples: ${String(report.evidence.candidate.qualitySamples)}`,
   ];
   if (report.budgetEvidence.notes.length > 0) {
     lines.push(
       'Budget notes:',
       ...report.budgetEvidence.notes.map(
         (entry) => `- ${entry.harnessId}/${entry.scope}: ${entry.code}: ${entry.summary}`,
+      ),
+    );
+  }
+  if (report.qualityEvidence.notes.length > 0) {
+    lines.push(
+      'Quality notes:',
+      ...report.qualityEvidence.notes.map(
+        (entry) => `- ${entry.harnessId}/${entry.taskClass}: ${entry.code}: ${entry.summary}`,
       ),
     );
   }
@@ -489,20 +565,25 @@ export async function scheduleMain(
   };
 
   const budget = await applyBudgetEvidence(initialInput, runtime);
-  const decision = scheduleCrossHarness(budget.input);
+  const quality = await applyQualityEvidence(budget.input, runtime, parsed.args.qualityExplicit);
+  const decision = scheduleCrossHarness(quality.input);
   const report: ScheduleReport = {
     ...decision,
     evidence: {
       current: {
-        fiveHourPace: budget.input.current.fiveHourPace,
-        weeklyPace: budget.input.current.weeklyPace,
+        fiveHourPace: quality.input.current.fiveHourPace,
+        weeklyPace: quality.input.current.weeklyPace,
       },
       candidate: {
-        fiveHourPace: budget.input.candidate.fiveHourPace,
-        weeklyPace: budget.input.candidate.weeklyPace,
+        fiveHourPace: quality.input.candidate.fiveHourPace,
+        weeklyPace: quality.input.candidate.weeklyPace,
+        quality: quality.input.candidate.quality,
+        qualityTaskClass: quality.input.candidate.qualityTaskClass,
+        qualitySamples: quality.input.candidate.qualitySamples,
       },
     },
     budgetEvidence: { status: budget.status, notes: budget.notes },
+    qualityEvidence: { status: quality.status, notes: quality.notes },
   };
 
   const result = commandResult({ command: 'schedule', exitCode: EXIT_CODES.ok, data: report });
