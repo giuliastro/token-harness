@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write apps/cli/src/transfer-main.ts apps/cli/src/transfer-runtime.ts apps/cli/test/transfer-main.test.ts apps/cli/test/transfer-runtime.test.ts && git diff -- apps/cli/src/transfer-main.ts apps/cli/src/transfer-runtime.ts apps/cli/test/transfer-main.test.ts apps/cli/test/transfer-runtime.test.ts && exit 1"
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
