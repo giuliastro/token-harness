@@ -236,5 +236,8 @@ test('equal common-unit outcomes stay unknown even when quota percentages and lo
 
   assert.equal(result.benefit, 'unknown');
   assert.equal(result.basis, 'none');
-  assert.match(result.reasons.join(' '), /quota percentages and local token counts are intentionally not compared/);
+  assert.match(
+    result.reasons.join(' '),
+    /quota percentages and local token counts are intentionally not compared/,
+  );
 });
