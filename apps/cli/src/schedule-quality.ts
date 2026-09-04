@@ -4,6 +4,7 @@ import {
   parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
   type FileSystemPort,
+  type TaskBenchmarkCapture,
   type TaskBenchmarkReceipt,
 } from '@token-harness/core';
 import {
@@ -36,13 +37,13 @@ async function readJson(fs: ReceiptFileSystem, path: string): Promise<unknown | 
 
 function receiptMatchesCapture(
   receipt: TaskBenchmarkReceipt,
-  capture: ReturnType<typeof parseTaskBenchmarkCapture> & { ok: true },
+  capture: TaskBenchmarkCapture,
 ): boolean {
   return (
-    receipt.benchmarkId === capture.capture.benchmarkId &&
-    receipt.variant === capture.capture.variant &&
-    receipt.taskClass === capture.capture.taskClass &&
-    receipt.harnessId === capture.capture.harnessId
+    receipt.benchmarkId === capture.benchmarkId &&
+    receipt.variant === capture.variant &&
+    receipt.taskClass === capture.taskClass &&
+    receipt.harnessId === capture.harnessId
   );
 }
 
@@ -80,7 +81,7 @@ export async function readProjectBenchmarkReceipts(
       const capture = parseTaskBenchmarkCapture(captureRaw);
       if (!receipt.ok || !capture.ok) continue;
       if (capture.capture.projectId !== input.projectId) continue;
-      if (!receiptMatchesCapture(receipt.receipt, capture)) continue;
+      if (!receiptMatchesCapture(receipt.receipt, capture.capture)) continue;
       receipts.push(receipt.receipt);
     }
   }
