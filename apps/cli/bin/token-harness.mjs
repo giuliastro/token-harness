@@ -8,8 +8,13 @@ if (argv[0] === 'handoff') {
   const { handoffMain } = await import('../dist/src/handoff-main.js');
   process.exitCode = await handoffMain(argv.slice(1));
 } else if (argv[0] === 'schedule') {
-  const { scheduleMain } = await import('../dist/src/schedule-main.js');
-  process.exitCode = await scheduleMain(argv.slice(1));
+  const [{ scheduleMain }, { observeScheduleBudget }] = await Promise.all([
+    import('../dist/src/schedule-main.js'),
+    import('../dist/src/schedule-budget.js'),
+  ]);
+  process.exitCode = await scheduleMain(argv.slice(1), undefined, {
+    observeBudget: () => observeScheduleBudget({ cwd: process.cwd() }),
+  });
 } else {
   const { main } = await import('../dist/src/main.js');
   await main(argv);
@@ -23,7 +28,7 @@ if (argv[0] === 'handoff') {
     process.stdout.write(
       '\nAdditional read-only commands\n' +
         '  handoff     Build a bounded compact handoff for another harness\n' +
-        '  schedule    Evaluate a Claude Code ↔ Codex switch from explicit evidence\n',
+        '  schedule    Evaluate a Claude Code ↔ Codex switch using live budget evidence\n',
     );
   }
 }
