@@ -7,6 +7,19 @@ const argv = process.argv.slice(2);
 if (argv[0] === 'handoff') {
   const { handoffMain } = await import('../dist/src/handoff-main.js');
   process.exitCode = await handoffMain(argv.slice(1));
+} else if (argv[0] === 'transfer') {
+  const [{ transferMain }, { observeProjectTransferExperiment }] = await Promise.all([
+    import('../dist/src/transfer-main.js'),
+    import('../dist/src/transfer-runtime.js'),
+  ]);
+  process.exitCode = await transferMain(argv.slice(1), undefined, {
+    observeExperiment: ({ benchmarkId, handoffFile }) =>
+      observeProjectTransferExperiment({
+        cwd: process.cwd(),
+        benchmarkId,
+        handoffFile,
+      }),
+  });
 } else if (argv[0] === 'schedule') {
   const [{ scheduleMain }, { observeScheduleBudget }, { observeScheduleQualityReceipts }] =
     await Promise.all([
@@ -31,6 +44,7 @@ if (argv[0] === 'handoff') {
     process.stdout.write(
       '\nAdditional read-only commands\n' +
         '  handoff     Build a bounded compact handoff for another harness\n' +
+        '  transfer    Evaluate a measured cross-harness handoff experiment\n' +
         '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality evidence\n',
     );
   }
