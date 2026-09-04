@@ -112,7 +112,11 @@ export async function readProjectTransferExperiment(
   const baselineCapture = parseTaskBenchmarkCapture(baselineCaptureRaw);
   const optimizedCapture = parseTaskBenchmarkCapture(optimizedCaptureRaw);
   if (!baselineReceipt.ok || !optimizedReceipt.ok || !baselineCapture.ok || !optimizedCapture.ok) {
-    return { status: 'invalid', experiment: null, reason: 'benchmark receipt or capture is invalid' };
+    return {
+      status: 'invalid',
+      experiment: null,
+      reason: 'benchmark receipt or capture is invalid',
+    };
   }
 
   if (
@@ -157,7 +161,11 @@ export async function readProjectTransferExperiment(
   try {
     handoffBytes = (await input.fs.readFile(input.handoffFile)).byteLength;
   } catch {
-    return { status: 'handoff-missing', experiment: null, reason: 'handoff file could not be read' };
+    return {
+      status: 'handoff-missing',
+      experiment: null,
+      reason: 'handoff file could not be read',
+    };
   }
 
   return {
