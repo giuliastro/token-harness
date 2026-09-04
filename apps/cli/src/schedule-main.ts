@@ -75,7 +75,10 @@ interface Args {
   version: boolean;
 }
 
-function valueAt(argv: readonly string[], index: number): { value: string | null; consumed: number } {
+function valueAt(
+  argv: readonly string[],
+  index: number,
+): { value: string | null; consumed: number } {
   const token = argv[index] as string;
   const equals = token.indexOf('=');
   if (equals >= 0) {
