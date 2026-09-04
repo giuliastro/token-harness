@@ -142,7 +142,8 @@ export function assessCrossHarnessTransferBenefit(
   }
 
   if (input.switched.outcome.errorCodes.length !== input.stay.outcome.errorCodes.length) {
-    const positive = input.switched.outcome.errorCodes.length < input.stay.outcome.errorCodes.length;
+    const positive =
+      input.switched.outcome.errorCodes.length < input.stay.outcome.errorCodes.length;
     return assessment(input, positive ? 'proven-positive' : 'non-positive', 'runtime-errors', [
       positive
         ? 'switched run recorded fewer runtime/provider errors'
