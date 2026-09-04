@@ -75,7 +75,9 @@ function hasSafeHeadroom(evidence: HarnessSchedulingEvidence): boolean {
   return live.every((state) => state === 'under-pace' || state === 'on-pace');
 }
 
-function validateTransfer(transfer: CrossHarnessTransferEvidence): CrossHarnessDecisionReason | null {
+function validateTransfer(
+  transfer: CrossHarnessTransferEvidence,
+): CrossHarnessDecisionReason | null {
   if (
     !Number.isInteger(transfer.handoffBytes) ||
     transfer.handoffBytes < 0 ||
