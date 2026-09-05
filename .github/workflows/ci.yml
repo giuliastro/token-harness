@@ -54,7 +54,7 @@ jobs:
           git diff -- .
 
       - name: Test
-        run: pnpm test
+        run: node scripts/ci-test-summary.mjs
 
       - name: Build
         run: pnpm build
