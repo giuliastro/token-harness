@@ -42,6 +42,26 @@ const doctor: DoctorReport = {
       evidence: [],
       warnings: [],
     },
+    {
+      harnessId: harnessId('pi'),
+      state: 'detected',
+      version: '0.84.2',
+      versionVerdict: 'unknown-newer',
+      configPath: null,
+      declaredVerificationTier: 'config-only',
+      evidence: [],
+      warnings: [],
+    },
+    {
+      harnessId: harnessId('hermes'),
+      state: 'absent',
+      version: null,
+      versionVerdict: null,
+      configPath: null,
+      declaredVerificationTier: 'config-only',
+      evidence: [],
+      warnings: [],
+    },
   ],
   providers: [
     {
@@ -145,31 +165,103 @@ describe('local dashboard', () => {
     assert.equal(parseUiArgs(['--listen', '0.0.0.0']).ok, false);
   });
 
-  it('builds an action-oriented snapshot without exposing local paths', () => {
+  it('shows active work first, hides absent tools, and ends the ready workflow', () => {
+    const readyDoctor: DoctorReport = {
+      ...doctor,
+      problemCount: 0,
+      // Pi being a newer optional detection must not make the primary setup look broken.
+      harnesses: doctor.harnesses.map((item) =>
+        item.harnessId === 'pi' ? { ...item, versionVerdict: 'in-range' as const } : item,
+      ),
+    };
     const model = buildDashboardModel({
       generatedAt: '2026-09-05T12:00:00.000Z',
-      doctor,
+      doctor: readyDoctor,
       status,
       budget,
       optimize,
     });
 
     assert.equal(model.state, 'ready');
+    assert.equal(model.statusLabel, 'READY');
+    assert.equal(model.nextStep.command, null);
+    assert.match(model.nextStep.title, /coding agent normally/i);
+    assert.deepEqual(model.harnesses.map((item) => item.id), ['codex']);
+    assert.deepEqual(model.otherHarnesses.map((item) => item.name), ['Pi']);
+    assert.equal(JSON.stringify(model).includes('Hermes'), false);
     assert.equal(model.harnesses[0]?.allowance[0]?.remainingPercent, 62);
     assert.match(model.recommendation?.action ?? '', /Codex/);
     assert.doesNotMatch(JSON.stringify(model), /\/home\/private/);
   });
 
-  it('ships only local static assets and a read-only JSON route', () => {
+  it('treats a newer-than-tested active harness as a limitation, not a broken setup', () => {
+    const limitedDoctor: DoctorReport = {
+      ...doctor,
+      problemCount: 1,
+      harnesses: doctor.harnesses.map((item) =>
+        item.harnessId === 'codex' ? { ...item, versionVerdict: 'unknown-newer' as const } : item,
+      ),
+    };
     const model = buildDashboardModel({
       generatedAt: '2026-09-05T12:00:00.000Z',
-      doctor,
+      doctor: limitedDoctor,
+      status,
+      budget,
+      optimize,
+    });
+
+    assert.equal(model.state, 'limited');
+    assert.equal(model.statusLabel, 'READY WITH LIMITATIONS');
+    assert.equal(model.nextStep.command, 'token-harness verify');
+    assert.match(model.summary, /keep working/i);
+  });
+
+  it('does not use zero-byte evidence to explain a recommendation when better evidence exists', () => {
+    const withMisleadingFirstEvidence: OptimizeReport = {
+      ...optimize,
+      harnesses: optimize.harnesses.map((item) => ({
+        ...item,
+        recommendations: [
+          {
+            area: 'context',
+            priority: 'first' as const,
+            action: 'Reduce avoidable static context.',
+            target: null,
+            evidence: [
+              { code: 'instruction-budget', summary: '0B known loaded of 32768B project-doc budget' },
+              { code: 'mcp-exposure', summary: '12 MCP servers, 60 tools visible in inventory' },
+            ],
+          },
+        ],
+      })),
+    };
+    const model = buildDashboardModel({
+      generatedAt: '2026-09-05T12:00:00.000Z',
+      doctor: { ...doctor, harnesses: doctor.harnesses.slice(0, 1) },
+      status,
+      budget,
+      optimize: withMisleadingFirstEvidence,
+    });
+
+    assert.match(model.recommendation?.reason ?? '', /60 tools/i);
+    assert.doesNotMatch(model.recommendation?.reason ?? '', /^0B/);
+  });
+
+  it('ships accessible, local-only, read-only assets with progressive disclosure', () => {
+    const model = buildDashboardModel({
+      generatedAt: '2026-09-05T12:00:00.000Z',
+      doctor: { ...doctor, harnesses: doctor.harnesses.slice(0, 1) },
       status,
       budget,
       optimize,
     });
 
     assert.match(DASHBOARD_HTML, /<main/);
+    assert.match(DASHBOARD_HTML, /<details id="other-panel"/);
+    assert.match(DASHBOARD_HTML, /<ul id="providers"/);
+    assert.match(DASHBOARD_CSS, /focus-visible/);
+    assert.match(DASHBOARD_CSS, /prefers-reduced-motion/);
+    assert.match(DASHBOARD_CSS, /prefers-color-scheme:dark/);
     assert.doesNotMatch(`${DASHBOARD_HTML}${DASHBOARD_CSS}${DASHBOARD_JS}`, /https?:\/\//);
     assert.equal(uiAsset('/api/status', model).contentType, 'application/json; charset=utf-8');
     assert.equal(uiAsset('/actions', model).status, 404);
