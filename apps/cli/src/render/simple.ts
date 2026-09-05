@@ -417,7 +417,12 @@ export function renderSimplePlan(report: PlanReport, context: RenderContext): st
         'Apply exactly this stored plan.',
       ),
     );
-  else if (report.actions.length === 0) lines.push(...next(null, normalWork()));
+  else if (report.actions.length === 0)
+    lines.push(
+      ...(report.pipelineId === null
+        ? next('token-harness setup', 'Check detection and finish guided setup.')
+        : next(null, normalWork())),
+    );
   else lines.push(...next('token-harness ui', 'Open the dashboard to review the current state.'));
   return document(lines);
 }
