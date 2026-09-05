@@ -38,11 +38,11 @@ export const UI_USAGE = `token-harness ui — open the local status and guidance
 Usage
   token-harness ui [--no-open] [--port <number>] [--json]
 
-The dashboard listens only on 127.0.0.1 and is read-only. It does not send data
-anywhere and cannot change configuration. It shows what is active, what needs attention,
-and what to do next. When the setup is ready, keep using Claude Code, Codex, or OpenCode
-normally — Token Harness does not replace their launch commands. Close the local dashboard
-server with Ctrl+C.`;
+The dashboard listens only on 127.0.0.1 and is read-only.
+It does not send data anywhere and cannot change configuration.
+It shows what is active, what needs attention, and what to do next. When the setup is ready,
+keep using Claude Code, Codex, or OpenCode normally — Token Harness does not replace their
+launch commands. Close the local dashboard server with Ctrl+C.`;
 
 export interface DashboardWindow {
   label: string;
