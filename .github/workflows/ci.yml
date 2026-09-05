@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -50,9 +50,43 @@ jobs:
 
       - name: Format check
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          pnpm exec prettier --write apps/cli/src/render/simple.ts apps/cli/src/ui.ts apps/cli/test/setup.test.ts apps/cli/test/ui.test.ts
-          git diff --exit-code -- apps/cli/src/render/simple.ts apps/cli/src/ui.ts apps/cli/test/setup.test.ts apps/cli/test/ui.test.ts
+          files=(
+            apps/cli/src/render/simple.ts
+            apps/cli/src/ui.ts
+            apps/cli/test/setup.test.ts
+            apps/cli/test/ui.test.ts
+          )
+          if [[ "$RUNNER_OS" != "Linux" ]]; then
+            pnpm exec prettier --check "${files[@]}"
+            exit 0
+          fi
+
+          pnpm exec prettier --write "${files[@]}"
+          changed=()
+          for file in "${files[@]}"; do
+            if ! git diff --quiet -- "$file"; then
+              changed+=("$file")
+            fi
+          done
+          if [[ ${#changed[@]} -eq 0 ]]; then
+            exit 0
+          fi
+
+          for file in "${changed[@]}"; do
+            sha=$(gh api "repos/$REPOSITORY/contents/$file?ref=$HEAD_BRANCH" --jq .sha)
+            content=$(base64 < "$file" | tr -d '\n')
+            gh api --method PUT "repos/$REPOSITORY/contents/$file" \
+              -f message="style: format $file" \
+              -f content="$content" \
+              -f sha="$sha" \
+              -f branch="$HEAD_BRANCH" >/dev/null
+          done
+          exit 1
 
       - name: Test
         run: pnpm test
