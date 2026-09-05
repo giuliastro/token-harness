@@ -12,7 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -230,20 +230,33 @@ describe('apply refuses the same combinations', () => {
     );
   });
 
-  it('refuses before loading a stored plan', async () => {
-    // The gate check sits ahead of the `--plan` load, so a bogus id must surface as the same
-    // coverage refusal, not as a usage error about the id — executing stored actions on an
-    // uncovered combination would be the worse failure mode.
+  it('reports a missing stored plan before resolving an unrelated default scope', async () => {
     const { exitCode, diagnostics } = await invoke<ApplyReport>(
       ['apply', '--plan', '00000000'],
       null,
     );
+    assert.equal(exitCode, EXIT_CODES['usage-error']);
+    assert.ok(diagnostics.some((entry) => entry.code === 'plan-not-found'));
+  });
 
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    assert.ok(
-      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
-      `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
+  it('still refuses a valid stored plan when its reviewed compatibility row is removed', async () => {
+    const home = bareHome();
+    const original = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
+    const planned = await invoke<PlanReport>(
+      ['plan', '--harness', 'claude'],
+      nodeVersionRows(FACTS),
+      home,
     );
+    const id = planned.data?.planId;
+    assert.ok(id);
+    const { exitCode, diagnostics } = await invoke<ApplyReport>(
+      ['apply', '--plan', id, '--yes'],
+      [],
+      home,
+    );
+    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
+    assert.ok(diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'));
+    assert.equal(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'), original);
   });
 });
 

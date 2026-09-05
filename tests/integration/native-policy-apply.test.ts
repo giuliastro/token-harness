@@ -362,10 +362,7 @@ describe('persisted Codex native policy', () => {
       { keyPath: 'model_verbosity', value: 'low', mergeStrategy: 'replace' },
     ]);
 
-    const applied = await invoke<ApplyReport>(
-      ['apply', '--yes', '--plan', planId, '--harness', 'codex', '--provider', 'none'],
-      place,
-    );
+    const applied = await invoke<ApplyReport>(['apply', '--yes', '--plan', planId], place);
 
     assert.equal(applied.exitCode, 0);
     assert.equal(applied.data?.outcome, 'committed');
@@ -385,10 +382,7 @@ describe('persisted Codex native policy', () => {
 
     place.version = 'external-v2';
 
-    const applied = await invoke<ApplyReport>(
-      ['apply', '--yes', '--plan', planId, '--harness', 'codex', '--provider', 'none'],
-      place,
-    );
+    const applied = await invoke<ApplyReport>(['apply', '--yes', '--plan', planId], place);
 
     assert.equal(applied.exitCode, 5);
     assert.equal(readFileSync(place.config, 'utf8'), original);

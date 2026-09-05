@@ -13,7 +13,11 @@ import {
   type PlanReport,
   type CliEnvelope,
   type ApplyReport,
+  type CompatibilityRow,
+  harnessId,
+  providerId,
 } from '@token-harness/core';
+import { FIXTURES_ROOT } from '@token-harness/tests';
 import { NodeFileSystem } from '@token-harness/platform';
 import { run } from 'token-harness';
 
@@ -54,6 +58,7 @@ function world(
     state,
     config,
     version: '2.1.261',
+    providersPresent: false,
     environment: { ...emptyEnvironment },
     environmentObserved: true,
     clock: Date.parse('2026-09-05T17:00:00Z'),
@@ -84,6 +89,21 @@ function runner(w: World): ProcessRunner {
       : {}),
     async run(request) {
       w.calls.push(request);
+      if (w.providersPresent) {
+        if (request.executable === 'rtk' && request.args[0] === '--version')
+          return outcome(request, 'rtk 0.44.0');
+        if (request.executable === 'harnesstrim' && request.args[0] === '--version')
+          return outcome(request, '0.1.0');
+        if (request.executable === 'harnesstrim' && request.args[0] === 'capabilities')
+          return outcome(
+            request,
+            readFileSync(join(FIXTURES_ROOT, 'providers/harnesstrim-capabilities.json'), 'utf8'),
+          );
+        if (request.executable === 'codex' && request.args[0] === '--version')
+          return outcome(request, 'codex-cli 0.146.0');
+        // No provider install may run while applying the Claude-only stored action.
+        if (request.args[0] === 'install') throw new Error('unreviewed provider install');
+      }
       if (request.executable !== 'claude') return outcome(request, null);
       if (request.args[0] === '--version') return outcome(request, w.version + ' (Claude Code)');
       if (request.args[0] === '--help')
@@ -99,7 +119,7 @@ function runner(w: World): ProcessRunner {
 async function invoke<T>(w: World, argv: string[]) {
   let output = '';
   const code = await run({
-    argv: [...argv, '--json', '--harness', 'claude', '--provider', 'none'],
+    argv: [...argv, '--json'],
     streams: {
       out: (text) => {
         output += text;
@@ -112,7 +132,20 @@ async function invoke<T>(w: World, argv: string[]) {
     stateRoot: w.state,
     now: () => new Date(w.clock++).toISOString(),
     metrics: null,
-    compatibilityRows: null,
+    compatibilityRows: w.providersPresent
+      ? [
+          {
+            harness: harnessId('codex'),
+            harnessVersion: { minimum: '0.146.0', maximum: '0.146.0' },
+            provider: providerId('harnesstrim'),
+            providerVersion: '0.1.0',
+            platform: { os: facts.os, wsl: false, supported: true, limitation: null },
+            configSchema: 'fake-skills',
+            fixture: 'test-only-scope-replay',
+            verificationTier: 'config-only',
+          } satisfies CompatibilityRow,
+        ]
+      : null,
     adapters: {
       fs: new NodeFileSystem(facts),
       runner: runner(w),
@@ -130,11 +163,142 @@ async function invoke<T>(w: World, argv: string[]) {
   return { code, envelope: JSON.parse(output) as CliEnvelope<T> };
 }
 async function plan(w: World, task = 'mechanical', profile = 'economy') {
-  return invoke<PlanReport>(w, ['plan', '--native-policy', '--task', task, '--profile', profile]);
+  return invoke<PlanReport>(w, [
+    'plan',
+    '--harness',
+    'claude',
+    '--provider',
+    'none',
+    '--native-policy',
+    '--task',
+    task,
+    '--profile',
+    profile,
+  ]);
 }
 async function apply(w: World, id: string) {
   return invoke<ApplyReport>(w, ['apply', '--yes', '--plan', id]);
 }
+
+function multiHarnessWorld() {
+  const w = world(
+    JSON.stringify({
+      effortLevel: 'high',
+      hooks: {
+        PreToolUse: ['Bash', 'PowerShell'].map((matcher) => ({
+          matcher,
+          hooks: [{ type: 'command', command: 'rtk hook claude' }],
+        })),
+      },
+    }),
+  );
+  w.providersPresent = true;
+  return w;
+}
+
+describe('stored native plans do not require repeating selectors', () => {
+  it('replays the exact reported Claude command with Codex, RTK and HarnessTrim present', async () => {
+    const w = multiHarnessWorld();
+    const p = await invoke<PlanReport>(w, [
+      'plan',
+      '--harness',
+      'claude',
+      '--native-policy',
+      '--task',
+      'mechanical',
+      '--profile',
+      'economy',
+    ]);
+    assert.equal(p.code, 0, JSON.stringify(p.envelope.diagnostics));
+    assert.equal(p.envelope.data?.actions.length, 1);
+    assert.ok(p.envelope.data?.ownership.every((item) => item.scope.harness === 'claude'));
+    const id = p.envelope.data?.planId;
+    assert.ok(id);
+    w.calls.length = 0;
+    const applied = await apply(w, id);
+    assert.equal(applied.code, 0, JSON.stringify(applied.envelope.diagnostics));
+    assert.equal(applied.envelope.data?.fromStoredPlan, true);
+    assert.equal(applied.envelope.data?.results.length, 1);
+    assert.equal(JSON.parse(readFileSync(w.config, 'utf8')).effortLevel, 'low');
+    assert.ok(w.calls.every((call) => call.executable !== 'codex'));
+    assert.ok(w.calls.every((call) => call.args[0] !== 'install'));
+  });
+  it('restores a provider-free plan instead of introducing installed providers during replay', async () => {
+    const w = multiHarnessWorld();
+    const p = await plan(w);
+    const id = p.envelope.data?.planId;
+    assert.ok(id);
+    w.calls.length = 0;
+    const applied = await apply(w, id);
+    assert.equal(applied.code, 0, JSON.stringify(applied.envelope.diagnostics));
+    assert.equal(JSON.parse(readFileSync(w.config, 'utf8')).effortLevel, 'low');
+    assert.ok(w.calls.every((call) => !['rtk', 'harnesstrim', 'codex'].includes(call.executable)));
+  });
+  it('rejects an explicit conflicting provider without probing excluded agents', async () => {
+    const w = multiHarnessWorld();
+    const original = readFileSync(w.config, 'utf8');
+    const id = (await plan(w)).envelope.data?.planId;
+    assert.ok(id);
+    w.calls.length = 0;
+    const applied = await invoke<ApplyReport>(w, [
+      'apply',
+      '--plan',
+      id,
+      '--yes',
+      '--provider',
+      'rtk',
+    ]);
+    assert.equal(applied.code, 5);
+    assert.ok(applied.envelope.diagnostics.some((item) => item.code === 'plan-selection-mismatch'));
+    assert.equal(w.calls.length, 0);
+    assert.equal(readFileSync(w.config, 'utf8'), original);
+  });
+  it('rejects a malformed artifact before probing agents or changing settings', async () => {
+    const w = multiHarnessWorld();
+    const original = readFileSync(w.config, 'utf8');
+    const id = (await plan(w)).envelope.data?.planId;
+    assert.ok(id);
+    writeFileSync(join(w.state, 'plans', id + '.json'), 'null');
+    w.calls.length = 0;
+    const applied = await apply(w, id);
+    assert.equal(applied.code, 2);
+    assert.equal(w.calls.length, 0);
+    assert.equal(readFileSync(w.config, 'utf8'), original);
+  });
+  it('rejects a valid artifact stored under a different requested id', async () => {
+    const w = multiHarnessWorld();
+    const original = readFileSync(w.config, 'utf8');
+    const id = (await plan(w)).envelope.data?.planId;
+    assert.ok(id);
+    writeFileSync(
+      join(w.state, 'plans', 'deadbeef.json'),
+      readFileSync(join(w.state, 'plans', id + '.json')),
+    );
+    w.calls.length = 0;
+    const applied = await apply(w, 'deadbeef');
+    assert.equal(applied.code, 5);
+    assert.ok(applied.envelope.diagnostics.some((item) => item.code === 'plan-digest-mismatch'));
+    assert.equal(w.calls.length, 0);
+    assert.equal(readFileSync(w.config, 'utf8'), original);
+  });
+  it('rejects an explicit conflicting harness without mutating either configuration', async () => {
+    const w = multiHarnessWorld();
+    const original = readFileSync(w.config, 'utf8');
+    const id = (await plan(w)).envelope.data?.planId;
+    assert.ok(id);
+    const applied = await invoke<ApplyReport>(w, [
+      'apply',
+      '--plan',
+      id,
+      '--yes',
+      '--harness',
+      'codex',
+    ]);
+    assert.equal(applied.code, 5);
+    assert.ok(applied.envelope.diagnostics.some((item) => item.code === 'plan-selection-mismatch'));
+    assert.equal(readFileSync(w.config, 'utf8'), original);
+  });
+});
 
 describe('Claude native effort policy through public plan/apply', () => {
   it('plans without mutation, applies only effort, and rollback restores exact original bytes', async () => {
@@ -225,7 +389,16 @@ describe('Claude native effort policy through public plan/apply', () => {
   it('requires an explicit task; critical work never gets low effort or persisted max', async () => {
     const w = world();
     assert.equal(
-      (await invoke<PlanReport>(w, ['plan', '--native-policy'])).envelope.data?.actions.length,
+      (
+        await invoke<PlanReport>(w, [
+          'plan',
+          '--harness',
+          'claude',
+          '--provider',
+          'none',
+          '--native-policy',
+        ])
+      ).envelope.data?.actions.length,
       0,
     );
     const p = await plan(w, 'critical', 'quality');

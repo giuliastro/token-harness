@@ -5,6 +5,7 @@ import {
   EXIT_CODES,
   commandResult,
   type DoctorReport,
+  type ApplyReport,
   type PlatformFacts,
 } from '@token-harness/core';
 
@@ -37,6 +38,28 @@ describe('progressive human rendering', () => {
     assert.match(output, /CHANGES\n {2}Nothing changed\./);
     assert.equal(output.match(/NEXT STEP/g)?.length, 1);
     assert.match(output, /token-harness setup/);
+  });
+
+  it('keeps a rejected stored plan id in the safe inspection command', () => {
+    const report: ApplyReport = {
+      planId: '3ebed6d6',
+      transactionId: null,
+      fromStoredPlan: true,
+      outcome: 'rejected',
+      results: [],
+      unrestored: [],
+      receiptId: null,
+    };
+    const output = renderHuman(
+      commandResult({
+        command: 'apply',
+        exitCode: EXIT_CODES['precondition-drift'],
+        data: report,
+      }),
+      { toolVersion: '0.1.8', home: '/home/dev', decorate: false },
+    ).report;
+    assert.match(output, /token-harness apply --plan 3ebed6d6 --verbose/);
+    assert.doesNotMatch(output, /--yes/);
   });
 
   it('keeps the established technical report behind --verbose', () => {
