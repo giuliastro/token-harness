@@ -222,9 +222,10 @@ export function renderDoctorReport(report: DoctorReport, context: RenderContext)
       ? [['token-harness plan', 'see what would change — writes nothing']]
       : [
           ...(installedProviders
-            ? ([
-                ['token-harness update', 'check RTK/HarnessTrim for newer versions'],
-              ] as [string, string][])
+            ? ([['token-harness update', 'check RTK/HarnessTrim for newer versions']] as [
+                string,
+                string,
+              ][])
             : []),
           ['token-harness verify', 'check the pipeline actually intercepts'],
           ['token-harness metrics --since 7d', 'see what it saved'],

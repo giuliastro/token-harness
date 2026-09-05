@@ -129,16 +129,11 @@ function matcherCoversFamily(matcher: string, family: string): boolean {
  * itself is command-payload based, so the plan closes the matcher gap without asking RTK's
  * installer to mutate settings.
  */
-export function planTargets(
-  context: ProviderContext,
-  request: ProviderPlanRequest,
-): PlanTarget[] {
+export function planTargets(context: ProviderContext, request: ProviderPlanRequest): PlanTarget[] {
   const targets = new Map<string, PlanTarget>();
 
   for (const owned of request.ownership) {
-    const harness = request.harnesses.find(
-      (entry) => entry.id === owned.scope.harness,
-    );
+    const harness = request.harnesses.find((entry) => entry.id === owned.scope.harness);
     if (harness === undefined) continue;
 
     /**
@@ -409,9 +404,7 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     // as an entry it wrote and later remove it under one of the individual family digests.
     for (const target of targets) {
       if (!alreadyRegistered(context, target, input.identifiesCommand, false)) continue;
-      actions.push(
-        removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)),
-      );
+      actions.push(removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
     }
     // RTK itself is deliberately left installed. RFC 0004: Token Harness removes what it owns,
     // and on a machine where RTK was already present it never owned the installation. Removing

@@ -171,7 +171,9 @@ describe('confirmation', () => {
     // Without an id the refusal cannot be acted on, and `data` is not available to carry it.
     assert.match(
       refusal?.message ?? '',
-      new RegExp(`^Plan [0-9a-f]{8} would run ${String(APPLIED_ACTION_COUNT)} action${APPLIED_ACTION_COUNT === 1 ? '' : 's'} against 1 file$`),
+      new RegExp(
+        `^Plan [0-9a-f]{8} would run ${String(APPLIED_ACTION_COUNT)} action${APPLIED_ACTION_COUNT === 1 ? '' : 's'} against 1 file$`,
+      ),
     );
     assert.match(refusal?.remediation ?? '', /--yes/);
   });

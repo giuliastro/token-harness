@@ -136,9 +136,7 @@ function ownership(capabilities: readonly string[], toolFamily = 'Bash'): Resolv
 }
 
 /** The live configuration as the harness adapter would report it. */
-function configuredWithRtk(
-  matchers: string[] = ['Bash'],
-): HarnessConfigSummary {
+function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
   return {
     harnessId: CLAUDE,
     configPath: SETTINGS,
@@ -229,9 +227,7 @@ describe('a machine with nothing on it', () => {
       ['package-manager-install', 'merge-json', 'merge-json'],
     );
     assert.deepEqual(
-      result.actions
-        .slice(1)
-        .map((action) => (action as MergeJsonAction).operations[0]?.value),
+      result.actions.slice(1).map((action) => (action as MergeJsonAction).operations[0]?.value),
       [
         {
           matcher: 'Bash',

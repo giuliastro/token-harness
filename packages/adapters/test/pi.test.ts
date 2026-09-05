@@ -126,6 +126,9 @@ describe('Pi harness adapter', () => {
       result.checks.find((check) => check.id === 'module-installed')?.status,
       'not-exercised',
     );
-    assert.equal(result.checks.some((check) => check.status === 'fail'), false);
+    assert.equal(
+      result.checks.some((check) => check.status === 'fail'),
+      false,
+    );
   });
 });
