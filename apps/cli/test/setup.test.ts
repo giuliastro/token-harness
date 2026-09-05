@@ -146,7 +146,10 @@ function operations(
     doctor: async () =>
       commandResult({
         command: 'doctor',
-        exitCode: (options.doctor ?? DOCTOR).problemCount > 0 ? EXIT_CODES['problems-found'] : EXIT_CODES.ok,
+        exitCode:
+          (options.doctor ?? DOCTOR).problemCount > 0
+            ? EXIT_CODES['problems-found']
+            : EXIT_CODES.ok,
         data: options.doctor ?? DOCTOR,
       }),
     plan: async () => commandResult({ command: 'plan', exitCode: EXIT_CODES.ok, data: PLAN }),
@@ -155,7 +158,11 @@ function operations(
       return commandResult({ command: 'apply', exitCode: EXIT_CODES.ok, data: APPLIED });
     },
     verify: async () =>
-      commandResult({ command: 'verify', exitCode: EXIT_CODES.ok, data: options.verify ?? VERIFIED }),
+      commandResult({
+        command: 'verify',
+        exitCode: EXIT_CODES.ok,
+        data: options.verify ?? VERIFIED,
+      }),
     budget: async () => commandResult({ command: 'budget', exitCode: EXIT_CODES.ok, data: BUDGET }),
   };
 }
@@ -204,7 +211,10 @@ describe('setup command', () => {
       ],
     };
 
-    const result = await runSetup(CONTEXT, operations(() => {}, { doctor: doctorWithSecondaryPi }));
+    const result = await runSetup(
+      CONTEXT,
+      operations(() => {}, { doctor: doctorWithSecondaryPi }),
+    );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(result.data?.stage, 'ready-to-configure');
