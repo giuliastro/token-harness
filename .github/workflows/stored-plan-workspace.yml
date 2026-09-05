@@ -1,0 +1,29 @@
+name: Stored plan regression workspace
+on:
+  push:
+    branches: [ci/stored-plan-repro]
+    paths: [.github/workflows/stored-plan-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Package source and dependencies without Git credentials
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > WORKSPACE_COMMIT
+          tar --exclude='./.git' -czf "$RUNNER_TEMP/stored-plan-workspace.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stored-plan-workspace
+          path: ${{ runner.temp }}/stored-plan-workspace.tar.gz
+          retention-days: 1
