@@ -40,6 +40,7 @@ import {
   digestText,
   executeTransaction,
   storedPlanFileName,
+  providerId,
   validateStoredPlan,
   type ApplyReport,
   type CommandResult,
@@ -116,7 +117,11 @@ async function loadStoredPlan(
 
   try {
     const text = new TextDecoder().decode(await context.adapters.fs.readFile(path));
-    return { stored: JSON.parse(text) as StoredPlan, diagnostic: null };
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new TypeError('A stored plan must be a JSON object');
+    }
+    return { stored: parsed as StoredPlan, diagnostic: null };
   } catch (error) {
     return {
       stored: null,
@@ -134,16 +139,107 @@ async function loadStoredPlan(
 export async function runApply(context: CommandContext): Promise<CommandResult<ApplyReport>> {
   const diagnostics: Diagnostic[] = [];
 
-  // Recomputed either way. With `--plan` it is what the stored plan is revalidated *against*:
-  // RFC 0006's staleness list compares recorded ownership and versions to the current ones, and
-  // there is no way to know the current ones without resolving them.
-  const computed = await computePlan(context);
+  let stored: StoredPlan | null = null;
+  let planningContext = context;
+  const rejectedReport = (): ApplyReport => ({
+    ...emptyReport('rejected'),
+    planId: context.planId,
+    fromStoredPlan: stored !== null,
+  });
+
+  if (context.planId !== null) {
+    const loaded = await loadStoredPlan(context, context.planId);
+    stored = loaded.stored;
+    if (stored === null) {
+      if (loaded.diagnostic !== null) diagnostics.push(loaded.diagnostic);
+      return finish('rejected', EXIT_CODES['usage-error'], rejectedReport(), diagnostics);
+    }
+
+    // Validate the artifact and project binding BEFORE trusting its selectors. The live
+    // version/ownership checks still run below; using the recorded values here checks only
+    // identity, schema and project, without probing an unrelated harness first.
+    try {
+      const identity = validateStoredPlan({
+        stored,
+        projectRoot: context.projectRoot,
+        projectId: context.adapters?.projectIdFor(context.projectRoot) ?? null,
+        versions: stored.versions,
+        ownership: stored.ownership,
+      });
+      for (const rejection of identity.rejections) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'error',
+            code: rejection.reason,
+            message: rejection.detail,
+            remediation: 'Run `token-harness plan` and review the new plan before applying it',
+          }),
+        );
+      }
+      if (stored.planId !== context.planId) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'error',
+            code: 'plan-digest-mismatch',
+            message: 'The stored plan does not match the requested plan id',
+            remediation: 'Run `token-harness plan` and review the new plan before applying it',
+          }),
+        );
+      }
+      if (diagnostics.length > 0) {
+        return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
+      }
+
+      // Schema 1 already records the harness filter and every selected provider's version,
+      // including null for absent providers. Thus an empty provider inventory means none,
+      // one key means a focused provider, and multiple keys mean the unfiltered registry.
+      // Recover that scope, not just the owners: an absent provider must still be checked
+      // for version drift. No schema migration or re-approval is needed for existing plans.
+      const providers = Object.keys(stored.versions.providers);
+      const provider =
+        providers.length === 0
+          ? providerId('none')
+          : providers.length === 1
+            ? providerId(providers[0]!)
+            : null;
+      if (
+        (context.harness !== null && context.harness !== stored.harness) ||
+        (context.provider !== null && context.provider !== provider)
+      ) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'error',
+            code: 'plan-selection-mismatch',
+            message: 'The supplied harness/provider selector differs from the reviewed plan',
+            remediation: `Use token-harness apply --plan ${stored.planId} to review that stored plan without overriding its selectors`,
+          }),
+        );
+        return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
+      }
+      planningContext = { ...context, harness: stored.harness, provider };
+    } catch {
+      diagnostics.push(
+        diagnostic({
+          severity: 'error',
+          code: 'plan-unreadable',
+          message: 'The stored plan has an invalid structure',
+          remediation: 'Run `token-harness plan` and review a new plan before applying it',
+        }),
+      );
+      return finish('rejected', EXIT_CODES['usage-error'], rejectedReport(), diagnostics);
+    }
+  }
+
+  // Resolve live state in the SAME scope as the reviewed plan. A bare `apply --plan ID`
+  // must not expand a Claude-only plan to Codex or introduce an excluded provider.
+  // Only the stored actions execute; this computation still enforces the normal gates.
+  const computed = await computePlan(planningContext);
   diagnostics.push(...computed.diagnostics);
 
   if (computed.blocked.length > 0 && computed.report.actions.length === 0) {
     /**
      * RFC 0009: a refused managed mutation is "cannot do this safely", not "nothing to do".
-     * Checked before `--plan` loads or executes stored actions: an uncovered combination must not
+     * Checked before any stored action executes: an uncovered combination must not
      * silently drop a recomputed plan (exit 0) or run an approved one whose environment no row has
      * ever admitted.
      *
@@ -154,35 +250,19 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
      * action, so applying what remains applies exactly what the plan displayed and nothing a row
      * has not admitted.
      */
-    return finish(
-      'rejected',
-      EXIT_CODES['unsupported-environment'],
-      emptyReport('rejected'),
-      diagnostics,
-    );
+    return finish('rejected', EXIT_CODES['unsupported-environment'], rejectedReport(), diagnostics);
   }
 
   if (computed.report.conflicts.length > 0) {
     // RFC 0006: 4 is "planning succeeded but a hard conflict prevents apply".
-    return finish(
-      'rejected',
-      EXIT_CODES['blocked-by-conflict'],
-      emptyReport('rejected'),
-      diagnostics,
-    );
+    return finish('rejected', EXIT_CODES['blocked-by-conflict'], rejectedReport(), diagnostics);
   }
 
   let actions = computed.report.actions;
   let planId = computed.report.planId;
   let fromStoredPlan = false;
 
-  if (context.planId !== null) {
-    const { stored, diagnostic: failure } = await loadStoredPlan(context, context.planId);
-    if (stored === null) {
-      if (failure !== null) diagnostics.push(failure);
-      return finish('rejected', EXIT_CODES['usage-error'], emptyReport('rejected'), diagnostics);
-    }
-
+  if (stored !== null) {
     const validation = validateStoredPlan({
       stored,
       projectRoot: context.projectRoot,
@@ -204,12 +284,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
       }
       // RFC 0006: 5 is "the environment no longer matches the plan or journal", and staleness
       // "is checked before any action executes".
-      return finish(
-        'rejected',
-        EXIT_CODES['precondition-drift'],
-        emptyReport('rejected'),
-        diagnostics,
-      );
+      return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
     }
 
     // The stored actions run, not the recomputed ones. This is the whole mechanism: a
@@ -264,12 +339,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
         remediation: null,
       }),
     );
-    return finish(
-      'rejected',
-      EXIT_CODES['unsupported-environment'],
-      emptyReport('rejected'),
-      diagnostics,
-    );
+    return finish('rejected', EXIT_CODES['unsupported-environment'], rejectedReport(), diagnostics);
   }
 
   const fs = context.adapters.fs;
@@ -292,12 +362,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     // The refusal `TransactionSnapshotStore` exists to make: a backup root inside the project
     // would put the copies inside the thing being changed.
     diagnostics.push(...creation.diagnostics);
-    return finish(
-      'rejected',
-      EXIT_CODES['unsupported-environment'],
-      emptyReport('rejected'),
-      diagnostics,
-    );
+    return finish('rejected', EXIT_CODES['unsupported-environment'], rejectedReport(), diagnostics);
   }
 
   const journal = new FileJournalStore({

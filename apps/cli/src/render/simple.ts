@@ -466,7 +466,9 @@ export function renderSimpleApply(report: ApplyReport, command: string): string 
         ? 'token-harness verify'
         : report.outcome === 'confirmation-required'
           ? confirmationCommand
-          : `token-harness ${command} --verbose`,
+          : command === 'apply' && report.planId !== null
+            ? `token-harness apply --plan ${report.planId} --verbose`
+            : `token-harness ${command} --verbose`,
       okay
         ? 'Check that the integration works; a successful verify is the end of setup.'
         : report.outcome === 'confirmation-required'

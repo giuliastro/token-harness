@@ -259,6 +259,12 @@ token-harness plan --harness claude --native-policy --task mechanical --profile 
 token-harness apply --plan <printed-plan-id> --yes
 ```
 
+`apply --plan <id>` restores the reviewed harness/provider selection automatically; you
+should not have to repeat `--harness`, `--provider`, `--native-policy`, `--task` or `--profile`.
+Run it from the same project as `plan`. Conflicting explicit selectors are rejected, and
+actual version, ownership and configuration changes still invalidate the plan. Existing
+schema-1 plans remain usable; only their approved actions can execute.
+
 The first Claude path supports the **persisted user effort preference** on the reviewed
 Claude Code 2.1.261 build. It does not change model, authentication, hooks, endpoint or billing.
 `max` is never persisted. Project/local/ancestor settings, custom configuration roots and
