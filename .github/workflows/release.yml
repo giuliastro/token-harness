@@ -131,7 +131,9 @@ jobs:
       - name: Publish to npm with trusted publishing
         if: steps.npm.outputs.publish == 'true'
         working-directory: dist/package
-        run: npm publish
+        # npm's OIDC helper logs token-exchange rejection reasons at verbose level without logging
+        # the ID token itself. Keep this enabled so a failed trusted-publishing exchange is actionable.
+        run: npm publish --loglevel verbose
 
       - name: Create or refresh GitHub release
         env:
