@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { handoffMain } from '../src/handoff-main.js';
+import { TOOL_VERSION } from '../src/version.js';
 
 function capture() {
   let stdout = '';
@@ -166,7 +167,7 @@ describe('handoff CLI', () => {
     const humanExit = await handoffMain(['--unknown', '--version'], human.streams);
     assert.equal(humanExit, 0);
     assert.equal(human.stderr(), '');
-    assert.match(human.stdout(), /^0\.1\.5\n$/);
+    assert.equal(human.stdout(), `${TOOL_VERSION}\n`);
 
     const json = capture();
     const jsonExit = await handoffMain(['--version', '--json'], json.streams);
@@ -179,6 +180,6 @@ describe('handoff CLI', () => {
     };
     assert.equal(envelope.command, 'version');
     assert.equal(envelope.status, 'ok');
-    assert.equal(envelope.data.version, '0.1.5');
+    assert.equal(envelope.data.version, TOOL_VERSION);
   });
 });
