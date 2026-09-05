@@ -37,6 +37,7 @@ export * from './domain/platform.js';
 export * from './domain/process.js';
 export * from './domain/redaction.js';
 export * from './domain/reports.js';
+export * from './domain/setup.js';
 export * from './domain/verification.js';
 export * from './domain/version.js';
 

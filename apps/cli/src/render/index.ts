@@ -26,6 +26,7 @@ import type {
   MetricsReport,
   OptimizeReport,
   PlanReport,
+  SetupReport,
   StatusReport,
   UpdateReport,
   VerifyReport,
@@ -47,6 +48,22 @@ import { renderStatusReport } from './status.js';
 import { renderUpdateReport } from './update.js';
 import { renderVerifyReport } from './verify.js';
 import type { RenderContext } from './layout.js';
+import {
+  renderSimpleApply,
+  renderSimpleBudget,
+  renderSimpleContext,
+  renderSimpleDoctor,
+  renderSimpleHistory,
+  renderSimpleMcp,
+  renderSimpleMetrics,
+  renderSimpleOptimize,
+  renderSimplePlan,
+  renderSimpleSetup,
+  renderSimpleStatus,
+  renderSimpleUpdate,
+  renderSimpleVerify,
+  renderVerboseSetup,
+} from './simple.js';
 
 export interface HumanRendering {
   /** The report, for stdout. Empty when the command produces none. */
@@ -67,6 +84,18 @@ function planRendering(
   };
 }
 
+function planRenderingSimple(
+  report: PlanReport,
+  result: CommandResult<unknown>,
+  context: RenderContext,
+): HumanRendering {
+  const conflictCodes = new Set(report.conflicts.map((conflict) => conflict.code));
+  return {
+    report: renderSimplePlan(report, context),
+    stderrDiagnostics: result.diagnostics.filter((entry) => !conflictCodes.has(entry.code)),
+  };
+}
+
 export function renderHuman(
   result: CommandResult<unknown>,
   context: RenderContext,
@@ -78,6 +107,39 @@ export function renderHuman(
     stderrDiagnostics: result.diagnostics,
   });
 
+  if (context.verbose !== true) {
+    switch (result.command) {
+      case 'apply':
+      case 'rollback':
+      case 'uninstall':
+        return plain(renderSimpleApply(data as ApplyReport, result.command));
+      case 'budget':
+        return plain(renderSimpleBudget(data as BudgetReport));
+      case 'context':
+        return plain(renderSimpleContext(data as ContextReport));
+      case 'doctor':
+        return plain(renderSimpleDoctor(data as DoctorReport));
+      case 'history':
+        return plain(renderSimpleHistory(data as HistoryReport));
+      case 'mcp':
+        return plain(renderSimpleMcp(data as McpReport));
+      case 'metrics':
+        return plain(renderSimpleMetrics(data as MetricsReport));
+      case 'optimize':
+        return plain(renderSimpleOptimize(data as OptimizeReport));
+      case 'plan':
+        return planRenderingSimple(data as PlanReport, result, context);
+      case 'setup':
+        return plain(renderSimpleSetup(data as SetupReport, context));
+      case 'status':
+        return plain(renderSimpleStatus(data as StatusReport));
+      case 'update':
+        return plain(renderSimpleUpdate(data as UpdateReport));
+      case 'verify':
+        return plain(renderSimpleVerify(data as VerifyReport));
+    }
+  }
+
   switch (result.command) {
     case 'apply':
     case 'rollback':
@@ -85,6 +147,8 @@ export function renderHuman(
       // One renderer for three commands: all three report a transaction outcome, and RFC 0006
       // rule 3 makes the rendering a function of the result object rather than of the verb.
       return plain(renderApplyReport(data as ApplyReport, context, result.command));
+    case 'setup':
+      return plain(renderVerboseSetup(data as SetupReport, context));
     case 'benchmark':
       return plain(renderBenchmarkReport(data as TaskBenchmarkCompareReport, context));
     case 'benchmark-matrix':

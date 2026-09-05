@@ -59,6 +59,7 @@ const noisyCommands = {
   apply: () => Promise.reject(new Error('unused')),
   verify: () => Promise.reject(new Error('unused')),
   rollback: () => Promise.reject(new Error('unused')),
+  setup: () => Promise.reject(new Error('unused')),
   uninstall: () => Promise.reject(new Error('unused')),
   update: () => Promise.reject(new Error('unused')),
   status: () => Promise.reject(new Error('unused')),
@@ -89,7 +90,8 @@ describe('stream discipline', () => {
     const result = await captureRun({ ...BASE, argv: ['doctor'], commands: noisyCommands });
     assert.match(result.stderr, /harness-version-untested/);
     assert.doesNotMatch(result.stdout, /harness-version-untested/);
-    assert.match(result.stdout, /^Token Harness 0\.1\.0 /);
+    assert.match(result.stdout, /^TOKEN HARNESS - /);
+    assert.match(result.stdout, /NEXT STEP/);
   });
 
   it('a usage error emits a valid envelope when --json was given', async () => {

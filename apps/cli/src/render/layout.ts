@@ -165,6 +165,8 @@ export function document(lines: readonly string[]): string {
 /** The context every human renderer receives. */
 export interface RenderContext {
   toolVersion: string;
+  /** Full technical human output; the default is a progressive action summary. */
+  verbose?: boolean;
   /** Absolute home directory, used only for `~` abbreviation. */
   home: string | null;
   /**

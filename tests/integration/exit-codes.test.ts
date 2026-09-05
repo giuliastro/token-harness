@@ -77,6 +77,7 @@ describe('exit codes', () => {
         apply: () => Promise.reject(new Error('unused')),
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
+        setup: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
         update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
@@ -95,7 +96,7 @@ describe('exit codes', () => {
   });
 
   it('2 — an unknown flag', async () => {
-    const result = await captureRun({ ...BASE, argv: ['doctor', '--verbose'] });
+    const result = await captureRun({ ...BASE, argv: ['doctor', '--debug'] });
     assert.equal(result.exitCode, EXIT_CODES['usage-error']);
     assert.match(result.stderr, /unknown-flag/);
   });
@@ -155,6 +156,7 @@ describe('exit codes', () => {
         apply: () => Promise.reject(new Error('unused')),
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
+        setup: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
         update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
@@ -192,6 +194,7 @@ describe('exit codes', () => {
         apply: () => Promise.reject(new Error('unused')),
         verify: () => Promise.reject(new Error('unused')),
         rollback: () => Promise.reject(new Error('unused')),
+        setup: () => Promise.reject(new Error('unused')),
         uninstall: () => Promise.reject(new Error('unused')),
         update: () => Promise.reject(new Error('unused')),
       },

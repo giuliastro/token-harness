@@ -1,7 +1,7 @@
 /**
  * Usage text.
  *
- * The command list mirrors RFC 0001 §CLI contract.
+ * The advanced command list mirrors RFC 0001; RFC 0006's onboarding amendment adds setup/ui.
  *
  * Ordered by the sequence a person would actually use, not alphabetically, and preceded by that
  * sequence spelled out. `--help` was reported as unusable by a first-time user: it listed nine
@@ -14,82 +14,66 @@
 
 import type { AvailableCommand } from './argv.js';
 
-const ROOT_USAGE = `token-harness — maximize useful Claude Code and Codex subscription capacity
+const ROOT_USAGE = `token-harness — simple Claude Code and Codex efficiency
 
-First time here
-  1  token-harness doctor        what is on this machine        writes nothing
-  2  token-harness budget        quota remaining                writes nothing
-  3  token-harness context       static context cost            writes nothing
-  4  token-harness mcp           MCP audit                     writes nothing
-  5  token-harness history       local usage history            writes nothing
-  6  token-harness optimize      quota-aware advice             writes nothing
-  7  token-harness plan          what would change              writes nothing
-  8  token-harness apply --yes   make those changes             WRITES
-  9  token-harness verify        is it actually intercepting    writes nothing
- 10  token-harness metrics       what it saved                  writes nothing
- 11  token-harness benchmark     compare paired task receipts   writes nothing
- 12  token-harness benchmark-start  snapshot task start         writes state
- 13  token-harness benchmark-finish close task receipt          writes state
- 14  token-harness benchmark-matrix aggregate empirical pairs   writes nothing
+New here? Run one command
+  token-harness setup
 
-  Steps 1 through 7 are safe to run right now. Nothing changes until step 8.
+It detects what is installed, checks what works, and prepares only supported
+changes. It ends with one next step. Nothing changes without an explicit
+--yes.
 
 Usage
   token-harness <command> [flags]
-  token-harness help <command>
 
-Commands, in the order you would use them
-  doctor      What is installed, what is wired up, what is worth knowing
-  budget      Read Claude/Codex usage windows with explicit source/confidence
-  context     Audit instruction bytes, effective config, MCP servers and tools
-  mcp         Show the focused native MCP/server/tool inventory
-  history     Read local Claude/Codex usage history through ccusage
-  plan        Compute what would change, file by file. Changes nothing
-  apply       Run that plan inside a transaction that can be rolled back
-  verify      Check the pipeline actually intercepts, at its declared tier
-  metrics     Report what was saved, labelled with how it was measured
-  benchmark   Compare baseline/optimized task receipts with quality gates
-  benchmark-start
-              Snapshot quota/policy before one benchmark task into local state
-  benchmark-finish
-              Close that capture with quota-after and an explicit quality gate
-  benchmark-matrix
-              Aggregate complete local pairs by class and evidence
-  optimize    Combine quota and context evidence into read-only policy advice
-  status      Report applied pipelines, drift, and importer modes
-  update      Update installed providers to what their channel offers
-  rollback    Restore the files a transaction changed, as they were before
-  uninstall   Remove what Token Harness set up, leaving everything else
+Everyday commands
+  setup       Guided detection, safe configuration, and verification
+  ui          Open the local dashboard in your browser
+  optimize    Show the best evidence-based action for the current task
+  status      Show active harnesses, providers, and configuration health
 
-Flags
-  --json               Emit one machine-readable envelope on stdout
+Advanced commands
+  doctor      Full installation and connection check
+  budget      Claude/Codex subscription usage windows
+  context     Instruction, model, and context-cost observations
+  mcp         MCP server and tool inventory
+  history     Local usage history through an installed ccusage
+  plan        Prepare an exact, reversible change without applying it
+  apply       Apply a reviewed plan
+  verify      Check that configured integrations work
+  metrics     Show measured savings
+  update      Check or update installed providers
+  rollback    Restore the previous configuration
+  uninstall   Remove only configuration Token Harness owns
+  benchmark, benchmark-start, benchmark-finish, benchmark-matrix
+              Compare real task results for advanced evaluation
+
+Useful flags
+  --verbose            Show technical details instead of the short summary
+  --json               Emit the complete machine-readable result
+  --yes                Confirm a configuration-changing operation
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
   --project <dir>      Use that project instead of the current directory
-  --since <window>     Report from this point: a duration like 7d, or a date
-  --until <window>     Report up to this point; defaults to now
-  --plan <id>          Apply a previously computed plan by id
-  --baseline <file>     Baseline task benchmark receipt JSON
-  --optimized <file>    Optimized task benchmark receipt JSON
-  --benchmark-id <id>    Safe local id for benchmark start/finish
-  --variant <name>       Benchmark variant: baseline or optimized
-  --quality <result>     Finish quality gate: passed or failed
-  --attempts <count>     Total attempts used to complete the task
-  --failed-attempts <n> Failed attempts before the final outcome
-  --task <class>        Optimizer task: mechanical, standard, hard, critical
-  --profile <name>      Optimizer profile: economy, balanced, quality, custom
-  --reserve <percent>   Keep this percent of observed allowance in reserve
-  --native-policy       Add reversible native Codex policy edits to plan
-  --yes                Grant the confirmation a mutating command requires
-  --version            Print the version and exit 0
-  --help               Print usage and exit 0
+  --help               Show help for a command
+  --version            Print the version
 
-Only apply, update, rollback and uninstall change harness/provider
-configuration, and none of them do without --yes. Metrics and benchmark
-capture may write only Token Harness's own local state. Exit codes and JSON
-are specified in RFC 0006.`;
+Run token-harness <command> --help for advanced flags and safety details.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  setup: `token-harness setup — guided onboarding in one command
+
+Usage
+  token-harness setup [--yes] [--verbose] [--json] [--project <dir>]
+
+Without --yes, setup detects Claude Code/Codex, checks existing providers, and
+prepares any supported reversible configuration. It changes no harness/provider
+configuration and ends with one next step.
+
+Run the suggested token-harness setup --yes only after reviewing the short plan.
+It applies that stored plan transactionally, verifies the result, reads allowance
+when available, and points to the local dashboard. Token Harness never installs
+Claude Code or Codex and never spends model quota during setup.`,
   'benchmark-start': `token-harness benchmark-start — snapshot one task before it runs
 
 Usage

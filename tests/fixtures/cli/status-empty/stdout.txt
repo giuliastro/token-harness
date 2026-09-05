@@ -1,12 +1,12 @@
-Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
+TOKEN HARNESS - HEALTHY
 
-Pipelines
-  no active payload pipeline recorded
+ACTIVE
+  No Token Harness pipeline is active.
+  Drift: none
 
-Drift
-  none
+CHANGES
+  Nothing changed.
 
-Importers
-  none
-
-No drift and no contested scope.
+NEXT STEP
+  token-harness setup
+  Finish the guided setup.

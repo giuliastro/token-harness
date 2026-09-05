@@ -1936,3 +1936,20 @@ The headline claim for this milestone is intentionally narrow:
 > model/effort choices only where they pay off.
 
 It does **not** claim to bypass provider limits or to know an unpublished token-to-quota formula.
+
+### 18.10 P1 — Progressive onboarding and local dashboard
+
+Make the quota-aware surface usable without requiring a first-time user to understand the command
+graph. `token-harness setup` composes the existing safe lifecycle and ends with one next step;
+ordinary human rendering states what works and what changed, while `--verbose` preserves technical
+evidence and `--json` preserves the complete stable envelope. `token-harness ui` provides a
+dependency-free, loopback-only, read-only browser dashboard over the same reports.
+
+Acceptance:
+
+- first-time onboarding starts with one command and never mutates without `--yes`;
+- every primary default report has one next step and explicitly states whether anything changed;
+- active harnesses/providers and observable allowance are visible without reading diagnostics;
+- `--verbose` retains the established detailed reports and schema-1 JSON remains complete;
+- the dashboard has no desktop runtime, remote assets, mutation endpoint, or non-loopback listener;
+- README and help lead with setup, dashboard, and a copyable AI installation prompt.

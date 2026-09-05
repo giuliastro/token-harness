@@ -223,7 +223,7 @@ with the RFCs, and reachable from the fixture it declares.
 ### Scenario: RTK and HarnessTrim installed, neither wired to a harness
 
 ```text
-$ token-harness doctor
+$ token-harness doctor --verbose
 Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
 
   HARNESSES     - STATE        - CONFIG FILE
@@ -281,7 +281,7 @@ by someone explaining the output rather than fixing it.
 ### Scenario: planning against the fixture above
 
 ```text
-$ token-harness plan --harness claude
+$ token-harness plan --harness claude --verbose
 Plan 7f3a91c2 — profile safe — harness claude — project C:/work/demo
 
 Capability ownership
@@ -338,7 +338,7 @@ provider row — both places where it is actually knowable.
 ### Scenario: brownfield — HarnessTrim already wired to Claude by hand
 
 ```text
-$ token-harness plan --harness claude
+$ token-harness plan --harness claude --verbose
 Plan aborted — 1 hard conflict.
 
   conflict  exclusive-scope-contested
@@ -356,7 +356,7 @@ Exit code 4.
 ### Scenario: verifying RTK managed on Claude and HarnessTrim adopted on OpenCode
 
 ```text
-$ token-harness verify
+$ token-harness verify --verbose
 Receipt 7f3a91c2 — applied 2026-07-29T10:12:04Z
 
 rtk on claude — set up by this tool, tier canary
@@ -418,7 +418,7 @@ harness — the case where the plan claimed interception would be proven and it 
 ### Scenario: metrics after a week of RTK on Claude and HarnessTrim adopted on OpenCode
 
 ```text
-$ token-harness metrics --since 7d
+$ token-harness metrics --since 7d --verbose
 Savings — 2026-07-22 to 2026-07-29 — pipeline b41e
 
 Exact local            1,204,880 -> 331,402 tokens    saved 873,478
@@ -496,3 +496,20 @@ reserved decision with no identifier, and this table is where that would have go
 - Verification status relative to the declared tier, so a supported configuration exits
   0: accepted.
 - Golden files for human output, not only JSON: accepted.
+
+## 2026-09-05 amendment: progressive human output and onboarding
+
+The original detailed golden transcripts remain normative for `--verbose`. The default human
+renderer is now progressive: it leads with the current state, states whether configuration changed,
+and ends with exactly one `NEXT STEP`. Technical evidence remains available through `--verbose`.
+The schema-1 `--json` envelope is unchanged and remains the complete automation surface.
+
+`setup` composes detection, planning, explicit confirmation, application, verification, and budget
+observation. Without `--yes` it may persist Token Harness's own reviewable plan state, but it does
+not change harness/provider configuration. With `--yes`, it applies only the stored supported plan
+through the existing transaction and verification contracts.
+
+`ui` is a read-only local consumer of the same command reports. It binds only to `127.0.0.1`, has no
+mutation endpoint or external asset dependency, and exposes a schema-1 one-shot snapshot with
+`ui --json`. The browser view may refresh observations, but may only copy a CLI command for an
+explicit action; it never performs that action itself.

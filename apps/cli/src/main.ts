@@ -13,8 +13,22 @@
  */
 
 import process from 'node:process';
+import { createServer } from 'node:http';
 
-import { JsonlStore, deriveProjectId } from '@token-harness/core';
+import {
+  EXIT_CODES,
+  JsonlStore,
+  commandResult,
+  deriveProjectId,
+  diagnostic,
+  serializeEnvelope,
+  toEnvelope,
+  type BudgetReport,
+  type CliEnvelope,
+  type DoctorReport,
+  type OptimizeReport,
+  type StatusReport,
+} from '@token-harness/core';
 import {
   ChildLocalDatabase,
   NodeFileSystem,
@@ -24,7 +38,16 @@ import {
   resolveHostEnvironment,
 } from '@token-harness/platform';
 
-import { run } from './run.js';
+import { run, type RunOptions } from './run.js';
+import {
+  UI_USAGE,
+  buildDashboardModel,
+  parseUiArgs,
+  uiAsset,
+  type DashboardModel,
+  type UiOptions,
+} from './ui.js';
+import { TOOL_VERSION } from './version.js';
 
 /**
  * The internal reader mode.
@@ -56,6 +79,18 @@ async function runAsDatabaseReader(argv: readonly string[]): Promise<boolean> {
 export async function main(argv: readonly string[]): Promise<void> {
   if (await runAsDatabaseReader(argv)) return;
 
+  const uiInvocation = argv[0] === 'ui' ? parseUiArgs(argv.slice(1)) : null;
+  if (uiInvocation !== null && !uiInvocation.ok) {
+    process.stderr.write(`${uiInvocation.message}\nRun token-harness ui --help for usage.\n`);
+    process.exitCode = EXIT_CODES['usage-error'];
+    return;
+  }
+  if (uiInvocation?.ok === true && uiInvocation.options.help) {
+    process.stdout.write(`${UI_USAGE}\n`);
+    process.exitCode = EXIT_CODES.ok;
+    return;
+  }
+
   const resolution = resolveHostEnvironment();
 
   /**
@@ -72,12 +107,7 @@ export async function main(argv: readonly string[]): Promise<void> {
       ? await resolveAttributionSalt(fs, resolution.environment.paths.state)
       : { salt: null, diagnostics: [] };
 
-  const exitCode = await run({
-    argv,
-    streams: {
-      out: (text) => process.stdout.write(text),
-      err: (text) => process.stderr.write(text),
-    },
+  const baseOptions: Omit<RunOptions, 'argv' | 'streams'> = {
     // On failure `facts` is null only when the operating system itself is
     // unsupported. An unresolvable state directory still has honest facts to
     // report, and `run` uses them for the runtime-floor check before refusing.
@@ -138,7 +168,219 @@ export async function main(argv: readonly string[]): Promise<void> {
         : null,
     env: process.env,
     stdoutIsTty: process.stdout.isTTY === true,
+  };
+
+  if (uiInvocation?.ok === true) {
+    process.exitCode = await runUi(uiInvocation.options, baseOptions);
+    return;
+  }
+
+  const exitCode = await run({
+    ...baseOptions,
+    argv,
+    streams: {
+      out: (text) => process.stdout.write(text),
+      err: (text) => process.stderr.write(text),
+    },
   });
 
   process.exitCode = exitCode;
+}
+
+async function readJsonReport<T>(
+  command: string,
+  baseOptions: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<{ exitCode: number; data: T }> {
+  let stdout = '';
+  let stderr = '';
+  const exitCode = await run({
+    ...baseOptions,
+    argv: [command, '--json'],
+    streams: {
+      out: (text) => {
+        stdout += text;
+      },
+      err: (text) => {
+        stderr += text;
+      },
+    },
+  });
+  let envelope: CliEnvelope<T>;
+  try {
+    envelope = JSON.parse(stdout) as CliEnvelope<T>;
+  } catch {
+    throw new Error(stderr.trim() || `${command} did not return a valid report`);
+  }
+  if (envelope.data === null) {
+    throw new Error(
+      envelope.diagnostics[0]?.message ?? `${command} could not inspect this computer`,
+    );
+  }
+  return { exitCode, data: envelope.data };
+}
+
+async function collectDashboard(
+  baseOptions: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<DashboardModel> {
+  const [doctor, status, budget, optimize] = await Promise.all([
+    readJsonReport<DoctorReport>('doctor', baseOptions),
+    readJsonReport<StatusReport>('status', baseOptions),
+    readJsonReport<BudgetReport>('budget', baseOptions),
+    readJsonReport<OptimizeReport>('optimize', baseOptions),
+  ]);
+  return buildDashboardModel({
+    generatedAt: new Date().toISOString(),
+    doctor: doctor.data,
+    status: status.data,
+    budget: budget.data,
+    optimize: optimize.data,
+  });
+}
+
+const UI_SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'Cache-Control': 'no-store',
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; " +
+    "img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+};
+
+async function openDashboard(
+  url: string,
+  baseOptions: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<boolean> {
+  const adapters = baseOptions.adapters;
+  const platform = baseOptions.platform;
+  if (adapters === null || adapters === undefined || platform === null) return false;
+  const request =
+    platform.os === 'windows'
+      ? { executable: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url] }
+      : platform.os === 'macos'
+        ? { executable: 'open', args: [url] }
+        : { executable: 'xdg-open', args: [url] };
+  const result = await adapters.runner.run({
+    ...request,
+    cwd: baseOptions.cwd,
+    env: Object.fromEntries(
+      ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'].flatMap(
+        (name) => (process.env[name] === undefined ? [] : [[name, process.env[name] as string]]),
+      ),
+    ),
+    timeoutMs: 5_000,
+    maxOutputBytes: 4_096,
+  });
+  return result.failure === null && result.exitCode === 0;
+}
+
+async function runUi(
+  options: UiOptions,
+  baseOptions: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<number> {
+  let initial: DashboardModel;
+  try {
+    initial = await collectDashboard(baseOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (options.json) {
+      process.stdout.write(
+        serializeEnvelope(
+          toEnvelope(
+            commandResult({
+              command: 'ui',
+              exitCode: EXIT_CODES['unsupported-environment'],
+              diagnostics: [
+                diagnostic({
+                  severity: 'error',
+                  code: 'dashboard-unavailable',
+                  message,
+                  remediation: 'Run token-harness doctor --verbose',
+                }),
+              ],
+            }),
+            TOOL_VERSION,
+          ),
+        ),
+      );
+    } else {
+      process.stderr.write(`Token Harness dashboard could not start: ${message}\n`);
+    }
+    return EXIT_CODES['unsupported-environment'];
+  }
+
+  if (options.json) {
+    const exitCode = initial.state === 'attention' ? EXIT_CODES['problems-found'] : EXIT_CODES.ok;
+    process.stdout.write(
+      serializeEnvelope(
+        toEnvelope(commandResult({ command: 'ui', exitCode, data: initial }), TOOL_VERSION),
+      ),
+    );
+    return exitCode;
+  }
+
+  let cached = initial;
+  let cachedAt = Date.now();
+  const server = createServer(async (request, response) => {
+    const host = request.headers.host ?? '';
+    const sameSite = request.headers['sec-fetch-site'] !== 'cross-site';
+    const localHost = host.startsWith('127.0.0.1:') || host.startsWith('localhost:');
+    if (!sameSite || !localHost) {
+      response.writeHead(403, { ...UI_SECURITY_HEADERS, 'Content-Type': 'text/plain' });
+      response.end('Forbidden\n');
+      return;
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.writeHead(405, {
+        ...UI_SECURITY_HEADERS,
+        Allow: 'GET, HEAD',
+        'Content-Type': 'text/plain',
+      });
+      response.end('Method not allowed\n');
+      return;
+    }
+    let model = cached;
+    if (request.url === '/api/status') {
+      if (Date.now() - cachedAt > 5_000) {
+        try {
+          cached = await collectDashboard(baseOptions);
+          cachedAt = Date.now();
+          model = cached;
+        } catch {
+          response.writeHead(503, {
+            ...UI_SECURITY_HEADERS,
+            'Content-Type': 'application/json; charset=utf-8',
+          });
+          response.end('{"error":"Dashboard data is temporarily unavailable"}');
+          return;
+        }
+      }
+    }
+    const asset = uiAsset(request.url ?? '/', model);
+    response.writeHead(asset.status, {
+      ...UI_SECURITY_HEADERS,
+      'Content-Type': asset.contentType,
+    });
+    response.end(request.method === 'HEAD' ? undefined : asset.body);
+  });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(options.port, '127.0.0.1', () => resolve());
+    });
+  } catch (error) {
+    process.stderr.write(
+      `Token Harness dashboard could not listen locally: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return EXIT_CODES['internal-error'];
+  }
+
+  const address = server.address();
+  const port = typeof address === 'object' && address !== null ? address.port : options.port;
+  const url = `http://127.0.0.1:${port}/`;
+  process.stdout.write(`Token Harness dashboard is ready: ${url}\nClose it with Ctrl+C.\n`);
+  if (options.open && !(await openDashboard(url, baseOptions))) {
+    process.stdout.write(`Open this address in your browser: ${url}\n`);
+  }
+  return EXIT_CODES.ok;
 }
