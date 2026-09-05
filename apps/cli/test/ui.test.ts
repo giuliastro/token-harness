@@ -181,8 +181,14 @@ describe('local dashboard', () => {
     assert.equal(model.statusLabel, 'READY');
     assert.equal(model.nextStep.command, null);
     assert.match(model.nextStep.title, /coding agent normally/i);
-    assert.deepEqual(model.harnesses.map((item) => item.id), ['codex']);
-    assert.deepEqual(model.otherHarnesses.map((item) => item.name), ['Pi']);
+    assert.deepEqual(
+      model.harnesses.map((item) => item.id),
+      ['codex'],
+    );
+    assert.deepEqual(
+      model.otherHarnesses.map((item) => item.name),
+      ['Pi'],
+    );
     assert.equal(JSON.stringify(model).includes('Hermes'), false);
     assert.equal(model.harnesses[0]?.allowance[0]?.remainingPercent, 62);
     assert.match(model.recommendation?.action ?? '', /Codex/);
@@ -266,7 +272,10 @@ describe('local dashboard', () => {
             action: 'Reduce avoidable static context.',
             target: null,
             evidence: [
-              { code: 'instruction-budget', summary: '0B known loaded of 32768B project-doc budget' },
+              {
+                code: 'instruction-budget',
+                summary: '0B known loaded of 32768B project-doc budget',
+              },
               { code: 'mcp-exposure', summary: '12 MCP servers, 60 tools visible in inventory' },
             ],
           },
