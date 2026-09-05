@@ -3,6 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
+import { TOOL_VERSION } from '../src/version.js';
+
 const launcher = join(process.cwd(), 'apps', 'cli', 'bin', 'token-harness.mjs');
 
 function run(args: readonly string[]) {
@@ -49,7 +51,7 @@ describe('Phase 18.7 launcher routing', () => {
 
     assert.equal(child.status, 0, child.stderr);
     assert.equal(child.stderr, '');
-    assert.match(child.stdout, /^0\.1\.5\n$/);
+    assert.equal(child.stdout, `${TOOL_VERSION}\n`);
   });
 
   it('surfaces read-only and evidence-capture Phase 18.7 commands from human root help only', () => {
@@ -93,7 +95,7 @@ describe('Phase 18.7 launcher routing', () => {
     const version = run(['transfer-record', '--bad-flag', '--version']);
     assert.equal(version.status, 0, version.stderr);
     assert.equal(version.stderr, '');
-    assert.match(version.stdout, /^0\.1\.5\n$/);
+    assert.equal(version.stdout, `${TOOL_VERSION}\n`);
   });
 
   it('does not append human discoverability text to JSON root help', () => {
