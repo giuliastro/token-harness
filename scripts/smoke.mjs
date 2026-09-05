@@ -8,8 +8,8 @@
  * no `node_modules` anywhere above it, and executed there. If anything failed to
  * inline, module resolution fails and the test does too.
  *
- * Only `--version` and `--help` are exercised. Both are pure and touch nothing
- * on the machine, which keeps this from reading the developer's real home.
+ * The smoke paths are read-only and use explicit scheduler evidence, so this
+ * never needs to inspect the developer's real harness state.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -70,6 +70,89 @@ try {
   check(
     '--help lists doctor, plan, and status',
     ['doctor', 'plan', 'status'].every((c) => help.stdout.includes(c)),
+  );
+  check(
+    '--help lists cross-harness surfaces',
+    ['handoff', 'transfer', 'schedule', 'transfer-record'].every((c) => help.stdout.includes(c)),
+  );
+
+  for (const command of ['handoff', 'transfer', 'transfer-record', 'schedule']) {
+    const commandHelp = runBundle([command, '--help']);
+    check(`${command} --help exits 0`, commandHelp.status === 0, `exit ${commandHelp.status}`);
+    check(
+      `${command} --help writes nothing to stderr`,
+      commandHelp.stderr === '',
+      JSON.stringify(commandHelp.stderr),
+    );
+    check(
+      `${command} --help identifies the command`,
+      commandHelp.stdout.includes(`token-harness ${command}`),
+      JSON.stringify(commandHelp.stdout.slice(0, 160)),
+    );
+  }
+
+  const handoff = runBundle([
+    'handoff',
+    '--objective',
+    'validate bundled release',
+    '--next-action',
+    'ship the tested artifact',
+    '--max-bytes',
+    '512',
+  ]);
+  check('handoff builds a compact payload', handoff.status === 0 && handoff.stdout.length > 0);
+  check(
+    'handoff respects the configured UTF-8 byte budget',
+    Buffer.byteLength(handoff.stdout, 'utf8') <= 512,
+    `${Buffer.byteLength(handoff.stdout, 'utf8')} bytes`,
+  );
+
+  const schedule = runBundle([
+    'schedule',
+    '--current',
+    'claude',
+    '--candidate',
+    'codex',
+    '--task-class',
+    'hard',
+    '--current-five-hour',
+    'over-pace',
+    '--current-weekly',
+    'on-pace',
+    '--candidate-five-hour',
+    'under-pace',
+    '--candidate-weekly',
+    'on-pace',
+    '--candidate-quality',
+    'passed',
+    '--candidate-quality-task',
+    'hard',
+    '--candidate-quality-samples',
+    '1',
+    '--handoff-bytes',
+    '400',
+    '--max-handoff-bytes',
+    '2048',
+    '--transfer-benefit',
+    'proven-positive',
+    '--json',
+  ]);
+  check(
+    'schedule evaluates explicit cross-harness evidence from the bundle',
+    (() => {
+      try {
+        const envelope = JSON.parse(schedule.stdout);
+        return (
+          schedule.status === 0 &&
+          schedule.stderr === '' &&
+          envelope.command === 'schedule' &&
+          envelope.data?.decision === 'switch'
+        );
+      } catch {
+        return false;
+      }
+    })(),
+    `${schedule.stderr.trim()}\n${schedule.stdout.trim()}`,
   );
 
   const bad = runBundle(['definitely-not-a-command']);
