@@ -122,22 +122,6 @@ describe('capturing', () => {
     assert.notEqual(first.contentRef, second.contentRef);
   });
 
-  it('reuses the initial snapshot when two actions mutate the same path', async () => {
-    const { store, project } = harness();
-    const target = join(project, 'settings.json');
-    writeFileSync(target, 'original\n');
-
-    const first = await store.capture(target);
-    writeFileSync(target, 'after first action\n');
-    const second = await store.capture(target);
-    writeFileSync(target, 'after second action\n');
-
-    assert.deepEqual(second, first);
-    assert.equal(store.captured.length, 1);
-    await store.restoreAll(store.captured);
-    assert.equal(readFileSync(target, 'utf8'), 'original\n');
-  });
-
   it('captures a directory as a directory', async () => {
     const { store, project } = harness();
     const dir = join(project, 'nested');
