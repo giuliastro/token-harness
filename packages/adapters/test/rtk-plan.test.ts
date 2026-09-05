@@ -7,8 +7,8 @@
  * one an installer gets wrong by overwriting.
  *
  * The hook shape here is copied from a configured installation: `hooks.PreToolUse` is a list of
- * `{ matcher, hooks: [{ type, command }] }`, and RTK's entry is `matcher: "Bash"` with command
- * `rtk hook claude`.
+ * `{ matcher, hooks: [{ type, command }] }`. On Windows the same native `rtk hook claude` command
+ * is used for both Claude shell tool families, `Bash` and `PowerShell`.
  */
 
 import assert from 'node:assert/strict';
@@ -136,13 +136,13 @@ function ownership(capabilities: readonly string[], toolFamily = 'Bash'): Resolv
 }
 
 /** The live configuration as the harness adapter would report it. */
-function configuredWithRtk(): HarnessConfigSummary {
+function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
   return {
     harnessId: CLAUDE,
     configPath: SETTINGS,
     scope: 'user',
     interceptionPoints: ['pre-tool-use'],
-    matchers: ['Bash'],
+    matchers,
     commands: ['rtk hook claude'],
   };
 }
@@ -217,14 +217,21 @@ function plan(options: {
 }
 
 describe('a machine with nothing on it', () => {
-  it('installs, then configures, in that order', () => {
+  it('installs, then configures both Windows shell families, in that order', () => {
     const result = plan({ installed: false });
 
     // Order is not cosmetic: a hook pointing at an absent executable is the `broken` state
     // `detect` reports, so every intercepted command would fail.
     assert.deepEqual(
       result.actions.map((action) => action.kind),
-      ['package-manager-install', 'merge-json'],
+      ['package-manager-install', 'merge-json', 'merge-json'],
+    );
+    assert.deepEqual(
+      result.actions.slice(1).map((action) => (action as MergeJsonAction).operations[0]?.value),
+      [
+        { matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] },
+        { matcher: 'PowerShell', hooks: [{ type: 'command', command: 'rtk hook claude' }] },
+      ],
     );
   });
 
@@ -271,11 +278,11 @@ describe('a machine with nothing on it', () => {
 });
 
 describe('installed but not wired', () => {
-  it('plans only the hook', () => {
+  it('plans one hook per Windows shell family', () => {
     const result = plan({ installed: true });
     assert.deepEqual(
       result.actions.map((action) => action.kind),
-      ['merge-json'],
+      ['merge-json', 'merge-json'],
     );
   });
 
@@ -291,11 +298,20 @@ describe('installed but not wired', () => {
     assert.equal(action.ownedPointers.length, 1);
   });
 
-  it('writes the entry shape the harness actually uses', () => {
+  it('writes the Bash entry shape the harness already uses', () => {
     const result = plan({ installed: true });
     const action = result.actions[0] as MergeJsonAction;
     assert.deepEqual(action.operations[0]?.value, {
       matcher: 'Bash',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
+  });
+
+  it('writes a PowerShell entry using the same native RTK Claude hook', () => {
+    const result = plan({ installed: true });
+    const action = result.actions[1] as MergeJsonAction;
+    assert.deepEqual(action.operations[0]?.value, {
+      matcher: 'PowerShell',
       hooks: [{ type: 'command', command: 'rtk hook claude' }],
     });
   });
@@ -320,9 +336,10 @@ describe('installed but not wired', () => {
     // `user` scope resolves against the home directory, not the project root. Getting this
     // backwards would write a machine-wide hook into a repository.
     assert.deepEqual(result.actions[0]?.affectedPaths, [SETTINGS]);
+    assert.deepEqual(result.actions[1]?.affectedPaths, [SETTINGS]);
   });
 
-  it('plans one hook for two capabilities on the same surface', () => {
+  it('deduplicates capabilities but still covers both Windows shell families', () => {
     const result = plan({
       installed: true,
       request: request({
@@ -330,9 +347,17 @@ describe('installed but not wired', () => {
       }),
     });
 
-    // One hook serves both. Two entries would register the command twice and double-count every
-    // saving — the RFC 0003 failure, caused by us rather than a third party.
+    // Each family gets one hook even though the same hook provides two capabilities.
+    assert.equal(result.actions.length, 2);
+  });
+
+  it('does not synthesize PowerShell outside Windows', () => {
+    const result = plan({ installed: true, os: 'linux' });
     assert.equal(result.actions.length, 1);
+    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+      matcher: 'Bash',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
   });
 
   it('gives the same plan the same action id', () => {
@@ -355,55 +380,75 @@ describe('installed but not wired', () => {
 });
 
 describe('brownfield: RTK already configured in the surface we would claim', () => {
-  it('plans nothing', () => {
+  it('plans only the missing PowerShell coverage on Windows', () => {
     const result = plan({ installed: true, configs: [configuredWithRtk()] });
 
-    // PLAN §10: "tolerate an existing user-managed RTK installation". The desired state is the
-    // current state. Rewriting it "our way" would take ownership of a line the user wrote.
+    assert.equal(result.actions.length, 1);
+    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+      matcher: 'PowerShell',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
+  });
+
+  it('does not duplicate a user-owned combined Bash|PowerShell matcher', () => {
+    const result = plan({
+      installed: true,
+      configs: [configuredWithRtk(['Bash|PowerShell'])],
+    });
     assert.deepEqual(result.actions, []);
   });
 
-  it('still plans nothing when a third party shares the surface', () => {
+  it('still plans only the missing family when a third party shares the surface', () => {
     const shared: HarnessConfigSummary = {
       ...configuredWithRtk(),
       commands: ['rtk hook claude', 'somebody-elses-tool'],
     };
     const result = plan({ installed: true, configs: [shared] });
-    // The competing entry is a conflict for `status` to report, not a reason to re-register a
-    // hook that is already there.
-    assert.deepEqual(result.actions, []);
+    assert.equal(result.actions.length, 1);
+    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+      matcher: 'PowerShell',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
   });
 
-  it('plans the hook when the entry is on a different tool family', () => {
+  it('plans the Bash hook when the existing entry is on PowerShell only', () => {
     const elsewhere: HarnessConfigSummary = { ...configuredWithRtk(), matchers: ['PowerShell'] };
     const result = plan({ installed: true, configs: [elsewhere] });
-    // Registered somewhere is not registered here — the coverage gap the Phase 2.5 spike found.
+    // PowerShell is covered; Bash is not.
     assert.equal(result.actions.length, 1);
+    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+      matcher: 'Bash',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
   });
 
-  it('plans the hook when the entry is on a different interception point', () => {
+  it('plans both hooks when the entry is on a different interception point', () => {
     const elsewhere: HarnessConfigSummary = {
       ...configuredWithRtk(),
       interceptionPoints: ['post-tool-use'],
     };
-    assert.equal(plan({ installed: true, configs: [elsewhere] }).actions.length, 1);
+    assert.equal(plan({ installed: true, configs: [elsewhere] }).actions.length, 2);
   });
 
-  it('plans the hook when the entry is in a different file', () => {
+  it('plans both hooks when the entry is in a different file', () => {
     const elsewhere: HarnessConfigSummary = {
       ...configuredWithRtk(),
       configPath: 'C:\\work\\demo\\.claude\\settings.local.json',
     };
-    assert.equal(plan({ installed: true, configs: [elsewhere] }).actions.length, 1);
+    assert.equal(plan({ installed: true, configs: [elsewhere] }).actions.length, 2);
   });
 
-  it('installs but does not re-wire when RTK is configured yet not runnable', () => {
+  it('installs and closes the missing family when RTK is configured yet not runnable', () => {
     // The `broken` state `detect` reports: a hook invoking rtk with no rtk to invoke.
     const result = plan({ installed: false, configs: [configuredWithRtk()] });
     assert.deepEqual(
       result.actions.map((action) => action.kind),
-      ['package-manager-install'],
+      ['package-manager-install', 'merge-json'],
     );
+    assert.deepEqual((result.actions[1] as MergeJsonAction).operations[0]?.value, {
+      matcher: 'PowerShell',
+      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+    });
   });
 });
 
@@ -426,6 +471,15 @@ describe('the uninstall plan', () => {
     const result = plan({ installed: true, request: request({ desiredState: 'absent' }) });
     // Planning a removal whose precondition cannot hold produces a plan that fails when run,
     // which is worse than an empty one.
+    assert.deepEqual(result.actions, []);
+  });
+
+  it('does not claim a combined user matcher during removal', () => {
+    const result = plan({
+      installed: true,
+      configs: [configuredWithRtk(['Bash|PowerShell'])],
+      request: request({ desiredState: 'absent' }),
+    });
     assert.deepEqual(result.actions, []);
   });
 
@@ -453,7 +507,7 @@ describe('the uninstall plan', () => {
       configs: [configuredWithRtk()],
       request: request({ desiredState: 'absent' }),
     });
-    // The install and the removal address the same entry, so the removal can name the action
+    // The install and the removal address the same Bash entry, so the removal can name the action
     // whose effect it undoes.
     assert.equal(
       (removal.actions[0] as RemoveOwnedChangeAction).reverses,
@@ -518,11 +572,6 @@ describe('scopes with nowhere to go', () => {
      * this file builds is a `{matcher, hooks:[…]}` object appended at `hooks.<eventName>`, which
      * is Claude Code's schema and nothing else's — OpenCode has no `hooks` document, and RTK
      * reaches it by dropping a plugin module into `.config/opencode/plugins/`.
-     *
-     * Without the guard the loop finds an interception point and a primary config file, and
-     * appends a Claude-shaped hook to `opencode.jsonc`: a valid-looking diff writing a key
-     * OpenCode never reads. The empty compatibility-row table stops that from running today, but
-     * that is a gate on when the plan may run, not on whether it is right.
      */
     const result = plan({
       installed: true,
