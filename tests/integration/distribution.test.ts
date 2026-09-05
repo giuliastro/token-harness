@@ -216,8 +216,14 @@ describe('distribution', () => {
   });
 
   it('tests the product floor in CI and uses a trusted-publishing runtime for releases', () => {
-    assert.ok(CI.includes("node-version: '22.13.0'"), 'CI no longer tests the RFC 0001 runtime floor');
-    assert.ok(RELEASE_CONFIG.includes("node-version: '24'"), 'release does not satisfy the OIDC runtime floor');
+    assert.ok(
+      CI.includes("node-version: '22.13.0'"),
+      'CI no longer tests the RFC 0001 runtime floor',
+    );
+    assert.ok(
+      RELEASE_CONFIG.includes("node-version: '24'"),
+      'release does not satisfy the OIDC runtime floor',
+    );
     assert.match(RELEASE_CONFIG, /npm install --global npm@11\.5\.1/);
   });
 
