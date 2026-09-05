@@ -91,7 +91,11 @@ export function parseCrossHarnessTransferReceipt(
 ): CrossHarnessTransferReceiptParseResult {
   const row = record(value);
   if (row === null) {
-    return { ok: false, reason: 'invalid-shape', message: 'transfer receipt must be a JSON object' };
+    return {
+      ok: false,
+      reason: 'invalid-shape',
+      message: 'transfer receipt must be a JSON object',
+    };
   }
   if (row['schemaVersion'] !== CROSS_HARNESS_TRANSFER_RECEIPT_SCHEMA_VERSION) {
     return {
