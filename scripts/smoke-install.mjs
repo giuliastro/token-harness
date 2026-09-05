@@ -19,8 +19,8 @@
  * command interpreter — the constraint `packages/platform` exists to handle, and not
  * something this script should reimplement to test a manifest.
  *
- * Only `--version`, `--help`, and `doctor` are exercised. All three are read-only, so
- * this never touches the machine it runs on.
+ * Read-only root and cross-harness surfaces are exercised. Scheduler evidence is supplied
+ * explicitly, so the smoke never needs to inspect real subscription state.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -167,6 +167,89 @@ try {
 
   const help = run(['--help']);
   check('--help exits 0 and prints usage', help.status === 0 && help.stdout.includes('Usage'));
+  check(
+    '--help exposes the cross-harness release surfaces',
+    ['handoff', 'transfer', 'schedule', 'transfer-record'].every((command) =>
+      help.stdout.includes(command),
+    ),
+  );
+
+  for (const command of ['handoff', 'transfer', 'transfer-record', 'schedule']) {
+    const commandHelp = run([command, '--help']);
+    check(
+      `${command} --help works from the installed package`,
+      commandHelp.status === 0 &&
+        commandHelp.stderr === '' &&
+        commandHelp.stdout.includes(`token-harness ${command}`),
+      `${commandHelp.stderr.trim()}\n${commandHelp.stdout.slice(0, 160)}`,
+    );
+  }
+
+  const handoff = run([
+    'handoff',
+    '--objective',
+    'validate installed release',
+    '--next-action',
+    'ship the tested package',
+    '--max-bytes',
+    '512',
+  ]);
+  check(
+    'handoff runs from the installed package within its byte budget',
+    handoff.status === 0 &&
+      handoff.stderr === '' &&
+      handoff.stdout.length > 0 &&
+      Buffer.byteLength(handoff.stdout, 'utf8') <= 512,
+    `${Buffer.byteLength(handoff.stdout, 'utf8')} bytes\n${handoff.stderr.trim()}`,
+  );
+
+  const schedule = run([
+    'schedule',
+    '--current',
+    'claude',
+    '--candidate',
+    'codex',
+    '--task-class',
+    'hard',
+    '--current-five-hour',
+    'over-pace',
+    '--current-weekly',
+    'on-pace',
+    '--candidate-five-hour',
+    'under-pace',
+    '--candidate-weekly',
+    'on-pace',
+    '--candidate-quality',
+    'passed',
+    '--candidate-quality-task',
+    'hard',
+    '--candidate-quality-samples',
+    '1',
+    '--handoff-bytes',
+    '400',
+    '--max-handoff-bytes',
+    '2048',
+    '--transfer-benefit',
+    'proven-positive',
+    '--json',
+  ]);
+  check(
+    'schedule reaches a deterministic switch decision from the installed package',
+    (() => {
+      try {
+        const envelope = JSON.parse(schedule.stdout);
+        return (
+          schedule.status === 0 &&
+          schedule.stderr === '' &&
+          envelope.command === 'schedule' &&
+          envelope.data?.decision === 'switch'
+        );
+      } catch {
+        return false;
+      }
+    })(),
+    `${schedule.stderr.trim()}\n${schedule.stdout.trim()}`,
+  );
 
   /**
    * The installed artifact runs and reports; it is not asked to find an empty machine.
@@ -185,8 +268,7 @@ try {
   check(
     'doctor runs and reports, exiting 0 or 3',
     doctor.status === 0 || doctor.status === 3,
-    `exit ${String(doctor.status)}
-${doctor.stderr.trim()}`,
+    `exit ${String(doctor.status)}\n${doctor.stderr.trim()}`,
   );
   check(
     'doctor reports the real platform',
