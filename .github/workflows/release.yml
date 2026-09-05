@@ -43,6 +43,8 @@ jobs:
           # current LTS runtime while CI continues to test the lower supported product floor.
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          # Release publishing must not restore package-manager state that could carry auth.
+          package-manager-cache: false
 
       - name: Pin npm Trusted Publishing floor
         run: npm install --global npm@11.5.1
@@ -108,6 +110,23 @@ jobs:
           fi
           echo "$name@$version is not on npm yet"
           echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Remove setup-node token auth shim before OIDC publish
+        if: steps.npm.outputs.publish == 'true'
+        shell: bash
+        run: |
+          # setup-node's registry-url support writes an _authToken placeholder into its temporary
+          # npmrc. npm can interpret that as classic token auth and skip the OIDC exchange. Keep the
+          # registry selection, but replace the generated file with a credential-free npmrc.
+          if [ -z "${NPM_CONFIG_USERCONFIG:-}" ]; then
+            echo "::error::setup-node did not expose its npm user config path"
+            exit 1
+          fi
+          printf '%s\n' 'registry=https://registry.npmjs.org/' > "$NPM_CONFIG_USERCONFIG"
+          if grep -q '_authToken' "$NPM_CONFIG_USERCONFIG"; then
+            echo "::error::npm user config still contains token authentication"
+            exit 1
+          fi
 
       - name: Publish to npm with trusted publishing
         if: steps.npm.outputs.publish == 'true'
