@@ -37,6 +37,7 @@ import { runMcp } from './commands/mcp.js';
 import { runOptimize } from './commands/optimize.js';
 import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
+import { runSetup } from './commands/setup.js';
 import { runStatus } from './commands/status.js';
 import { runUpdate } from './commands/update.js';
 import { runVerify } from './commands/verify.js';
@@ -76,6 +77,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   optimize: runOptimize,
   plan: runPlan,
   rollback: runRollback,
+  setup: runSetup,
   status: runStatus,
   uninstall: runUninstall,
   update: runUpdate,
@@ -300,6 +302,7 @@ export async function run(options: RunOptions): Promise<number> {
   const renderContext: RenderContext = {
     toolVersion,
     home: options.home,
+    verbose: false,
     decorate: shouldDecorate({
       stdoutIsTty: options.stdoutIsTty ?? false,
       noColor: env['NO_COLOR'] !== undefined,
@@ -368,6 +371,8 @@ export async function run(options: RunOptions): Promise<number> {
       json,
     );
   }
+
+  renderContext.verbose = invocation.options.verbose;
 
   // Checked here rather than beside the runtime floor: an unresolvable state
   // directory does not make `--help` or `--version` untrustworthy, and it does not

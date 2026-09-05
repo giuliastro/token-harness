@@ -43,10 +43,17 @@ describe('argv', () => {
   });
 
   it('rejects an unknown flag', () => {
-    const parsed = parseArgv(['doctor', '--verbose']);
+    const parsed = parseArgv(['doctor', '--debug']);
     assert.equal(parsed.kind, 'usage-error');
     if (parsed.kind !== 'usage-error') return;
     assert.equal(parsed.diagnostics[0]?.code, 'unknown-flag');
+  });
+
+  it('accepts --verbose for progressive human output', () => {
+    const parsed = parseArgv(['doctor', '--verbose']);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.options.verbose, true);
   });
 
   it('rejects a value flag with no value', () => {

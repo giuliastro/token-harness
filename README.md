@@ -1,410 +1,259 @@
 # Token Harness
 
-**Get more useful work from your Claude Code and Codex subscription limits.**
+**Make Claude Code and Codex easier to understand and use efficiently.**
 
-Token Harness is a local, quota-aware efficiency layer for coding agents. It helps you understand how much subscription headroom you have left, reduce avoidable context overhead, choose a sensible task/profile, and decide when switching between Claude Code and Codex is actually supported by evidence.
+Token Harness checks your coding agents, shows subscription allowance when it can be
+observed reliably, reduces avoidable context overhead, and recommends one useful next
+action. It runs locally and never presents local token estimates as subscription quota.
 
-It is deliberately conservative: read-only commands stay read-only, configuration changes are previewed first, unsupported combinations are refused instead of guessed, and local token savings are never presented as if they were the same thing as subscription quota.
+## The easy path
 
-> Current release: **v0.1.6**. See the [latest release](https://github.com/giuliastro/token-harness/releases/latest).
+You need [Node.js 22.13 or newer](https://nodejs.org/) and at least one signed-in coding
+agent: Claude Code or Codex.
 
-## Start here
-
-If you already use **Claude Code**, **Codex**, or both, the basic setup is:
-
-1. Install **Node.js 22.13 or newer**.
-2. Open a terminal.
-3. Copy and paste:
+Open a terminal and paste:
 
 ```sh
 npm install --global token-harness@latest
-token-harness doctor
-token-harness budget
+token-harness setup
+```
+
+That is the whole first-time check. `setup` tells you:
+
+- which coding agents it found;
+- whether an optimization provider is active;
+- whether the current setup works;
+- what it changed, if anything;
+- exactly one next step.
+
+The first run does not change Claude Code, Codex, or project configuration. If Token
+Harness finds a supported improvement, it shows the safe plan and may suggest:
+
+```sh
+token-harness setup --yes
+```
+
+`--yes` is always explicit. The change is backed up, applied transactionally, and
+verified. Unsupported combinations are left untouched.
+
+## Open the dashboard
+
+After setup, run:
+
+```sh
+token-harness ui
+```
+
+The dashboard opens in your browser and shows harness status, active providers,
+allowance windows, the main recommendation, and the next action. It is a small local
+web page served only on `127.0.0.1`: no Electron app, account, or cloud service.
+
+Use `Ctrl+C` in the terminal to close it. If you do not want it to open a browser:
+
+```sh
+token-harness ui --no-open
+```
+
+## Ask your AI to install Token Harness
+
+You can give this prompt to Claude Code or Codex:
+
+```text
+Install the latest stable Token Harness from npm on this computer, then run
+`token-harness setup`. Do not install or replace Claude Code, Codex, or any
+optimization provider unless Token Harness's supported plan explicitly requires it.
+
+Explain the setup result in plain language: what was detected, what already works,
+what would change, and the single next step. Do not expose credentials, cookies,
+tokens, raw home paths, or private project contents. If setup proposes a supported
+configuration change, show me the short plan and ask before running
+`token-harness setup --yes`. After an approved change, verify it and start
+`token-harness ui`. If anything is unsupported, stop safely and explain why.
+```
+
+The AI should ask before the `--yes` step because that is the point where coding-agent
+configuration may change.
+
+## What normal output looks like
+
+Human output is intentionally short:
+
+```text
+TOKEN HARNESS - READY
+
+DETECTED
+  Claude Code: detected
+  Codex: configured
+  harnesstrim: active on Codex
+
+CHANGES
+  Nothing changed.
+
+NEXT STEP
+  token-harness ui
+  Open the dashboard to see status, allowance, and advice.
+```
+
+Need the evidence behind the summary? Add `--verbose`:
+
+```sh
+token-harness doctor --verbose
+```
+
+Need stable machine-readable output for automation? Add `--json`:
+
+```sh
+token-harness doctor --json
+token-harness ui --json
+```
+
+`--json` keeps the complete schema-1 result and diagnostics; it is not shortened.
+
+## Three commands to remember
+
+```sh
+token-harness setup
+token-harness ui
 token-harness optimize
 ```
 
-That is enough to get useful, read-only guidance.
-
-If you only remember three commands, remember these:
-
-```sh
-token-harness doctor
-token-harness budget
-token-harness optimize
-```
-
-- `doctor` tells you what Token Harness can see and what needs attention.
-- `budget` shows the subscription usage/headroom that the harness can actually prove.
-- `optimize` combines quota pressure and context pressure into practical advice.
-
-`doctor` ends with a **NEXT** section. If you are unsure what to do, run the command shown there.
-
-### Try it without installing globally
-
-You can run the read-only diagnosis with:
-
-```sh
-npx token-harness doctor
-```
-
-`npx` may download Token Harness into npm's cache, but it does **not** install or configure Claude Code, Codex, RTK, HarnessTrim, or another coding agent.
-
-## What Token Harness does
-
-Token Harness focuses on two budgets:
-
-| Budget | What it tries to improve |
+| Command | Answer |
 | --- | --- |
-| **Subscription headroom** | Observe five-hour, weekly, model-specific, or credit-backed limits only from evidence exposed by the coding agent; pace work against reset time; avoid wasting expensive turns |
-| **Model context** | Reduce unnecessary instructions, MCP/tool schemas, stale conversation history, repeated command output, and other context that gets sent back to the model |
+| `setup` | Is Token Harness ready, and what is my one next step? |
+| `ui` | What is active, how much allowance is visible, and what should I do? |
+| `optimize` | What is the best evidence-based action for the task I am starting? |
 
-It can help with:
-
-- live Claude Code and Codex quota/headroom observation where reliable evidence exists;
-- model/reasoning/profile recommendations for the current task;
-- oversized session and context pressure detection;
-- MCP/tool exposure inspection;
-- local usage history and measured reducer savings;
-- conservative scheduling between Claude Code and Codex;
-- compact handoffs when moving an in-progress task from one harness to another;
-- reviewed installation/configuration of supported optimization providers such as RTK and HarnessTrim.
-
-## The safest way to use it
-
-If you do **not** want Token Harness to change any configuration, stay with these commands:
-
-```sh
-token-harness doctor
-token-harness budget
-token-harness context
-token-harness history --since 7d
-token-harness optimize
-```
-
-They are read-only with respect to your coding-agent and project configuration.
-
-A useful everyday command is:
-
-```sh
-token-harness optimize --task standard --profile balanced
-```
-
-For routine work where you want to conserve quota:
-
-```sh
-token-harness optimize --task mechanical --profile economy
-```
-
-For difficult work where quality matters more:
+For example:
 
 ```sh
 token-harness optimize --task hard --profile quality
+token-harness optimize --task mechanical --profile economy
 ```
 
-## Let Token Harness apply supported optimizations
+## Safety and privacy
 
-Token Harness separates **review** from **mutation**.
+Token Harness is conservative by design:
 
-First preview the exact plan:
+- normal read-only commands do not change coding-agent or project configuration;
+- `setup --yes`, `apply --yes`, `update --yes`, `rollback --yes`, and
+  `uninstall --yes` are the explicit configuration-changing forms;
+- plans are checked again immediately before they are applied;
+- existing files are backed up before a managed write;
+- only exact Token Harness-owned entries are removed by `uninstall`;
+- newer or untested combinations are reported, not guessed;
+- the dashboard binds only to the local loopback address and provides no mutation API;
+- source code, prompts, command contents, credentials, and cookies are not sent to a
+  Token Harness service.
 
-```sh
-token-harness plan
-```
+Plans, receipts, metrics, and backups stay in the local Token Harness state directory.
+See [RFC 0004](docs/rfcs/0004-execution-safety-ownership-update.md) for the execution
+model and [RFC 0006](docs/rfcs/0006-cli-contract.md) for CLI/JSON guarantees.
 
-Nothing is changed yet.
+## Supported optimizations
 
-If the plan is supported and looks correct, apply it explicitly:
+Token Harness can detect and measure several independent local tools:
 
-```sh
-token-harness apply --yes
-```
-
-Then restart the coding agent and verify:
-
-```sh
-token-harness status
-token-harness verify
-```
-
-If Token Harness says the environment is unsupported or unverifiable, do not force it. Refusing an unreviewed combination is intentional.
-
-You can also apply the exact stored plan printed by `plan`:
-
-```sh
-token-harness apply --plan <plan-id> --yes
-```
-
-The stored plan is rejected if the project, versions, ownership, or file preconditions changed after review.
-
-## Claude Code and Codex
-
-You can target one harness explicitly:
-
-```sh
-token-harness budget --harness claude
-token-harness optimize --harness claude --task standard --profile balanced
-```
-
-```sh
-token-harness budget --harness codex
-token-harness context --harness codex
-token-harness optimize --harness codex --task standard --profile balanced
-```
-
-On supported recent Codex builds, Token Harness uses Codex's native app-server for rate-limit windows, effective configuration, model catalog, MCP inventory, and reviewed native-policy changes. It does not infer subscription quota from local token counts.
-
-For Claude, live quota observation can optionally use an already-installed compatible `cclimits` build in cacheless JSON mode. Token Harness does not read `cclimits` credentials and does not install it automatically.
-
-## Using both Claude Code and Codex
-
-Version 0.1.6 adds a conservative cross-harness scheduler and compact handoff workflow.
-
-Ask which harness is the better candidate for a task:
-
-```sh
-token-harness schedule \
-  --current claude \
-  --candidate codex \
-  --task-class hard \
-  --handoff-bytes 900
-```
-
-`schedule` is a recommendation, not an automatic router. It uses attributable quota and benchmark evidence where available. Missing or conflicting evidence returns `insufficient-evidence` instead of guessing.
-
-If you decide to switch harnesses mid-task, create a compact handoff instead of copying the whole conversation:
-
-```sh
-token-harness handoff \
-  --objective "Finish the current task" \
-  --decision "Keep the validated architecture" \
-  --changed-file src/example.ts \
-  --validation "tests pass" \
-  --unresolved "One edge case remains" \
-  --next-action "Fix the edge case and rerun tests" \
-  --max-bytes 2048 > handoff.md
-```
-
-Advanced users can benchmark cross-harness transfers with `benchmark-start`, `benchmark-finish`, `transfer`, and `transfer-record`. See `token-harness schedule --help` and the command reference below.
-
-## What's new in v0.1.6
-
-The current release includes, among other changes:
-
-- stronger Codex quota recovery with a cacheless `cclimits` fallback path where appropriate;
-- compatibility with recent Codex app-server behavior;
-- HarnessTrim 0.2.1 support for the reviewed Codex/Linux combination;
-- clearer distinction between provider ownership and integration ownership;
-- detection of shadowed provider executables;
-- empirical task benchmark aggregation;
-- compact cross-harness handoff generation;
-- conservative Claude Code ↔ Codex scheduling;
-- transfer evaluation and immutable transfer evidence receipts;
-- scheduler hydration from live quota and local benchmark evidence.
-
-See the [v0.1.6 release notes](https://github.com/giuliastro/token-harness/releases/tag/v0.1.6) for the complete changelog.
-
-## What Token Harness does not do
-
-Token Harness does **not**:
-
-- install Claude Code, Codex, OpenCode, Hermes, or Pi for you;
-- silently reroute subscription traffic through unrelated API providers;
-- equate local token reduction with subscription-quota savings;
-- overwrite an unsupported or unreviewed integration because it "probably works";
-- delete user-owned provider configuration;
-- send your source code, prompts, raw commands, or credentials to a Token Harness service.
-
-Install and sign in to at least one supported coding agent first, then run `token-harness doctor`.
-
-## Optimization providers
-
-Token Harness can detect and measure optimization providers while keeping ownership explicit.
-
-| Provider | Main role | Current direction |
+| Provider | Purpose | Management |
 | --- | --- | --- |
-| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Active. Managed only where a reviewed compatibility row exists |
-| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers, skills, pipes, and harness adapters | Active. Managed only on reviewed surfaces; otherwise detected/adopted |
-| [cclimits](https://github.com/cruzanstx/cclimits) | Live/local quota companion | Optional read-only companion for Claude; Codex prefers its native app-server |
-| [ccusage](https://github.com/ccusage/ccusage) | Historical local usage analytics | Read-only companion for history and baselines |
+| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Managed only for reviewed combinations |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Managed only for reviewed combinations |
+| [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
+| [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
 
-Other candidates such as Lazy MCP, Context Mode, Headroom, Dejavu, repowise, routers, and generic prompt compressors are evaluated only when they improve included Claude/Codex capacity without creating overlapping ownership or unverifiable claims. See [docs/provider-landscape.md](docs/provider-landscape.md).
+A provider you installed yourself remains yours. Token Harness can adopt observable
+configuration without claiming ownership of the executable.
 
-## Managed compatibility
+Exact reviewed provider/harness/platform/version combinations are generated in
+[docs/matrices.md](docs/matrices.md). A combination outside that table can still be
+detected and inspected, but Token Harness will not mutate it.
 
-Token Harness changes a harness configuration only when a reviewed compatibility row covers the exact provider version, harness version, platform, and configuration schema.
+## Advanced commands
 
-The managed rows shipped with 0.1.6 are:
+Most people do not need this section. Run `token-harness <command> --help` for details.
 
-| Provider | Harness | Platform | Tested versions | Tier |
-| --- | --- | --- | --- | --- |
-| RTK | Claude Code | Windows | RTK 0.44.0, Claude Code 2.1.220 | `canary` |
-| HarnessTrim | Claude Code | Windows | HarnessTrim 0.1.0, Claude Code 2.1.220 | `config-only` |
-| HarnessTrim | Codex | Windows | HarnessTrim 0.1.0, Codex 0.146.0 | `config-only` |
-| HarnessTrim | Codex | Linux (non-WSL) | HarnessTrim 0.2.1, Codex 0.152.1 | `config-only` |
-
-Other combinations can still be detected, inspected, verified, or measured where supported, but mutation is refused unless a reviewed row covers it.
-
-The full generated matrices and known limitations are in [docs/matrices.md](docs/matrices.md).
-
-## Updating Token Harness
-
-Update to the newest published CLI with:
-
-```sh
-npm install --global token-harness@latest
-token-harness --version
-```
-
-Then run:
-
-```sh
-token-harness doctor
-token-harness budget
-```
-
-## Undoing Token Harness changes
-
-Remove only exact integration entries owned by Token Harness:
-
-```sh
-token-harness uninstall --yes
-```
-
-Restore files from the most recent committed Token Harness transaction snapshot:
-
-```sh
-token-harness rollback --yes
-```
-
-`uninstall` is surgical and normally safer after later manual edits. `rollback` restores whole files to their pre-transaction bytes and can therefore also revert changes made to those files afterwards.
-
-Neither command removes user-owned RTK or HarnessTrim configuration or provider executables.
-
-## Command reference
-
-| Command | Purpose | Changes coding-agent/project configuration? |
+| Command | Purpose | Changes agent/project config? |
 | --- | --- | --- |
-| `doctor` | Detect agents, providers, ownership, versions, and problems | No |
-| `budget` | Read live quota/headroom where reliable evidence exists | No |
-| `context` | Inspect model/config, instructions, MCP exposure, and tools | No |
-| `mcp` | Inspect MCP servers and tool-schema exposure | No |
-| `history` | Summarize attributable local usage history | No |
-| `optimize` | Turn quota/context pressure into task-specific advice | No |
-| `schedule` | Recommend Claude Code or Codex from attributable evidence | No |
-| `handoff` | Build a bounded compact cross-harness handoff | No |
-| `plan` | Preview exact supported changes | No; stores plan state only |
-| `apply` | Apply a reviewed plan transactionally | Yes, only with `--yes` |
-| `status` | Detect drift and competing integrations | No |
-| `verify` | Check the declared verification tier | No |
-| `metrics` | Report attributable reducer savings | No agent/project config change |
-| `benchmark` | Compare an explicit baseline/optimized pair | No |
-| `benchmark-start` | Start an empirical task capture | No agent/project config change |
-| `benchmark-finish` | Finish an empirical task capture | No agent/project config change |
-| `benchmark-matrix` | Aggregate complete project-scoped benchmark pairs | No |
-| `transfer` | Evaluate one cross-harness benchmark pair and handoff | No |
-| `transfer-record` | Persist an immutable transfer evidence receipt | No agent/project config change |
-| `update` | Query channels and update installed providers | Yes, only with `--yes` |
-| `rollback` | Restore files from the latest committed transaction | Yes, only with `--yes` |
+| `doctor` | Detect harnesses, providers, versions, and problems | No |
+| `budget` | Read authoritative/reported allowance windows | No |
+| `context` | Inspect model settings, instructions, and MCP exposure | No |
+| `mcp` | Focus on MCP server/tool health | No |
+| `history` | Summarize local usage through an installed ccusage | No |
+| `plan` | Prepare exact supported changes | No; stores local plan state |
+| `apply` | Apply a reviewed stored plan | Yes, only with `--yes` |
+| `verify` | Check the declared integration tier | No |
+| `metrics` | Report attributable reducer savings | No |
+| `status` | Report pipelines, drift, and importer modes | No |
+| `update` | Check/update installed providers | Yes, only with `--yes` |
+| `rollback` | Restore the latest transaction snapshot | Yes, only with `--yes` |
 | `uninstall` | Remove owned integration entries | Yes, only with `--yes` |
-
-Every command supports `--help`.
-
-Common filters:
-
-```text
---harness <id>
---provider <id>
---project <directory>
---task mechanical|standard|hard|critical
---profile economy|balanced|quality|custom
---reserve <percent>
---native-policy
---plan <plan-id>
---json
-```
-
-## Privacy
-
-Token Harness stores plans, journals, backups, receipts, import cursors, and normalized metrics locally.
-
-Default state locations:
-
-| Platform | State root |
-| --- | --- |
-| Windows | `%LOCALAPPDATA%\TokenHarness` |
-| macOS | `~/Library/Application Support/TokenHarness` |
-| Linux / WSL | `${XDG_STATE_HOME:-~/.local/state}/token-harness` |
-
-Normalized metrics do not contain raw command text, tool output, source code, prompts, credentials, or raw file paths. Provider records are read in place and only normalized event data is imported.
+| `schedule` | Compare Claude Code and Codex using available evidence | No |
+| `handoff` | Build a bounded cross-harness handoff | No |
+| `benchmark*`, `transfer*` | Capture and compare empirical evidence | Local state only |
 
 ## Troubleshooting
 
 ### `token-harness` is not found
 
-Check Node and the global npm installation:
+Check that Node is new enough and the package is installed:
 
 ```sh
 node --version
 npm list --global token-harness
-npm prefix --global
 ```
 
-Node must be at least **22.13.0**. If npm's global executable directory is not on `PATH`, add it and reopen the terminal.
+Node must be at least 22.13. Reopen the terminal after installation if needed.
 
-### `plan` says there is nothing to do
+### Setup needs attention
 
-Run:
+Run the single command it prints. For technical evidence:
 
 ```sh
-token-harness doctor
+token-harness doctor --verbose
 ```
 
-Common reasons are: no supported coding agent was detected, your existing setup is already sufficient, the requested provider is adoption-only on that harness, or no reviewed compatibility row covers the requested mutation.
+Do not force an unsupported plan. Open an issue with the redacted `--json` result if
+you believe the combination should be supported.
 
-### `verify` reports `not-exercised`
+### Verification says `not-exercised`
 
-Restart the coding agent, ask it to run a normal shell command such as `git status`, then run:
+Restart the coding agent, use it for one normal command, and run:
 
 ```sh
 token-harness verify
 ```
 
-For a `config-only` integration, no stronger external execution receipt may exist; Token Harness reports that limitation explicitly.
+No observed operation is different from a failed integration, so Token Harness reports
+the two states separately.
 
-### `metrics` shows no data
+## Updating or undoing
 
-Make sure the provider has actually processed operations in the selected project and time range. For example:
+Update the CLI:
 
 ```sh
-token-harness metrics --since 7d
+npm install --global token-harness@latest
+token-harness setup
 ```
 
-An empty metrics report is a valid observation and exits successfully.
+Remove only Token Harness-owned integration entries:
 
-### A newer provider or coding-agent version is reported
+```sh
+token-harness uninstall --yes
+```
 
-Token Harness records versions actually exercised by the project. A newer version is handled conservatively rather than assumed compatible. Check [docs/matrices.md](docs/matrices.md) before applying changes.
+Restore complete files from the latest committed transaction snapshot:
 
-## Install from source
+```sh
+token-harness rollback --yes
+```
 
-Most users should install from npm. For development:
+`rollback` is whole-file time travel, so it can also revert later manual edits to those
+files. Prefer `uninstall` when you only want to remove Token Harness-owned entries.
+
+## Develop from source
 
 ```sh
 git clone https://github.com/giuliastro/token-harness.git
 cd token-harness
-corepack enable
-pnpm install
-pnpm build
-pnpm package
-npm install --global ./dist/package
-token-harness --version
-```
-
-The workspace requires Node.js 22.13+ and the pnpm version declared in `package.json`.
-
-## Development
-
-```sh
 corepack enable
 pnpm install
 pnpm typecheck
@@ -416,8 +265,10 @@ pnpm package
 pnpm smoke:install
 ```
 
-Before changing architecture or public behavior, read [PLAN.md](PLAN.md) and the accepted RFCs in [docs/rfcs](docs/rfcs). The CLI and JSON contract is defined by [RFC 0006](docs/rfcs/0006-cli-contract.md).
+Read [PLAN.md](PLAN.md) and the accepted [RFCs](docs/rfcs) before changing public
+behavior or architecture.
 
 ## License
 
-Token Harness is licensed under the [Apache License 2.0](LICENSE). RTK, HarnessTrim, cclimits, ccusage, and other referenced tools are independent projects distributed under their own licenses.
+[Apache License 2.0](LICENSE). Referenced provider tools are independent projects with
+their own licenses.

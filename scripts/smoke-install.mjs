@@ -168,6 +168,12 @@ try {
   const help = run(['--help']);
   check('--help exits 0 and prints usage', help.status === 0 && help.stdout.includes('Usage'));
   check(
+    '--help leads with setup and the local dashboard',
+    ['token-harness setup', 'ui          Open the local dashboard'].every((text) =>
+      help.stdout.includes(text),
+    ),
+  );
+  check(
     '--help exposes the cross-harness release surfaces',
     ['handoff', 'transfer', 'schedule', 'transfer-record'].every((command) =>
       help.stdout.includes(command),
@@ -175,6 +181,17 @@ try {
   );
 
   for (const command of ['handoff', 'transfer', 'transfer-record', 'schedule']) {
+    const commandHelp = run([command, '--help']);
+    check(
+      `${command} --help works from the installed package`,
+      commandHelp.status === 0 &&
+        commandHelp.stderr === '' &&
+        commandHelp.stdout.includes(`token-harness ${command}`),
+      `${commandHelp.stderr.trim()}\n${commandHelp.stdout.slice(0, 160)}`,
+    );
+  }
+
+  for (const command of ['setup', 'ui']) {
     const commandHelp = run([command, '--help']);
     check(
       `${command} --help works from the installed package`,
@@ -271,9 +288,16 @@ try {
     `exit ${String(doctor.status)}\n${doctor.stderr.trim()}`,
   );
   check(
-    'doctor reports the real platform',
-    /^Token Harness \d+\.\d+\.\d+ — /.test(doctor.stdout),
+    'doctor reports one progressive next step',
+    /^TOKEN HARNESS - /.test(doctor.stdout) && doctor.stdout.match(/NEXT STEP/g)?.length === 1,
     doctor.stdout.split('\n')[0],
+  );
+
+  const verboseDoctor = run(['doctor', '--verbose']);
+  check(
+    'doctor --verbose reports the real platform',
+    /^Token Harness \d+\.\d+\.\d+ — /.test(verboseDoctor.stdout),
+    verboseDoctor.stdout.split('\n')[0],
   );
 
   const json = run(['doctor', '--json']);

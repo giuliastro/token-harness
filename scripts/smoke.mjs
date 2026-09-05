@@ -72,6 +72,12 @@ try {
     ['doctor', 'plan', 'status'].every((c) => help.stdout.includes(c)),
   );
   check(
+    '--help leads with setup and the local dashboard',
+    ['token-harness setup', 'ui          Open the local dashboard'].every((text) =>
+      help.stdout.includes(text),
+    ),
+  );
+  check(
     '--help lists cross-harness surfaces',
     ['handoff', 'transfer', 'schedule', 'transfer-record'].every((c) => help.stdout.includes(c)),
   );
@@ -88,6 +94,17 @@ try {
       `${command} --help identifies the command`,
       commandHelp.stdout.includes(`token-harness ${command}`),
       JSON.stringify(commandHelp.stdout.slice(0, 160)),
+    );
+  }
+
+  for (const command of ['setup', 'ui']) {
+    const commandHelp = runBundle([command, '--help']);
+    check(
+      `${command} --help works from the bundle`,
+      commandHelp.status === 0 &&
+        commandHelp.stderr === '' &&
+        commandHelp.stdout.includes(`token-harness ${command}`),
+      `${commandHelp.stderr.trim()}\n${commandHelp.stdout.slice(0, 160)}`,
     );
   }
 

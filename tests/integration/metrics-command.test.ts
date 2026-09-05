@@ -352,7 +352,7 @@ describe('the envelope', () => {
 describe('the human rendering', () => {
   it('keeps each class on its own line and never prints a combined total', async () => {
     const result = await runMetrics(
-      ['metrics'],
+      ['metrics', '--verbose'],
       [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
     );
 
@@ -364,7 +364,7 @@ describe('the human rendering', () => {
 
   it('reports an unmeasured latency as unmeasured', async () => {
     const result = await runMetrics(
-      ['metrics'],
+      ['metrics', '--verbose'],
       [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
     );
     // `0ms` would claim the overhead was measured and found negligible.
@@ -373,7 +373,7 @@ describe('the human rendering', () => {
 
   it('names inflated operations instead of leaving them inside a net figure', async () => {
     const result = await runMetrics(
-      ['metrics'],
+      ['metrics', '--verbose'],
       [
         event({ id: 'shrank', timestamp: '2026-07-30T10:00:00.000Z' }),
         event({
@@ -394,7 +394,7 @@ describe('the human rendering', () => {
 
   it('says nothing about inflation when there was none', async () => {
     const result = await runMetrics(
-      ['metrics'],
+      ['metrics', '--verbose'],
       [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })],
     );
     assert.doesNotMatch(result.stdout, /made the payload larger/);
@@ -403,7 +403,7 @@ describe('the human rendering', () => {
   it('reports a store-less host as covering no events rather than failing', async () => {
     let stdout = '';
     const exitCode = await run({
-      argv: ['metrics'],
+      argv: ['metrics', '--verbose'],
       streams: { out: (text) => (stdout += text), err: () => undefined },
       platform: FACTS,
       cwd: sandbox,

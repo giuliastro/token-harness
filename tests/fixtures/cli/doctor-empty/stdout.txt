@@ -1,10 +1,12 @@
-Token Harness 0.1.0 — Windows 11 (x64), Node 22.14.0
+TOKEN HARNESS - SETUP NEEDED
 
-  HARNESSES     - STATE        - CONFIG FILE
-  none registered
+WHAT WORKS
+  No supported coding harness was found.
+  Providers: none detected
 
-  PROVIDERS     - VERSION    - WIRED TO       - SET UP BY
-  none registered
+CHANGES
+  Nothing changed.
 
-NEXT
-  token-harness plan - see what would change — writes nothing
+NEXT STEP
+  token-harness setup
+  Finish the guided setup.

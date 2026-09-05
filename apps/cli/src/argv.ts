@@ -32,7 +32,7 @@ import {
   type TaskQualityGate,
 } from '@token-harness/core';
 
-/** Commands the Phase 1 shell implements. */
+/** Commands handled by the shared parser and dispatcher. */
 export const AVAILABLE_COMMANDS = [
   'apply',
   'budget',
@@ -48,6 +48,7 @@ export const AVAILABLE_COMMANDS = [
   'optimize',
   'plan',
   'rollback',
+  'setup',
   'status',
   'uninstall',
   'update',
@@ -96,6 +97,8 @@ export interface CommandOptions {
   reservePercent: number | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
+  /** Show the full technical human report. JSON is already complete. */
+  verbose: boolean;
   /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
   yes: boolean;
 }
@@ -133,7 +136,7 @@ const VALUE_FLAGS = new Set([
  * an envelope when `--json` parsed; it is listed here so the main loop does not reject it as
  * unknown.
  */
-const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--yes']);
+const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--verbose', '--yes']);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
   return argv.some((token) => token === '--json' || token.startsWith('--json='));
@@ -202,6 +205,7 @@ export function parseArgv(
     profile: null,
     reservePercent: null,
     nativePolicy: false,
+    verbose: false,
     yes: false,
   };
   let command: string | null = null;
@@ -244,6 +248,7 @@ export function parseArgv(
       // RFC 0006: "require either an interactive confirmation or `--yes`". This is the second.
       if (name === '--yes') options.yes = true;
       if (name === '--native-policy') options.nativePolicy = true;
+      if (name === '--verbose') options.verbose = true;
       continue;
     }
 

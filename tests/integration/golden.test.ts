@@ -57,6 +57,7 @@ describe('golden files', () => {
           toolVersion: scenario.toolVersion,
           home: scenario.roots.home,
           decorate: false,
+          verbose: true,
         });
         assert.equal(
           normalizeGolden(rendering.report, normalizeOptions),
