@@ -5,6 +5,7 @@ import {
   harnessId,
   hydrateCandidateQualityFromBenchmarkReceipts,
   hydrateCrossHarnessPaceFromBudget,
+  hydrateTransferBenefitFromReceipts,
   isTaskClass,
   scheduleCrossHarness,
   serializeEnvelope,
@@ -12,11 +13,13 @@ import {
   type BudgetReport,
   type CrossHarnessSchedulerDecision,
   type CrossHarnessSchedulerInput,
+  type CrossHarnessTransferReceipt,
   type Diagnostic,
   type PaceState,
   type QualityEvidenceState,
   type SchedulerPaceEvidenceNote,
   type SchedulerQualityEvidenceNote,
+  type SchedulerTransferEvidenceNote,
   type TaskBenchmarkReceipt,
   type TransferBenefitState,
 } from '@token-harness/core';
@@ -46,8 +49,8 @@ Evidence flags
   --candidate-quality-task <mechanical|standard|hard|critical>
   --candidate-quality-samples <n>                               default: 0
   --candidate-unavailable                                      mark candidate unusable
-  --handoff-bytes <n>                                          default: 0
-  --max-handoff-bytes <n>                                      default: 2048
+  --handoff-bytes <n>                                          current handoff size, default: 0
+  --max-handoff-bytes <n>                                      current handoff budget, default: 2048
   --transfer-benefit <proven-positive|non-positive|unknown>     default: unknown
   --json                                                       RFC 0006 JSON envelope
   --version                                                    print version and exit 0
@@ -55,9 +58,12 @@ Evidence flags
 
 In the installed CLI, unknown five-hour/weekly pace fields are hydrated from the same live budget
 observer used by token-harness budget. When candidate quality is not supplied, quality-gated local
-benchmark receipts for the current project and exact task class are used conservatively: unanimous
-known observations may pass/fail, conflicting observations remain unknown. Explicit evidence flags
-always win. Transfer benefit is never inferred from tokens or raw provider quota percentages.
+benchmark receipts for the current project and exact task class are used conservatively. When
+transfer benefit is not supplied, immutable transfer receipts for the current project, exact route,
+and exact task class are used only when every attributable receipt agrees on one non-unknown verdict.
+Any conflict or unknown receipt keeps transfer benefit unknown. Explicit evidence flags always win,
+including an explicit unknown. Historical transfer receipts never overwrite the current handoff byte
+estimate or budget. Transfer benefit is never inferred from tokens or raw provider quota percentages.
 This command never launches a harness and never switches automatically. Missing evidence produces
 insufficient-evidence rather than a guessed recommendation.`;
 
@@ -69,6 +75,7 @@ interface Streams {
 export interface ScheduleRuntime {
   observeBudget?: () => Promise<BudgetReport | null>;
   observeQualityReceipts?: () => Promise<readonly TaskBenchmarkReceipt[] | null>;
+  observeTransferReceipts?: () => Promise<readonly CrossHarnessTransferReceipt[] | null>;
 }
 
 type BudgetEvidenceStatus =
@@ -88,6 +95,16 @@ type QualityEvidenceStatus =
   | 'unavailable'
   | 'failed';
 
+type TransferEvidenceStatus =
+  | 'not-configured'
+  | 'not-needed'
+  | 'observed'
+  | 'conflicting'
+  | 'inconclusive'
+  | 'no-evidence'
+  | 'unavailable'
+  | 'failed';
+
 interface ScheduleReport extends CrossHarnessSchedulerDecision {
   evidence: {
     current: { fiveHourPace: PaceState; weeklyPace: PaceState };
@@ -98,6 +115,11 @@ interface ScheduleReport extends CrossHarnessSchedulerDecision {
       qualityTaskClass: string | null;
       qualitySamples: number;
     };
+    transfer: {
+      handoffBytes: number;
+      maxHandoffBytes: number;
+      benefit: TransferBenefitState;
+    };
   };
   budgetEvidence: {
     status: BudgetEvidenceStatus;
@@ -106,6 +128,10 @@ interface ScheduleReport extends CrossHarnessSchedulerDecision {
   qualityEvidence: {
     status: QualityEvidenceStatus;
     notes: SchedulerQualityEvidenceNote[];
+  };
+  transferEvidence: {
+    status: TransferEvidenceStatus;
+    notes: SchedulerTransferEvidenceNote[];
   };
 }
 
@@ -125,6 +151,7 @@ interface Args {
   handoffBytes: number;
   maxHandoffBytes: number;
   transferBenefit: TransferBenefitState;
+  transferExplicit: boolean;
   json: boolean;
   help: boolean;
   version: boolean;
@@ -183,6 +210,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
     handoffBytes: 0,
     maxHandoffBytes: DEFAULT_MAX_HANDOFF_BYTES,
     transferBenefit: 'unknown',
+    transferExplicit: false,
     json: false,
     help: false,
     version: false,
@@ -328,6 +356,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
         break;
       }
       case '--transfer-benefit':
+        args.transferExplicit = true;
         if (!BENEFIT_STATES.has(value as TransferBenefitState)) {
           diagnostics.push(
             diagnostic({
@@ -451,6 +480,41 @@ async function applyQualityEvidence(
   }
 }
 
+async function applyTransferEvidence(
+  input: CrossHarnessSchedulerInput,
+  runtime: ScheduleRuntime | undefined,
+  explicit: boolean,
+): Promise<{
+  input: CrossHarnessSchedulerInput;
+  status: TransferEvidenceStatus;
+  notes: SchedulerTransferEvidenceNote[];
+}> {
+  if (explicit) return { input, status: 'not-needed', notes: [] };
+  if (runtime?.observeTransferReceipts === undefined) {
+    return { input, status: 'not-configured', notes: [] };
+  }
+
+  try {
+    const receipts = await runtime.observeTransferReceipts();
+    if (receipts === null) return { input, status: 'unavailable', notes: [] };
+    const hydrated = hydrateTransferBenefitFromReceipts(input, receipts);
+    const code = hydrated.notes[0]?.code;
+    const status: TransferEvidenceStatus =
+      code === 'transfer-evidence-positive' || code === 'transfer-evidence-non-positive'
+        ? 'observed'
+        : code === 'transfer-evidence-conflicting'
+          ? 'conflicting'
+          : code === 'transfer-evidence-inconclusive'
+            ? 'inconclusive'
+            : code === 'transfer-evidence-unavailable'
+              ? 'no-evidence'
+              : 'no-evidence';
+    return { input: hydrated.input, status, notes: hydrated.notes };
+  } catch {
+    return { input, status: 'failed', notes: [] };
+  }
+}
+
 function render(report: ScheduleReport): string {
   const lines = [
     `Cross-harness recommendation: ${report.decision}`,
@@ -459,6 +523,7 @@ function render(report: ScheduleReport): string {
     `Task class: ${report.taskClass}`,
     `Budget evidence: ${report.budgetEvidence.status}`,
     `Quality evidence: ${report.qualityEvidence.status}`,
+    `Transfer evidence: ${report.transferEvidence.status}`,
     'Pace evidence:',
     `- current five-hour: ${report.evidence.current.fiveHourPace}`,
     `- current weekly: ${report.evidence.current.weeklyPace}`,
@@ -468,6 +533,10 @@ function render(report: ScheduleReport): string {
     `- state: ${report.evidence.candidate.quality}`,
     `- task class: ${report.evidence.candidate.qualityTaskClass ?? 'unknown'}`,
     `- samples: ${String(report.evidence.candidate.qualitySamples)}`,
+    'Transfer:',
+    `- benefit: ${report.evidence.transfer.benefit}`,
+    `- handoff bytes: ${String(report.evidence.transfer.handoffBytes)}`,
+    `- max handoff bytes: ${String(report.evidence.transfer.maxHandoffBytes)}`,
   ];
   if (report.budgetEvidence.notes.length > 0) {
     lines.push(
@@ -482,6 +551,15 @@ function render(report: ScheduleReport): string {
       'Quality notes:',
       ...report.qualityEvidence.notes.map(
         (entry) => `- ${entry.harnessId}/${entry.taskClass}: ${entry.code}: ${entry.summary}`,
+      ),
+    );
+  }
+  if (report.transferEvidence.notes.length > 0) {
+    lines.push(
+      'Transfer notes:',
+      ...report.transferEvidence.notes.map(
+        (entry) =>
+          `- ${entry.currentHarness}->${entry.candidateHarness}/${entry.taskClass}: ${entry.code}: ${entry.summary}`,
       ),
     );
   }
@@ -566,24 +644,31 @@ export async function scheduleMain(
 
   const budget = await applyBudgetEvidence(initialInput, runtime);
   const quality = await applyQualityEvidence(budget.input, runtime, parsed.args.qualityExplicit);
-  const decision = scheduleCrossHarness(quality.input);
+  const transfer = await applyTransferEvidence(quality.input, runtime, parsed.args.transferExplicit);
+  const decision = scheduleCrossHarness(transfer.input);
   const report: ScheduleReport = {
     ...decision,
     evidence: {
       current: {
-        fiveHourPace: quality.input.current.fiveHourPace,
-        weeklyPace: quality.input.current.weeklyPace,
+        fiveHourPace: transfer.input.current.fiveHourPace,
+        weeklyPace: transfer.input.current.weeklyPace,
       },
       candidate: {
-        fiveHourPace: quality.input.candidate.fiveHourPace,
-        weeklyPace: quality.input.candidate.weeklyPace,
-        quality: quality.input.candidate.quality,
-        qualityTaskClass: quality.input.candidate.qualityTaskClass,
-        qualitySamples: quality.input.candidate.qualitySamples,
+        fiveHourPace: transfer.input.candidate.fiveHourPace,
+        weeklyPace: transfer.input.candidate.weeklyPace,
+        quality: transfer.input.candidate.quality,
+        qualityTaskClass: transfer.input.candidate.qualityTaskClass,
+        qualitySamples: transfer.input.candidate.qualitySamples,
+      },
+      transfer: {
+        handoffBytes: transfer.input.transfer.handoffBytes,
+        maxHandoffBytes: transfer.input.transfer.maxHandoffBytes,
+        benefit: transfer.input.transfer.benefit,
       },
     },
     budgetEvidence: { status: budget.status, notes: budget.notes },
     qualityEvidence: { status: quality.status, notes: quality.notes },
+    transferEvidence: { status: transfer.status, notes: transfer.notes },
   };
 
   const result = commandResult({ command: 'schedule', exitCode: EXIT_CODES.ok, data: report });
