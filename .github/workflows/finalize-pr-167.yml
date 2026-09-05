@@ -1,0 +1,60 @@
+name: Finalize PR 167
+
+on:
+  push:
+    branches: [fix/windows-powershell-companions-2026-09-05]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/windows-powershell-companions-2026-09-05
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Keep PowerShell ownership Windows-scoped
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/adapters/src/providers/rtk.ts')
+          s = p.read_text()
+          block = """      surfaces: [\n        { toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' },\n        { toolFamily: 'PowerShell', interceptionPoint: 'pre-tool-use' },\n      ],"""
+          replacement = """      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],"""
+          count = s.count(block)
+          if count != 2:
+              raise SystemExit(f'expected exactly 2 global Bash+PowerShell surface blocks, found {count}')
+          s = s.replace(block, replacement)
+          s = s.replace(
+              "// Windows live evidence now covers both Claude shell families on the same native\n      // `PreToolUse` processor. The upstream RTK installer still does not create the PowerShell\n      // matcher itself; Token Harness writes that reviewed matcher entry transactionally.",
+              "// The portable resolver surface remains Bash. Windows PowerShell coverage is added by\n      // the planner only on Windows, because ProviderManifest capabilities are not platform-scoped.\n      // The native processor and that Windows-only plan path are covered by the live fixture below."
+          )
+          s = s.replace(
+              "// Same surface: RTK rewrites the command at `PreToolUse` and the rewritten command is\n      // what filters the output, so both capabilities are served from the same Bash/PowerShell\n      // interception points proven by the Windows recording above.",
+              "// Same portable Bash surface. On Windows the planner adds PowerShell as a platform-only\n      // companion matcher; the live fixture below proves the same native processor handles both."
+          )
+          p.write_text(s)
+          PY
+      - name: Regenerate matrices and validate
+        shell: bash
+        run: |
+          pnpm matrices
+          pnpm format
+          pnpm test
+      - name: Commit canonical result and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/finalize-pr-167.yml
+          git add packages/adapters/src/providers/rtk.ts docs/matrices.md
+          git commit -m 'fix: scope Claude PowerShell ownership to Windows'
+          git push origin HEAD:fix/windows-powershell-companions-2026-09-05
