@@ -620,3 +620,72 @@ describe('context-cost observation', () => {
     assert.deepEqual(requests[0]?.args, ['mcp', 'list']);
   });
 });
+
+describe('Claude allowance compatibility diagnostics', () => {
+  const cases = [
+    {
+      name: 'old flags',
+      exit: 2,
+      stdout: '',
+      stderr: 'unrecognized arguments: --no-cache-write --no-stale-fallback',
+      code: 'cclimits-readonly-flags-unsupported',
+    },
+    {
+      name: 'missing Python',
+      exit: 1,
+      stdout: '',
+      stderr: 'Python not found. Install Python 3.10+',
+      code: 'cclimits-python-unavailable',
+    },
+    {
+      name: 'missing login',
+      exit: 0,
+      stdout: JSON.stringify({ claude: { error: 'No credentials found' } }),
+      stderr: '',
+      code: 'cclimits-claude-credentials-unavailable',
+    },
+    {
+      name: 'expired login',
+      exit: 0,
+      stdout: JSON.stringify({ claude: { error: 'Token expired' } }),
+      stderr: '',
+      code: 'cclimits-claude-token-expired',
+    },
+    {
+      name: 'old source schema',
+      exit: 0,
+      stdout: JSON.stringify({ claude: { five_hour: { used: '10%', remaining: '90%' } } }),
+      stderr: '',
+      code: 'cclimits-claude-source-unsupported',
+    },
+    {
+      name: 'generic error privacy',
+      exit: 0,
+      stdout: JSON.stringify({ claude: { error: 'private token SECRET home /private/secret' } }),
+      stderr: '',
+      code: 'cclimits-claude-usage-unavailable',
+    },
+  ];
+  for (const item of cases)
+    it(item.name, async () => {
+      let calls = 0;
+      const runner: ProcessRunner = {
+        run: async (request) => {
+          calls += 1;
+          assert.deepEqual(request.args, [
+            '--claude',
+            '--json',
+            '--no-cache-write',
+            '--no-stale-fallback',
+          ]);
+          const base = await versionRunner('').run(request);
+          return { ...base, exitCode: item.exit, stdout: item.stdout, stderr: item.stderr };
+        },
+      };
+      const report = await claudeAdapter.observeUsage!(context({ runner }), '2026-09-05T17:00:00Z');
+      assert.equal(report.state, 'unavailable');
+      assert.equal(report.diagnostics[0]?.code, item.code);
+      assert.equal(calls, 1, 'must never retry without observer safety flags');
+      assert.ok(!JSON.stringify(report).includes('SECRET'));
+    });
+});

@@ -8,6 +8,7 @@
 import type { Diagnostic } from './diagnostics.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
+import type { NativeConfigurationEnvironment } from './process.js';
 
 export type ContextObservationState = 'observed' | 'partial' | 'unavailable' | 'absent';
 export type ContextObservationSource = 'native-rpc' | 'native-cli' | 'filesystem';
@@ -91,7 +92,22 @@ export interface ManagedConfigFieldOriginObservation {
   source: 'native-rpc';
 }
 
+/** File-based Claude preference, not a claim about an active session or a native model catalog. */
+export interface NativeEffortObservation {
+  harnessVersion: string;
+  supported: string[];
+  current: string | null;
+  source: 'native-cli+filesystem';
+  verification: 'config-only';
+  writable: boolean;
+  reason: string;
+  path: string;
+  files: Array<{ path: string; digest: string | null }>;
+  environment: NativeConfigurationEnvironment | null;
+}
+
 export interface HarnessContextObservation {
+  nativeEffort?: NativeEffortObservation | null;
   harnessId: HarnessId;
   state: ContextObservationState;
   model: string | null;

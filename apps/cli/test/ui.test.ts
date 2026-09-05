@@ -314,3 +314,44 @@ describe('local dashboard', () => {
     assert.equal(uiAsset('/actions', model).status, 404);
   });
 });
+
+describe('allowance diagnostics on the dashboard', () => {
+  it('shows a safe actionable reason instead of a generic unsupported message', () => {
+    const d: DoctorReport = {
+      ...doctor,
+      harnesses: [{ ...doctor.harnesses[0]!, harnessId: harnessId('claude') }],
+    };
+    const b: BudgetReport = {
+      ...budget,
+      harnesses: [
+        {
+          ...budget.harnesses[0]!,
+          harnessId: harnessId('claude'),
+          state: 'unavailable',
+          windows: [],
+          diagnostics: [
+            {
+              severity: 'info',
+              code: 'cclimits-not-installed',
+              message: 'SECRET /home/private',
+              subject: 'claude',
+              path: '/home/private',
+              remediation: 'SECRET',
+            },
+          ],
+        },
+      ],
+    };
+    const model = buildDashboardModel({
+      generatedAt: budget.observedAt,
+      doctor: d,
+      budget: b,
+      optimize,
+      status,
+    });
+    assert.match(model.harnesses[0]!.allowanceIssue!.message, /cclimits/);
+    assert.match(model.harnesses[0]!.allowanceIssue!.command!, /budget --harness claude/);
+    assert.ok(!JSON.stringify(model).includes('SECRET'));
+    assert.ok(!JSON.stringify(model).includes('/home/private'));
+  });
+});

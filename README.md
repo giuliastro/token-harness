@@ -250,7 +250,57 @@ Most people do not need this section. Run `token-harness <command> --help` for d
 | `handoff` | Build a bounded cross-harness handoff | No |
 | `benchmark*`, `transfer*` | Capture and compare empirical evidence | Local state only |
 
+## Applying native recommendations
+
+`optimize` remains read-only. Review a plan before applying a supported native change:
+
+```sh
+token-harness plan --harness claude --native-policy --task mechanical --profile economy
+token-harness apply --plan <printed-plan-id> --yes
+```
+
+The first Claude path supports the **persisted user effort preference** on the reviewed
+Claude Code 2.1.261 build. It does not change model, authentication, hooks, endpoint or billing.
+`max` is never persisted. Project/local/ancestor settings, custom configuration roots and
+known environment/thinking overrides block the change rather than being overwritten. The
+preference affects future sessions unless overridden: reopen Claude and check `/effort`.
+This is not evidence of a running session's effective effort or a guaranteed quota saving.
+
+For Codex, the same plan/apply flow manages the existing reviewed reasoning-effort and
+verbosity fields through native `config/batchWrite`; project/profile overrides remain yours.
+`rollback --yes` restores the complete pre-change files. `uninstall --yes` removes only owned
+changes and restores a prior Claude effort preference without undoing unrelated later edits.
+
 ## Troubleshooting
+
+### Claude allowance is unavailable
+
+The dashboard now explains whether the optional companion is missing, lacks the safe CLI
+flags, cannot find Python, has no usable Claude session, reports an expired session, or returns
+an unsupported source. It does not expose credentials, raw companion errors or private paths.
+
+As observed on **September 5, 2026**, npm `cclimits@1.7.0` includes the merged Claude
+zero-configuration support and the read-only flags. The latest GitHub Release listing is older
+and is not evidence of what npm ships. To check the same path Token Harness uses:
+
+```sh
+npm list --global cclimits
+cclimits --claude --json --no-cache-write --no-stale-fallback
+token-harness budget --harness claude --verbose
+```
+
+An explicit optional installation/update is `npm install --global cclimits@1.7.0`.
+Token Harness does not install it automatically or retry without its read-only flags.
+A fresh local Claude cache is shown as **cached**, never promoted to live quota pacing.
+A missing observation is not zero remaining allowance. Never paste credentials to debug it.
+
+### Codex is configured but its hook does not run
+
+`token-harness verify --harness codex --verbose` now reads native `hooks/list` where the
+installed app-server exposes it. Disabled, untrusted and modified hooks are distinguished from
+an unavailable observation. Trust must still be granted explicitly in Codex. Enabled/trusted
+metadata does not prove interception, reduction, or task quality; the integration remains
+`config-only` until attributable runtime evidence exists.
 
 ### `token-harness` is not found
 

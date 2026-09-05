@@ -916,3 +916,117 @@ describe('context-cost observation', () => {
     );
   });
 });
+
+describe('native Codex hook enablement is not execution evidence', () => {
+  const HASH = 'sha256:' + 'a'.repeat(64);
+  const nativeHook = {
+    eventName: 'postToolUse',
+    handlerType: 'command',
+    command: 'rtk hook codex',
+    matcher: '^Bash$',
+    sourcePath: HOOKS,
+    enabled: true,
+    trustStatus: 'trusted',
+    currentHash: HASH,
+  };
+  async function check(
+    hook: Record<string, unknown> = nativeHook,
+    options: {
+      errors?: unknown[];
+      cwd?: string;
+      nativeAvailable?: boolean;
+      aliases?: boolean;
+    } = {},
+  ) {
+    const ctx = context({ [HOOKS]: DECLARED }, '0.153.4');
+    const calls: ProcessRequest[] = [];
+    const original = ctx.runner;
+    const runner: ProcessRunner = {
+      async run(request) {
+        calls.push(request);
+        const out = await original.run(request);
+        if (request.args[0] !== 'app-server') return out;
+        return {
+          ...out,
+          stdout: JSON.stringify(
+            options.nativeAvailable === false
+              ? {
+                  id: 'token-harness-hooks-list',
+                  error: { code: -32601, message: 'Method not found' },
+                }
+              : {
+                  id: 'token-harness-hooks-list',
+                  result: {
+                    data: [
+                      { cwd: options.cwd ?? PROJECT, hooks: [hook], errors: options.errors ?? [] },
+                    ],
+                  },
+                },
+          ),
+        };
+      },
+    };
+    if (options.aliases)
+      ctx.fs.canonicalPath = async (path) =>
+        path === '/canonical/hooks.json' || path === HOOKS ? '/canonical/hooks.json' : path;
+    const result = await codexAdapter.verify({ ...ctx, runner });
+    assert.equal(result.achievedTier, 'config-only');
+    assert.equal(
+      result.checks.find((item) => item.id === 'canary-intercepted')?.status,
+      'not-exercised',
+    );
+    assert.ok(
+      calls
+        .filter((call) => call.args[0] === 'app-server')
+        .every(
+          (call) =>
+            call.stdin?.includes('hooks/list') &&
+            !call.stdin?.includes('hooks/enable') &&
+            !call.stdin?.includes('hooks/trust'),
+        ),
+    );
+    return result.checks.find((item) => item.id === 'hook-enablement');
+  }
+  it('matches exact enabled and trusted hook tuples without promoting the tier', async () => {
+    const result = await check();
+    assert.equal(result?.status, 'pass');
+    assert.equal(result?.achievedTier, null);
+    assert.match(result?.summary ?? '', /execution is not proved/);
+  });
+  for (const state of ['untrusted', 'modified'])
+    it('reports ' + state + ' hooks without granting trust', async () => {
+      assert.equal((await check({ ...nativeHook, trustStatus: state }))?.status, 'fail');
+    });
+  it('reports a disabled hook even when trusted', async () => {
+    assert.equal((await check({ ...nativeHook, enabled: false }))?.status, 'fail');
+  });
+  it('does not attribute an unrelated command, matcher or file', async () => {
+    for (const hook of [
+      { ...nativeHook, command: 'different' },
+      { ...nativeHook, matcher: 'Read' },
+      { ...nativeHook, sourcePath: '/other/hooks.json' },
+    ])
+      assert.equal((await check(hook))?.status, 'info');
+  });
+  it('keeps unsupported, ambiguous or malformed native responses unknown', async () => {
+    for (const hook of [
+      { ...nativeHook, currentHash: 'garbage' },
+      { ...nativeHook, trustStatus: 'future' },
+      { ...nativeHook, enabled: 'true' },
+    ])
+      assert.equal((await check(hook))?.status, 'info');
+    for (const options of [
+      { errors: ['parse failure'] },
+      { cwd: '/other/project' },
+      { nativeAvailable: false },
+    ])
+      assert.equal((await check(nativeHook, options))?.status, 'info');
+  });
+  it('resolves actual filesystem aliases rather than comparing basenames', async () => {
+    const result = await check(
+      { ...nativeHook, sourcePath: '/canonical/hooks.json' },
+      { aliases: true },
+    );
+    assert.equal(result?.status, 'pass');
+  });
+});

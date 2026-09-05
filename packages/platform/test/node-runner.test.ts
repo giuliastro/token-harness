@@ -475,3 +475,32 @@ describe('Windows batch shims', () => {
     },
   );
 });
+
+describe('native policy environment observations', () => {
+  it('exposes presence, not secrets, and honors Windows case rules', () => {
+    const observation = runner({
+      facts: WINDOWS_FACTS,
+      env: {
+        anthropic_api_key: 'never-expose-this',
+        claude_code_effort_level: 'private-effort',
+        CLAUDE_CONFIG_DIR: 'C:\\Claude Settings',
+        codex_home: 'C:\\Codex Settings',
+      },
+    }).readNativeConfigurationEnvironment();
+    assert.equal(observation.claudeBackendOverridden, true);
+    assert.equal(observation.claudeEffortOverridden, true);
+    assert.equal(observation.claudeModelOverridden, false);
+    assert.equal(observation.codexConfigDirectory, 'C:\\Codex Settings');
+    assert.ok(!JSON.stringify(observation).includes('never-expose-this'));
+    assert.ok(!JSON.stringify(observation).includes('private-effort'));
+  });
+  it('does not confuse an unknown remote environment with an empty observed environment', () => {
+    assert.deepEqual(runner({ env: {} }).readNativeConfigurationEnvironment(), {
+      claudeConfigDirectory: null,
+      codexConfigDirectory: null,
+      claudeEffortOverridden: false,
+      claudeModelOverridden: false,
+      claudeBackendOverridden: false,
+    });
+  });
+});

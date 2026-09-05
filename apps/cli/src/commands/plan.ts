@@ -18,7 +18,11 @@
  * — printing one would name an artifact that does not exist.
  */
 
-import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
+import {
+  listHarnessAdapters,
+  listProviderAdapters,
+  planClaudeNativeEffort,
+} from '@token-harness/adapters';
 import {
   COMPATIBILITY_ROWS,
   COMPATIBILITY_RULES,
@@ -455,7 +459,47 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     }
   }
 
-  await appendCodexNativePolicy(context, actions, diagnostics);
+  if (context.nativePolicy === true && context.harness === harnessId('claude')) {
+    if (context.taskClass === undefined || context.taskClass === null) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'claude-native-task-required',
+          subject: 'claude',
+          message: 'An explicit --task is required before changing a Claude effort preference',
+          remediation:
+            'Review token-harness plan --harness claude --native-policy --task mechanical --profile economy',
+        }),
+      );
+    } else {
+      const optimization = await runOptimize(context);
+      const observation = await runContext(context);
+      const advice = optimization.data?.harnesses.find(
+        (item) => item.harnessId === harnessId('claude'),
+      );
+      const native = observation.data?.harnesses.find(
+        (item) => item.harnessId === harnessId('claude'),
+      )?.nativeEffort;
+      if (advice !== undefined && native != null && advice.currentEffort !== native.current) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'claude-native-observation-drift',
+            subject: 'claude',
+            message: 'Claude effort changed while the plan was being prepared',
+            remediation: 'Re-run the plan against a stable configuration',
+          }),
+        );
+      } else {
+        const result = planClaudeNativeEffort(native, advice?.recommendedEffort ?? null);
+        // Guard before another provider writes an unrelated hook in the same settings file.
+        actions.unshift(...result.actions);
+        diagnostics.push(...result.diagnostics);
+      }
+    }
+  } else {
+    await appendCodexNativePolicy(context, actions, diagnostics);
+  }
 
   const markerConflicts: HardConflict[] = findMarkerRegionConflicts(attributedActions).map(
     (conflict) => ({

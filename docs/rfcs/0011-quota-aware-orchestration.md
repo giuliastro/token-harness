@@ -401,3 +401,19 @@ This comparator does not by itself claim cross-provider quota savings. Live inde
 pacing remains the scheduler's budget evidence; the transfer experiment answers only whether a
 bounded handoff has demonstrated a useful-work advantage rather than manufacturing a common quota
 unit that the providers do not expose.
+
+
+## Amendment - September 5, 2026: explicit Claude user preference
+
+The initial Claude native-policy path manages only the persisted user `effortLevel` preference
+on a reviewed CLI version and with an explicit task class. It uses guarded JSON merge under
+the existing transaction engine, with version/environment/settings-digest preconditions,
+verified rollback and journal-owned preference restoration on uninstall. It never changes
+model, provider, authentication, endpoint, hooks or billing. Known overrides prevent mutation;
+unobserved managed/session overrides remain explicit limitations, not a claim of effective
+native config. `max` is session-only and cannot be persisted by this path.
+
+Codex `hooks/list` is now consumed read-only when available to observe exact hook enablement
+and trust. This metadata does not prove execution or reduction and does not raise verification
+tiers. The dated evidence and exclusions are recorded in
+[the native-contract note](../spikes/claude-codex-native-policy.md).

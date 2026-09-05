@@ -78,6 +78,19 @@ export function renderContextReport(report: ContextReport, context: RenderContex
         ),
       );
     }
+    if (harness.nativeEffort) {
+      lines.push(
+        truncate(
+          '  user effort preference: ' +
+            text(harness.nativeEffort.current) +
+            ' (config-only; ' +
+            (harness.nativeEffort.writable ? 'reviewable' : 'read-only') +
+            ')',
+          78,
+        ),
+      );
+      lines.push(truncate('  ' + harness.nativeEffort.reason, 78));
+    }
     if (harness.managedConfigTarget !== null) {
       lines.push(
         truncate(

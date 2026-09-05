@@ -395,6 +395,81 @@ async function applyMergeJson(
   context: ActionContext,
 ): Promise<ActionOutcome> {
   const { fs } = context;
+  const guard = action.claudeEffortGuard;
+  if (guard !== undefined) {
+    const operation = action.operations[0];
+    if (
+      action.operations.length !== 1 ||
+      action.ownedPointers.length !== 1 ||
+      action.ownedPointers[0] !== 'effortLevel' ||
+      operation?.kind !== 'set' ||
+      operation.pointer !== 'effortLevel' ||
+      typeof operation.value !== 'string' ||
+      !['low', 'medium', 'high', 'xhigh'].includes(operation.value) ||
+      !guard.files.some((file) => file.path === action.path)
+    ) {
+      return refusal(
+        action,
+        'claude-native-policy-outside-safe-set',
+        action.path,
+        'A Claude native policy may only set the reviewed user effortLevel preference',
+        'Recompute a narrow native policy plan',
+      );
+    }
+    const environment = context.runner?.readNativeConfigurationEnvironment?.();
+    if (
+      environment === undefined ||
+      jsonValueDigest(environment as unknown as JsonValue) !==
+        jsonValueDigest(guard.environment as unknown as JsonValue)
+    ) {
+      return drift(
+        action,
+        action.path,
+        'The native configuration environment is unknown or changed',
+      );
+    }
+    if (
+      environment.claudeConfigDirectory !== null ||
+      environment.claudeEffortOverridden ||
+      environment.claudeModelOverridden ||
+      environment.claudeBackendOverridden
+    ) {
+      return refusal(
+        action,
+        'claude-native-environment-override',
+        action.path,
+        'An environment override prevents managing this Claude user preference',
+        'Leave custom roots, models, effort and backends under user control',
+      );
+    }
+    const version = await context.runner!.run({
+      executable: 'claude',
+      args: ['--version'],
+      cwd: context.cwd ?? fs.dirname(action.path),
+      timeoutMs: 10_000,
+      maxOutputBytes: 4096,
+    });
+    if (
+      !processSucceeded(version) ||
+      version.stdoutTruncated ||
+      /\b(\d+\.\d+\.\d+)\b/.exec(version.stdout)?.[1] !== guard.version
+    ) {
+      return drift(
+        action,
+        action.path,
+        'The reviewed Claude version changed or cannot be observed',
+      );
+    }
+    for (const file of guard.files) {
+      const stat = await fs.stat(file.path);
+      if (stat !== null && (stat.kind !== 'file' || stat.byteLength > 1024 * 1024)) {
+        return drift(action, file.path, 'A guarded settings path is not a bounded file');
+      }
+      const actual = stat === null ? null : digestBytes(await fs.readFile(file.path));
+      if (actual !== file.digest)
+        return drift(action, file.path, 'A settings document changed since planning');
+    }
+  }
 
   const declared = new Set(action.ownedPointers);
   const undeclared = action.operations
@@ -484,6 +559,20 @@ async function applyMergeJson(
     pointer: entry.pointer,
     placement: entry.placement,
     valueDigest: entry.valueDigest,
+    ...(guard !== undefined &&
+    typeof parsed.document === 'object' &&
+    parsed.document !== null &&
+    !Array.isArray(parsed.document) &&
+    typeof parsed.document['effortLevel'] === 'string' &&
+    ['low', 'medium', 'high', 'xhigh'].includes(parsed.document['effortLevel'])
+      ? {
+          previousEffortValue: parsed.document['effortLevel'] as
+            | 'low'
+            | 'medium'
+            | 'high'
+            | 'xhigh',
+        }
+      : {}),
   }));
 
   const text = formatJsonDocument(merged.document, parsed.formatting);
@@ -768,6 +857,36 @@ async function applyRemoveOwnedChange(
         'This document can no longer be edited without damaging it, so the entry was left in place',
         'Remove the entry by hand',
       );
+    }
+    if (action.target.previousEffortValue !== undefined) {
+      if (
+        action.target.pointer !== 'effortLevel' ||
+        !['low', 'medium', 'high', 'xhigh'].includes(action.target.previousEffortValue)
+      ) {
+        return refusal(
+          action,
+          'native-restore-outside-safe-set',
+          action.target.path,
+          'Only a previously observed effort enum can be restored',
+          'Review the ownership record',
+        );
+      }
+      const restored = mergeJsonEntries(parsed.document, [
+        {
+          kind: 'set',
+          pointer: 'effortLevel',
+          value: action.target.previousEffortValue,
+          expectedValueDigest: action.target.valueDigest,
+        },
+      ]);
+      if (restored.state !== 'merged')
+        return drift(action, action.target.path, 'The effort preference changed');
+      await fs.writeFile(
+        action.target.path,
+        UTF8.encode(formatJsonDocument(restored.document, parsed.formatting)),
+        null,
+      );
+      return outcome(action, 'applied', { snapshots: [snapshot] });
     }
     const removal = removeJsonEntry(parsed.document, {
       pointer: action.target.pointer,

@@ -16,6 +16,7 @@ import type { HarnessAdapter } from './contract.js';
 
 export * from './contract.js';
 export { claudeAdapter } from './claude.js';
+export { planClaudeNativeEffort, planClaudeNativeEffortRemoval } from './claude-policy.js';
 export { codexAdapter } from './codex.js';
 export { hermesAdapter } from './hermes.js';
 export { opencodeAdapter } from './opencode.js';

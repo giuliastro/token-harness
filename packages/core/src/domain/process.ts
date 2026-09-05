@@ -112,8 +112,19 @@ export interface ProcessOutcome {
   failure: ProcessFailure | null;
 }
 
+/** Safe configuration selectors only. Never contains tokens, credentials or prompts. */
+export interface NativeConfigurationEnvironment {
+  claudeConfigDirectory: string | null;
+  codexConfigDirectory: string | null;
+  claudeEffortOverridden: boolean;
+  claudeModelOverridden: boolean;
+  claudeBackendOverridden: boolean;
+}
+
 export interface ProcessRunner {
   run(request: ProcessRequest): Promise<ProcessOutcome>;
+  /** Optional on test/remote runners: absence is unknown, not an empty environment. */
+  readNativeConfigurationEnvironment?(): NativeConfigurationEnvironment;
 }
 
 /** One mebibyte per stream. Enough for any provider's `--json`, small enough to keep in a diagnostic. */

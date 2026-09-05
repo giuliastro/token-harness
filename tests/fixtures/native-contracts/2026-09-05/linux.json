@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-05T15:50:31.861Z",
+  "platform": "linux",
+  "workflowRun": 33976006739,
+  "versions": {
+    "claude": "2.1.261",
+    "codex": "0.153.4",
+    "cclimits": "1.7.0"
+  },
+  "measurementClass": "native-contract-not-task-runtime",
+  "normalization": [
+    "Paths replaced by scope placeholders",
+    "Unrelated native notifications and machine identifiers omitted"
+  ],
+  "claudeDoctorExitCodes": {
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "xhigh": 0
+  },
+  "cclimitsSyntheticCache": {
+    "claude": {
+      "status": "ok",
+      "source": "claude_code_cache",
+      "five_hour": {
+        "used": "18.0%",
+        "remaining": "82.0%",
+        "resets_at": "2026-09-05T16:50:33.899Z",
+        "resets_in": "59m"
+      },
+      "seven_day": {
+        "used": "42.0%",
+        "remaining": "58.0%",
+        "resets_at": "2026-09-06T15:50:33.899Z",
+        "resets_in": "23h 59m"
+      },
+      "source_age_seconds": 0
+    }
+  },
+  "codexHooksList": {
+    "data": [
+      {
+        "cwd": "<project>",
+        "hooks": [
+          {
+            "key": "<codex-home>/hooks.json:post_tool_use:0:0",
+            "eventName": "postToolUse",
+            "handlerType": "command",
+            "command": "echo native-probe",
+            "async": false,
+            "matcher": "^Bash$",
+            "timeoutSec": 600,
+            "statusMessage": null,
+            "additionalContextLimit": null,
+            "sourcePath": "<codex-home>/hooks.json",
+            "source": "user",
+            "pluginId": null,
+            "displayOrder": 0,
+            "enabled": true,
+            "isManaged": false,
+            "currentHash": "sha256:325e45bd2ea9ef969156caf59d9f0864cb8c250a9cce6e407ead6a03c93c3872",
+            "trustStatus": "untrusted"
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      }
+    ]
+  },
+  "codexHooksExitCode": 0,
+  "limitations": [
+    "No real account",
+    "Synthetic quota fixture, not observed subscription use",
+    "Hook was not executed",
+    "Claude doctor does not prove effective session effort"
+  ]
+}

@@ -2,8 +2,8 @@
  * Codex CLI — PLAN §3.2 and RFC 0007's enablement finding.
  *
  * A hook in hooks.json is only a declaration. Codex persists enablement and trust in
- * internal TUI state whose file location was not observable in the spike, so this
- * adapter never converts declaration into activation. `enabled: null` is deliberate.
+ * internal state. Newer app-server builds expose hooks/list; verification can observe
+ * enablement and trust through that API, but never confuses either with execution.
  */
 import {
   classifyVersion,
@@ -23,6 +23,7 @@ import {
 } from '@token-harness/core';
 
 import { matcherCoversFamily } from './claude.js';
+import { readCodexHookEnablement } from './codex-hooks.js';
 import {
   familiesOnThisPlatform,
   resolveConfigPath,
@@ -72,7 +73,7 @@ const MANIFEST: HarnessManifest = {
   ],
   requiresEnablement: true,
   enablementNote:
-    'Codex persists hook enablement and trust separately from hooks.json; the spike could not locate readable state outside the TUI',
+    'Codex persists hook enablement and trust separately from hooks.json; verify reads hooks/list where available and otherwise keeps enablement unknown',
   receiptFamily: 'harness-event-stream',
 };
 
@@ -305,7 +306,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
           code: 'hook-enablement-unobservable',
           subject: CODEX,
           message:
-            'Codex declares this hook, but its persisted enablement and trust state cannot be read outside the TUI',
+            'This file declares hooks; run verify to query native enablement/trust where hooks/list is available',
           path: hook.path,
           remediation: 'Open Codex and confirm the hook is enabled and trusted after any hook edit',
         }),
@@ -396,7 +397,7 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
       id: 'hook-enablement',
       status: configured ? 'info' : 'not-exercised',
       summary: configured
-        ? 'Enablement and trust are separate persisted state and are not observable from this adapter'
+        ? 'Native enablement/trust metadata was unavailable; the declared file alone does not prove activation'
         : 'No declared hook has enablement to inspect',
       achievedTier: null,
       evidence: [],
@@ -413,6 +414,13 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
       remediation: null,
     },
   ];
+  if (configured && readable && hook !== undefined) {
+    const native = await readCodexHookEnablement(context, hook);
+    if (native !== null) {
+      const index = checks.findIndex((check) => check.id === 'hook-enablement');
+      if (index !== -1) checks[index] = native;
+    }
+  }
   return {
     harnessId: CODEX,
     declaredTier: MANIFEST.verificationTier,

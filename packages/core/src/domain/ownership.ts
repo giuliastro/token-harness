@@ -68,6 +68,8 @@ export interface OwnedJsonEntryRecord {
   placement: JsonEntryPlacement;
   /** Digest of the canonical form of the value that was written. */
   valueDigest: string;
+  /** Only an overwritten Claude effort enum; never arbitrary settings/credentials. */
+  previousEffortValue?: 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 /**

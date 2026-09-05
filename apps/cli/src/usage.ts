@@ -232,7 +232,7 @@ is returned, because nothing may change without an explicit decision.
 
 With --plan <id> the stored plan is loaded and revalidated instead of recomputed,
 so the artifact that was reviewed is the artifact that runs. Without --plan,
---native-policy recomputes the same reversible Codex effort/verbosity policy
+--native-policy recomputes the same reversible native preference policy
 described by token-harness plan --native-policy before confirmation. It is rejected when
 the project, the recorded provider or harness versions, the resolved ownership, or
 a precondition digest no longer match — exit 5, before any action executes.
@@ -345,7 +345,13 @@ apply. Nothing is changed either way.
 policy as token-harness optimize. This build manages reasoning effort and verbosity
 only. A field coming from project config or a selected profile is left untouched.
 The resulting config/batchWrite action carries Codex's observed user-config version,
-is snapshotted before mutation, and can be executed later with apply --plan <id> --yes.`,
+is snapshotted before mutation, and can be executed later with apply --plan <id> --yes.
+
+With --harness claude, an explicit --task is required. On reviewed Claude versions,
+only the persisted user effortLevel preference is managed. Project, environment and
+thinking overrides block mutation. Managed policy and running-session overrides
+may still win: reopen Claude and inspect /effort. This is config-only verification.
+Rollback restores exact file bytes; uninstall restores only the owned preference.`,
   rollback: `token-harness rollback — restore the files a transaction changed
 
 Usage

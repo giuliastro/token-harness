@@ -12,7 +12,16 @@
  *   guessing.
  */
 
-import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { posix, win32 } from 'node:path';
 
 import type { FileStat, FileSystemPort, PlatformFacts } from '@token-harness/core';
@@ -60,6 +69,15 @@ export class NodeFileSystem implements FileSystemPort {
         // reporting them would invite a caller to treat them as one.
         mode: this.nativeWindows ? null : octal(info.mode),
       };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  async canonicalPath(path: string): Promise<string | null> {
+    try {
+      return await realpath(path);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       throw error;

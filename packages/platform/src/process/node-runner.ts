@@ -34,6 +34,7 @@ import {
   redactText,
   redactionPolicy,
   secretValuesIn,
+  type NativeConfigurationEnvironment,
   type PlatformFacts,
   type ProcessFailureReason,
   type ProcessInterpreter,
@@ -137,6 +138,35 @@ export class NodeProcessRunner implements ProcessRunner {
 
   constructor(options: NodeProcessRunnerOptions) {
     this.options = options;
+  }
+
+  readNativeConfigurationEnvironment(): NativeConfigurationEnvironment {
+    const entries = Object.entries(this.options.env);
+    const value = (key: string): string | undefined =>
+      entries.find(([name]) =>
+        this.options.facts.os === 'windows' ? name.toUpperCase() === key : name === key,
+      )?.[1];
+    const present = (key: string): boolean => value(key) !== undefined;
+    return {
+      claudeConfigDirectory: value('CLAUDE_CONFIG_DIR') ?? null,
+      codexConfigDirectory: value('CODEX_HOME') ?? null,
+      claudeEffortOverridden:
+        present('CLAUDE_CODE_EFFORT_LEVEL') ||
+        present('MAX_THINKING_TOKENS') ||
+        present('CLAUDE_CODE_DISABLE_THINKING'),
+      claudeModelOverridden:
+        present('ANTHROPIC_MODEL') ||
+        present('ANTHROPIC_DEFAULT_OPUS_MODEL') ||
+        present('ANTHROPIC_DEFAULT_SONNET_MODEL'),
+      claudeBackendOverridden: [
+        'ANTHROPIC_BASE_URL',
+        'CLAUDE_CODE_USE_BEDROCK',
+        'CLAUDE_CODE_USE_VERTEX',
+        'CLAUDE_CODE_USE_FOUNDRY',
+        'ANTHROPIC_API_KEY',
+        'ANTHROPIC_AUTH_TOKEN',
+      ].some(present),
+    };
   }
 
   async run(request: ProcessRequest): Promise<ProcessOutcome> {
