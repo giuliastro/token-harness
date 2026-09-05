@@ -241,17 +241,17 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
 
     const accepted = new Set([
       '--current',
-     '--candidate',
+      '--candidate',
       '--task-class',
-     '--current-five-hour',
+      '--current-five-hour',
       '--current-weekly',
-     '--candidate-five-hour',
-     '--candidate-weekly',
-     '--candidate-quality',
+      '--candidate-five-hour',
+      '--candidate-weekly',
+      '--candidate-quality',
       '--candidate-quality-task',
       '--candidate-quality-samples',
-     '--handoff-bytes',
-     '--max-handoff-bytes',
+      '--handoff-bytes',
+      '--max-handoff-bytes',
       '--transfer-benefit',
     ]);
     if (!accepted.has(name)) {
@@ -632,7 +632,8 @@ export async function scheduleMain(
       fiveHourPace: parsed.args.candidateFiveHour,
       weeklyPace: parsed.args.candidateWeekly,
       quality: parsed.args.candidateQuality,
-      qualityTaskClass: qualityTask !== null && isTaskClass(qualityTask) ? qualityTask : null,
+      qualityTaskClass:
+        qualityTask !== null && isTaskClass(qualityTask) ? qualityTask : null,
       qualitySamples: parsed.args.candidateQualitySamples,
     },
     transfer: {
