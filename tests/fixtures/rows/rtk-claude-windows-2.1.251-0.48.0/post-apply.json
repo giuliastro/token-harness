@@ -1,0 +1,37 @@
+{
+  "stage": "post-apply",
+  "harness": "claude",
+  "provider": "rtk",
+  "observed": {
+    "harnessVersion": "2.1.251",
+    "providerVersion": "0.48.0",
+    "platform": {
+      "os": "windows",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.0"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\r\n  \"theme\": \"dark\",\r\n  \"hooks\": {\r\n    \"PreToolUse\": [\r\n      {\r\n        \"matcher\": \"Write|Edit\",\r\n        \"hooks\": [\r\n          {\r\n            \"type\": \"command\",\r\n            \"command\": \"my-own-linter --strict\"\r\n          }\r\n        ]\r\n      },\r\n      {\r\n        \"matcher\": \"Bash\",\r\n        \"hooks\": [\r\n          {\r\n            \"type\": \"command\",\r\n            \"command\": \"rtk hook claude\"\r\n          }\r\n        ]\r\n      },\r\n      {\r\n        \"matcher\": \"PowerShell\",\r\n        \"hooks\": [\r\n          {\r\n            \"type\": \"command\",\r\n            \"command\": \"rtk hook claude\"\r\n          }\r\n        ]\r\n      }\r\n    ]\r\n  },\r\n  \"permissions\": {\r\n    \"allow\": [\r\n      \"Read\",\r\n      \"Write\"\r\n    ]\r\n  }\r\n}\r\n"
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    }
+  }
+}
