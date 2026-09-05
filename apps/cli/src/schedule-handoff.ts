@@ -1,7 +1,25 @@
+import type { FileSystemPort } from '@token-harness/core';
 import { NodeFileSystem, resolveHostEnvironment } from '@token-harness/platform';
 
 export interface ScheduleHandoffObserverInput {
   handoffFile: string;
+}
+
+type HandoffFileSystem = Pick<FileSystemPort, 'stat' | 'readFile'>;
+
+export async function readScheduleHandoffBytes(input: {
+  fs: HandoffFileSystem;
+  handoffFile: string;
+}): Promise<number | null> {
+  const stat = await input.fs.stat(input.handoffFile);
+  if (stat === null || stat.kind !== 'file') return null;
+
+  try {
+    const content = await input.fs.readFile(input.handoffFile);
+    return content.byteLength;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -17,13 +35,5 @@ export async function observeScheduleHandoffBytes(
   if (!resolution.ok) return null;
 
   const fs = new NodeFileSystem(resolution.environment.facts);
-  const stat = await fs.stat(input.handoffFile);
-  if (stat === null || stat.kind !== 'file') return null;
-
-  try {
-    const content = await fs.readFile(input.handoffFile);
-    return content.byteLength;
-  } catch {
-    return null;
-  }
+  return readScheduleHandoffBytes({ fs, handoffFile: input.handoffFile });
 }
