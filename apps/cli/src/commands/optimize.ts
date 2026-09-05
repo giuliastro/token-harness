@@ -69,7 +69,16 @@ function contextEvidence(
   const evidence: RecommendationEvidence[] = [];
   let score = 0;
 
-  if (harness.projectDocMaxBytes !== null && harness.projectDocMaxBytes > 0) {
+  // A configured capacity is not evidence that any bytes are actually loaded. The old renderer
+  // could therefore recommend reducing context while explaining it with "0B known loaded of ...",
+  // which made a correct recommendation from another signal look self-contradictory. Only attach
+  // budget evidence when there is a measured numerator; otherwise fall back to discovered
+  // candidates and state that admission is not proven.
+  if (
+    harness.projectDocMaxBytes !== null &&
+    harness.projectDocMaxBytes > 0 &&
+    instructionBytes > 0
+  ) {
     const ratio = instructionBytes / harness.projectDocMaxBytes;
     if (ratio >= 0.75) score = Math.max(score, 2);
     else if (ratio >= 0.5) score = Math.max(score, 1);
