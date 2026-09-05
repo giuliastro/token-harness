@@ -1,0 +1,25 @@
+name: Verify npm 0.1.7
+
+on:
+  push:
+    branches: [release/0.1.7]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Verify public npm latest and clean install
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest="$(npm view token-harness@latest version --registry=https://registry.npmjs.org)"
+          echo "npm latest: $latest"
+          test "$latest" = "0.1.7"
+          npm install --global token-harness@latest --registry=https://registry.npmjs.org
+          installed="$(token-harness --version | tr -d '\r\n')"
+          echo "installed version: $installed"
+          test "$installed" = "0.1.7"
