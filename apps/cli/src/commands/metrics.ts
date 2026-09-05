@@ -23,6 +23,7 @@ import {
   TOKEN_HARNESS_OWNER,
   UNATTRIBUTED_PROJECT_ID,
   aggregateEvents,
+  measurementUnit,
   commandResult,
   diagnostic,
   resolveMetricsWindow,
@@ -160,7 +161,9 @@ export async function runMetrics(
    * than quietly reinstating the unscoped read.
    */
   const projectId =
-    context.adapters === null ? null : context.adapters.projectIdFor(context.projectRoot);
+    context.metricsAllProjects === true || context.adapters === null
+      ? null
+      : context.adapters.projectIdFor(context.projectRoot);
 
   const events: OptimizationEvent[] = [];
   for await (const event of store.query({
@@ -178,7 +181,10 @@ export async function runMetrics(
       diagnostic({
         severity: 'info',
         code: 'metrics-not-project-scoped',
-        message: 'This report covers every project in the store: no project identity was available',
+        message:
+          context.metricsAllProjects === true
+            ? 'This report covers all locally recorded projects, including unattributed operations'
+            : 'This report covers every project in the store: no project identity was available',
         remediation: null,
       }),
     );
@@ -234,7 +240,7 @@ export async function runMetrics(
     // A provider-filtered stream is intentionally partial. Computing a raw-to-final pipeline total
     // from it would turn the missing stages created by the flag into an "incomparable pipeline".
     // Provider rows still render normally; channel totals are omitted under that filter.
-    if (context.provider === null) {
+    if (context.provider === null && context.metricsAllProjects !== true) {
       channelExpectations = pipelines.flatMap((pipeline) =>
         (pipeline.channels ?? []).map((channel) => ({
           pipelineId: pipeline.pipelineId,
@@ -255,6 +261,44 @@ export async function runMetrics(
     adapterModes,
     ...(channelExpectations === undefined ? {} : { channels: channelExpectations }),
   });
+
+  if (context.metricsAllProjects === true) {
+    report.scope = 'all-projects';
+    const seen = new Set<string>();
+    const unique = events.filter((event) => {
+      if (seen.has(event.eventId)) return false;
+      seen.add(event.eventId);
+      return true;
+    });
+    const timestamps = unique.map((event) => event.timestamp).sort();
+    report.firstRecordedAt = timestamps[0] ?? null;
+    report.lastRecordedAt = timestamps.at(-1) ?? null;
+    for (const row of report.providers) {
+      const matching = unique.filter(
+        (event) =>
+          event.provider.id === row.providerId &&
+          event.measurement.class === row.class &&
+          event.outcome.changed &&
+          measurementUnit(event) === row.unit,
+      );
+      row.before = matching.reduce(
+        (sum, event) =>
+          sum +
+          (row.unit === 'tokens'
+            ? (event.measurement.beforeTokens ?? 0)
+            : (event.measurement.beforeChars ?? 0)),
+        0,
+      );
+      row.after = matching.reduce(
+        (sum, event) =>
+          sum +
+          (row.unit === 'tokens'
+            ? (event.measurement.afterTokens ?? 0)
+            : (event.measurement.afterChars ?? 0)),
+        0,
+      );
+    }
+  }
 
   // Exit 0 whatever the figures say. RFC 0006 §Exit codes reserves 3 for a verification below
   // its declared tier; a report with nothing in it is a fact about the machine, not a

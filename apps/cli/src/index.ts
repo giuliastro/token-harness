@@ -25,3 +25,5 @@ export { runDoctor } from './commands/doctor.js';
 export { runPlan, planExitCode } from './commands/plan.js';
 export { runStatus } from './commands/status.js';
 export * from './render/index.js';
+
+export { GuideService, createGuideCall, type GuideCall } from './guided.js';

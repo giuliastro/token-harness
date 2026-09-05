@@ -14,6 +14,7 @@
 
 import process from 'node:process';
 import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 
 import {
   EXIT_CODES,
@@ -27,6 +28,8 @@ import {
   type CliEnvelope,
   type DoctorReport,
   type OptimizeReport,
+  type MetricsReport,
+  type ExitCode,
   type StatusReport,
 } from '@token-harness/core';
 import {
@@ -48,6 +51,8 @@ import {
   type UiOptions,
 } from './ui.js';
 import { TOOL_VERSION } from './version.js';
+import { createGuideCall, GuideService, savingsView, type GuidePeriod } from './guided.js';
+import { createGuideHandler } from './guided-http.js';
 
 /**
  * The internal reader mode.
@@ -79,14 +84,29 @@ async function runAsDatabaseReader(argv: readonly string[]): Promise<boolean> {
 export async function main(argv: readonly string[]): Promise<void> {
   if (await runAsDatabaseReader(argv)) return;
 
-  const uiInvocation = argv[0] === 'ui' ? parseUiArgs(argv.slice(1)) : null;
+  const opensGuide = argv.length === 0 || argv[0] === 'start' || argv[0] === 'ui';
+  const readOnly = argv.includes('--read-only');
+  const uiInvocation = opensGuide
+    ? parseUiArgs(argv.slice(1).filter((arg) => arg !== '--read-only'))
+    : null;
   if (uiInvocation !== null && !uiInvocation.ok) {
     process.stderr.write(`${uiInvocation.message}\nRun token-harness ui --help for usage.\n`);
     process.exitCode = EXIT_CODES['usage-error'];
     return;
   }
   if (uiInvocation?.ok === true && uiInvocation.options.help) {
-    process.stdout.write(`${UI_USAGE}\n`);
+    process.stdout.write(
+      readOnly
+        ? UI_USAGE + '\n'
+        : 'Token Harness: open, review setup once, then use your coding agent normally.\n\n' +
+            '  token-harness                   Open the guided application\n' +
+            '  token-harness start             Same guided application\n' +
+            '  token-harness savings           Show recorded output savings across projects\n' +
+            '  token-harness ui --no-open      Start without opening a browser\n' +
+            '  token-harness ui --read-only    Use the legacy read-only dashboard\n' +
+            '  token-harness ui --json         Emit the existing schema-1 status report\n\n' +
+            'The local application listens only on 127.0.0.1 and shows setup, measured results and rules. Changes require an explicit browser approval.\n',
+    );
     process.exitCode = EXIT_CODES.ok;
     return;
   }
@@ -171,7 +191,15 @@ export async function main(argv: readonly string[]): Promise<void> {
   };
 
   if (uiInvocation?.ok === true) {
-    process.exitCode = await runUi(uiInvocation.options, baseOptions);
+    process.exitCode =
+      readOnly || uiInvocation.options.json
+        ? await runUi(uiInvocation.options, baseOptions)
+        : await runGuidedUi(uiInvocation.options, baseOptions);
+    return;
+  }
+
+  if (argv[0] === 'savings') {
+    process.exitCode = await runSavingsView(argv.slice(1), baseOptions);
     return;
   }
 
@@ -384,4 +412,134 @@ async function runUi(
     process.stdout.write(`Open this address in your browser: ${url}\n`);
   }
   return EXIT_CODES.ok;
+}
+
+async function runGuidedUi(
+  options: UiOptions,
+  base: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<number> {
+  const service = new GuideService(
+    createGuideCall(base),
+    () => Date.now(),
+    () => randomBytes(32).toString('hex'),
+  );
+  const token = randomBytes(32).toString('hex');
+  let authority = '';
+  const server = createServer(createGuideHandler({ service, token, authority: () => authority }));
+  server.requestTimeout = 15_000;
+  server.headersTimeout = 10_000;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(options.port, '127.0.0.1', resolve);
+    });
+  } catch {
+    process.stderr.write(
+      'The local application could not start. The chosen port may already be in use.\n',
+    );
+    return EXIT_CODES['internal-error'];
+  }
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    return EXIT_CODES['internal-error'];
+  }
+  authority = `127.0.0.1:${address.port}`;
+  const url = `http://${authority}/`;
+  process.stdout.write(
+    `Token Harness is ready: ${url}\n\n` +
+      'Use the browser to review setup, see recorded savings and read the active rules.\n' +
+      'No configuration changes happen until you approve them.\n' +
+      'Keep using Claude Code and Codex normally. Close this dashboard with Ctrl+C.\n',
+  );
+  if (options.open && !(await openDashboard(url, base)))
+    process.stdout.write(`Open ${url} in your browser.\n`);
+  return EXIT_CODES.ok;
+}
+
+async function runSavingsView(
+  args: readonly string[],
+  base: Omit<RunOptions, 'argv' | 'streams'>,
+): Promise<number> {
+  if (args.includes('--help')) {
+    process.stdout.write(
+      'token-harness savings [--since all|7d|30d] [--json]\nRecorded output reductions across all locally recorded projects. No configuration changes.\n',
+    );
+    return EXIT_CODES.ok;
+  }
+  let period: GuidePeriod = 'all';
+  const json = args.includes('--json');
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--json') continue;
+    else if (args[index] === '--since' && ['all', '7d', '30d'].includes(args[index + 1] ?? '')) {
+      period = args[index + 1] as GuidePeriod;
+      index += 1;
+    } else {
+      const message = 'Use token-harness savings [--since all|7d|30d] [--json].';
+      if (json)
+        process.stdout.write(
+          serializeEnvelope(
+            toEnvelope(
+              commandResult({
+                command: 'savings',
+                exitCode: EXIT_CODES['usage-error'],
+                data: null,
+                diagnostics: [
+                  diagnostic({
+                    severity: 'error',
+                    code: 'invalid-savings-option',
+                    message,
+                    remediation: 'Run token-harness savings --help',
+                  }),
+                ],
+              }),
+              TOOL_VERSION,
+            ),
+          ),
+        );
+      else process.stderr.write(message + '\n');
+      return EXIT_CODES['usage-error'];
+    }
+  }
+  const result = await createGuideCall(base)<MetricsReport>([
+    'savings',
+    '--since',
+    period === 'all' ? '1970-01-01' : period,
+  ]);
+  const view = savingsView(result.data, period);
+  if (json) {
+    process.stdout.write(
+      serializeEnvelope(
+        toEnvelope(
+          commandResult({
+            command: 'savings',
+            exitCode: result.exitCode as ExitCode,
+            data: result.data === null ? null : view,
+            diagnostics: result.diagnostics,
+          }),
+          TOOL_VERSION,
+        ),
+      ),
+    );
+  } else if (result.data === null) {
+    process.stderr.write(
+      'Measurements could not be read. Open Token Harness to check your setup.\n',
+    );
+  } else {
+    process.stdout.write(
+      'RECORDED SAVINGS\nAll locally recorded projects / ' +
+        (period === 'all' ? 'all available history' : period) +
+        '\n\n',
+    );
+    if (view.rows.length === 0)
+      process.stdout.write(
+        'No measurable reductions recorded yet. This is not a measured zero.\nUse the configured agent normally; some integrations require telemetry to be enabled.\n',
+      );
+    for (const row of view.rows)
+      process.stdout.write(
+        `${row.provider}: ${Math.abs(row.saved).toLocaleString()} ${row.unit} ${row.saved < 0 ? 'added, not saved' : 'removed'}\n  ${row.measurement}; ${row.operations} recorded changed outputs.\n`,
+      );
+    process.stdout.write('\n' + view.note + '\n');
+  }
+  return result.exitCode;
 }
