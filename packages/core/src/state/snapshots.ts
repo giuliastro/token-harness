@@ -23,7 +23,7 @@ import type { FileSnapshot } from '../domain/ownership.js';
 import type { FileSystemPort } from './filesystem.js';
 
 export interface SnapshotStore {
-  /** Captures the current state of a path, including its absence. */
+  /** Captures the transaction's initial state of a path, including its absence. */
   capture(path: string): Promise<FileSnapshot>;
   /** Records an absence established by a pre-invocation tree scan. */
   captureAbsent(path: string): FileSnapshot;
@@ -32,12 +32,18 @@ export interface SnapshotStore {
   /** Restores in reverse order, so a directory created last is removed first. */
   restoreAll(snapshots: readonly FileSnapshot[]): Promise<void>;
   /**
-   * Every snapshot taken through this store, in capture order.
+   * Every distinct path captured through this store, in first-capture order.
    *
-   * The store is the authority on what to roll back, not the action outcomes. An
-   * action that captures a snapshot and then fails while writing throws instead of
-   * returning an outcome, and a rollback driven by returned outcomes would not know
-   * that snapshot existed — which is precisely the case where rollback matters most.
+   * A path is intentionally present only once even if several actions in the same transaction
+   * mutate it. Transaction rollback restores the state from before the transaction, not an
+   * intermediate state between two of its actions. Reusing that first snapshot also makes final
+   * restoration verification meaningful when Bash and PowerShell hooks are appended to the same
+   * settings file in one apply.
+   *
+   * The store is the authority on what to roll back, not the action outcomes. An action that
+   * captures a snapshot and then fails while writing throws instead of returning an outcome, and
+   * a rollback driven by returned outcomes would not know that snapshot existed — which is
+   * precisely the case where rollback matters most.
    */
   readonly captured: readonly FileSnapshot[];
 }
@@ -100,11 +106,19 @@ export class TransactionSnapshotStore implements SnapshotStore {
     return this.input.fs.join(this.input.backupRoot, this.input.transactionId);
   }
 
+  private alreadyCaptured(path: string): FileSnapshot | null {
+    return this.taken.find((snapshot) => snapshot.path === path) ?? null;
+  }
+
   private remember(snapshot: FileSnapshot): FileSnapshot {
     this.taken.push(snapshot);
     return snapshot;
   }
+
   captureAbsent(path: string): FileSnapshot {
+    const existing = this.alreadyCaptured(path);
+    if (existing !== null) return existing;
+
     return this.remember({
       schemaVersion: 1,
       path,
@@ -117,7 +131,11 @@ export class TransactionSnapshotStore implements SnapshotStore {
       capturedAt: this.input.now(),
     });
   }
+
   async capture(path: string): Promise<FileSnapshot> {
+    const existing = this.alreadyCaptured(path);
+    if (existing !== null) return existing;
+
     const { fs } = this.input;
     const stat = await fs.stat(path);
     const capturedAt = this.input.now();
