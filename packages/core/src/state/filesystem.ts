@@ -41,6 +41,8 @@ export interface FileSystemPort {
 
   /** Null when the path does not exist. Any other failure throws. */
   stat(path: string): Promise<FileStat | null>;
+  /** Resolve existing path aliases without guessing. Absent on older remote/test ports. */
+  canonicalPath?(path: string): Promise<string | null>;
   readFile(path: string): Promise<Uint8Array>;
   /** Creates parent directories as needed. `mode` is ignored where it means nothing. */
   writeFile(path: string, content: Uint8Array, mode?: string | null): Promise<void>;

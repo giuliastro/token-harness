@@ -19,6 +19,7 @@
  * stored plan when "a recorded precondition digest no longer matches".
  */
 
+import type { NativeConfigurationEnvironment } from './process.js';
 import type { HarnessId, ProviderId } from './ids.js';
 import type { JsonMergeOperation, JsonValue } from './json.js';
 import type { YamlMergeOperation } from './yaml.js';
@@ -116,6 +117,12 @@ export interface WriteOwnedFileAction extends PlannedActionBase {
 export interface MergeJsonAction extends PlannedActionBase {
   kind: 'merge-json';
   path: string;
+  /** Narrow guard for an explicitly reviewed Claude user effort preference. */
+  claudeEffortGuard?: {
+    version: string;
+    environment: NativeConfigurationEnvironment;
+    files: Array<{ path: string; digest: string | null }>;
+  };
   /**
    * Dotted pointers into the document that this action owns.
    *

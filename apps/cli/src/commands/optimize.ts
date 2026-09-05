@@ -353,14 +353,19 @@ function adviceForHarness(input: {
       : (context.availableModels.find(
           (model) => model.model === context.model || model.id === context.model,
         ) ?? null);
-  const currentEffort = context.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
+  const nativeEffort = context.nativeEffort;
+  const currentEffort =
+    context.reasoningEffort ??
+    catalogModel?.defaultReasoningEffort ??
+    nativeEffort?.current ??
+    null;
   const recommendedEffort =
-    catalogModel === null
+    catalogModel === null && (nativeEffort == null || !nativeEffort.writable)
       ? null
       : chooseSupportedEffort({
-          supported: catalogModel.supportedReasoningEfforts,
+          supported: catalogModel?.supportedReasoningEfforts ?? nativeEffort?.supported ?? [],
           current: currentEffort,
-          defaultEffort: catalogModel.defaultReasoningEffort,
+          defaultEffort: catalogModel?.defaultReasoningEffort ?? null,
           taskClass,
           profile,
           pace: budgetWindows,
@@ -406,6 +411,12 @@ function adviceForHarness(input: {
       },
       ...paceEvidence,
     ];
+    if (nativeEffort != null)
+      evidence.push({
+        code: 'configured-native-effort',
+        summary:
+          'Claude persistent preference only; active-session effort and managed overrides are not observed',
+      });
     if (pressure.pressure === 'high') evidence.push(...pressure.evidence);
     recommendations.push({
       area: 'reasoning',

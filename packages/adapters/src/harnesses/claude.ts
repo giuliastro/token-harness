@@ -48,6 +48,8 @@ import {
   type ResolvedHarnessConfig,
 } from './contract.js';
 
+import { readClaudeNativeEffort } from './claude-policy.js';
+
 const CLAUDE = harnessId('claude');
 
 /**
@@ -596,6 +598,7 @@ async function observeUsage(
     code: string,
     message: string,
     severity: 'info' | 'warning' = 'warning',
+    remediation: string | null = null,
   ): HarnessBudgetObservation => ({
     harnessId: CLAUDE,
     state: 'unavailable',
@@ -610,9 +613,10 @@ async function observeUsage(
         subject: CLAUDE,
         message,
         remediation:
-          severity === 'info'
+          remediation ??
+          (severity === 'info'
             ? 'Install a cclimits build with cacheless Claude JSON support if you want this optional fallback'
-            : 'Run cclimits --claude --json --no-cache-write --no-stale-fallback directly and inspect its output',
+            : 'Run cclimits --claude --json --no-cache-write --no-stale-fallback directly and inspect its output'),
       }),
     ],
   });
@@ -629,6 +633,35 @@ async function observeUsage(
     );
   }
 
+  // Do not retry without the read-only flags: older companions can write caches or
+  // substitute stale data. Distinguish the actual compatibility failure from missing quota.
+  const failureText = outcome.stderr + '\n' + outcome.stdout;
+  if (
+    outcome.exitCode !== 0 &&
+    /(?:unrecognized|unknown|unexpected|no such) (?:arguments?|options?)/i.test(failureText) &&
+    /--no-(?:cache-write|stale-fallback)/.test(failureText)
+  ) {
+    return unavailable(
+      'cclimits-readonly-flags-unsupported',
+      'This cclimits build does not support the read-only flags required for Claude quota',
+      'info',
+      'Check cclimits --help for --no-cache-write and --no-stale-fallback. Update cclimits explicitly; a merged upstream PR is not proof that your installed release contains it.',
+    );
+  }
+  if (
+    outcome.exitCode !== 0 &&
+    /python/i.test(failureText) &&
+    /not found|not installed|not recognized|required|could not find|unable to find/i.test(
+      failureText,
+    )
+  ) {
+    return unavailable(
+      'cclimits-python-unavailable',
+      'cclimits is installed, but its Python runtime could not start',
+      'info',
+      'Run cclimits --help in the same terminal and check its Python requirement and PATH.',
+    );
+  }
   if (outcome.exitCode !== 0 || outcome.stdoutTruncated) {
     return unavailable(
       'cclimits-claude-usage-unavailable',
@@ -659,10 +692,23 @@ async function observeUsage(
   const claude = parsed['claude'];
   const source = claude['source'];
   if (typeof claude['error'] === 'string') {
+    const missingCredentials = claude['error'] === 'No credentials found';
+    const expired = claude['error'] === 'Token expired';
     return unavailable(
-      'cclimits-claude-usage-unavailable',
-      'cclimits could not provide Claude quota: ' + claude['error'],
-      claude['error'] === 'No credentials found' ? 'info' : 'warning',
+      missingCredentials
+        ? 'cclimits-claude-credentials-unavailable'
+        : expired
+          ? 'cclimits-claude-token-expired'
+          : 'cclimits-claude-usage-unavailable',
+      missingCredentials
+        ? 'cclimits found no existing Claude login or usable local usage snapshot'
+        : expired
+          ? 'cclimits reported an expired Claude login'
+          : 'cclimits could not obtain Claude quota from the existing login',
+      missingCredentials ? 'info' : 'warning',
+      missingCredentials
+        ? 'Run cclimits --claude --json --no-cache-write --no-stale-fallback in the same terminal. Check the installed release for zero-config Claude discovery and keep Claude Code or Claude Desktop signed in.'
+        : 'Check the Claude login in its native app, then retry cclimits. Token Harness does not read or refresh credentials.',
     );
   }
   if (
@@ -671,11 +717,16 @@ async function observeUsage(
     source !== 'claude_code_cache'
   ) {
     return unavailable(
-      'cclimits-claude-schema-unrecognized',
-      'cclimits Claude usage did not name a fixture-proven source',
+      'cclimits-claude-source-unsupported',
+      'This cclimits response lacks a supported Claude discovery source',
+      'info',
+      'Check the installed cclimits release for zero-config Claude discovery. Do not infer live quota from an unlabelled response.',
     );
   }
-  if (source === 'claude_code_cache' && claude['source_stale'] === true) {
+  if (
+    claude['stale_fallback'] === true ||
+    (source === 'claude_code_cache' && claude['source_stale'] === true)
+  ) {
     return unavailable(
       'cclimits-claude-cache-stale',
       'cclimits found only a stale Claude Code local usage snapshot',
@@ -762,12 +813,15 @@ async function observeContext(
     maxOutputBytes: 1024 * 1024,
   });
 
+  const nativeEffort = await readClaudeNativeEffort(context);
+
   const empty = (
     state: HarnessContextObservation['state'],
     diagnostics: Diagnostic[],
   ): HarnessContextObservation => ({
     harnessId: CLAUDE,
     state,
+    nativeEffort,
     model: null,
     reasoningEffort: null,
     verbosity: null,

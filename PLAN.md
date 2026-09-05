@@ -1953,3 +1953,22 @@ Acceptance:
 - `--verbose` retains the established detailed reports and schema-1 JSON remains complete;
 - the dashboard has no desktop runtime, remote assets, mutation endpoint, or non-loopback listener;
 - README and help lead with setup, dashboard, and a copyable AI installation prompt.
+
+
+## September 5, 2026 compatibility implementation follow-up
+
+- Claude allowance diagnostics now distinguish missing/incompatible cclimits, unavailable
+  Python, missing/expired credentials, stale cache and unsupported sources in the dashboard.
+  cclimits 1.7.0 from npm was observed on all three desktop OSes with its cacheless flags and a
+  synthetic fresh local Claude cache; this does not claim live account coverage.
+- Initial Claude native `effortLevel` planning/apply/rollback/uninstall is implemented with
+  exact-version admission, safe environment observation, settings-digest guards and user-owned
+  preference restoration. It is explicitly config-only, not active-session control.
+- Codex native `hooks/list` adds enabled/trust diagnostics with exact source/tuple matching and
+  filesystem alias resolution. No trust is granted and no runtime tier is inferred.
+- Existing RTK PowerShell support was retained. No provider compatibility row was fabricated
+  from CLI help or from an unauthenticated probe.
+- Still outstanding: signed-in runtime reduction receipts and quality-passed task A/B runs,
+  broader provider lifecycle recordings including WSL, empirical model ranking, and reviewed
+  policy extensions for profiles/context-output budgets/MCP controls. See the detailed evidence
+  and scope in `docs/spikes/claude-codex-native-policy.md`.

@@ -79,8 +79,8 @@ is exactly the drift generating the tables above exists to prevent.
 - **A matcher covers a tool family, not a harness.** On Windows, Claude Code routes shell commands
   through a PowerShell tool as well as `Bash`, and a hook matching `Bash` does not see them. This
   was measured on a real machine, not inferred: the identical command bypassed the pipeline
-  entirely. `doctor` reports the uncovered family, and it is the one problem the shipped
-  configuration on that machine reports.
+  entirely. `doctor` reports an uncovered family. The reviewed RTK Windows rows for Claude
+  2.1.251 already include PowerShell support; old Bash-only configurations remain partial.
 - **RTK claims Claude Code and OpenCode.** On Codex there is nothing for it to own. That is a
   declaration, not a gap in the resolver.
 - **RTK's OpenCode plugin is inert under OpenCode Desktop.** Spike 9.1 ran the same plugin, from the
@@ -93,9 +93,11 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### What "installed" does not prove
 
-- **Codex persists hook enablement and trust separately from `hooks.json`,** in state no adapter can
-  read from outside its TUI. A correctly written hook there can be configured and never run, which
-  is why the tier stops at `config-only` and why `verify` says so rather than passing.
+- **Codex enablement is not execution.** Codex persists hook enablement and trust separately from hooks.json; verify reads hooks/list where available and otherwise keeps enablement unknown.
+  Codex 0.153.4 was observed on Windows, macOS and Linux returning enabled/trust metadata.
+  Verification matches the exact source file and event/matcher/command tuples. It never grants
+  trust and never upgrades `config-only` into proof of output reduction. See
+  [native-contract evidence](spikes/claude-codex-native-policy.md).
 - **OpenCode's reducing plugin is a generated wrapper with no externally observable receipt.**
   Nothing outside the plugin records that it ran, so no tier above `config-only` is provable.
 - **HarnessTrim's telemetry is opt-in.** Its importer's ordinary answer is therefore `unavailable`,
@@ -130,10 +132,11 @@ is exactly the drift generating the tables above exists to prevent.
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
-- **Four compatibility rows ship.** Three are on Windows: RTK × Claude Code at rtk `0.44.0` /
+- **Six managed-provider compatibility rows ship.** The original three Windows rows are: RTK × Claude Code at rtk `0.44.0` /
   Claude Code `2.1.220` (`canary`), HarnessTrim × Claude Code at harnesstrim `0.1.0` /
   Claude Code `2.1.220` (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` /
-  Codex `0.146.0` (`config-only`). The fourth is the real Linux/non-WSL recording:
+  Codex `0.146.0` (`config-only`). Two more Windows recordings cover RTK `0.44.0` and `0.48.0`
+  with Claude Code `2.1.251`. The remaining row is the real Linux/non-WSL recording:
   HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). Each names a recording under
   `tests/fixtures/rows/`, and the Linux row is exact: nearby Codex/HarnessTrim versions and WSL
   remain refused. HarnessTrim's OpenCode combination remains adoption-only.

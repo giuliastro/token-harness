@@ -17,7 +17,7 @@
  * command would have to guess which.
  */
 
-import { listProviderAdapters } from '@token-harness/adapters';
+import { listProviderAdapters, planClaudeNativeEffortRemoval } from '@token-harness/adapters';
 import {
   EXIT_CODES,
   FileJournalStore,
@@ -412,6 +412,17 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
   }
 
   const actions = removalOrder.order.flatMap((provider) => actionsByProvider.get(provider) ?? []);
+  if (
+    (context.harness === null || context.harness === 'claude') &&
+    (context.provider === null || context.provider === 'none')
+  ) {
+    actions.push(
+      ...planClaudeNativeEffortRemoval(
+        journalHistory,
+        fsPort.join(context.adapters.paths.home, '.claude', 'settings.json'),
+      ),
+    );
+  }
 
   if (actions.length === 0) {
     diagnostics.push(

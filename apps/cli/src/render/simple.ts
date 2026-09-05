@@ -361,14 +361,22 @@ export function renderSimpleOptimize(report: OptimizeReport): string {
     if (evidence) lines.push(truncate(`    Why: ${evidence}`, MAX_WIDTH));
   }
   lines.push(...changeLine(false));
-  const canPlan = advice.some(
+  const candidate = advice.find(
     (item) =>
       item.recommendedEffort !== item.currentEffort ||
       item.recommendedVerbosity !== item.currentVerbosity,
   );
+  const canPlan = candidate !== undefined;
   lines.push(
     ...next(
-      canPlan ? 'token-harness plan --native-policy' : null,
+      candidate?.harnessId === 'claude'
+        ? 'token-harness plan --harness claude --native-policy --task ' +
+            report.taskClass +
+            ' --profile ' +
+            report.profile
+        : canPlan
+          ? 'token-harness plan --native-policy'
+          : null,
       canPlan
         ? 'Review the reversible recommended policy change.'
         : 'No change is required now. ' + normalWork(),

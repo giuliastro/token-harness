@@ -19,6 +19,8 @@ import type { PlatformFacts } from '@token-harness/core';
  * variables are what package managers use to find their own installation roots.
  */
 const WINDOWS_ALLOWLIST: readonly string[] = [
+  'CLAUDE_CONFIG_DIR',
+  'CODEX_HOME',
   'ALLUSERSPROFILE',
   'APPDATA',
   'COMPUTERNAME',
@@ -52,6 +54,8 @@ const WINDOWS_ALLOWLIST: readonly string[] = [
  * child that does not try to draw one, and captured output stays parseable.
  */
 const POSIX_ALLOWLIST: readonly string[] = [
+  'CLAUDE_CONFIG_DIR',
+  'CODEX_HOME',
   'HOME',
   'LANG',
   'LC_ALL',

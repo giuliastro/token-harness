@@ -97,7 +97,7 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
      */
     const verification = await adapter.verify(detectionContext);
     for (const check of verification.checks) {
-      if (check.status === 'pass') continue;
+      if (check.status === 'pass' && check.id !== 'hook-enablement') continue;
       diagnostics.push(
         diagnostic({
           severity: check.status === 'fail' ? 'warning' : 'info',
@@ -110,7 +110,15 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
 
     const inspection = await adapter.inspect(detectionContext);
     harnessConfigs.push(...inspection.summaries);
-    diagnostics.push(...inspection.diagnostics);
+    const nativeEnablementKnown = verification.checks.some(
+      (check) =>
+        check.id === 'hook-enablement' && (check.status === 'pass' || check.status === 'fail'),
+    );
+    diagnostics.push(
+      ...inspection.diagnostics.filter(
+        (item) => !nativeEnablementKnown || item.code !== 'hook-enablement-unobservable',
+      ),
+    );
   }
 
   const managedIntegrations = await readManagedIntegrations(context);
