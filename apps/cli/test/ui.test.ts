@@ -30,7 +30,7 @@ const PLATFORM: PlatformFacts = {
 
 const doctor: DoctorReport = {
   platform: PLATFORM,
-  problemCount: 0,
+  problemCount: 1,
   harnesses: [
     {
       harnessId: harnessId('codex'),
@@ -165,23 +165,18 @@ describe('local dashboard', () => {
     assert.equal(parseUiArgs(['--listen', '0.0.0.0']).ok, false);
   });
 
-  it('shows active work first, hides absent tools, and ends the ready workflow', () => {
-    const readyDoctor: DoctorReport = {
-      ...doctor,
-      problemCount: 0,
-      // Pi being a newer optional detection must not make the primary setup look broken.
-      harnesses: doctor.harnesses.map((item) =>
-        item.harnessId === 'pi' ? { ...item, versionVerdict: 'in-range' as const } : item,
-      ),
-    };
+  it('shows active work first and ignores secondary newer harnesses in primary health', () => {
     const model = buildDashboardModel({
       generatedAt: '2026-09-05T12:00:00.000Z',
-      doctor: readyDoctor,
+      doctor,
       status,
       budget,
       optimize,
     });
 
+    // Pi is newer than tested and contributes to doctor.problemCount, but it is merely detected:
+    // it is not wired, has no allowance window, and has no live pipeline. The active Codex setup
+    // therefore remains READY while Pi stays available under progressive disclosure.
     assert.equal(model.state, 'ready');
     assert.equal(model.statusLabel, 'READY');
     assert.equal(model.nextStep.command, null);
@@ -197,7 +192,7 @@ describe('local dashboard', () => {
   it('treats a newer-than-tested active harness as a limitation, not a broken setup', () => {
     const limitedDoctor: DoctorReport = {
       ...doctor,
-      problemCount: 1,
+      problemCount: 2,
       harnesses: doctor.harnesses.map((item) =>
         item.harnessId === 'codex' ? { ...item, versionVerdict: 'unknown-newer' as const } : item,
       ),
@@ -213,7 +208,50 @@ describe('local dashboard', () => {
     assert.equal(model.state, 'limited');
     assert.equal(model.statusLabel, 'READY WITH LIMITATIONS');
     assert.equal(model.nextStep.command, 'token-harness verify');
-    assert.match(model.summary, /keep working/i);
+    assert.match(model.summary, /active integration/i);
+  });
+
+  it('does not let a secondary harness recommendation replace active guidance', () => {
+    const withPiAdvice: OptimizeReport = {
+      ...optimize,
+      harnesses: [
+        {
+          harnessId: harnessId('pi'),
+          state: 'advised',
+          currentModel: null,
+          recommendedModel: null,
+          currentEffort: null,
+          recommendedEffort: null,
+          currentVerbosity: null,
+          recommendedVerbosity: null,
+          contextPressure: 'high',
+          localBurnTrend: null,
+          recentSession: null,
+          pace: [],
+          recommendations: [
+            {
+              area: 'context',
+              priority: 'first',
+              action: 'Change the secondary Pi context.',
+              target: null,
+              evidence: [{ code: 'pi-secondary', summary: 'Secondary Pi signal' }],
+            },
+          ],
+          diagnostics: [],
+        },
+        ...optimize.harnesses,
+      ],
+    };
+    const model = buildDashboardModel({
+      generatedAt: '2026-09-05T12:00:00.000Z',
+      doctor,
+      status,
+      budget,
+      optimize: withPiAdvice,
+    });
+
+    assert.match(model.recommendation?.action ?? '', /^Codex:/);
+    assert.doesNotMatch(model.recommendation?.action ?? '', /Pi/);
   });
 
   it('does not use zero-byte evidence to explain a recommendation when better evidence exists', () => {
@@ -237,7 +275,7 @@ describe('local dashboard', () => {
     };
     const model = buildDashboardModel({
       generatedAt: '2026-09-05T12:00:00.000Z',
-      doctor: { ...doctor, harnesses: doctor.harnesses.slice(0, 1) },
+      doctor: { ...doctor, problemCount: 0, harnesses: doctor.harnesses.slice(0, 1) },
       status,
       budget,
       optimize: withMisleadingFirstEvidence,
@@ -250,7 +288,7 @@ describe('local dashboard', () => {
   it('ships accessible, local-only, read-only assets with progressive disclosure', () => {
     const model = buildDashboardModel({
       generatedAt: '2026-09-05T12:00:00.000Z',
-      doctor: { ...doctor, harnesses: doctor.harnesses.slice(0, 1) },
+      doctor: { ...doctor, problemCount: 0, harnesses: doctor.harnesses.slice(0, 1) },
       status,
       budget,
       optimize,
