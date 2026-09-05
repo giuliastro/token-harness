@@ -52,6 +52,11 @@ register the same native hook command for a missing `PowerShell` matcher. This i
 RTK's own installer, whose first-class PowerShell installation/status path is still being tracked
 upstream.
 
+Token Harness has live Windows recordings for Claude Code 2.1.251 with both RTK 0.44.0 and RTK
+0.48.0. Those recordings exercise Bash and PowerShell setup, a direct PowerShell hook payload,
+drift, verified rollback, and surgical uninstall. RTK 0.48.0 is therefore inside the current
+tested provider range rather than being treated as an unknown newer build.
+
 The change is reviewable and reversible: Token Harness appends only the missing matcher entry to
 Claude's `PreToolUse` hook list and snapshots the settings file before apply.
 

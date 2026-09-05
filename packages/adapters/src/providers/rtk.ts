@@ -74,9 +74,10 @@ const CLAUDE = harnessId('claude');
 const OPENCODE = harnessId('opencode');
 
 /**
- * The tested range is what has been observed, not what has been proven by a suite. `0.42.0`
- * is the version whose `--format json` output this adapter parses and whose interception
- * the Phase 2.5 spike watched; `0.44.0` is the version spike 9.1 watched intercept OpenCode.
+ * The tested range is observation-backed. RTK 0.44.0 and 0.48.0 were exercised with real
+ * Windows binaries against Claude Code 2.1.251, including the analytics JSON contract and
+ * native Bash/PowerShell hook path. Older RTK builds remain detectable but are deliberately
+ * outside the current tested range rather than inheriting PowerShell support by assumption.
  */
 const MANIFEST: ProviderManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -91,18 +92,16 @@ const MANIFEST: ProviderManifest = {
       capability: 'shell.command.rewrite',
       mode: 'exclusive',
       harnesses: [CLAUDE],
-      // The surface the Phase 2.5 spike actually watched: a `PreToolUse` hook matching
-      // `Bash`. `PowerShell` is deliberately absent — the spike ran the identical command
-      // through it and RTK's counter did not move, which is the coverage gap `doctor`
-      // reports as `tool-family-not-covered`. Claiming it here would make the resolver
-      // hand RTK a scope it demonstrably does not serve.
-      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
-      // RFC 0003 §Rule wants the evidence recorded at a version. The reference is the
-      // hook the Phase 2.5 spike read, not a line of RTK's source: what was demonstrated
-      // is that the harness routes commands through it, which is the claim being made.
+      // Windows live evidence now covers both Claude shell families on the same native
+      // `PreToolUse` processor. The upstream RTK installer still does not create the PowerShell
+      // matcher itself; Token Harness writes that reviewed matcher entry transactionally.
+      surfaces: [
+        { toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' },
+        { toolFamily: 'PowerShell', interceptionPoint: 'pre-tool-use' },
+      ],
       evidence: {
-        sourceReference: 'docs/spikes/2.5-live-verification-log.md',
-        upstreamVersion: '0.42.0',
+        sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
+        upstreamVersion: '0.48.0',
       },
     },
     {
@@ -110,11 +109,15 @@ const MANIFEST: ProviderManifest = {
       mode: 'exclusive',
       harnesses: [CLAUDE],
       // Same surface: RTK rewrites the command at `PreToolUse` and the rewritten command is
-      // what filters the output, so both capabilities are served from one interception point.
-      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      // what filters the output, so both capabilities are served from the same Bash/PowerShell
+      // interception points proven by the Windows recording above.
+      surfaces: [
+        { toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' },
+        { toolFamily: 'PowerShell', interceptionPoint: 'pre-tool-use' },
+      ],
       evidence: {
-        sourceReference: 'docs/spikes/2.5-live-verification-log.md',
-        upstreamVersion: '0.42.0',
+        sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
+        upstreamVersion: '0.48.0',
       },
     },
     /**
@@ -171,7 +174,7 @@ const MANIFEST: ProviderManifest = {
   harnesses: [
     {
       harness: CLAUDE,
-      testedVersions: { minimum: '2.0.0', maximum: '2.1.212' },
+      testedVersions: { minimum: '2.0.0', maximum: '2.1.251' },
       verificationTier: 'canary',
     },
     {
@@ -242,7 +245,7 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReviews: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.40.0', maximum: '0.44.0' };
+const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.48.0' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */
