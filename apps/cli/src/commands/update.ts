@@ -81,19 +81,15 @@ function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
 }
 
 /**
- * Reads only explicit product-level ownership from committed journals.
+ * Reads explicit product-level ownership from committed journals.
  *
- * A configured provider is not enough: RFC 0004 brownfield adoption means the same live hook can
- * be user-owned or Token-Harness-owned. Journals written before this field existed simply provide
- * no evidence here; they are never upgraded into ownership by inference.
+ * Older journals predate provider × harness attribution. Their ownership remains untouched: update
+ * never rewrites or upgrades those records. When such a journal exists, the command recovers only
+ * the compatibility question from the live harness configuration — "where is this provider wired
+ * now?" — without claiming that Token Harness owns those entries.
  */
 interface ManagedState {
   integrations: ManagedIntegration[];
-  /**
-   * A pre-attribution journal owns configuration but cannot say which provider × harness it
-   * belongs to. Update must fail closed rather than silently reclassify that old managed state as
-   * adopted.
-   */
   legacyOwnershipUnknown: boolean;
 }
 
@@ -140,8 +136,6 @@ function upgradeAction(input: {
   return {
     kind: 'package-manager-install',
     id: digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 9),
-    // The same class the install action uses, for the same reason: an installed package is not
-    // reversed by restoring a file.
     riskClass: 'delegated',
     requiresNetwork: input.requiresNetwork,
     requiresElevation: input.requiresElevation,
@@ -152,21 +146,10 @@ function upgradeAction(input: {
       `${input.packageName} is installed at ${input.installed}`,
     ],
     postconditions: [`${input.packageName} reports ${input.target}`],
-    /**
-     * `package-inventory` where the channel can report what is installed, `none` otherwise.
-     *
-     * An update replaces a binary. Rolling the transaction back restores files and leaves the new
-     * version in place, so the executor's receipt is not boilerplate here — it is the difference
-     * between the machine being restored and the *configuration* being restored. With an
-     * inventory-capturing channel the rollback also reinstalls the previous version, and the
-     * receipt says per package whether that reinstall took.
-     */
     rollbackData: channelCanReportInventory(input.channel) ? 'package-inventory' : 'none',
     explanation: `Update ${input.packageName} from ${input.installed} to ${input.target} through ${input.channel}`,
     packageManager: input.channel,
     packageName: input.packageName,
-    // Pinned to the exact version the channel reported, not left open. An unpinned upgrade would
-    // install whatever is newest at execution time, which is not the version the dry run showed.
     version: input.target,
   };
 }
@@ -179,8 +162,6 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     commandResult<UpdateReport>({
       command: 'update',
       exitCode,
-      // RFC 0006: `data` is null when the status is `error`, and the human renderer must read the
-      // same object it serializes — the defect `apply` already had to fix.
       data: statusForExitCode(exitCode) === 'error' ? null : data,
       diagnostics,
     });
@@ -204,22 +185,34 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
   const managedState = await managedIntegrations(context);
   const managed = managedState.integrations;
+  const harnessAdapters = listHarnessAdapters();
   const managedHarnessIds = new Set(managed.map((entry) => entry.harnessId));
-  const harnessVersions = new Map<string, string | null>();
-  if (managedHarnessIds.size > 0) {
-    const harnessContext = {
-      fs: adapters.fs,
-      runner: adapters.runner,
-      facts: context.platform,
-      paths: adapters.paths,
-      projectRoot: context.projectRoot,
-    };
-    for (const harness of listHarnessAdapters()) {
-      if (!managedHarnessIds.has(harness.manifest.id)) continue;
-      const detection = await harness.detect(harnessContext);
-      harnessVersions.set(harness.manifest.id, detection.version);
-    }
+  if (managedState.legacyOwnershipUnknown) {
+    // Legacy journals cannot say which integration they came from. Inspecting all harnesses is
+    // read-only and lets the provider adapter recover the *live* wiring without assigning ownership.
+    for (const harness of harnessAdapters) managedHarnessIds.add(harness.manifest.id);
   }
+
+  const harnessContext = {
+    fs: adapters.fs,
+    runner: adapters.runner,
+    facts: context.platform,
+    paths: adapters.paths,
+    projectRoot: context.projectRoot,
+  };
+  const harnessVersions = new Map<string, string | null>();
+  for (const harness of harnessAdapters) {
+    if (!managedHarnessIds.has(harness.manifest.id)) continue;
+    const detection = await harness.detect(harnessContext);
+    harnessVersions.set(harness.manifest.id, detection.version);
+  }
+  const recoveryHarnessConfigs = managedState.legacyOwnershipUnknown
+    ? (
+        await Promise.all(
+          harnessAdapters.map(async (harness) => (await harness.inspect(harnessContext)).summaries),
+        )
+      ).flat()
+    : [];
 
   const pins =
     context.stateRoot === null
@@ -237,7 +230,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     facts: context.platform,
     paths: adapters.paths,
     projectRoot: context.projectRoot,
-    harnessConfigs: [],
+    harnessConfigs: recoveryHarnessConfigs,
     now: context.now,
     localDatabase: adapters.localDatabase,
     projectIdFor: adapters.projectIdFor,
@@ -246,6 +239,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
   const actions: PackageManagerInstallAction[] = [];
   const blockedUpdates: Array<{
     providerId: string;
+    installed: string | null;
     target: string;
     harnessId: string;
     missing: string;
@@ -305,9 +299,6 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
     row.available = query.version;
     if (query.status !== 'found' || query.version === null) {
-      // Two distinct states, not one. `unknown` means the channel answered and its answer was
-      // unreadable; `unavailable` means it was never asked or would not run. The diagnostics from
-      // the query carry the specific reason either way.
       row.verdict = query.status === 'unknown' ? 'unknown' : 'unavailable';
       report.providers.push(row);
       continue;
@@ -316,36 +307,29 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     const installed = detection.version === null ? null : parseSemanticVersion(detection.version);
     const offered = parseSemanticVersion(query.version);
     if (installed === null || offered === null || compareVersions(offered, installed) <= 0) {
-      /**
-       * `current` covers "same" and "the channel is behind", deliberately.
-       *
-       * A channel offering something older than what is installed is not an update opportunity in
-       * either direction: RFC 0004's binary rollback exists for going backwards and is a different
-       * command. An unparseable installed version lands here too — it is not a version this build
-       * can compare, so it is not one it will act on.
-       */
       row.verdict = 'current';
       report.providers.push(row);
       continue;
     }
 
-    const managedHarnesses = managed.filter((entry) => entry.providerId === adapter.manifest.id);
-    let updateAdmitted = !managedState.legacyOwnershipUnknown;
+    const compatibilityHarnessIds = new Set(
+      managed
+        .filter((entry) => entry.providerId === adapter.manifest.id)
+        .map((entry) => entry.harnessId),
+    );
     if (managedState.legacyOwnershipUnknown) {
-      blockedUpdates.push({
-        providerId: adapter.manifest.id,
-        target: query.version,
-        harnessId: 'legacy-owned-state',
-        missing:
-          'a committed pre-attribution journal owns configuration but does not identify its provider and harness',
-      });
+      // Detection from the live harness summaries answers only where the provider is configured.
+      // It deliberately does not answer who owns that configuration.
+      for (const harnessId of detection.configuredHarnesses) compatibilityHarnessIds.add(harnessId);
     }
-    for (const integration of managedHarnesses) {
+
+    let updateAdmitted = true;
+    for (const harnessId of compatibilityHarnessIds) {
       const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
         provider: adapter.manifest.id,
         providerVersion: query.version,
-        harness: integration.harnessId,
-        harnessVersion: harnessVersions.get(integration.harnessId) ?? null,
+        harness: harnessId,
+        harnessVersion: harnessVersions.get(harnessId) ?? null,
         os: context.platform.os,
         wsl: context.platform.isWsl,
       });
@@ -353,8 +337,9 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       updateAdmitted = false;
       blockedUpdates.push({
         providerId: adapter.manifest.id,
+        installed: detection.version,
         target: query.version,
-        harnessId: integration.harnessId,
+        harnessId,
         missing: admission.missing,
       });
     }
@@ -382,27 +367,37 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
   report.network = [...destinations].sort();
 
-  const blockedIsOutcome = blockedUpdates.length > 0 && actions.length === 0;
   for (const blocked of blockedUpdates) {
     diagnostics.push(
       diagnostic({
-        severity: blockedIsOutcome ? 'error' : 'warning',
+        severity: 'info',
         code: 'managed-update-blocked',
-        message: `update refuses ${blocked.providerId} ${blocked.target} on managed ${blocked.harnessId}: ${blocked.missing}`,
+        message:
+          `${blocked.providerId} ${blocked.target} is available but is not validated for ` +
+          `${blocked.harnessId}; keeping ${blocked.installed ?? 'the installed version'}`,
         remediation:
-          'Record a compatibility row and fixture for the target version before updating this managed integration',
+          'No action is required; Token Harness will allow the update after this combination has reviewed compatibility evidence',
+      }),
+    );
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'managed-update-blocked-detail',
+        message: `${blocked.providerId} ${blocked.target} compatibility evidence is missing: ${blocked.missing}`,
+        remediation: null,
       }),
     );
   }
 
   if (pins.unhonoredProjectPinPath !== null) {
-    // Already carried as a diagnostic by `readPins`; nothing more to add here, and adding a
-    // second one would make the same fact look like two findings.
+    // Already carried as a diagnostic by `readPins`; nothing more to add here.
   }
 
   if (actions.length === 0 && blockedUpdates.length > 0) {
-    report.execution = emptyExecution('rejected');
-    return finish(EXIT_CODES['unsupported-environment'], report);
+    // A newer version existing is not itself an actionable problem. Refusing to cross the reviewed
+    // compatibility boundary is a successful update check, analogous to a deliberate version pin.
+    report.execution = emptyExecution('nothing-to-do');
+    return finish(EXIT_CODES.ok, report);
   }
 
   if (actions.length === 0) {
@@ -427,7 +422,6 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       diagnostic({
         severity: 'error',
         code: 'confirmation-required',
-        // In the message and not only in `data`: exit 8 is an `error` status, so `data` is null.
         message: `Would update ${summary}`,
         remediation: 'Re-run with `--yes` to apply it',
       }),
@@ -464,15 +458,6 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     return finish(EXIT_CODES['unsupported-environment'], null);
   }
 
-  /**
-   * An update runs through the transaction engine even though it touches no file.
-   *
-   * Nothing here needs a snapshot — a package is not a file — so the engine's restore machinery
-   * has nothing to do. What it does supply is the journal: RFC 0004 requires the record to be
-   * written before the work, and a provider version that changed with no journal entry is a
-   * change `status` and `rollback` cannot see. Running the install outside the engine would have
-   * been simpler and would have made the update the one mutation with no history.
-   */
   const transaction = await executeTransaction({
     transactionId,
     planId: null,
@@ -495,8 +480,6 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     planId: null,
     transactionId,
     fromStoredPlan: false,
-    // Mapped the way `apply` maps it: `in-progress` is not a terminal outcome a report may
-    // carry, and anything that is not one of the three known ends is a rejection.
     outcome:
       transaction.journal.outcome === 'committed'
         ? 'committed'
