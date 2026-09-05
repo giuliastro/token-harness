@@ -417,11 +417,15 @@ describe('schedule CLI', () => {
 
   it('keeps quota, quality, and transfer evidence machine-readable in the standard envelope', async () => {
     const output = capture();
-    const exitCode = await scheduleMain([...base, '--handoff-bytes', '700', '--json'], output.streams, {
-      observeBudget: async () => liveBudget(),
-      observeQualityReceipts: async () => [qualityReceipt('hard-a', 'passed')],
-      observeTransferReceipts: async () => [transferReceipt('transfer-a', 'proven-positive')],
-    });
+    const exitCode = await scheduleMain(
+      [...base, '--handoff-bytes', '700', '--json'],
+      output.streams,
+      {
+        observeBudget: async () => liveBudget(),
+        observeQualityReceipts: async () => [qualityReceipt('hard-a', 'passed')],
+        observeTransferReceipts: async () => [transferReceipt('transfer-a', 'proven-positive')],
+      },
+    );
 
     assert.equal(exitCode, 0);
     assert.equal(output.stderr(), '');
@@ -464,7 +468,7 @@ describe('schedule CLI', () => {
     const exitCode = await scheduleMain(
       [...base, '--candidate-quality-samples', '1.5'],
       output.streams,
-    );
+     );
 
     assert.equal(exitCode, 2);
     assert.match(output.stderr(), /invalid-schedule-number/);

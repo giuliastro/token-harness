@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import {
-  digestText,
-  harnessId,
-  type CrossHarnessTransferReceipt,
-} from '@token-harness/core';
+import { digestText, harnessId, type CrossHarnessTransferReceipt } from '@token-harness/core';
 
 import {
   readProjectTransferReceipts,
@@ -90,7 +86,10 @@ describe('schedule project transfer receipt reader', () => {
     f.addReceipt('hard-a', receipt('hard-a'));
 
     const rows = await read(f);
-    assert.deepEqual(rows.map((row) => row.benchmarkId), ['hard-a', 'hard-b']);
+    assert.deepEqual(
+      rows.map((row) => row.benchmarkId),
+      ['hard-a', 'hard-b'],
+    );
   });
 
   it('ignores receipts attributed to another project', async () => {

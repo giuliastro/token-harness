@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write apps/cli/src/schedule-main.ts apps/cli/test/schedule-main.test.ts apps/cli/test/schedule-transfer.test.ts packages/core/src/domain/cross-harness-transfer-evidence.ts && for f in apps/cli/src/schedule-main.ts apps/cli/test/schedule-main.test.ts apps/cli/test/schedule-transfer.test.ts packages/core/src/domain/cross-harness-transfer-evidence.ts; do echo FORMATTED_BEGIN:$f; base64 -w0 $f; echo; echo FORMATTED_END:$f; done && exit 1"
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

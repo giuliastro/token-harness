@@ -241,17 +241,17 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
 
     const accepted = new Set([
       '--current',
-      '--candidate',
+     '--candidate',
       '--task-class',
-      '--current-five-hour',
+     '--current-five-hour',
       '--current-weekly',
-      '--candidate-five-hour',
-      '--candidate-weekly',
-      '--candidate-quality',
+     '--candidate-five-hour',
+     '--candidate-weekly',
+     '--candidate-quality',
       '--candidate-quality-task',
       '--candidate-quality-samples',
-      '--handoff-bytes',
-      '--max-handoff-bytes',
+     '--handoff-bytes',
+     '--max-handoff-bytes',
       '--transfer-benefit',
     ]);
     if (!accepted.has(name)) {
@@ -644,7 +644,11 @@ export async function scheduleMain(
 
   const budget = await applyBudgetEvidence(initialInput, runtime);
   const quality = await applyQualityEvidence(budget.input, runtime, parsed.args.qualityExplicit);
-  const transfer = await applyTransferEvidence(quality.input, runtime, parsed.args.transferExplicit);
+  const transfer = await applyTransferEvidence(
+    quality.input,
+    runtime,
+    parsed.args.transferExplicit,
+  );
   const decision = scheduleCrossHarness(transfer.input);
   const report: ScheduleReport = {
     ...decision,

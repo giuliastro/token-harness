@@ -1,4 +1,7 @@
-import type { CrossHarnessSchedulerInput, TransferBenefitState } from './cross-harness-scheduler.js';
+import type {
+  CrossHarnessSchedulerInput,
+  TransferBenefitState,
+} from './cross-harness-scheduler.js';
 import type { CrossHarnessTransferReceipt } from './cross-harness-transfer-receipt.js';
 import type { HarnessId } from './ids.js';
 import type { TaskClass } from './optimizer.js';
@@ -48,7 +51,9 @@ function uniqueMatchingReceipts(
     }
     unique.set(receipt.benchmarkId, receipt);
   }
-  return [...unique.values()].sort((left, right) => left.benchmarkId.localeCompare(right.benchmarkId));
+  return [...unique.values()].sort((left, right) =>
+    left.benchmarkId.localeCompare(right.benchmarkId),
+  );
 }
 
 /**
