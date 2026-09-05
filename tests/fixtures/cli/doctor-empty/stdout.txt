@@ -2,7 +2,7 @@ TOKEN HARNESS - SETUP NEEDED
 
 WHAT WORKS
   No supported coding harness was found.
-  Providers: none detected
+  Optimization provider: none active
 
 CHANGES
   Nothing changed.
