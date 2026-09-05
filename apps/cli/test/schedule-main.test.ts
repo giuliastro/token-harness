@@ -468,7 +468,7 @@ describe('schedule CLI', () => {
     const exitCode = await scheduleMain(
       [...base, '--candidate-quality-samples', '1.5'],
       output.streams,
-     );
+    );
 
     assert.equal(exitCode, 2);
     assert.match(output.stderr(), /invalid-schedule-number/);
