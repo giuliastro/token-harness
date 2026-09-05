@@ -5,6 +5,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish (used for safe release recovery)
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -13,24 +18,34 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
   verify:
     name: verify and publish release
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # A manual recovery run executes the trusted workflow from the default branch while
+          # rebuilding the exact immutable tag supplied by the operator.
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22.13.0'
-          cache: pnpm
+          # npm Trusted Publishing requires Node >=22.14 and npm >=11.5.1. Release jobs use a
+          # current LTS runtime while CI continues to test the lower supported product floor.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Pin npm Trusted Publishing floor
+        run: npm install --global npm@11.5.1
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -54,7 +69,7 @@ jobs:
         run: pnpm smoke:install
 
       - name: Refuse a tag that does not match the staged version
-        run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+        run: node scripts/check-release-tag.mjs "$RELEASE_TAG"
 
       - name: Pack the exact release artifact
         run: |
@@ -76,14 +91,12 @@ jobs:
       - name: Keep the attested tarball
         uses: actions/upload-artifact@v4
         with:
-          name: token-harness-${{ github.ref_name }}
+          name: token-harness-${{ inputs.tag || github.ref_name }}
           path: dist/release/*.tgz
           if-no-files-found: error
 
       - name: Decide whether npm needs this version
         id: npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
         run: |
           version="$(node -p "require('./dist/package/package.json').version")"
@@ -93,26 +106,20 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "::error::NPM_TOKEN is required to publish $name@$version"
-            exit 1
-          fi
           echo "$name@$version is not on npm yet"
           echo "publish=true" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to npm
+      - name: Publish to npm with trusted publishing
         if: steps.npm.outputs.publish == 'true'
         working-directory: dist/package
-        run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
 
       - name: Create or refresh GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag="${{ github.ref_name }}"
+          tag="$RELEASE_TAG"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/release/*.tgz --clobber
           else
