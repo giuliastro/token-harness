@@ -69,8 +69,8 @@ jobs:
             return @("$root\home", "$root\project")
           }
 
-          function Write-Brownfield([string]$home) {
-            New-Item -ItemType Directory -Force -Path "$home\.claude" | Out-Null
+          function Write-Brownfield([string]$isolatedHome) {
+            New-Item -ItemType Directory -Force -Path "$isolatedHome\.claude" | Out-Null
             @'
           {
             "theme": "dark",
@@ -86,23 +86,23 @@ jobs:
             },
             "permissions": { "allow": ["Read", "Write"] }
           }
-          '@ | Set-Content -Encoding utf8 "$home\.claude\settings.json"
+          '@ | Set-Content -Encoding utf8 "$isolatedHome\.claude\settings.json"
           }
 
-          function Add-User-Drift([string]$home) {
-            $file = "$home\.claude\settings.json"
+          function Add-User-Drift([string]$isolatedHome) {
+            $file = "$isolatedHome\.claude\settings.json"
             $env:TH_SETTINGS = $file
             node -e "const fs=require('fs'); const p=process.env.TH_SETTINGS; const x=JSON.parse(fs.readFileSync(p,'utf8')); x.hooks.PostToolUse=[{matcher:'Read',hooks:[{type:'command',command:'my-post-hook'}]}]; x.permissions.allow.push('Glob'); fs.writeFileSync(p, JSON.stringify(x,null,2)+'\n')"
             Remove-Item Env:TH_SETTINGS
           }
 
-          function Record-Stage([string]$stage, [string]$home, [string]$project, [string]$out) {
-            node tests/tools/record-row-fixture.mjs --stage $stage --harness claude --provider rtk --project $project --home $home --out $out --reviewed
+          function Record-Stage([string]$stage, [string]$isolatedHome, [string]$project, [string]$out) {
+            node tests/tools/record-row-fixture.mjs --stage $stage --harness claude --provider rtk --project $project --home $isolatedHome --out $out --reviewed
             if ($LASTEXITCODE -ne 0) { throw "record $stage failed" }
           }
 
-          function Apply-Provisional([string]$operation, [string]$home, [string]$project) {
-            node tests/tools/apply-with-provisional-row.mjs --operation $operation --harness claude --provider rtk --project $project --home $home
+          function Apply-Provisional([string]$operation, [string]$isolatedHome, [string]$project) {
+            node tests/tools/apply-with-provisional-row.mjs --operation $operation --harness claude --provider rtk --project $project --home $isolatedHome
             if ($LASTEXITCODE -ne 0) { throw "$operation failed" }
           }
 
@@ -118,36 +118,36 @@ jobs:
             Set-Rtk $providerVersion
             $root = "C:\th-live-evidence\world-$suffix"
             $parts = Reset-World $root
-            $home = $parts[0]
+            $isolatedHome = $parts[0]
             $project = $parts[1]
             $out = "$repo\tests\fixtures\rows\rtk-claude-windows-2.1.251-$providerVersion"
             if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 
-            Record-Stage 'empty' $home $project $out
-            Write-Brownfield $home
-            Record-Stage 'brownfield' $home $project $out
+            Record-Stage 'empty' $isolatedHome $project $out
+            Write-Brownfield $isolatedHome
+            Record-Stage 'brownfield' $isolatedHome $project $out
 
-            Apply-Provisional 'apply' $home $project
-            $settings = Get-Content -Raw "$home\.claude\settings.json"
+            Apply-Provisional 'apply' $isolatedHome $project
+            $settings = Get-Content -Raw "$isolatedHome\.claude\settings.json"
             if ($settings -notmatch '"matcher": "Bash"') { throw 'Bash matcher missing after apply' }
             if ($settings -notmatch '"matcher": "PowerShell"') { throw 'PowerShell matcher missing after apply' }
-            Record-Stage 'post-apply' $home $project $out
+            Record-Stage 'post-apply' $isolatedHome $project $out
 
-            Add-User-Drift $home
-            Record-Stage 'drift' $home $project $out
-            Apply-Provisional 'rollback' $home $project
-            Record-Stage 'rollback' $home $project $out
+            Add-User-Drift $isolatedHome
+            Record-Stage 'drift' $isolatedHome $project $out
+            Apply-Provisional 'rollback' $isolatedHome $project
+            Record-Stage 'rollback' $isolatedHome $project $out
 
-            Apply-Provisional 'apply' $home $project
-            Add-User-Drift $home
-            Apply-Provisional 'uninstall' $home $project
-            $afterUninstall = Get-Content -Raw "$home\.claude\settings.json"
+            Apply-Provisional 'apply' $isolatedHome $project
+            Add-User-Drift $isolatedHome
+            Apply-Provisional 'uninstall' $isolatedHome $project
+            $afterUninstall = Get-Content -Raw "$isolatedHome\.claude\settings.json"
             if ($afterUninstall -match 'rtk hook claude') { throw 'uninstall left an RTK hook behind' }
             if ($afterUninstall -notmatch 'my-post-hook') { throw 'uninstall removed user drift' }
-            Record-Stage 'uninstall' $home $project $out
+            Record-Stage 'uninstall' $isolatedHome $project $out
 
             Set-Rtk $otherVersion
-            Record-Stage 'invalidating-update' $home $project $out
+            Record-Stage 'invalidating-update' $isolatedHome $project $out
             Set-Rtk $providerVersion
 
             $hook = Assert-PowerShellHook $providerVersion
@@ -179,11 +179,11 @@ jobs:
 
           $script:basePath = $env:PATH
           Set-Rtk '0.44.0'
-          $hook044 = Assert-PowerShellHook '0.44.0'
+          Assert-PowerShellHook '0.44.0' | Out-Null
           Record-Row '0.44.0' '0.48.0' '044'
 
           Set-Rtk '0.48.0'
-          $hook048 = Assert-PowerShellHook '0.48.0'
+          Assert-PowerShellHook '0.48.0' | Out-Null
           Record-Row '0.48.0' '0.44.0' '048'
 
           # Validate the 0.48 analytics JSON contract Token Harness consumes.
