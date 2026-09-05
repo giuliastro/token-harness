@@ -632,8 +632,7 @@ export async function scheduleMain(
       fiveHourPace: parsed.args.candidateFiveHour,
       weeklyPace: parsed.args.candidateWeekly,
       quality: parsed.args.candidateQuality,
-      qualityTaskClass:
-        qualityTask !== null && isTaskClass(qualityTask) ? qualityTask : null,
+      qualityTaskClass: qualityTask !== null && isTaskClass(qualityTask) ? qualityTask : null,
       qualitySamples: parsed.args.candidateQualitySamples,
     },
     transfer: {
