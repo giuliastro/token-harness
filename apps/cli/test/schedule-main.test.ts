@@ -12,6 +12,7 @@ import {
 } from '@token-harness/core';
 
 import { scheduleMain } from '../src/schedule-main.js';
+import { TOOL_VERSION } from '../src/version.js';
 
 function capture() {
   let stdout = '';
@@ -500,7 +501,7 @@ describe('schedule CLI', () => {
     const version = capture();
     assert.equal(await scheduleMain(['--bad', '--version'], version.streams, runtime), 0);
     assert.equal(version.stderr(), '');
-    assert.match(version.stdout(), /^0\.1\.5\n$/);
+    assert.equal(version.stdout(), `${TOOL_VERSION}\n`);
     assert.equal(budgetObservations, 0);
     assert.equal(qualityObservations, 0);
     assert.equal(transferObservations, 0);
