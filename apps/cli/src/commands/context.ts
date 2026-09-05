@@ -48,6 +48,8 @@ export interface CommandContext {
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
+  /** Guided all-project observation; the legacy metrics CLI remains project-scoped. */
+  metricsAllProjects?: boolean;
   since: string | null;
   until: string | null;
   /**

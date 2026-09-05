@@ -14,12 +14,21 @@ function run(args: readonly string[]) {
 
 describe('ui launcher', () => {
   it('documents the loopback-only read-only dashboard without inspecting the host', () => {
-    const child = run(['ui', '--help']);
+    const child = run(['ui', '--read-only', '--help']);
 
     assert.equal(child.status, 0, child.stderr);
     assert.equal(child.stderr, '');
     assert.match(child.stdout, /127\.0\.0\.1/);
     assert.match(child.stdout, /does not send data anywhere and cannot change configuration/);
+  });
+
+  it('documents approval-based guided controls as the default, not a read-only facade', () => {
+    const child = run(['ui', '--help']);
+    assert.equal(child.status, 0);
+    assert.equal(child.stderr, '');
+    assert.match(child.stdout, /explicit browser approval/);
+    assert.match(child.stdout, /token-harness savings/);
+    assert.doesNotMatch(child.stdout, /cannot change configuration/);
   });
 
   it('rejects options that could imply a non-local listener', () => {

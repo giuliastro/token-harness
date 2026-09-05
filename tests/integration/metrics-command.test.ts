@@ -23,7 +23,7 @@ import {
   type PlatformFacts,
 } from '@token-harness/core';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
-import { run, type RunOptions } from 'token-harness';
+import { run, createGuideCall, type RunOptions } from 'token-harness';
 
 const FACTS: PlatformFacts = {
   os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
@@ -184,8 +184,10 @@ async function runScopedMetrics(
     metrics: store,
     now: () => NOW,
   };
-  await run(options);
-  const envelope = JSON.parse(stdout) as CliEnvelope<MetricsReport>;
+  const envelope =
+    argv[0] === 'savings'
+      ? await createGuideCall(options)<MetricsReport>(argv)
+      : (await run(options), JSON.parse(stdout) as CliEnvelope<MetricsReport>);
   assert.ok(envelope.data);
   return { report: envelope.data, codes: envelope.diagnostics.map((entry) => entry.code) };
 }
@@ -440,5 +442,51 @@ describe('help', () => {
      */
     assert.match(stdout, /^ {2}metrics {4,}\S/m, 'metrics is not listed as a command');
     assert.doesNotMatch(stdout, /metrics {2,}Not in this build/);
+  });
+});
+
+describe('guided all-project savings', () => {
+  it('includes retained history from other projects without changing metrics default scope', async () => {
+    const seed = [
+      event({ id: 'one', timestamp: '2026-07-30T10:00:00Z', projectId: 'p_1' }),
+      event({ id: 'two', timestamp: '2026-07-30T10:01:00Z', projectId: 'p_2' }),
+      event({ id: 'old', timestamp: '2025-01-01T10:00:00Z', projectId: 'p_2' }),
+      event({
+        id: 'unknown',
+        timestamp: '2026-07-30T10:02:00Z',
+        projectId: UNATTRIBUTED_PROJECT_ID,
+      }),
+    ];
+    const ordinary = await runScopedMetrics(['metrics', '--json'], seed, 'p_1');
+    assert.equal(ordinary.report.providers[0]?.operations, 1);
+    assert.equal(ordinary.report.scope, undefined);
+    const all = await runScopedMetrics(['savings'], seed, 'p_1');
+    assert.equal(all.report.scope, 'all-projects');
+    assert.equal(all.report.providers[0]?.operations, 4);
+    assert.equal(all.report.providers[0]?.saved, 240);
+    assert.equal(all.report.providers[0]?.before, 400);
+    assert.equal(all.report.providers[0]?.after, 160);
+    assert.equal(all.report.firstRecordedAt, '2025-01-01T10:00:00Z');
+    assert.equal(all.report.pipelineTotal, undefined);
+  });
+  it('honors the selected savings period and keeps output growth negative', async () => {
+    const all = await runScopedMetrics(
+      ['savings', '--since', '7d'],
+      [
+        event({ id: 'old', timestamp: '2025-01-01T00:00:00Z' }),
+        event({
+          id: 'growth',
+          timestamp: '2026-07-30T10:00:00Z',
+          beforeTokens: 10,
+          afterTokens: 15,
+        }),
+      ],
+      'p_1',
+    );
+    assert.equal(all.report.providers[0]?.saved, -5);
+    assert.equal(all.report.providers[0]?.before, 10);
+    assert.equal(all.report.providers[0]?.after, 15);
+    assert.equal(all.report.providers[0]?.operations, 1);
+    assert.equal(all.report.inflatedOperations, 1);
   });
 });

@@ -198,6 +198,19 @@ export async function runRollback(context: CommandContext): Promise<CommandResul
     return finish(EXIT_CODES.ok, 'rollback', empty('nothing-to-do'), diagnostics);
   }
 
+  // A guided undo names the reviewed plan; never undo a newer unrelated transaction.
+  if (context.planId !== null && target.planId !== context.planId) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'rollback-plan-drift',
+        message: 'The latest transaction no longer belongs to the reviewed plan',
+        remediation: 'Review the latest transaction before choosing what to restore',
+      }),
+    );
+    return finish(EXIT_CODES['precondition-drift'], 'rollback', empty('rejected'), diagnostics);
+  }
+
   if (!context.confirmed) {
     const paths = new Set(
       target.entries.flatMap((entry) => entry.snapshots.map((snapshot) => snapshot.path)),
