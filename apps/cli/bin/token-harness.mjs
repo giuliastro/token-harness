@@ -41,16 +41,19 @@ if (argv[0] === 'handoff') {
     { observeScheduleBudget },
     { observeScheduleQualityReceipts },
     { observeScheduleTransferReceipts },
+    { observeScheduleHandoffBytes },
   ] = await Promise.all([
     import('../dist/src/schedule-main.js'),
     import('../dist/src/schedule-budget.js'),
     import('../dist/src/schedule-quality.js'),
     import('../dist/src/schedule-transfer.js'),
+    import('../dist/src/schedule-handoff.js'),
   ]);
   process.exitCode = await scheduleMain(argv.slice(1), undefined, {
     observeBudget: () => observeScheduleBudget({ cwd: process.cwd() }),
     observeQualityReceipts: () => observeScheduleQualityReceipts({ cwd: process.cwd() }),
     observeTransferReceipts: () => observeScheduleTransferReceipts({ cwd: process.cwd() }),
+    measureHandoffBytes: (handoffFile) => observeScheduleHandoffBytes({ handoffFile }),
   });
 } else {
   const { main } = await import('../dist/src/main.js');

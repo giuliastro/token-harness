@@ -49,7 +49,8 @@ Evidence flags
   --candidate-quality-task <mechanical|standard|hard|critical>
   --candidate-quality-samples <n>                               default: 0
   --candidate-unavailable                                      mark candidate unusable
-  --handoff-bytes <n>                                          current handoff size, default: 0
+  --handoff-file <path>                                        measure the exact current handoff file
+  --handoff-bytes <n>                                          current handoff size when no file is supplied
   --max-handoff-bytes <n>                                      current handoff budget, default: 2048
   --transfer-benefit <proven-positive|non-positive|unknown>     default: unknown
   --json                                                       RFC 0006 JSON envelope
@@ -62,10 +63,11 @@ benchmark receipts for the current project and exact task class are used conserv
 transfer benefit is not supplied, immutable transfer receipts for the current project, exact route,
 and exact task class are used only when every attributable receipt agrees on one non-unknown verdict.
 Any conflict or unknown receipt keeps transfer benefit unknown. Explicit evidence flags always win,
-including an explicit unknown. Historical transfer receipts never overwrite the current handoff byte
-estimate or budget. Transfer benefit is never inferred from tokens or raw provider quota percentages.
-This command never launches a harness and never switches automatically. Missing evidence produces
-insufficient-evidence rather than a guessed recommendation.`;
+including an explicit unknown. When --handoff-file is supplied, its exact byte length is measured at
+the host boundary; it is mutually exclusive with --handoff-bytes. Historical transfer receipts never
+overwrite the current handoff size or budget. Transfer benefit is never inferred from tokens or raw
+provider quota percentages. This command never launches a harness and never switches automatically.
+Missing evidence produces insufficient-evidence rather than a guessed recommendation.`;
 
 interface Streams {
   out(text: string): void;
@@ -76,6 +78,7 @@ export interface ScheduleRuntime {
   observeBudget?: () => Promise<BudgetReport | null>;
   observeQualityReceipts?: () => Promise<readonly TaskBenchmarkReceipt[] | null>;
   observeTransferReceipts?: () => Promise<readonly CrossHarnessTransferReceipt[] | null>;
+  measureHandoffBytes?: (handoffFile: string) => Promise<number | null>;
 }
 
 type BudgetEvidenceStatus =
@@ -148,7 +151,9 @@ interface Args {
   candidateQualitySamples: number;
   qualityExplicit: boolean;
   candidateAvailable: boolean;
+  handoffFile: string | null;
   handoffBytes: number;
+  handoffBytesExplicit: boolean;
   maxHandoffBytes: number;
   transferBenefit: TransferBenefitState;
   transferExplicit: boolean;
@@ -207,7 +212,9 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
     candidateQualitySamples: 0,
     qualityExplicit: false,
     candidateAvailable: true,
+    handoffFile: null,
     handoffBytes: 0,
+    handoffBytesExplicit: false,
     maxHandoffBytes: DEFAULT_MAX_HANDOFF_BYTES,
     transferBenefit: 'unknown',
     transferExplicit: false,
@@ -250,6 +257,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
       '--candidate-quality',
       '--candidate-quality-task',
       '--candidate-quality-samples',
+      '--handoff-file',
       '--handoff-bytes',
       '--max-handoff-bytes',
       '--transfer-benefit',
@@ -345,7 +353,11 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
         if (n !== null) args.candidateQualitySamples = n;
         break;
       }
+      case '--handoff-file':
+        args.handoffFile = value;
+        break;
       case '--handoff-bytes': {
+        args.handoffBytesExplicit = true;
         const n = parseInteger(name, value, 0, diagnostics);
         if (n !== null) args.handoffBytes = n;
         break;
@@ -401,6 +413,16 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
           code: 'invalid-quality-task-class',
           message: 'Candidate quality task class is invalid',
           remediation: 'Use mechanical, standard, hard, or critical',
+        }),
+      );
+    }
+    if (args.handoffFile !== null && args.handoffBytesExplicit) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'error',
+          code: 'handoff-evidence-conflict',
+          message: '--handoff-file and --handoff-bytes are mutually exclusive',
+          remediation: 'Pass the handoff file or an explicit byte count, not both',
         }),
       );
     }
@@ -580,6 +602,17 @@ function emitSpecial(kind: 'help' | 'version', json: boolean, streams: Streams):
   }
 }
 
+function emitUsageError(diagnostics: Diagnostic[], json: boolean, output: Streams): number {
+  const result = commandResult({
+    command: 'schedule',
+    exitCode: EXIT_CODES['usage-error'],
+    diagnostics,
+  });
+  if (json) output.out(serializeEnvelope(toEnvelope(result, TOOL_VERSION)));
+  else for (const entry of diagnostics) output.err(`${entry.code}: ${entry.message}\n`);
+  return EXIT_CODES['usage-error'];
+}
+
 export async function scheduleMain(
   argv: readonly string[],
   streams?: Streams,
@@ -602,14 +635,32 @@ export async function scheduleMain(
     return EXIT_CODES.ok;
   }
   if (parsed.diagnostics.length > 0) {
-    const result = commandResult({
-      command: 'schedule',
-      exitCode: EXIT_CODES['usage-error'],
-      diagnostics: parsed.diagnostics,
-    });
-    if (parsed.args.json) output.out(serializeEnvelope(toEnvelope(result, TOOL_VERSION)));
-    else for (const entry of parsed.diagnostics) output.err(`${entry.code}: ${entry.message}\n`);
-    return EXIT_CODES['usage-error'];
+    return emitUsageError(parsed.diagnostics, parsed.args.json, output);
+  }
+
+  let handoffBytes = parsed.args.handoffBytes;
+  if (parsed.args.handoffFile !== null) {
+    let measured: number | null = null;
+    try {
+      measured = (await runtime?.measureHandoffBytes?.(parsed.args.handoffFile)) ?? null;
+    } catch {
+      measured = null;
+    }
+    if (measured === null || !Number.isInteger(measured) || measured < 0) {
+      return emitUsageError(
+        [
+          diagnostic({
+            severity: 'error',
+            code: 'handoff-file-unavailable',
+            message: 'The handoff file could not be measured',
+            remediation: 'Check --handoff-file or pass --handoff-bytes explicitly instead',
+          }),
+        ],
+        parsed.args.json,
+        output,
+      );
+    }
+    handoffBytes = measured;
   }
 
   const taskClass = parsed.args.taskClass!;
@@ -636,7 +687,7 @@ export async function scheduleMain(
       qualitySamples: parsed.args.candidateQualitySamples,
     },
     transfer: {
-      handoffBytes: parsed.args.handoffBytes,
+      handoffBytes,
       maxHandoffBytes: parsed.args.maxHandoffBytes,
       benefit: parsed.args.transferBenefit,
     },
