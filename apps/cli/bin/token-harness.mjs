@@ -20,6 +20,21 @@ if (argv[0] === 'handoff') {
         handoffFile,
       }),
   });
+} else if (argv[0] === 'transfer-record') {
+  const [{ transferRecordMain }, { recordObservedProjectTransferEvidence }] = await Promise.all([
+    import('../dist/src/transfer-record-main.js'),
+    import('../dist/src/transfer-runtime.js'),
+  ]);
+  process.exitCode = await transferRecordMain(argv.slice(1), undefined, {
+    recordEvidence: ({ benchmarkId, handoffFile, maxHandoffBytes, recordedAt }) =>
+      recordObservedProjectTransferEvidence({
+        cwd: process.cwd(),
+        benchmarkId,
+        handoffFile,
+        maxHandoffBytes,
+        recordedAt,
+      }),
+  });
 } else if (argv[0] === 'schedule') {
   const [{ scheduleMain }, { observeScheduleBudget }, { observeScheduleQualityReceipts }] =
     await Promise.all([
@@ -35,8 +50,8 @@ if (argv[0] === 'handoff') {
   const { main } = await import('../dist/src/main.js');
   await main(argv);
 
-  // These Phase 18.7 read-only surfaces deliberately stay outside the historical
-  // parser/dispatcher so they cannot widen CommandTable or mutate existing command semantics.
+  // Phase 18.7 surfaces deliberately stay outside the historical parser/dispatcher so they cannot
+  // widen CommandTable or mutate existing command semantics.
   const positional = argv.find((token) => !token.startsWith('-'));
   const rootHumanHelp =
     argv.includes('--help') && !argv.includes('--json') && positional === undefined;
@@ -45,7 +60,9 @@ if (argv[0] === 'handoff') {
       '\nAdditional read-only commands\n' +
         '  handoff     Build a bounded compact handoff for another harness\n' +
         '  transfer    Evaluate a measured cross-harness handoff experiment\n' +
-        '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality evidence\n',
+        '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality evidence\n' +
+        '\nEvidence capture commands\n' +
+        '  transfer-record  Record one immutable project-scoped transfer evidence receipt\n',
     );
   }
 }

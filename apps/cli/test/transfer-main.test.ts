@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { harnessId, type TaskBenchmarkReceipt, type TaskQualityGate } from '@token-harness/core';
+import {
+  digestText,
+  harnessId,
+  type TaskBenchmarkReceipt,
+  type TaskQualityGate,
+} from '@token-harness/core';
 
 import { transferMain } from '../src/transfer-main.js';
 import type { TransferObservation } from '../src/transfer-runtime.js';
@@ -60,9 +65,11 @@ function observed(): TransferObservation {
   return {
     status: 'observed',
     experiment: {
+      projectId: 'p_current',
       stay: receipt({ harness: CLAUDE, variant: 'baseline', quality: 'failed' }),
       switched: receipt({ harness: CODEX, variant: 'optimized', quality: 'passed' }),
       handoffBytes: 700,
+      handoffDigest: digestText('handoff fixture'),
     },
     reason: null,
   };
