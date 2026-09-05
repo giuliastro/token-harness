@@ -2,9 +2,8 @@
  * `token-harness update` end to end — RFC 0001 §CLI contract, RFC 0004 §Provider update policy and
  * §Amended.
  *
- * Every case here is a *refusal to act* except one, which is the shape of the command: an update
- * that is willing to guess is worse than one that reports it cannot tell. The channel is faked at
- * the process-runner seam, so no test reaches a package index or the real home.
+ * Every case here is a *refusal to act* except the explicitly admitted updates. The channel is
+ * faked at the process-runner seam, so no test reaches a package index or the real home.
  */
 
 import assert from 'node:assert/strict';
@@ -38,33 +37,12 @@ const FACTS: PlatformFacts = {
 };
 
 const SALT = 'a'.repeat(64);
-
-/**
- * The channel RTK actually uses here, and the shape that channel answers in.
- *
- * Not a detail, and not something to paper over by forcing Windows facts: RTK declares `winget` at
- * priority 0 for Windows only and `cargo` at priority 1 everywhere, so the channel under test is
- * genuinely different per platform. The first version of this file hardcoded winget and passed on
- * Windows while failing all eight cases on Linux and macOS — the tests were asserting one
- * platform's channel selection on three platforms.
- *
- * Parameterising it means each platform exercises the channel it will really use, including that
- * channel's own output format, which is more informative than pinning one everywhere.
- */
 const CHANNEL = FACTS.os === 'windows' ? 'winget' : 'cargo';
 const PACKAGE = FACTS.os === 'windows' ? 'rtk-ai.rtk' : 'rtk';
 const QUERY_VERB = FACTS.os === 'windows' ? 'show' : 'search';
-
-/** The inventory query the channel answers, by name — `winget list`, `cargo install --list`. */
 const INVENTORY_LINE =
   FACTS.os === 'windows' ? 'winget list --id rtk-ai.rtk --exact' : 'cargo install --list';
 
-/**
- * What the channel prints for a given available version.
- *
- * winget prints a table with a localized header and a separator of dashes; cargo prints
- * `name = "version"    # description`. Both are the real documented shapes.
- */
 function channelAnswer(...versions: string[]): string {
   if (FACTS.os === 'windows') {
     return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', ...versions, ''].join('\r\n');
@@ -72,9 +50,6 @@ function channelAnswer(...versions: string[]): string {
   return `${versions.map((version) => `rtk = "${version}"    # a token-saving proxy`).join('\n')}\n`;
 }
 
-/**
- * What the channel reports as *installed* — `winget list` rows and `cargo install --list` lines.
- */
 function inventoryAnswer(version: string): string {
   if (FACTS.os === 'windows') {
     return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', version, ''].join('\r\n');
@@ -115,7 +90,6 @@ function world(
   mkdirSync(join(home, '.claude'), { recursive: true });
   mkdirSync(state, { recursive: true });
   mkdirSync(project, { recursive: true });
-  // A wired Claude Code, so the providers are `configured` rather than merely available.
   writeFileSync(
     join(home, '.claude', 'settings.json'),
     JSON.stringify({
@@ -186,24 +160,13 @@ function world(
 }
 
 interface FakeChannel {
-  /** Version each provider's own executable reports. Absent means the executable is missing. */
   installed?: Readonly<Record<string, string>>;
-  /** Raw stdout the channel query returns, by executable name. */
   channelStdout?: Readonly<Record<string, string>>;
-  /** Raw stdout the inventory query returns, keyed by the full command line. */
   inventoryStdout?: Readonly<Record<string, string>>;
-  /** Exit code the install invocation returns. */
   installExitCode?: number;
-  /** Compatibility rows supplied to the command instead of the shipped table. */
   compatibilityRows?: readonly CompatibilityRow[];
 }
 
-/**
- * A runner that answers as the machine would, and records what it was asked.
- *
- * Provider version probes and channel queries both come through here, which is what lets a test
- * say "installed 0.42.0, channel offers 0.44.0" without either tool being present.
- */
 function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunner } {
   const asked: string[] = [];
   const installed = config.installed ?? {};
@@ -225,15 +188,11 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
       failure: null,
     };
 
-    // The inventory query is a read, but it shares the executable with the install (on cargo,
-    // `install --list` vs `install <crate>`), so it is keyed by the full line rather than guessed
-    // from a flag.
     const inventory = inventoryStdout[line];
     if (inventory !== undefined) return { ...base, exitCode: 0, stdout: inventory };
 
     const channel = channelStdout[request.executable];
     if (channel !== undefined) {
-      // An install through the same executable is not a query: `install` mutates, `show`/`view` read.
       const isInstall = request.args[0] === 'install';
       return isInstall
         ? { ...base, exitCode: config.installExitCode ?? 0, stdout: '' }
@@ -293,8 +252,6 @@ async function invoke(
     stateRoot: place.state,
     adapters: {
       fs: new NodeFileSystem(FACTS),
-      // Wrapped so the resolver is consulted the way the real runner consults it: a name the test
-      // did not declare resolves to nothing, and the provider is then absent.
       runner: {
         run: (request) =>
           resolve(request.executable) === null
@@ -343,6 +300,19 @@ function row(data: UpdateReport | null, provider: string) {
   return data?.providers.find((entry) => entry.providerId === provider);
 }
 
+function admittedRow(): CompatibilityRow {
+  return {
+    harness: 'claude' as CompatibilityRow['harness'],
+    harnessVersion: { minimum: '2.1.220', maximum: '2.1.220' },
+    provider: 'rtk' as CompatibilityRow['provider'],
+    providerVersion: '0.44.0',
+    platform: { os: FACTS.os, wsl: FACTS.isWsl, supported: true, limitation: null },
+    configSchema: 'test-claude-settings',
+    fixture: 'tests/fixtures/update-target-reviewed',
+    verificationTier: 'canary',
+  };
+}
+
 describe('update', () => {
   it('refuses without --yes and names both versions', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
@@ -350,11 +320,8 @@ describe('update', () => {
       channelStdout: { [CHANNEL]: channelAnswer('0.44.0', '0.43.0') },
     });
 
-    // RFC 0006: mutating commands are dry-run by default and there is no flag that skips planning.
     assert.equal(result.exitCode, EXIT_CODES['confirmation-required']);
     assert.ok(result.codes.includes('confirmation-required'));
-    // The channel was asked, by the name *that* channel knows the package as — `rtk-ai.rtk` on
-    // winget and the bare crate name on cargo. Defaulting to the provider id would query nothing.
     assert.ok(
       result.asked.some(
         (line) => line.startsWith(`${CHANNEL} ${QUERY_VERB}`) && line.includes(PACKAGE),
@@ -370,18 +337,10 @@ describe('update', () => {
   it('reports the network it reached on a dry run', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      // Nothing newer, so the run is conclusive and `data` survives — exit 8 nulls it.
       channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    /**
-     * RFC 0004 §Network policy, on the reconnaissance rather than on the install.
-     *
-     * A command that changes nothing still reached a package index, and that is the part most
-     * likely to surprise someone. It cannot be avoided — a target version cannot be named without
-     * asking — so it is disclosed.
-     */
     assert.deepEqual(result.data?.network, [`${CHANNEL} package index`]);
     assert.equal(row(result.data, 'rtk')?.verdict, 'current');
   });
@@ -392,8 +351,6 @@ describe('update', () => {
       channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
-    // The user may have installed something newer deliberately. Going backwards is RFC 0004's
-    // binary rollback, which is a different command.
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(row(result.data, 'rtk')?.verdict, 'current');
   });
@@ -409,9 +366,7 @@ describe('update', () => {
 
     assert.equal(row(result.data, 'rtk')?.verdict, 'pinned');
     assert.equal(row(result.data, 'rtk')?.pin, '0.42.0');
-    // RFC 0004 §Amended: a deliberately frozen environment is a state, not a problem.
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    // And the channel was never asked, because the answer could not change anything.
     assert.equal(
       result.asked.some((line) => line.startsWith(`${CHANNEL} ${QUERY_VERB}`)),
       false,
@@ -427,8 +382,6 @@ describe('update', () => {
       channelStdout: { [CHANNEL]: channelAnswer('0.42.0') },
     });
 
-    // RFC 0004 §Repository trust: a repository may not choose which version the user runs, and no
-    // trust mechanism exists to make it able to.
     assert.ok(result.codes.includes('project-pin-not-honored'));
     assert.equal(row(result.data, 'rtk')?.verdict, 'current');
     assert.equal(row(result.data, 'rtk')?.pin, null);
@@ -439,7 +392,6 @@ describe('update', () => {
       channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
     });
 
-    // `update` updates. Installing here would be an install nobody reviewed as one.
     assert.equal(row(result.data, 'rtk')?.verdict, 'not-installed');
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(
@@ -451,55 +403,51 @@ describe('update', () => {
   it('says the channel answered unreadably rather than claiming it is current', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
-      // A shape this build does not read — a future winget, or another locale's layout.
       channelStdout: { [CHANNEL]: 'Versione: 0.44.0\r\n' },
     });
 
     assert.equal(row(result.data, 'rtk')?.verdict, 'unknown');
     assert.equal(row(result.data, 'rtk')?.available, null);
     assert.ok(result.codes.includes('version-query-unreadable'));
-    /**
-     * The distinction the first version of this got wrong.
-     *
-     * `current` and `unknown` are different claims, and reporting the first here would tell a user
-     * they are up to date on the strength of an answer nobody could read.
-     */
     assert.notEqual(row(result.data, 'rtk')?.verdict, 'current');
   });
 
-  it('fails closed for a legacy managed journal whose provider cannot be attributed', async () => {
+  it('recovers compatibility from live wiring when a legacy journal lacks attribution', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ legacyOwnedState: true }),
       {
         installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
         channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+        compatibilityRows: [admittedRow()],
       },
     );
 
-    assert.equal(result.exitCode, EXIT_CODES['unsupported-environment']);
-    assert.ok(result.codes.includes('managed-update-blocked'));
-    assert.equal(
-      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
-      false,
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.equal(result.codes.includes('managed-update-blocked'), false);
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
+      ),
       JSON.stringify(result.asked),
     );
   });
 
-  it('refuses a managed provider update when the target version has no reviewed row', async () => {
+  it('keeps the current version when a managed target has no reviewed row', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
       {
         installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
         channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
-        // An explicit empty table proves the refusal comes from the target-version gate rather
-        // than from whatever rows happen to ship on the platform running this test.
         compatibilityRows: [],
       },
     );
 
-    assert.equal(result.exitCode, EXIT_CODES['unsupported-environment']);
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');
+    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');
     assert.ok(result.codes.includes('managed-update-blocked'));
     assert.equal(
       result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
@@ -509,23 +457,13 @@ describe('update', () => {
   });
 
   it('updates a managed provider only when a row admits the target version', async () => {
-    const admitted: CompatibilityRow = {
-      harness: 'claude' as CompatibilityRow['harness'],
-      harnessVersion: { minimum: '2.1.220', maximum: '2.1.220' },
-      provider: 'rtk' as CompatibilityRow['provider'],
-      providerVersion: '0.44.0',
-      platform: { os: FACTS.os, wsl: FACTS.isWsl, supported: true, limitation: null },
-      configSchema: 'test-claude-settings',
-      fixture: 'tests/fixtures/update-target-reviewed',
-      verificationTier: 'canary',
-    };
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
       {
         installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
         channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
-        compatibilityRows: [admitted],
+        compatibilityRows: [admittedRow()],
       },
     );
 
@@ -547,12 +485,6 @@ describe('update', () => {
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(result.data?.execution?.outcome, 'committed');
-    /**
-     * `--version 0.44.0`, not an open-ended install.
-     *
-     * An unpinned upgrade would install whatever is newest when it executes, which is not the
-     * version the dry run displayed and approved.
-     */
     assert.ok(
       result.asked.some(
         (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
@@ -568,9 +500,6 @@ describe('update', () => {
       inventoryStdout: { [INVENTORY_LINE]: inventoryAnswer('0.42.0') },
     });
 
-    // RFC 0009 §Initial delivery order item 1: the channel was asked what it has installed before
-    // the update ran, so a rollback can put the machine back — the receipt says so instead of the
-    // pre-0009 "a package is not a file".
     assert.ok(
       result.asked.some(
         (line) =>
@@ -586,13 +515,9 @@ describe('update', () => {
     const result = await invoke(['update', '--provider', 'rtk', '--yes'], world(), {
       installed: { rtk: 'rtk 0.42.0' },
       channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
-      // The channel answered nothing this build reads — a shape a future winget, or another
-      // locale, would produce — so the update cannot restore the machine and says so.
       inventoryStdout: { [INVENTORY_LINE]: 'Versione: 0.44.0\r\n' },
     });
 
-    // RFC 0004: rollback restores files, and a package is not a file. Reporting a clean transaction
-    // without this would leave the user believing the machine could be returned to where it was.
     assert.ok(result.codes.includes('install-not-reversible'));
   });
 
