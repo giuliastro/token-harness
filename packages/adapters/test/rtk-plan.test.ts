@@ -136,7 +136,9 @@ function ownership(capabilities: readonly string[], toolFamily = 'Bash'): Resolv
 }
 
 /** The live configuration as the harness adapter would report it. */
-function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
+function configuredWithRtk(
+  matchers: string[] = ['Bash'],
+): HarnessConfigSummary {
   return {
     harnessId: CLAUDE,
     configPath: SETTINGS,
@@ -227,10 +229,18 @@ describe('a machine with nothing on it', () => {
       ['package-manager-install', 'merge-json', 'merge-json'],
     );
     assert.deepEqual(
-      result.actions.slice(1).map((action) => (action as MergeJsonAction).operations[0]?.value),
+      result.actions
+        .slice(1)
+        .map((action) => (action as MergeJsonAction).operations[0]?.value),
       [
-        { matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] },
-        { matcher: 'PowerShell', hooks: [{ type: 'command', command: 'rtk hook claude' }] },
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: 'rtk hook claude' }],
+        },
+        {
+          matcher: 'PowerShell',
+          hooks: [{ type: 'command', command: 'rtk hook claude' }],
+        },
       ],
     );
   });
@@ -412,7 +422,10 @@ describe('brownfield: RTK already configured in the surface we would claim', () 
   });
 
   it('plans the Bash hook when the existing entry is on PowerShell only', () => {
-    const elsewhere: HarnessConfigSummary = { ...configuredWithRtk(), matchers: ['PowerShell'] };
+    const elsewhere: HarnessConfigSummary = {
+      ...configuredWithRtk(),
+      matchers: ['PowerShell'],
+    };
     const result = plan({ installed: true, configs: [elsewhere] });
     // PowerShell is covered; Bash is not.
     assert.equal(result.actions.length, 1);
