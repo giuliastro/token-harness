@@ -10,6 +10,7 @@ import {
 
 import { transferMain } from '../src/transfer-main.js';
 import type { TransferObservation } from '../src/transfer-runtime.js';
+import { TOOL_VERSION } from '../src/version.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
@@ -173,7 +174,7 @@ describe('transfer CLI', () => {
 
     const version = capture();
     assert.equal(await transferMain(['--bad', '--version'], version.streams, runtime), 0);
-    assert.match(version.stdout(), /^0\.1\.5\n$/);
+    assert.equal(version.stdout(), `${TOOL_VERSION}\n`);
     assert.equal(observations, 0);
   });
 });

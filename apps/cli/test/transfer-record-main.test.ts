@@ -10,6 +10,7 @@ import {
 
 import { transferRecordMain } from '../src/transfer-record-main.js';
 import type { TransferRecordResult } from '../src/transfer-runtime.js';
+import { TOOL_VERSION } from '../src/version.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
@@ -147,7 +148,7 @@ describe('transfer-record CLI', () => {
 
     const version = capture();
     assert.equal(await transferRecordMain(['--bad', '--version'], version.streams, runtime), 0);
-    assert.match(version.stdout(), /^0\.1\.5\n$/);
+    assert.equal(version.stdout(), `${TOOL_VERSION}\n`);
     assert.equal(writes, 0);
   });
 });
