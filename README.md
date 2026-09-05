@@ -168,6 +168,93 @@ token-harness mcp --harness codex
 token-harness history --harness codex --since 7d
 ```
 
+### Cross-harness scheduling and compact handoff
+
+`token-harness schedule` is a read-only recommendation, not an automatic router. In the normal
+installed CLI, unknown five-hour and weekly pace fields are hydrated from the same live budget
+observer used by `token-harness budget`. Candidate quality and transfer benefit are hydrated only
+from attributable project-local benchmark evidence. Missing or conflicting evidence returns
+`insufficient-evidence` instead of guessing.
+
+Start with the minimal command:
+
+```sh
+token-harness schedule \
+  --current claude \
+  --candidate codex \
+  --task-class hard \
+  --handoff-bytes 900
+```
+
+If the task is already in progress, generate a bounded handoff rather than copying the transcript:
+
+```sh
+token-harness handoff \
+  --objective "Finish the scheduler change without weakening quota evidence" \
+  --decision "Keep Claude and Codex quota observations provider-local" \
+  --changed-file apps/cli/src/schedule-main.ts \
+  --validation "pnpm test passes" \
+  --unresolved "Need one empirical Codex comparison" \
+  --next-action "Run the candidate benchmark in Codex" \
+  --max-bytes 2048 > handoff.md
+```
+
+To teach future recommendations whether that handoff was actually worth the switch, capture one
+paired experiment. The baseline and optimized variants use the same benchmark id and task class,
+but different harnesses:
+
+```sh
+# 1. Before doing the task in the current harness.
+token-harness benchmark-start \
+  --benchmark-id scheduler-hard-01 \
+  --variant baseline \
+  --task hard \
+  --harness claude
+
+# Run the baseline task in Claude Code, then record its observed outcome.
+token-harness benchmark-finish \
+  --benchmark-id scheduler-hard-01 \
+  --variant baseline \
+  --quality passed \
+  --attempts 1 \
+  --failed-attempts 0
+
+# 2. Before the candidate run, start the optimized variant.
+token-harness benchmark-start \
+  --benchmark-id scheduler-hard-01 \
+  --variant optimized \
+  --task hard \
+  --harness codex
+
+# Give handoff.md to Codex, run the equivalent task, then close the capture.
+token-harness benchmark-finish \
+  --benchmark-id scheduler-hard-01 \
+  --variant optimized \
+  --quality passed \
+  --attempts 1 \
+  --failed-attempts 0
+
+# 3. Evaluate the exact handoff used by the candidate run.
+token-harness transfer \
+  --benchmark-id scheduler-hard-01 \
+  --handoff-file handoff.md
+
+# 4. Persist the immutable transfer verdict for future schedule calls.
+token-harness transfer-record \
+  --benchmark-id scheduler-hard-01 \
+  --handoff-file handoff.md
+```
+
+`transfer-record` re-validates the project-scoped pair, hashes the exact handoff and writes one
+immutable receipt. Future `schedule` calls consume receipts only for the exact route and task class.
+Every attributable receipt must agree on the same non-unknown transfer verdict; one `unknown` or a
+positive/non-positive conflict keeps the recommendation unresolved. Historical receipt sizes never
+replace the current `--handoff-bytes` value.
+
+Manual evidence flags remain available for controlled experiments and debugging. Explicit values,
+including an explicit `unknown`, always override automatic hydration. Run
+`token-harness schedule --help` for the full list.
+
 To try the read-only diagnosis without installing Token Harness globally:
 
 ```sh
@@ -577,14 +664,19 @@ Neither command removes user-owned RTK or HarnessTrim configuration.
 | `mcp` | Inspect MCP servers and tool-schema exposure | No |
 | `history` | Summarize attributable local usage history | No |
 | `optimize` | Combine quota pacing, context pressure, and task/profile policy into advice | No |
+| `schedule` | Recommend Claude Code or Codex from independently attributable evidence | No |
+| `handoff` | Build a bounded compact handoff for an in-progress cross-harness move | No |
 | `plan` | Resolve ownership and preview exact actions; use `--native-policy` for supported harness-native changes | No; stores the plan in private state |
 | `apply` | Apply a reviewed plan transactionally | Yes, only with `--yes` |
 | `status` | Detect drift and competing hooks | No |
 | `verify` | Check the declared verification tier | No |
 | `metrics` | Import provider records and report savings | No; updates only Token Harness state |
-| `benchmark` | Inspect benchmark evidence and comparable captures | No |
+| `benchmark` | Compare an explicit baseline/optimized receipt pair | No |
 | `benchmark-start` | Start an empirical task capture | No agent/project config change; records Token Harness benchmark state |
 | `benchmark-finish` | Finish an empirical task capture and record the outcome | No agent/project config change; records Token Harness benchmark state |
+| `benchmark-matrix` | Aggregate complete project-scoped benchmark pairs by task class and evidence | No |
+| `transfer` | Evaluate one empirical cross-harness benchmark pair and exact handoff | No |
+| `transfer-record` | Persist one immutable project-scoped transfer evidence receipt | No agent/project config change; records Token Harness benchmark state |
 | `update` | Query channels and update installed providers | Yes, only with `--yes` |
 | `rollback` | Restore files from the latest committed transaction | Yes, only with `--yes` |
 | `uninstall` | Remove owned integration entries | Yes, only with `--yes` |
