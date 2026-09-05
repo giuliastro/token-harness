@@ -178,11 +178,23 @@ describe('distribution', () => {
     }
 
     const attestation = RELEASE_CONFIG.indexOf('actions/attest@v4');
-    const publish = RELEASE_CONFIG.indexOf('npm publish --provenance');
+    const publish = RELEASE_CONFIG.indexOf('run: npm publish');
     assert.ok(publish > attestation, 'npm publish runs before the release artifact is attested');
     assert.match(RELEASE_CONFIG, /registry-url:\s*'https:\/\/registry\.npmjs\.org'/);
-    assert.match(RELEASE_CONFIG, /secrets\.NPM_TOKEN/, 'npm publish has no repository credential');
+    assert.doesNotMatch(
+      RELEASE_CONFIG,
+      /secrets\.NPM_TOKEN|NODE_AUTH_TOKEN/,
+      'trusted publishing must not fall back to a long-lived write token',
+    );
+    assert.match(RELEASE_CONFIG, /npm install --global npm@11\.5\.1/);
     assert.match(RELEASE_CONFIG, /gh release create/, 'the workflow creates no GitHub release');
+  });
+
+  it('supports safe recovery of an immutable existing tag', () => {
+    assert.match(RELEASE_CONFIG, /workflow_dispatch:\s*\n\s*inputs:/);
+    assert.match(RELEASE_CONFIG, /RELEASE_TAG:\s*\$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+    assert.match(RELEASE_CONFIG, /ref:\s*\$\{\{ inputs\.tag \|\| github\.ref \}\}/);
+    assert.match(RELEASE_CONFIG, /check-release-tag\.mjs "\$RELEASE_TAG"/);
   });
 
   it('validates release tags and dispatches only an exact release branch', () => {
@@ -192,7 +204,7 @@ describe('distribution', () => {
       'the release workflow does not check the tag against the version',
     );
     const guard = RELEASE_CONFIG.indexOf('check-release-tag.mjs');
-    const publish = RELEASE_CONFIG.indexOf('npm publish --provenance');
+    const publish = RELEASE_CONFIG.indexOf('run: npm publish');
     assert.ok(publish > guard, 'the release tag is checked only after publishing');
     assert.match(RELEASE, /workflow_dispatch:/, 'the validated bridge cannot dispatch a release');
 
@@ -203,10 +215,10 @@ describe('distribution', () => {
     assert.match(RELEASE_BRIDGE, /actions\/workflows\/release\.yml\/dispatches/);
   });
 
-  it('uses the same runtime floor as CI', () => {
-    const floor = "node-version: '22.13.0'";
-    assert.ok(CI.includes(floor), 'CI no longer tests the RFC 0001 runtime floor');
-    assert.ok(RELEASE_CONFIG.includes(floor), 'the release job no longer uses the runtime floor');
+  it('tests the product floor in CI and uses a trusted-publishing runtime for releases', () => {
+    assert.ok(CI.includes("node-version: '22.13.0'"), 'CI no longer tests the RFC 0001 runtime floor');
+    assert.ok(RELEASE_CONFIG.includes("node-version: '24'"), 'release does not satisfy the OIDC runtime floor');
+    assert.match(RELEASE_CONFIG, /npm install --global npm@11\.5\.1/);
   });
 
   it('claims a version the contents actually satisfy', () => {
