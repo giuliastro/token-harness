@@ -73,6 +73,7 @@ const FACTS: PlatformFacts = {
 };
 
 const SALT = 'f'.repeat(64);
+const MANAGED_MATCHERS = FACTS.os === 'windows' ? ['Bash', 'PowerShell'] : ['Bash'];
 
 let sandbox = '';
 let counter = 0;
@@ -126,7 +127,9 @@ function world(
     });
   }
   if (options.rtkOnClaude === true) {
-    preToolUse.push({ matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] });
+    for (const matcher of MANAGED_MATCHERS) {
+      preToolUse.push({ matcher, hooks: [{ type: 'command', command: 'rtk hook claude' }] });
+    }
   }
   if (options.harnesstrimOnClaude === true) {
     preToolUse.push({
@@ -259,7 +262,9 @@ describe('brownfield adoption', () => {
     );
 
     const plan = await invoke<PlanReport>(['plan'], place);
-    // Behaviour 2: "the plan adopts the existing installation rather than reinstalling it".
+    // Behaviour 2: "the plan adopts the existing installation rather than reinstalling it". On
+    // Windows the fixture includes both Bash and PowerShell, because Bash-only is intentionally a
+    // partial integration that Token Harness now repairs.
     assert.deepEqual(plan.data?.actions, []);
 
     // Behaviour 5, the strongest form: not one byte changed by any read-only command.
@@ -341,9 +346,9 @@ describe('brownfield adoption', () => {
     assert.equal(uninstall.exitCode, 0);
     assert.equal(uninstall.data?.outcome, 'nothing-to-do');
 
-    // Behaviour 5: byte-for-byte. Both the user's own linter hook and the RTK entry they wrote.
+    // Behaviour 5: byte-for-byte. Both the user's own linter hook and the RTK entries they wrote.
     assert.equal(readFileSync(place.claudeSettings, 'utf8'), before);
-    assert.deepEqual(matchers(place), ['Edit', 'Bash']);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
     assert.ok(
       uninstall.envelope.diagnostics.some((entry) => entry.code === 'not-owned-by-token-harness'),
     );
@@ -356,7 +361,7 @@ describe('brownfield adoption', () => {
     const applied = await invoke<ApplyReport>(['apply', '--yes'], place);
 
     assert.equal(applied.exitCode, 0);
-    assert.deepEqual(matchers(place), ['Edit', 'Bash']);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
     const parsed = JSON.parse(readFileSync(place.claudeSettings, 'utf8')) as {
       theme: string;
       hooks: { PreToolUse: { hooks: { command: string }[] }[] };
