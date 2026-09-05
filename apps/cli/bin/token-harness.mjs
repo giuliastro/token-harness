@@ -36,15 +36,21 @@ if (argv[0] === 'handoff') {
       }),
   });
 } else if (argv[0] === 'schedule') {
-  const [{ scheduleMain }, { observeScheduleBudget }, { observeScheduleQualityReceipts }] =
-    await Promise.all([
-      import('../dist/src/schedule-main.js'),
-      import('../dist/src/schedule-budget.js'),
-      import('../dist/src/schedule-quality.js'),
-    ]);
+  const [
+    { scheduleMain },
+    { observeScheduleBudget },
+    { observeScheduleQualityReceipts },
+    { observeScheduleTransferReceipts },
+  ] = await Promise.all([
+    import('../dist/src/schedule-main.js'),
+    import('../dist/src/schedule-budget.js'),
+    import('../dist/src/schedule-quality.js'),
+    import('../dist/src/schedule-transfer.js'),
+  ]);
   process.exitCode = await scheduleMain(argv.slice(1), undefined, {
     observeBudget: () => observeScheduleBudget({ cwd: process.cwd() }),
     observeQualityReceipts: () => observeScheduleQualityReceipts({ cwd: process.cwd() }),
+    observeTransferReceipts: () => observeScheduleTransferReceipts({ cwd: process.cwd() }),
   });
 } else {
   const { main } = await import('../dist/src/main.js');
@@ -60,7 +66,7 @@ if (argv[0] === 'handoff') {
       '\nAdditional read-only commands\n' +
         '  handoff     Build a bounded compact handoff for another harness\n' +
         '  transfer    Evaluate a measured cross-harness handoff experiment\n' +
-        '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality evidence\n' +
+        '  schedule    Evaluate a Claude Code ↔ Codex switch with live quota + local quality/transfer evidence\n' +
         '\nEvidence capture commands\n' +
         '  transfer-record  Record one immutable project-scoped transfer evidence receipt\n',
     );

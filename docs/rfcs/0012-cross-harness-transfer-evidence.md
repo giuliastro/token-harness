@@ -1,6 +1,6 @@
 # RFC 0012 — Cross-harness transfer evidence receipts
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-04
 - Owners: Token Harness
 - Depends on: RFC 0011
@@ -64,18 +64,27 @@ In particular:
   cross-harness comparable units;
 - ties or missing comparable evidence remain `unknown`.
 
-## Future scheduler consumption
+## Scheduler consumption
 
-`schedule` may consume project-scoped transfer receipts only when route and task class match exactly.
-Multiple receipts must be aggregated conservatively:
+`schedule` consumes only valid transfer receipts attributed to the current local project. A receipt
+must also match the exact current harness, candidate harness, and task class before it can contribute
+to the verdict. A receipt stored under a directory whose benchmark id does not match the receipt is
+ignored.
 
-- unanimous positive known evidence may hydrate `proven-positive`;
-- unanimous non-positive known evidence may hydrate `non-positive`;
-- conflicting positive/non-positive evidence remains `unknown`;
-- unknown-only evidence remains `unknown`.
+Multiple matching receipts are aggregated conservatively:
 
-Historical handoff byte observations may inform expected transfer cost, but explicit current evidence
-must win and the configured current byte budget must still be enforced.
+- every attributable receipt `proven-positive` → hydrate `proven-positive`;
+- every attributable receipt `non-positive` → hydrate `non-positive`;
+- any positive/non-positive conflict → remain `unknown`;
+- any set containing an `unknown` receipt → remain `unknown`;
+- no matching receipt → remain `unknown`.
+
+An explicit `--transfer-benefit`, including explicit `unknown`, always wins and suppresses automatic
+transfer-receipt hydration.
+
+Historical handoff byte observations remain part of the immutable receipt, but scheduler hydration
+does not substitute them for the current handoff estimate. `--handoff-bytes` and
+`--max-handoff-bytes` continue to describe the current scheduling decision.
 
 This RFC does not authorize automatic harness switching. The scheduler remains advisory unless a
 separate opt-in execution contract is approved.
