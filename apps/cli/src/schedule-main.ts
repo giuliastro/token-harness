@@ -602,11 +602,7 @@ function emitSpecial(kind: 'help' | 'version', json: boolean, streams: Streams):
   }
 }
 
-function emitUsageError(
-  diagnostics: Diagnostic[],
-  json: boolean,
-  output: Streams,
-): number {
+function emitUsageError(diagnostics: Diagnostic[], json: boolean, output: Streams): number {
   const result = commandResult({
     command: 'schedule',
     exitCode: EXIT_CODES['usage-error'],
