@@ -1,7 +1,7 @@
 {
   "name": "token-harness",
-  "version": "0.1.5",
-  "description": "One control plane for token-efficient coding agents.",
+  "version": "0.1.6",
+  "description": "Quota-aware efficiency layer for Claude Code and Codex subscription limits.",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
