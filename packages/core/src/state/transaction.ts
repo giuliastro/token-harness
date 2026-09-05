@@ -114,6 +114,22 @@ function terminal(status: ActionOutcome['status']): boolean {
 }
 
 /**
+ * A transaction may mutate the same path more than once. Actions still capture before every
+ * mutation, because their individual rollback contract depends on those snapshots, but a
+ * transaction rollback must return each path to the state from before the transaction began.
+ * Keeping only the first capture per path gives restoreAll one coherent target state and makes
+ * restoration verification meaningful instead of asking the final file to match intermediate
+ * snapshots as well as the original one.
+ */
+function initialSnapshots(snapshots: readonly FileSnapshot[]): FileSnapshot[] {
+  const firstByPath = new Map<string, FileSnapshot>();
+  for (const snapshot of snapshots) {
+    if (!firstByPath.has(snapshot.path)) firstByPath.set(snapshot.path, snapshot);
+  }
+  return [...firstByPath.values()];
+}
+
+/**
  * Reads the filesystem back and reports which snapshots did not take.
  *
  * This is the check that makes exit 7 reachable. It compares against the recorded
@@ -247,8 +263,9 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
   const rollback = async (cause: Diagnostic[]): Promise<TransactionResult> => {
     diagnostics.push(...cause);
     // The store's own record, not the action outcomes: an action that captured a
-    // snapshot and then threw while writing returns no outcome at all.
-    const snapshots = request.snapshots.captured;
+    // snapshot and then threw while writing returns no outcome at all. When several
+    // actions touched one path, rollback targets the first capture: the pre-transaction state.
+    const snapshots = initialSnapshots(request.snapshots.captured);
 
     let restoreError: string | null = null;
     try {
@@ -490,7 +507,7 @@ export async function rollbackTransaction(request: RollbackRequest): Promise<Rol
     };
   }
 
-  const snapshots = journal.entries.flatMap((entry) => entry.snapshots);
+  const snapshots = initialSnapshots(journal.entries.flatMap((entry) => entry.snapshots));
   const diagnostics: Diagnostic[] = [];
 
   let restoreError: string | null = null;
