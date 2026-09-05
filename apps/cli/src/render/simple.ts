@@ -89,14 +89,13 @@ export function renderSimpleDoctor(report: DoctorReport): string {
   const newerThanTested = [...present, ...report.providers].some(
     (item) => item.versionVerdict === 'unknown-newer',
   );
-  const state =
-    broken
-      ? 'attention needed'
-      : newerThanTested
-        ? 'ready with limitations'
-        : present.length > 0
-          ? 'ready'
-          : 'setup needed';
+  const state = broken
+    ? 'attention needed'
+    : newerThanTested
+      ? 'ready with limitations'
+      : present.length > 0
+        ? 'ready'
+        : 'setup needed';
   const lines = [...title(state), 'WHAT WORKS'];
 
   if (present.length === 0) lines.push('  No supported coding harness was found.');
@@ -108,14 +107,14 @@ export function renderSimpleDoctor(report: DoctorReport): string {
   if (active.length === 0) lines.push('  Optimization provider: none active');
   for (const item of active) {
     const connected = item.configuredHarnesses.map(harnessName).join(', ');
-    lines.push(
-      truncate(`  ${providerName(item.providerId)}: active on ${connected}`, MAX_WIDTH),
-    );
+    lines.push(truncate(`  ${providerName(item.providerId)}: active on ${connected}`, MAX_WIDTH));
   }
   lines.push(...changeLine(false));
 
   if (broken) {
-    lines.push(...next('token-harness doctor --verbose', 'Review the integration that needs attention.'));
+    lines.push(
+      ...next('token-harness doctor --verbose', 'Review the integration that needs attention.'),
+    );
   } else if (present.length === 0 || active.length === 0) {
     lines.push(...next('token-harness setup', 'Finish the guided setup.'));
   } else if (newerThanTested) {
@@ -473,15 +472,16 @@ export function renderSimpleVerify(report: VerifyReport): string {
   if (report.results.length === 0) lines.push('  Nothing is configured to verify yet.');
   for (const item of report.results)
     lines.push(
-      truncate(`  ${providerName(item.providerId)} on ${harnessName(item.harnessId)}: ${item.status}`, MAX_WIDTH),
+      truncate(
+        `  ${providerName(item.providerId)} on ${harnessName(item.harnessId)}: ${item.status}`,
+        MAX_WIDTH,
+      ),
     );
   lines.push(...changeLine(false));
   lines.push(
     ...next(
       report.healthyAtDeclaredTier ? null : 'token-harness verify --verbose',
-      report.healthyAtDeclaredTier
-        ? normalWork()
-        : 'Review the failed check and suggested fix.',
+      report.healthyAtDeclaredTier ? normalWork() : 'Review the failed check and suggested fix.',
     ),
   );
   return document(lines);
@@ -554,7 +554,8 @@ export function renderSimpleHistory(report: HistoryReport): string {
 
 function updateStatus(item: UpdateReport['providers'][number]): string {
   if (item.verdict === 'current') return `${item.installed ?? 'installed'} is current`;
-  if (item.verdict === 'pinned') return `kept at ${item.pin ?? item.installed ?? 'installed'} (pinned)`;
+  if (item.verdict === 'pinned')
+    return `kept at ${item.pin ?? item.installed ?? 'installed'} (pinned)`;
   if (item.verdict === 'blocked-unreviewed')
     return `${item.available ?? 'newer version'} available; keeping ${item.installed ?? 'installed'} until validated`;
   if (item.verdict === 'upgradable')
