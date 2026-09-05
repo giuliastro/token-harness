@@ -108,27 +108,49 @@ export function buildDashboardModel(input: {
   optimize: OptimizeReport;
 }): DashboardModel {
   const present = input.doctor.harnesses.filter((item) => item.state !== 'absent');
-  const configuredProviders = input.doctor.providers.filter(
-    (item) => item.state === 'configured' && item.configuredHarnesses.length > 0,
+  const connectedProviders = input.doctor.providers.filter(
+    (item) => item.configuredHarnesses.length > 0,
+  );
+  const configuredProviders = connectedProviders.filter((item) => item.state === 'configured');
+
+  // The primary dashboard is about the setup the user is actually using. A secondary detected
+  // harness (for example Pi or Hermes) must not downgrade the whole product merely because its
+  // version is newer than Token Harness has tested. It becomes primary only when it is wired to an
+  // active provider, exposes an allowance window, or participates in a live status pipeline.
+  const relevantHarnessIds = new Set<string>();
+  for (const provider of connectedProviders) {
+    for (const harness of provider.configuredHarnesses) relevantHarnessIds.add(harness);
+  }
+  for (const item of input.budget.harnesses) {
+    if (item.windows.length > 0) relevantHarnessIds.add(item.harnessId);
+  }
+  for (const pipeline of input.status.pipelines) relevantHarnessIds.add(pipeline.harness);
+
+  const relevantHarnesses = present.filter((harness) =>
+    relevantHarnessIds.has(harness.harnessId),
   );
   const broken =
-    present.some((item) => item.state === 'broken') ||
-    input.doctor.providers.some((item) => item.state === 'broken');
-  const newerThanTested = [...present, ...input.doctor.providers].some(
-    (item) => item.versionVerdict === 'unknown-newer',
-  );
+    relevantHarnesses.some((item) => item.state === 'broken') ||
+    connectedProviders.some((item) => item.state === 'broken');
+  const newerThanTested =
+    relevantHarnesses.some((item) => item.versionVerdict === 'unknown-newer') ||
+    connectedProviders.some((item) => item.versionVerdict === 'unknown-newer');
 
   const state: DashboardModel['state'] =
-    present.length === 0 || configuredProviders.length === 0
+    present.length === 0
       ? 'setup-needed'
       : broken || input.status.problemCount > 0
         ? 'action-needed'
-        : newerThanTested || input.doctor.problemCount > 0
-          ? 'limited'
-          : 'ready';
+        : configuredProviders.length === 0
+          ? 'setup-needed'
+          : newerThanTested
+            ? 'limited'
+            : 'ready';
 
   const rankedRecommendations = input.optimize.harnesses
-    .filter((harness) => harness.state !== 'absent')
+    .filter(
+      (harness) => harness.state !== 'absent' && relevantHarnessIds.has(harness.harnessId),
+    )
     .flatMap((harness) =>
       harness.recommendations.map((item) => ({
         harness: harness.harnessId,
@@ -143,56 +165,43 @@ export function buildDashboardModel(input: {
     });
   const recommendation = rankedRecommendations.find((item) => item.priority !== 'optional');
 
-  const visibleHarnessIds = new Set<string>();
-  for (const provider of configuredProviders) {
-    for (const harness of provider.configuredHarnesses) visibleHarnessIds.add(harness);
-  }
-  for (const item of input.budget.harnesses) {
-    if (item.windows.length > 0) visibleHarnessIds.add(item.harnessId);
-  }
-  for (const harness of present) {
-    if (harness.state === 'broken') visibleHarnessIds.add(harness.harnessId);
-  }
-
-  const harnesses: DashboardHarness[] = present
-    .filter((harness) => visibleHarnessIds.has(harness.harnessId))
-    .map((harness) => {
-      const providerIds = configuredProviders
-        .filter((provider) => provider.configuredHarnesses.includes(harness.harnessId))
-        .map((provider) => provider.providerId);
-      const budget = input.budget.harnesses.find((item) => item.harnessId === harness.harnessId);
-      const health: DashboardHealth =
-        harness.state === 'broken'
-          ? 'attention'
-          : harness.versionVerdict === 'unknown-newer'
-            ? 'limited'
-            : 'active';
-      const statusLabel =
-        health === 'attention'
-          ? 'Needs attention'
-          : health === 'limited'
-            ? 'Works · newer than tested'
-            : providerIds.length > 0
-              ? 'Optimized'
-              : 'Available';
-      return {
-        id: harness.harnessId,
-        name: nameOf(harness.harnessId),
-        health,
-        statusLabel,
-        version: harness.version,
-        providers: providerIds.map(providerName),
-        allowance: (budget?.windows ?? []).map((window) => ({
-          label: window.bucketName ?? window.scope,
-          remainingPercent: window.remainingPercent,
-          resetsAt: window.resetsAt,
-          confidence: window.confidence,
-        })),
-      };
-    });
+  const harnesses: DashboardHarness[] = relevantHarnesses.map((harness) => {
+    const providerIds = configuredProviders
+      .filter((provider) => provider.configuredHarnesses.includes(harness.harnessId))
+      .map((provider) => provider.providerId);
+    const budget = input.budget.harnesses.find((item) => item.harnessId === harness.harnessId);
+    const health: DashboardHealth =
+      harness.state === 'broken'
+        ? 'attention'
+        : harness.versionVerdict === 'unknown-newer'
+          ? 'limited'
+          : 'active';
+    const statusLabel =
+      health === 'attention'
+        ? 'Needs attention'
+        : health === 'limited'
+          ? 'Works · newer than tested'
+          : providerIds.length > 0
+            ? 'Optimized'
+            : 'Available';
+    return {
+      id: harness.harnessId,
+      name: nameOf(harness.harnessId),
+      health,
+      statusLabel,
+      version: harness.version,
+      providers: providerIds.map(providerName),
+      allowance: (budget?.windows ?? []).map((window) => ({
+        label: window.bucketName ?? window.scope,
+        remainingPercent: window.remainingPercent,
+        resetsAt: window.resetsAt,
+        confidence: window.confidence,
+      })),
+    };
+  });
 
   const otherHarnesses = present
-    .filter((harness) => !visibleHarnessIds.has(harness.harnessId))
+    .filter((harness) => !relevantHarnessIds.has(harness.harnessId))
     .map((harness) => ({ name: nameOf(harness.harnessId), version: harness.version }));
 
   const providers = configuredProviders.map((provider) => ({
@@ -220,7 +229,7 @@ export function buildDashboardModel(input: {
             statusLabel: 'READY WITH LIMITATIONS',
             headline: 'You can keep working.',
             summary:
-              'Your integrations are present, but at least one detected version is newer than the tested range. Token Harness will stay conservative about changes.',
+              'An active integration uses a version newer than the tested range. Token Harness will keep working read-only and stay conservative about changes.',
             nextStep: {
               command: 'token-harness verify',
               title: 'Verify the active integrations',
@@ -252,7 +261,8 @@ export function buildDashboardModel(input: {
               nextStep: {
                 command: 'token-harness setup',
                 title: 'Continue guided setup',
-                description: 'Token Harness will detect what is available and propose only supported changes.',
+                description:
+                  'Token Harness will detect what is available and propose only supported changes.',
               },
             };
 
