@@ -92,13 +92,10 @@ const MANIFEST: ProviderManifest = {
       capability: 'shell.command.rewrite',
       mode: 'exclusive',
       harnesses: [CLAUDE],
-      // Windows live evidence now covers both Claude shell families on the same native
-      // `PreToolUse` processor. The upstream RTK installer still does not create the PowerShell
-      // matcher itself; Token Harness writes that reviewed matcher entry transactionally.
-      surfaces: [
-        { toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' },
-        { toolFamily: 'PowerShell', interceptionPoint: 'pre-tool-use' },
-      ],
+      // The portable resolver surface remains Bash. Windows PowerShell coverage is added by
+      // the planner only on Windows, because ProviderManifest capabilities are not platform-scoped.
+      // The native processor and that Windows-only plan path are covered by the live fixture below.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
         sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
         upstreamVersion: '0.48.0',
@@ -108,13 +105,9 @@ const MANIFEST: ProviderManifest = {
       capability: 'shell.output.reduce',
       mode: 'exclusive',
       harnesses: [CLAUDE],
-      // Same surface: RTK rewrites the command at `PreToolUse` and the rewritten command is
-      // what filters the output, so both capabilities are served from the same Bash/PowerShell
-      // interception points proven by the Windows recording above.
-      surfaces: [
-        { toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' },
-        { toolFamily: 'PowerShell', interceptionPoint: 'pre-tool-use' },
-      ],
+      // Same portable Bash surface. On Windows the planner adds PowerShell as a platform-only
+      // companion matcher; the live fixture below proves the same native processor handles both.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
         sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
         upstreamVersion: '0.48.0',
