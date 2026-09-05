@@ -1,0 +1,65 @@
+name: Validate guided experience
+on:
+  push:
+    branches: [ci/guided-efficiency-build]
+    paths: [.github/workflows/guided-apply.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - name: Verify transferred implementation and apply to clean main baseline
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, lzma, os
+          from pathlib import Path
+          encoded = ''.join(Path(f'.transfer/guided-{i}.b64').read_text().strip() for i in range(6))
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'f6359906127da059301fa752c8356e819e7ee09e17673f623ecd163062774771', 'Patch digest mismatch'
+          Path(os.environ['RUNNER_TEMP'], 'guided.patch').write_bytes(patch)
+          PY
+          git switch --detach dbed441f125df8073090b1815b10f3cbd4466404
+          git apply --check "$RUNNER_TEMP/guided.patch"
+          git apply "$RUNNER_TEMP/guided.patch"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - name: Full regression suite
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee "$RUNNER_TEMP/guided-tests.log"
+      - run: pnpm build
+      - run: pnpm smoke
+      - run: pnpm package
+      - run: pnpm smoke:install
+      - name: Commit verified source only, never update main
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          chmod 644 apps/cli/bin/token-harness.mjs
+          git add PLAN.md README.md apps packages docs package.json scripts tests
+          git diff --cached --check
+          git commit -m 'feat: guided setup, readable rules and measured savings in a local app'
+          git push --force-with-lease=refs/heads/feature/guided-efficiency:0c745797a7baeb73cf0e54d2cfcb5d18a5235737 origin HEAD:refs/heads/feature/guided-efficiency
+          git rev-parse HEAD > "$RUNNER_TEMP/guided-commit.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guided-validation
+          path: |
+            ${{ runner.temp }}/guided-tests.log
+            ${{ runner.temp }}/guided-commit.txt
+          retention-days: 7
