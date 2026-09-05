@@ -138,16 +138,31 @@ const BUDGET: BudgetReport = {
   harnesses: [],
 };
 
-function operations(onApply: (context: CommandContext) => void = () => {}): SetupOperations {
+function operations(
+  onApply: (context: CommandContext) => void = () => {},
+  options: { doctor?: DoctorReport; verify?: VerifyReport } = {},
+): SetupOperations {
   return {
-    doctor: async () => commandResult({ command: 'doctor', exitCode: EXIT_CODES.ok, data: DOCTOR }),
+    doctor: async () =>
+      commandResult({
+        command: 'doctor',
+        exitCode:
+          (options.doctor ?? DOCTOR).problemCount > 0
+            ? EXIT_CODES['problems-found']
+            : EXIT_CODES.ok,
+        data: options.doctor ?? DOCTOR,
+      }),
     plan: async () => commandResult({ command: 'plan', exitCode: EXIT_CODES.ok, data: PLAN }),
     apply: async (context) => {
       onApply(context);
       return commandResult({ command: 'apply', exitCode: EXIT_CODES.ok, data: APPLIED });
     },
     verify: async () =>
-      commandResult({ command: 'verify', exitCode: EXIT_CODES.ok, data: VERIFIED }),
+      commandResult({
+        command: 'verify',
+        exitCode: EXIT_CODES.ok,
+        data: options.verify ?? VERIFIED,
+      }),
     budget: async () => commandResult({ command: 'budget', exitCode: EXIT_CODES.ok, data: BUDGET }),
   };
 }
@@ -175,6 +190,68 @@ describe('setup command', () => {
     assert.equal(result.data?.changed, false);
     assert.equal(result.data?.nextStep.command, 'token-harness setup --yes');
     assert.equal(applied, false);
+  });
+
+  it('does not let an unrelated newer Pi detection block Claude setup', async () => {
+    const doctorWithSecondaryPi: DoctorReport = {
+      ...DOCTOR,
+      problemCount: 1,
+      harnesses: [
+        ...DOCTOR.harnesses,
+        {
+          harnessId: harnessId('pi'),
+          state: 'detected',
+          version: '0.84.2',
+          versionVerdict: 'unknown-newer',
+          configPath: null,
+          declaredVerificationTier: 'config-only',
+          evidence: [],
+          warnings: [],
+        },
+      ],
+    };
+
+    const result = await runSetup(
+      CONTEXT,
+      operations(() => {}, { doctor: doctorWithSecondaryPi }),
+    );
+
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data?.stage, 'ready-to-configure');
+    assert.equal(result.data?.nextStep.command, 'token-harness setup --yes');
+  });
+
+  it('verifies an active newer-than-tested Claude integration instead of stopping at doctor', async () => {
+    const doctorWithActiveNewerClaude: DoctorReport = {
+      ...DOCTOR,
+      problemCount: 1,
+      harnesses: DOCTOR.harnesses.map((item) => ({
+        ...item,
+        state: 'configured' as const,
+        version: '2.1.251',
+        versionVerdict: 'unknown-newer' as const,
+      })),
+      providers: DOCTOR.providers.map((item) => ({
+        ...item,
+        state: 'configured' as const,
+        configuredHarnesses: [harnessId('claude')],
+      })),
+    };
+    let verified = false;
+    const ops = operations(() => {}, { doctor: doctorWithActiveNewerClaude });
+    const originalVerify = ops.verify;
+    ops.verify = async (context) => {
+      verified = true;
+      return originalVerify(context);
+    };
+
+    const result = await runSetup(CONTEXT, ops);
+
+    assert.equal(verified, true);
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data?.stage, 'ready');
+    assert.equal(result.data?.nextStep.command, 'token-harness ui');
+    assert.match(result.data?.nextStep.description ?? '', /coding agent normally/i);
   });
 
   it('applies the stored plan and verifies it only after explicit confirmation', async () => {

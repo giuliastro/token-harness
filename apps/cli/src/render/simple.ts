@@ -53,7 +53,29 @@ function harnessName(id: string): string {
   if (id === 'claude') return 'Claude Code';
   if (id === 'codex') return 'Codex';
   if (id === 'opencode') return 'OpenCode';
+  if (id === 'pi') return 'Pi';
+  if (id === 'hermes') return 'Hermes';
   return id;
+}
+
+function providerName(id: string): string {
+  if (id === 'rtk') return 'RTK';
+  if (id === 'harnesstrim') return 'HarnessTrim';
+  return id;
+}
+
+function normalWork(): string {
+  return 'Use your coding agent normally; configured optimizers run automatically.';
+}
+
+function usefulEvidence(evidence: readonly { summary: string }[]): string | null {
+  const useful = evidence.find(
+    (item) =>
+      !/^0B known loaded of /i.test(item.summary) &&
+      !/^0 MCP servers/i.test(item.summary) &&
+      !/^0B of instruction candidates/i.test(item.summary),
+  );
+  return useful?.summary ?? evidence[0]?.summary ?? null;
 }
 
 export function renderSimpleDoctor(report: DoctorReport): string {
@@ -61,35 +83,49 @@ export function renderSimpleDoctor(report: DoctorReport): string {
   const active = report.providers.filter(
     (item) => item.state === 'configured' && item.configuredHarnesses.length > 0,
   );
-  const state =
-    report.problemCount > 0 ? 'attention needed' : present.length > 0 ? 'ready' : 'setup needed';
+  const broken =
+    present.some((item) => item.state === 'broken') ||
+    report.providers.some((item) => item.state === 'broken');
+  const newerThanTested = [...present, ...report.providers].some(
+    (item) => item.versionVerdict === 'unknown-newer',
+  );
+  const state = broken
+    ? 'attention needed'
+    : newerThanTested
+      ? 'ready with limitations'
+      : present.length > 0
+        ? 'ready'
+        : 'setup needed';
   const lines = [...title(state), 'WHAT WORKS'];
 
   if (present.length === 0) lines.push('  No supported coding harness was found.');
-  for (const item of report.harnesses) {
-    const stateText = item.state === 'absent' ? 'not found' : item.state;
+  for (const item of present) {
     lines.push(
-      `  ${harnessName(item.harnessId)}: ${stateText}${item.version ? ` (${item.version})` : ''}`,
+      `  ${harnessName(item.harnessId)}: ${item.state}${item.version ? ` (${item.version})` : ''}`,
     );
   }
-  if (report.providers.length === 0) lines.push('  Providers: none detected');
-  for (const item of report.providers) {
+  if (active.length === 0) lines.push('  Optimization provider: none active');
+  for (const item of active) {
     const connected = item.configuredHarnesses.map(harnessName).join(', ');
-    lines.push(
-      truncate(
-        `  ${item.providerId}: ${connected === '' ? item.state : `active on ${connected}`}`,
-        MAX_WIDTH,
-      ),
-    );
+    lines.push(truncate(`  ${providerName(item.providerId)}: active on ${connected}`, MAX_WIDTH));
   }
   lines.push(...changeLine(false));
 
-  if (report.problemCount > 0) {
-    lines.push(...next('token-harness doctor --verbose', 'Review the technical findings.'));
+  if (broken) {
+    lines.push(
+      ...next('token-harness doctor --verbose', 'Review the integration that needs attention.'),
+    );
   } else if (present.length === 0 || active.length === 0) {
     lines.push(...next('token-harness setup', 'Finish the guided setup.'));
+  } else if (newerThanTested) {
+    lines.push(
+      ...next(
+        'token-harness verify',
+        'You can keep working; verify the active integrations when convenient.',
+      ),
+    );
   } else {
-    lines.push(...next('token-harness ui', 'Open the dashboard.'));
+    lines.push(...next(null, normalWork()));
   }
   return document(lines);
 }
@@ -115,7 +151,7 @@ export function renderSimpleSetup(report: SetupReport, context: RenderContext): 
   for (const provider of active) {
     lines.push(
       truncate(
-        `  ${provider.providerId}: active on ${provider.configuredHarnesses.map(harnessName).join(', ')}`,
+        `  ${providerName(provider.providerId)}: active on ${provider.configuredHarnesses.map(harnessName).join(', ')}`,
         MAX_WIDTH,
       ),
     );
@@ -142,7 +178,14 @@ export function renderSimpleSetup(report: SetupReport, context: RenderContext): 
         : undefined,
     ),
   );
-  lines.push(...next(report.nextStep.command, report.nextStep.description));
+  lines.push(
+    ...next(
+      report.nextStep.command,
+      report.stage === 'ready' && report.nextStep.command === 'token-harness ui'
+        ? 'Open the dashboard once to review status; after that use your coding agent normally.'
+        : report.nextStep.description,
+    ),
+  );
   return document(lines);
 }
 
@@ -249,7 +292,7 @@ export function renderSimpleBudget(report: BudgetReport): string {
     ...next(
       observed.length > 0 ? 'token-harness optimize' : 'token-harness setup',
       observed.length > 0
-        ? 'See the best action for the current allowance.'
+        ? 'Get advice for the task you are about to start.'
         : 'Check the local installation and connections.',
     ),
   );
@@ -291,7 +334,7 @@ export function renderSimpleMcp(report: McpReport): string {
       attention ? 'token-harness mcp --verbose' : 'token-harness optimize',
       attention
         ? 'Review the server that needs attention.'
-        : 'See whether context can be simplified.',
+        : 'See whether context can be simplified for the next task.',
     ),
   );
   return document(lines);
@@ -307,14 +350,14 @@ export function renderSimpleOptimize(report: OptimizeReport): string {
   for (const harness of advice) {
     const recommendation =
       harness.recommendations.find((item) => item.priority === 'first') ??
-      harness.recommendations[0];
+      harness.recommendations.find((item) => item.priority === 'next');
     lines.push(
       truncate(
         `  ${harnessName(harness.harnessId)}: ${recommendation?.action ?? 'No change recommended.'}`,
         MAX_WIDTH,
       ),
     );
-    const evidence = recommendation?.evidence[0]?.summary;
+    const evidence = recommendation === undefined ? null : usefulEvidence(recommendation.evidence);
     if (evidence) lines.push(truncate(`    Why: ${evidence}`, MAX_WIDTH));
   }
   lines.push(...changeLine(false));
@@ -325,10 +368,10 @@ export function renderSimpleOptimize(report: OptimizeReport): string {
   );
   lines.push(
     ...next(
-      canPlan ? 'token-harness plan --native-policy' : 'token-harness ui',
+      canPlan ? 'token-harness plan --native-policy' : null,
       canPlan
         ? 'Review the reversible recommended policy change.'
-        : 'Keep the dashboard open for the next decision.',
+        : 'No change is required now. ' + normalWork(),
     ),
   );
   return document(lines);
@@ -375,8 +418,12 @@ export function renderSimplePlan(report: PlanReport, context: RenderContext): st
       ),
     );
   else if (report.actions.length === 0)
-    lines.push(...next('token-harness setup', 'Check detection and finish guided setup.'));
-  else lines.push(...next('token-harness ui', 'Open the dashboard.'));
+    lines.push(
+      ...(report.pipelineId === null
+        ? next('token-harness setup', 'Check detection and finish guided setup.')
+        : next(null, normalWork())),
+    );
+  else lines.push(...next('token-harness ui', 'Open the dashboard to review the current state.'));
   return document(lines);
 }
 
@@ -413,7 +460,7 @@ export function renderSimpleApply(report: ApplyReport, command: string): string 
           ? confirmationCommand
           : `token-harness ${command} --verbose`,
       okay
-        ? 'Check that the integration works.'
+        ? 'Check that the integration works; a successful verify is the end of setup.'
         : report.outcome === 'confirmation-required'
           ? 'Apply the reviewed change.'
           : 'Review the technical result.',
@@ -430,15 +477,16 @@ export function renderSimpleVerify(report: VerifyReport): string {
   if (report.results.length === 0) lines.push('  Nothing is configured to verify yet.');
   for (const item of report.results)
     lines.push(
-      truncate(`  ${item.providerId} on ${harnessName(item.harnessId)}: ${item.status}`, MAX_WIDTH),
+      truncate(
+        `  ${providerName(item.providerId)} on ${harnessName(item.harnessId)}: ${item.status}`,
+        MAX_WIDTH,
+      ),
     );
   lines.push(...changeLine(false));
   lines.push(
     ...next(
-      report.healthyAtDeclaredTier ? 'token-harness ui' : 'token-harness verify --verbose',
-      report.healthyAtDeclaredTier
-        ? 'Open the dashboard.'
-        : 'Review the failed check and suggested fix.',
+      report.healthyAtDeclaredTier ? null : 'token-harness verify --verbose',
+      report.healthyAtDeclaredTier ? normalWork() : 'Review the failed check and suggested fix.',
     ),
   );
   return document(lines);
@@ -451,7 +499,7 @@ export function renderSimpleStatus(report: StatusReport): string {
     const providers = [...new Set(pipeline.owners.map((owner) => owner.owner))];
     lines.push(
       truncate(
-        `  ${harnessName(pipeline.harness)}: ${providers.join(' -> ') || 'no provider'}`,
+        `  ${harnessName(pipeline.harness)}: ${providers.map(providerName).join(' -> ') || 'no provider'}`,
         MAX_WIDTH,
       ),
     );
@@ -463,12 +511,12 @@ export function renderSimpleStatus(report: StatusReport): string {
       report.problemCount === 0
         ? report.pipelines.length === 0
           ? 'token-harness setup'
-          : 'token-harness ui'
+          : null
         : 'token-harness status --verbose',
       report.problemCount === 0
         ? report.pipelines.length === 0
           ? 'Finish the guided setup.'
-          : 'Open the dashboard.'
+          : normalWork()
         : 'Review the drift before making changes.',
     ),
   );
@@ -483,7 +531,12 @@ export function renderSimpleMetrics(report: MetricsReport): string {
     lines.push(`  ${item.class}: ${formatCount(item.saved ?? 0)} ${item.unit ?? ''} saved`);
   lines.push(`  Errors: ${report.errors}`);
   lines.push(...changeLine(false));
-  lines.push(...next('token-harness optimize', 'Get the next evidence-based recommendation.'));
+  lines.push(
+    ...next(
+      null,
+      'Measurement is complete. Use optimize before a task only when you want fresh advice.',
+    ),
+  );
   return document(lines);
 }
 
@@ -495,8 +548,27 @@ export function renderSimpleHistory(report: HistoryReport): string {
       `  ${harnessName(item.harnessId)}: ${formatCount(item.totalTokens)} tokens, trend ${item.burnTrend.state}`,
     );
   lines.push(...changeLine(false));
-  lines.push(...next('token-harness optimize', 'Use the history in the next recommendation.'));
+  lines.push(
+    ...next(
+      null,
+      'History is informational. Run token-harness optimize when you want task-specific advice.',
+    ),
+  );
   return document(lines);
+}
+
+function updateStatus(item: UpdateReport['providers'][number]): string {
+  if (item.verdict === 'current') return `${item.installed ?? 'installed'} is current`;
+  if (item.verdict === 'pinned')
+    return `kept at ${item.pin ?? item.installed ?? 'installed'} (pinned)`;
+  if (item.verdict === 'blocked-unreviewed')
+    return `${item.available ?? 'newer version'} available; keeping ${item.installed ?? 'installed'} until validated`;
+  if (item.verdict === 'upgradable')
+    return `${item.installed ?? 'installed'} -> ${item.available ?? 'newer version'} ready`;
+  if (item.verdict === 'not-installed') return 'not installed';
+  if (item.verdict === 'no-channel') return 'installed; no supported update channel';
+  if (item.verdict === 'unavailable') return 'installed; update check unavailable';
+  return 'installed; update status unknown';
 }
 
 export function renderSimpleUpdate(report: UpdateReport): string {
@@ -507,17 +579,24 @@ export function renderSimpleUpdate(report: UpdateReport): string {
   const lines = [...title(changed ? 'updated' : 'update checked'), 'PROVIDERS'];
   if (report.providers.length === 0) lines.push('  No provider was detected.');
   for (const item of report.providers)
-    lines.push(truncate(`  ${item.providerId}: ${item.verdict}`, MAX_WIDTH));
+    lines.push(truncate(`  ${providerName(item.providerId)}: ${updateStatus(item)}`, MAX_WIDTH));
   lines.push(...changeLine(changed, 'Provider update applied.'));
   const pending = report.providers.some((item) => item.verdict === 'upgradable');
+  const deferred = report.providers.some((item) => item.verdict === 'blocked-unreviewed');
   lines.push(
     ...next(
       pending && execution?.outcome === 'confirmation-required'
         ? 'token-harness update --yes'
-        : 'token-harness verify',
+        : changed
+          ? 'token-harness verify'
+          : null,
       pending && execution?.outcome === 'confirmation-required'
         ? 'Apply the reviewed provider update.'
-        : 'Check that integrations still work.',
+        : changed
+          ? 'Check that the updated integrations still work.'
+          : deferred
+            ? 'No action required. The installed versions stay active until newer ones are validated.'
+            : normalWork(),
     ),
   );
   return document(lines);

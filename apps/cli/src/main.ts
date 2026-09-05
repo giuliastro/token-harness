@@ -309,7 +309,8 @@ async function runUi(
   }
 
   if (options.json) {
-    const exitCode = initial.state === 'attention' ? EXIT_CODES['problems-found'] : EXIT_CODES.ok;
+    const exitCode =
+      initial.state === 'action-needed' ? EXIT_CODES['problems-found'] : EXIT_CODES.ok;
     process.stdout.write(
       serializeEnvelope(
         toEnvelope(commandResult({ command: 'ui', exitCode, data: initial }), TOOL_VERSION),

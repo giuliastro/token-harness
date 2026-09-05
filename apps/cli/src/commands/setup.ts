@@ -91,7 +91,24 @@ export async function runSetup(
     });
   }
 
-  if (doctor.exitCode !== EXIT_CODES.ok || baseDoctor.problemCount > 0) {
+  /**
+   * `doctor` deliberately reports a newer-than-tested version as a problem because its job is to
+   * inventory every conservative boundary on the machine. Guided setup asks a narrower question:
+   * "is the integration I am about to use actually broken?" A newer version is therefore a
+   * limitation to surface and verify, not a reason to stop before verification. Likewise an
+   * unrelated detected harness (for example Pi when setup is guiding Claude/Codex) must not block
+   * the main onboarding path.
+   */
+  const setupHarnessIds = new Set(detectedHarnesses.map((harness) => harness.harnessId));
+  const hasBrokenSetupIntegration =
+    detectedHarnesses.some((harness) => harness.state === 'broken') ||
+    baseDoctor.providers.some(
+      (provider) =>
+        provider.state === 'broken' &&
+        provider.configuredHarnesses.some((harness) => setupHarnessIds.has(harness)),
+    );
+
+  if (hasBrokenSetupIntegration) {
     return commandResult({
       command: 'setup',
       exitCode: EXIT_CODES['problems-found'],
@@ -105,7 +122,7 @@ export async function runSetup(
         budget: null,
         nextStep: {
           command: 'token-harness doctor --verbose',
-          description: 'Review the detected problem before changing configuration.',
+          description: 'Review the broken active integration before changing configuration.',
         },
       },
       diagnostics: doctor.diagnostics,
@@ -148,7 +165,8 @@ export async function runSetup(
         nextStep: healthy
           ? {
               command: 'token-harness ui',
-              description: 'Open the dashboard to see status, allowance, and advice.',
+              description:
+                'Open the dashboard once to review status; then use your coding agent normally.',
             }
           : {
               command: 'token-harness verify --verbose',
@@ -259,7 +277,8 @@ export async function runSetup(
       nextStep: healthy
         ? {
             command: 'token-harness ui',
-            description: 'Open the dashboard to see status, allowance, and advice.',
+            description:
+              'Open the dashboard once to review status; then use your coding agent normally.',
           }
         : {
             command: 'token-harness verify --verbose',
