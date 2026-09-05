@@ -14,7 +14,7 @@ version outside it is reported as such and treated conservatively rather than re
 
 | Provider | Harness | Tested harness versions | Capabilities claimed |
 | --- | --- | --- | --- |
-| rtk | claude | 2.0.0–2.1.212 | `shell.command.rewrite`, `shell.output.reduce` |
+| rtk | claude | 2.0.0–2.1.251 | `shell.command.rewrite`, `shell.output.reduce` |
 | rtk | opencode | 1.18.11–1.18.14 | `shell.command.rewrite`, `shell.output.reduce` |
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |

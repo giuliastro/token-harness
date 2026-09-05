@@ -98,10 +98,15 @@ async function planIn(home: string): Promise<{ exitCode: number; report: PlanRep
   return { exitCode, report: (JSON.parse(stdout) as CliEnvelope<PlanReport>).data };
 }
 
-/** The hook a configured installation carries, copied from a real machine. */
+/** The complete RTK hook a configured installation carries on this runner. */
 const RTK_HOOK = {
   hooks: {
-    PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }],
+    PreToolUse: [
+      { matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] },
+      ...(FACTS.os === 'windows'
+        ? [{ matcher: 'PowerShell', hooks: [{ type: 'command', command: 'rtk hook claude' }] }]
+        : []),
+    ],
   },
 };
 

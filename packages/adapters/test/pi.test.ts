@@ -118,4 +118,17 @@ describe('Pi harness adapter', () => {
     );
     assert.equal(result.checks.find((check) => check.id === 'mode-unreadable')?.status, 'info');
   });
+
+  it('does not report an optional HarnessTrim module as failed when Pi is merely installed', async () => {
+    const result = await piAdapter.verify(context());
+    assert.equal(result.achievedTier, 'presence');
+    assert.equal(
+      result.checks.find((check) => check.id === 'module-installed')?.status,
+      'not-exercised',
+    );
+    assert.equal(
+      result.checks.some((check) => check.status === 'fail'),
+      false,
+    );
+  });
 });

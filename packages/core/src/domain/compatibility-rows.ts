@@ -66,15 +66,16 @@ export interface CompatibilityRow {
  * table is an admission set, not a list of things that probably work.
  *
  * Windows supplied the first reviewed rows. Linux now has one exact HarnessTrim × Codex row recorded
- * on a real Zorin machine at Codex 0.152.1 / HarnessTrim 0.2.1. That does not widen any Windows row
- * and does not imply nearby Linux versions are compatible: the harness range remains a point and the
- * provider version remains exact. macOS still has no reviewed mutation row.
+ * on a real Zorin machine at Codex 0.152.1 / HarnessTrim 0.2.1. Windows also has live isolated
+ * recordings for Claude Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised Bash and
+ * PowerShell hook entries, drift, verified rollback, and surgical uninstall. None of those points
+ * widens a neighbouring row by inference. macOS still has no reviewed mutation row.
  *
  * ## What each row is standing on
  *
- * The harness range is a point, not a span: one Claude Code version was observed, so one is claimed.
- * A newer one reads `unknown-newer` and refuses, which is a true statement rather than a guess that
- * `2.1.221` behaves like `2.1.220`.
+ * The harness ranges are points, not spans: one Claude Code version was observed in each fixture,
+ * so one is claimed. A newer one reads `unknown-newer` and refuses, which is a true statement rather
+ * than a guess that the next patch behaves the same way.
  *
  * The tiers differ because the evidence does. RTK's row claims `canary`: its history database is a
  * per-harness receipt `verify` can read on the user's machine. HarnessTrim's claims `config-only`:
@@ -90,6 +91,26 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     platform: { os: 'windows', wsl: false, supported: true, limitation: null },
     configSchema: 'claude-settings-json-hooks',
     fixture: 'tests/fixtures/rows/rtk-claude-windows',
+    verificationTier: 'canary',
+  },
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.251', maximum: '2.1.251' },
+    provider: 'rtk' as ProviderId,
+    providerVersion: '0.44.0',
+    platform: { os: 'windows', wsl: false, supported: true, limitation: null },
+    configSchema: 'claude-settings-json-hooks-powershell',
+    fixture: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.44.0',
+    verificationTier: 'canary',
+  },
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.251', maximum: '2.1.251' },
+    provider: 'rtk' as ProviderId,
+    providerVersion: '0.48.0',
+    platform: { os: 'windows', wsl: false, supported: true, limitation: null },
+    configSchema: 'claude-settings-json-hooks-powershell',
+    fixture: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0',
     verificationTier: 'canary',
   },
   {

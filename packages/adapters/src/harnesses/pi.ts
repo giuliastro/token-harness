@@ -223,28 +223,33 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
     },
     {
       id: 'module-installed',
-      status: module ? 'pass' : 'fail',
+      // The HarnessTrim extension is optional. `verify` answers whether existing integrations are
+      // healthy; it must not turn an installed Pi executable into a warning merely because the
+      // user never chose to integrate HarnessTrim with it.
+      status: module ? 'pass' : 'not-exercised',
       summary: module
         ? 'HarnessTrim extension module is installed'
-        : 'No HarnessTrim extension module was found in the Pi extension directories',
+        : 'HarnessTrim is not configured on Pi, so there is no Pi integration to verify',
       achievedTier: module ? 'config-only' : null,
       evidence: [],
-      remediation: module ? null : 'Run `harnesstrim install pi --apply`',
+      remediation: null,
     },
     {
       id: 'mode-unreadable',
-      status: 'info',
-      summary:
-        'The effective reduction mode (HARNESSTRIM_MODE) defaults to dryrun and is not observable from the extension alone',
+      status: module ? 'info' : 'pass',
+      summary: module
+        ? 'The effective reduction mode (HARNESSTRIM_MODE) defaults to dryrun and is not observable from the extension alone'
+        : 'no HarnessTrim Pi mode applies because no extension is configured',
       achievedTier: null,
       evidence: [],
       remediation: null,
     },
     {
       id: 'canary-intercepted',
-      status: 'not-exercised',
-      summary:
-        'Pi exposes no independent receipt; HarnessTrim telemetry is verified by the provider adapter',
+      status: module ? 'not-exercised' : 'pass',
+      summary: module
+        ? 'Pi exposes no independent receipt; HarnessTrim telemetry is verified by the provider adapter'
+        : 'no HarnessTrim Pi canary applies because no extension is configured',
       achievedTier: null,
       evidence: [],
       remediation: null,

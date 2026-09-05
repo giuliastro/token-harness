@@ -1,0 +1,35 @@
+{
+  "stage": "empty",
+  "harness": "claude",
+  "provider": "rtk",
+  "observed": {
+    "harnessVersion": "2.1.251",
+    "providerVersion": "0.44.0",
+    "platform": {
+      "os": "windows",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.0"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": false
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    }
+  }
+}

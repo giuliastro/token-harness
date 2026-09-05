@@ -40,6 +40,7 @@ const FACTS: PlatformFacts = {
 };
 
 const SALT = 'e'.repeat(64);
+const MANAGED_MATCHERS = FACTS.os === 'windows' ? ['Bash', 'PowerShell'] : ['Bash'];
 
 /** The entry that must survive every command below. */
 const USER_HOOK = {
@@ -223,7 +224,7 @@ describe('uninstall', () => {
   it('removes only what Token Harness owns', async () => {
     const place = world();
     await invoke(['apply', '--yes'], place);
-    assert.deepEqual(matchers(place), ['Edit', 'Bash']);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
 
     const result = await invoke<ApplyReport>(['uninstall', '--yes'], place);
 
@@ -252,9 +253,11 @@ describe('uninstall', () => {
     const before = JSON.parse(readFileSync(place.settings, 'utf8')) as {
       hooks: { PreToolUse: { matcher: string; hooks: { type: string; command: string }[] }[] };
     };
-    const owned = before.hooks.PreToolUse.find((entry) => entry.matcher === 'Bash');
-    assert.ok(owned);
-    owned.hooks.push({ type: 'command', command: 'node my-own-hook.mjs' });
+    for (const matcher of MANAGED_MATCHERS) {
+      const owned = before.hooks.PreToolUse.find((entry) => entry.matcher === matcher);
+      assert.ok(owned);
+      owned.hooks.push({ type: 'command', command: 'node my-own-hook.mjs' });
+    }
     writeFileSync(place.settings, `${JSON.stringify(before, null, 2)}\n`);
 
     const stdout = await invokeHuman(['uninstall', '--yes'], place);
@@ -271,7 +274,7 @@ describe('uninstall', () => {
     const result = await invoke<ApplyReport>(['uninstall'], place);
 
     assert.equal(result.exitCode, 8);
-    assert.deepEqual(matchers(place), ['Edit', 'Bash']);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
   });
 
   it('has nothing to remove on a machine it never touched', async () => {
@@ -398,11 +401,11 @@ describe('rollback', () => {
     await invoke(['uninstall', '--yes'], place);
     assert.deepEqual(matchers(place), ['Edit']);
 
-    // Reversing the uninstall puts our entry back. Correct, and the reason the confirmation names
+    // Reversing the uninstall puts our entries back. Correct, and the reason the confirmation names
     // what it is reversing: this is a step backwards in history, not an undo of the last apply.
     const result = await invoke<ApplyReport>(['rollback', '--yes'], place);
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(matchers(place), ['Edit', 'Bash']);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
   });
 });
 

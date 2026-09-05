@@ -1,0 +1,37 @@
+{
+  "stage": "uninstall",
+  "harness": "claude",
+  "provider": "rtk",
+  "observed": {
+    "harnessVersion": "2.1.251",
+    "providerVersion": "0.44.0",
+    "platform": {
+      "os": "windows",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.0"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"theme\": \"dark\",\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Write|Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"my-own-linter --strict\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Read\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"my-post-hook\"\n          }\n        ]\n      }\n    ]\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Read\",\n      \"Write\",\n      \"Glob\"\n    ]\n  }\n}\n"
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    }
+  }
+}

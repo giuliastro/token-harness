@@ -42,6 +42,8 @@ const FACTS: PlatformFacts = {
 
 const NOW = '2026-07-31T13:00:00.000Z';
 const SALT = 'e'.repeat(64);
+const MANAGED_MATCHERS = FACTS.os === 'windows' ? ['Bash', 'PowerShell'] : ['Bash'];
+const APPLIED_ACTION_COUNT = MANAGED_MATCHERS.length;
 
 /** A user hook that must survive everything below. */
 const USER_HOOK = {
@@ -167,7 +169,12 @@ describe('confirmation', () => {
       (entry) => entry.code === 'confirmation-required',
     );
     // Without an id the refusal cannot be acted on, and `data` is not available to carry it.
-    assert.match(refusal?.message ?? '', /^Plan [0-9a-f]{8} would run 1 action against 1 file$/);
+    assert.match(
+      refusal?.message ?? '',
+      new RegExp(
+        `^Plan [0-9a-f]{8} would run ${String(APPLIED_ACTION_COUNT)} action${APPLIED_ACTION_COUNT === 1 ? '' : 's'} against 1 file$`,
+      ),
+    );
     assert.match(refusal?.remediation ?? '', /--yes/);
   });
 });
@@ -191,21 +198,22 @@ describe('a committed apply', () => {
     };
 
     // The property `append` exists for. A `set` on the list would have replaced this entry, and
-    // RFC 0004 scopes ownership to the one entry Token Harness wrote.
+    // RFC 0004 scopes ownership to the entries Token Harness wrote. Windows now owns one entry per
+    // shell family so PowerShell coverage is tested end to end rather than only in the planner.
     assert.deepEqual(
       written.hooks.PreToolUse.map((entry) => entry.matcher),
-      ['Edit', 'Bash'],
+      ['Edit', ...MANAGED_MATCHERS],
     );
     // And nothing else in the document moved.
     assert.equal(written.theme, 'dark');
   });
 
-  it('reports the action it ran with the path it touched', async () => {
+  it('reports the actions it ran with the path they touched', async () => {
     const place = world(USER_HOOK);
     const result = await invoke<ApplyReport>(['apply', '--yes'], place);
-    assert.equal(result.data?.results.length, 1);
-    assert.equal(result.data?.results[0]?.status, 'applied');
-    assert.equal(result.data?.results[0]?.path, place.settings);
+    assert.equal(result.data?.results.length, APPLIED_ACTION_COUNT);
+    assert.ok(result.data?.results.every((entry) => entry.status === 'applied'));
+    assert.ok(result.data?.results.every((entry) => entry.path === place.settings));
   });
 
   it('leaves a journal and a backup under the transaction id', async () => {

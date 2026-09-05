@@ -91,7 +91,7 @@ function runner(options: RunnerOptions): ProcessRunner {
       const isVersion = request.args[0] === '--version';
       const payload = isVersion
         ? options.version === undefined
-          ? 'rtk 0.42.0'
+          ? 'rtk 0.44.0'
           : options.version
         : options.analytics === undefined
           ? analyticsDocument([{ date: '2026-07-30', commands: 500 }])
@@ -240,9 +240,16 @@ describe('detection', () => {
   it('reports installed when rtk runs but no harness names it', async () => {
     const detection = await rtkAdapter.detect(context({}));
     assert.equal(detection.state, 'installed');
-    assert.equal(detection.version, '0.42.0');
+    assert.equal(detection.version, '0.44.0');
     assert.equal(detection.versionVerdict, 'in-range');
     assert.equal(detection.executable, 'C:\\tools\\rtk.exe');
+  });
+
+  it('accepts the live-validated RTK 0.48.0 build as in range', async () => {
+    const detection = await rtkAdapter.detect(context({ version: 'rtk 0.48.0' }));
+    assert.equal(detection.version, '0.48.0');
+    assert.equal(detection.versionVerdict, 'in-range');
+    assert.deepEqual(detection.warnings, []);
   });
 
   it('reports configured when a harness hook names it', async () => {

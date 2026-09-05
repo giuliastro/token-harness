@@ -21,7 +21,7 @@
  *   means from its heading, not from a sentence explaining the table.
  * - **Harness and provider states in plain words**, because `configured` meant two different things
  *   in the two tables — a harness with hooks, and a provider wired into one.
- * - **A `NEXT` block containing a command to type.** Nothing else in the output tells anybody what
+ * - **A `NEXT` block containing commands to type.** Nothing else in the output tells anybody what
  *   to do, so this does, always, in every state.
  * - **`NOTES` only when there is something in it**, one line each, no commentary.
  *
@@ -206,18 +206,27 @@ export function renderDoctorReport(report: DoctorReport, context: RenderContext)
    * Always present, always a command to type.
    *
    * Which command depends on what is missing, and that decision is the only thing in this output
-   * that is about the reader rather than about the machine.
+   * that is about the reader rather than about the machine. Provider binaries may be user-owned;
+   * `update` is therefore a dry-run suggestion rather than a silent mutation. This is what makes
+   * a stale RTK/HarnessTrim install visible during onboarding without taking ownership of it.
    */
   const unwired = report.providers.filter(
     (provider) => provider.state !== 'absent' && provider.configuredHarnesses.length === 0,
   );
+  const installedProviders = report.providers.some((provider) => provider.state !== 'absent');
   lines.push('');
   lines.push('NEXT');
-  // Aligned on the widest command, so two suggestions do not read as two unrelated fragments.
+  // Aligned on the widest command, so several suggestions still read as one sequence.
   const suggestions: [string, string][] =
     report.providers.every((provider) => provider.state === 'absent') || unwired.length > 0
       ? [['token-harness plan', 'see what would change — writes nothing']]
       : [
+          ...(installedProviders
+            ? ([['token-harness update', 'check RTK/HarnessTrim for newer versions']] as [
+                string,
+                string,
+              ][])
+            : []),
           ['token-harness verify', 'check the pipeline actually intercepts'],
           ['token-harness metrics --since 7d', 'see what it saved'],
         ];
