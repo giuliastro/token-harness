@@ -126,9 +126,7 @@ export function buildDashboardModel(input: {
   }
   for (const pipeline of input.status.pipelines) relevantHarnessIds.add(pipeline.harness);
 
-  const relevantHarnesses = present.filter((harness) =>
-    relevantHarnessIds.has(harness.harnessId),
-  );
+  const relevantHarnesses = present.filter((harness) => relevantHarnessIds.has(harness.harnessId));
   const broken =
     relevantHarnesses.some((item) => item.state === 'broken') ||
     connectedProviders.some((item) => item.state === 'broken');
@@ -148,9 +146,7 @@ export function buildDashboardModel(input: {
             : 'ready';
 
   const rankedRecommendations = input.optimize.harnesses
-    .filter(
-      (harness) => harness.state !== 'absent' && relevantHarnessIds.has(harness.harnessId),
-    )
+    .filter((harness) => harness.state !== 'absent' && relevantHarnessIds.has(harness.harnessId))
     .flatMap((harness) =>
       harness.recommendations.map((item) => ({
         harness: harness.harnessId,
