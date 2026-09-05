@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,6 +18,11 @@ jobs:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # Windows is first in the matrix, and the matrix does not fail fast, so a
+      # Windows failure is visible immediately rather than after two green jobs.
+      # PLAN §1.1 and §7: Windows is the primary development platform for the
+      # platform and state layers, and its failures are the ones this project
+      # exists to catch early.
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
@@ -25,44 +30,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Apply targeted UX contract fix
-        if: runner.os == 'Linux'
-        shell: bash
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-        run: |
-          git fetch origin "$HEAD_BRANCH:$HEAD_BRANCH"
-          git checkout "$HEAD_BRANCH"
-          python - <<'PY'
-          from pathlib import Path
-
-          ui = Path('apps/cli/src/ui.ts')
-          text = ui.read_text()
-          old = """The dashboard listens only on 127.0.0.1 and is read-only. It shows what is active,\nwhat needs attention, and what to do next. When the setup is ready, keep using\nClaude Code, Codex, or OpenCode normally — Token Harness does not replace their\nlaunch commands. Close the local dashboard server with Ctrl+C.`;"""
-          new = """The dashboard listens only on 127.0.0.1 and is read-only. It does not send data\nanywhere and cannot change configuration. It shows what is active, what needs attention,\nand what to do next. When the setup is ready, keep using Claude Code, Codex, or OpenCode\nnormally — Token Harness does not replace their launch commands. Close the local dashboard\nserver with Ctrl+C.`;"""
-          if old not in text:
-              raise SystemExit('UI usage target not found')
-          ui.write_text(text.replace(old, new))
-
-          simple = Path('apps/cli/src/render/simple.ts')
-          text = simple.read_text()
-          old = """  else if (report.actions.length === 0) lines.push(...next(null, normalWork()));\n  else lines.push(...next('token-harness ui', 'Open the dashboard to review the current state.'));"""
-          new = """  else if (report.actions.length === 0)\n    lines.push(\n      ...(report.pipelineId === null\n        ? next('token-harness setup', 'Check detection and finish guided setup.')\n        : next(null, normalWork())),\n    );\n  else lines.push(...next('token-harness ui', 'Open the dashboard to review the current state.'));"""
-          if old not in text:
-              raise SystemExit('plan empty target not found')
-          simple.write_text(text.replace(old, new))
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/cli/src/ui.ts apps/cli/src/render/simple.ts
-          git commit -m "fix: distinguish empty setup from configured steady state"
-          git push origin HEAD:"$HEAD_BRANCH"
-          exit 1
-
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
         with:
+          # The RFC 0001 runtime floor. CI runs the oldest supported runtime, so
+          # a feature newer than the floor fails here rather than for a user.
           node-version: '22.13.0'
           cache: pnpm
 
@@ -90,5 +63,11 @@ jobs:
       - name: Stage the publishable package
         run: pnpm package
 
+      # The bundle running is not the same as the package installing: the manifest
+      # could name the wrong bin, omit the file, or carry a dependency npm cannot
+      # resolve, and the bundle would still run when invoked directly. This packs,
+      # installs the tarball with no workspace above it, and runs the result — on all
+      # three platforms, because a package that installs on Linux and not on Windows is
+      # the failure PLAN §1.1 puts Windows first in the matrix to catch.
       - name: Install smoke test
         run: pnpm smoke:install
