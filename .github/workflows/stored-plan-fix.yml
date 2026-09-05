@@ -1,0 +1,58 @@
+name: Validate stored plan scope fix
+on:
+  push:
+    branches: [ci/stored-plan-repro]
+    paths: [.github/workflows/stored-plan-fix.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - name: Verify tested patch and apply on an isolated branch
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib, os
+          from pathlib import Path
+          patch = gzip.decompress(base64.b64decode(Path('.github/stored-plan-scope.patch.b64').read_text(), validate=False))
+          expected = 'd48e7cd4656e6c3b864ebda21038d05e1638691fcb9a939a729e96b89dbea6c6'
+          assert hashlib.sha256(patch).hexdigest() == expected, 'Patch digest mismatch'
+          Path(os.environ['RUNNER_TEMP'], 'scope.patch').write_bytes(patch)
+          PY
+          git checkout -b fix/stored-plan-scope-replay da8529ca5c77698d483777ed0b62da6be6d2c995
+          git apply --check "$RUNNER_TEMP/scope.patch"
+          git apply "$RUNNER_TEMP/scope.patch"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - name: Full regression suite
+        run: pnpm test > "$RUNNER_TEMP/scope-tests.log" 2>&1
+      - run: pnpm build
+      - run: pnpm smoke
+      - run: pnpm package
+      - run: pnpm smoke:install
+      - name: Commit verified source changes only; never update main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git restore apps/cli/bin/token-harness.mjs
+          git add README.md apps/cli/src/commands/apply.ts apps/cli/src/render/simple.ts apps/cli/test/simple-render.test.ts tests/integration/claude-native-policy.test.ts tests/integration/gate-rfc0009.test.ts tests/integration/native-policy-apply.test.ts
+          git diff --cached --check
+          git commit -m 'fix: restore reviewed scope when applying a stored plan'
+          git push origin HEAD:refs/heads/fix/stored-plan-scope-replay
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stored-plan-test-log
+          path: ${{ runner.temp }}/scope-tests.log
+          retention-days: 3
