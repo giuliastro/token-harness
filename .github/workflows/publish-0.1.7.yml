@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "57da8ca4574c18852e96cba4902ecdaa77a514dd"
-          test "$(node -p \"require('./apps/cli/package.json').version\")" = "0.1.7"
+          node -e "if (require('./apps/cli/package.json').version !== '0.1.7') process.exit(1)"
           if git ls-remote --exit-code --tags origin refs/tags/v0.1.7 >/dev/null 2>&1; then
             echo 'v0.1.7 already exists; leaving it unchanged'
           else
