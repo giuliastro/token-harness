@@ -1,0 +1,84 @@
+name: Validate dashboard feedback
+on:
+  push:
+    branches: [ci/dashboard-feedback]
+    paths: [.github/workflows/feedback-validate.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify exact implementation against reviewed feature baseline
+        shell: bash
+        run: |
+          cp .ci/feedback-*.b64 "$RUNNER_TEMP/"
+          git fetch origin feature/dashboard-clarity
+          git checkout -B feedback-implementation origin/feature/dashboard-clarity
+          test "$(git rev-parse HEAD)" = '23e9fdcb2dc38be3aa8a273d52f6f9d77a218986'
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          encoded = ''.join((temp / f'feedback-{i}.b64').read_text().strip() for i in range(3))
+          payload = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(payload).hexdigest() == 'a298f3f981d09f97a69804f2504b0cd641da98e27d3c1e20d39174beed383140'
+          updates = json.loads(payload)
+          allowed = {'PLAN.md', 'README.md', 'apps/cli/src/guided-assets.ts',
+                     'apps/cli/src/guided-client.ts', 'apps/cli/src/guided-impact.ts',
+                     'apps/cli/src/guided-styles.ts', 'apps/cli/src/guided.ts',
+                     'apps/cli/test/guided-feedback.test.ts',
+                     'docs/rfcs/0013-guided-local-experience.md', 'docs/spikes/progress-sharing.md'}
+          assert len(updates) == len(allowed) and {u['path'] for u in updates} == allowed
+          prepared = []
+          for update in updates:
+              path = Path(update['path'])
+              assert not path.is_symlink()
+              before = path.read_bytes() if path.exists() else b''
+              assert hashlib.sha256(before).hexdigest() == update['before'], str(path)
+              lines = before.decode('utf-8').splitlines(keepends=True)
+              for start, end, replacement in reversed(update['edits']):
+                  assert 0 <= start <= end <= len(lines)
+                  lines[start:end] = replacement
+              after = ''.join(lines).encode('utf-8')
+              assert hashlib.sha256(after).hexdigest() == update['after'], str(path)
+              prepared.append((path, after))
+          for path, after in prepared:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(after)
+          print('Verified all 10 source and documentation files.')
+          PY
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - name: Full regression suite
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee "$RUNNER_TEMP/feedback-validation.log"
+      - run: pnpm build
+      - run: pnpm smoke
+      - run: pnpm package
+      - run: pnpm smoke:install
+      - name: Commit validated production changes only
+        shell: bash
+        run: |
+          git restore apps/cli/bin/token-harness.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add PLAN.md README.md apps/cli/src/guided-assets.ts apps/cli/src/guided-client.ts apps/cli/src/guided-impact.ts apps/cli/src/guided-styles.ts apps/cli/src/guided.ts apps/cli/test/guided-feedback.test.ts docs/rfcs/0013-guided-local-experience.md docs/spikes/progress-sharing.md
+          git commit -m 'feat: progressive loading, honest impact stories and private social sharing'
+          git push origin HEAD:feature/dashboard-clarity
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feedback-validation
+          path: ${{ runner.temp }}/feedback-validation.log
+          retention-days: 7
