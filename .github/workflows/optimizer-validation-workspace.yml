@@ -1,0 +1,31 @@
+name: Optimizer validation workspace
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/optimizer-validation-workspace.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Export public source and validation dependencies
+        run: tar --exclude=.git -czf /tmp/optimizer-workspace.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: optimizer-validation-workspace
+          path: /tmp/optimizer-workspace.tar.gz
+          retention-days: 1
