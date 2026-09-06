@@ -11,6 +11,7 @@ import {
   type ProcessRunner,
   type PlatformFacts,
   type PlanReport,
+  type OptimizeReport,
   type CliEnvelope,
   type ApplyReport,
   type CompatibilityRow,
@@ -62,6 +63,7 @@ function world(
     environment: { ...emptyEnvironment },
     environmentObserved: true,
     clock: Date.parse('2026-09-05T17:00:00Z'),
+    quota: null as { fiveHourUsed: number; weeklyUsed: number | null } | null,
     calls: [] as ProcessRequest[],
   };
 }
@@ -103,6 +105,33 @@ function runner(w: World): ProcessRunner {
           return outcome(request, 'codex-cli 0.146.0');
         // No provider install may run while applying the Claude-only stored action.
         if (request.args[0] === 'install') throw new Error('unreviewed provider install');
+      }
+      if (request.executable === 'cclimits' && w.quota !== null) {
+        assert.deepEqual(request.args, [
+          '--claude',
+          '--json',
+          '--no-cache-write',
+          '--no-stale-fallback',
+        ]);
+        const window = (used: number, reset: string) => ({
+          used: String(used) + '%',
+          remaining: String(100 - used) + '%',
+          resets_at: reset,
+        });
+        return outcome(
+          request,
+          JSON.stringify({
+            claude: {
+              status: 'ok',
+              source: 'claude_desktop_oauth',
+              plan: 'pro',
+              five_hour: window(w.quota.fiveHourUsed, '2026-09-06T12:30:00Z'),
+              ...(w.quota.weeklyUsed === null
+                ? {}
+                : { seven_day: window(w.quota.weeklyUsed, '2026-09-09T12:00:00Z') }),
+            },
+          }),
+        );
       }
       if (request.executable !== 'claude') return outcome(request, null);
       if (request.args[0] === '--version') return outcome(request, w.version + ' (Claude Code)');
@@ -529,4 +558,56 @@ describe('guided UI through the actual command and transaction pipeline', () => 
     assert.equal((await service.apply({ ticket: undo.ticket })).ok, false);
     assert.equal(readFileSync(w.config, 'utf8'), before);
   });
+});
+
+describe('joint allowance decisions reach Claude native plans', () => {
+  for (const scenario of [
+    { weeklyUsed: 75, fiveHourUsed: 20, effort: 'medium', decision: 'conserve' },
+    { weeklyUsed: 20, fiveHourUsed: 20, effort: 'xhigh', decision: 'use-headroom' },
+    { weeklyUsed: null, fiveHourUsed: 20, effort: 'high', decision: 'unknown' },
+    { weeklyUsed: 100, fiveHourUsed: 100, effort: 'medium', decision: 'wait-for-reset' },
+  ] as const) {
+    it(`preserves explicit approval and unrelated settings for ${scenario.decision}`, async () => {
+      const w = world();
+      w.clock = Date.parse('2026-09-06T12:00:00Z');
+      w.quota = scenario;
+      const original = readFileSync(w.config, 'utf8');
+      const optimized = await invoke<OptimizeReport>(w, [
+        'optimize',
+        '--harness',
+        'claude',
+        '--task',
+        'hard',
+        '--profile',
+        'balanced',
+      ]);
+      const advice = optimized.envelope.data?.harnesses[0];
+      assert.ok(advice);
+      assert.equal(advice.budgetDecision?.state, scenario.decision);
+      assert.equal(advice.recommendedEffort, scenario.effort);
+      const planned = await plan(w, 'hard', 'balanced');
+      assert.equal(readFileSync(w.config, 'utf8'), original);
+      assert.equal(
+        w.calls.some((call) => call.args.includes('--print') || call.args.includes('-p')),
+        false,
+      );
+      const action = planned.envelope.data?.actions.find((item) => item.kind === 'merge-json');
+      if (scenario.effort === 'high') {
+        assert.equal(action, undefined);
+      } else {
+        assert.ok(action?.kind === 'merge-json');
+        assert.deepEqual(action.ownedPointers, ['effortLevel']);
+        const id = planned.envelope.data?.planId;
+        assert.ok(id);
+        const applied = await apply(w, id);
+        assert.equal(applied.code, 0);
+        const settings = JSON.parse(readFileSync(w.config, 'utf8'));
+        assert.equal(settings.effortLevel, scenario.effort);
+        assert.deepEqual(settings.permissions, { allow: ['Read'] });
+        assert.ok(
+          !w.calls.some((call) => /redeem|consume|purchase|billing/i.test(call.args.join(' '))),
+        );
+      }
+    });
+  }
 });

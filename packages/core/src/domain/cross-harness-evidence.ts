@@ -4,7 +4,7 @@ import type {
   HarnessSchedulingEvidence,
 } from './cross-harness-scheduler.js';
 import type { HarnessId } from './ids.js';
-import { assessWindowPace, type PaceState } from './optimizer.js';
+import { assessBudgetDecision, assessWindowPace, type PaceState } from './optimizer.js';
 
 export interface SchedulerPaceEvidenceNote {
   code: string;
@@ -84,6 +84,20 @@ function deriveScopePace(input: {
   }
 
   const assessment = assessWindowPace(windows[0]!, input.report.observedAt, input.reservePercent);
+  const constraint = assessBudgetDecision([assessment], 'mechanical');
+  // The scheduler uses pace as a safety gate. A late-window deadband cannot make an
+  // exhausted or reserved allowance appear safe for a cross-harness transfer.
+  if (constraint.state === 'conserve' || constraint.state === 'wait-for-reset') {
+    return {
+      state: 'over-pace',
+      note: note(
+        assessment.state === 'over-pace' ? 'budget-pace-observed' : 'budget-reserve-protected',
+        input.harnessId,
+        input.scope,
+        constraint.reasons[0]?.summary ?? assessment.reason,
+      ),
+    };
+  }
   return {
     state: assessment.state,
     note: note(

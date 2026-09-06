@@ -12,6 +12,7 @@ import {
 
 import type { CommandContext } from '../src/commands/context.js';
 import { computePlan } from '../src/commands/plan.js';
+import { runOptimize } from '../src/commands/optimize.js';
 
 const HOME = '/home/dev';
 const PROJECT = HOME + '/project';
@@ -65,6 +66,7 @@ function context(input: {
   effort?: string;
   secondEffort?: string;
   verbosity?: string;
+  quota?: { fiveHourUsed: number; weeklyUsed: number | null };
 }): CommandContext {
   const files = new Map<string, string>([[CONFIG, 'model_reasoning_effort = "medium"\n']]);
   let configReadCount = 0;
@@ -88,7 +90,8 @@ function context(input: {
     confirmed: false,
     metrics: null,
     compatibilityRows: null,
-    now: () => '2026-09-01T18:00:00.000Z',
+    now: () =>
+      input.quota === undefined ? '2026-09-01T18:00:00.000Z' : '2026-09-06T12:00:00.000Z',
     adapters: {
       fs: {
         join: (...parts) => parts.join('/').replaceAll('//', '/'),
@@ -130,17 +133,27 @@ function context(input: {
               [
                 JSON.stringify({ id: 1, result: {} }),
                 JSON.stringify({
-                  id: 2,
+                  id: 'token-harness-rate-limits',
                   result: {
                     rateLimits: {
                       limitId: 'codex',
                       limitName: 'Codex',
                       primary: {
-                        usedPercent: 20,
+                        usedPercent: input.quota?.fiveHourUsed ?? 20,
                         windowDurationMins: 300,
-                        resetsAt: 1788292800,
+                        resetsAt:
+                          input.quota === undefined
+                            ? 1788292800
+                            : Date.parse('2026-09-06T12:30:00Z') / 1000,
                       },
-                      secondary: null,
+                      secondary:
+                        input.quota?.weeklyUsed == null
+                          ? null
+                          : {
+                              usedPercent: input.quota.weeklyUsed,
+                              windowDurationMins: 10080,
+                              resetsAt: Date.parse('2026-09-09T12:00:00Z') / 1000,
+                            },
                       planType: 'pro',
                       rateLimitReachedType: null,
                     },
@@ -203,6 +216,7 @@ function context(input: {
                           { reasoningEffort: 'low', description: 'Low' },
                           { reasoningEffort: 'medium', description: 'Medium' },
                           { reasoningEffort: 'high', description: 'High' },
+                          { reasoningEffort: 'xhigh', description: 'Extra high' },
                         ],
                         defaultReasoningEffort: 'medium',
                         isDefault: true,
@@ -342,4 +356,59 @@ describe('Codex native policy planning', () => {
       true,
     );
   });
+});
+
+describe('joint allowance decisions reach Codex native plans', () => {
+  for (const scenario of [
+    { weeklyUsed: 75, fiveHourUsed: 20, effort: 'medium', decision: 'conserve' },
+    { weeklyUsed: 20, fiveHourUsed: 20, effort: 'xhigh', decision: 'use-headroom' },
+    { weeklyUsed: null, fiveHourUsed: 20, effort: 'high', decision: 'unknown' },
+    { weeklyUsed: 100, fiveHourUsed: 100, effort: 'medium', decision: 'wait-for-reset' },
+  ] as const) {
+    it(`keeps advice and native edits consistent for ${scenario.decision}`, async () => {
+      const c = context({
+        effortOrigin: USER_EFFORT,
+        verbosityOrigin: null,
+        effort: 'high',
+        verbosity: 'medium',
+        quota: scenario,
+      });
+      c.taskClass = 'hard';
+      c.budgetProfile = 'balanced';
+      const report = await runOptimize(c);
+      const advice = report.data?.harnesses[0];
+      assert.ok(advice);
+      assert.equal(advice.budgetDecision?.state, scenario.decision);
+      assert.equal(advice.recommendedEffort, scenario.effort);
+      assert.equal(
+        advice.pace[0]?.spendableRemainingPercent,
+        Math.max(0, 80 - scenario.fiveHourUsed),
+      );
+      assert.ok(advice.recommendations.some((item) => item.area === 'quota'));
+      if (scenario.decision !== 'use-headroom') {
+        assert.ok(
+          !advice.recommendations.some((item) => item.action.startsWith('Use available headroom')),
+        );
+      }
+      if (scenario.decision === 'wait-for-reset') {
+        assert.equal(advice.budgetDecision?.recheckAt, '2026-09-09T12:00:00.000Z');
+        assert.ok(
+          advice.recommendations.some((item) => item.action.startsWith('Save a checkpoint')),
+        );
+      }
+      const computed = await computePlan(c);
+      const action = computed.report.actions.find(
+        (item) => item.kind === 'codex-config-batch-write',
+      );
+      if (scenario.effort === 'high') {
+        assert.equal(action, undefined);
+      } else {
+        assert.ok(action?.kind === 'codex-config-batch-write');
+        assert.equal(action.policyGuard, 'subscription-safe');
+        assert.deepEqual(action.edits, [
+          { keyPath: 'model_reasoning_effort', value: scenario.effort, mergeStrategy: 'replace' },
+        ]);
+      }
+    });
+  }
 });
