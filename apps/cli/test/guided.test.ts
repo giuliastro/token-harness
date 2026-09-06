@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
 import { describe, it } from 'node:test';
+import { Script } from 'node:vm';
 import {
   commandResult,
   toEnvelope,
@@ -12,16 +13,18 @@ import {
   type MetricsReport,
   type PlanReport,
   type PlannedAction,
+  type HarnessContextObservation,
 } from '@token-harness/core';
 import {
   GuideService,
   GuideError,
   savingsView,
   explainGuideIssue,
+  reasoningView,
   type GuideCall,
 } from '../src/guided.js';
 import { createGuideHandler } from '../src/guided-http.js';
-import { GUIDE_JS, GUIDE_HTML } from '../src/guided-assets.js';
+import { GUIDE_JS, GUIDE_HTML, GUIDE_CSS } from '../src/guided-assets.js';
 
 const platform = {
   os: 'linux',
@@ -372,5 +375,83 @@ describe('guided browser security and assets', () => {
     assert.ok(GUIDE_HTML.includes('<dialog'));
     assert.ok(GUIDE_HTML.includes('Approve and apply'));
     assert.ok(!GUIDE_HTML.includes('onclick='));
+  });
+});
+
+describe('reasoning explanations and contextual actions', () => {
+  const observed = (native: Record<string, unknown>) =>
+    ({
+      harnessId: 'claude',
+      nativeEffort: {
+        current: 'low',
+        preferenceState: 'configured',
+        writable: false,
+        harnessVersion: '2.1.999',
+        reason: 'This version is not reviewed for changes.',
+        ...native,
+      },
+    }) as unknown as HarnessContextObservation;
+  it('shows readable preferences without implying write compatibility or active-session control', () => {
+    const view = reasoningView('claude', observed({}));
+    assert.equal(view.label, 'Low');
+    assert.equal(view.action.kind, 'help');
+    assert.equal(view.action.topic, 'claude-effort');
+    assert.match(view.changeNote, /not reviewed/);
+    assert.match(view.changeNote, /\/effort/);
+    assert.match(view.observed, /2.1.999/);
+    assert.ok(!view.observed.includes('Setup never'));
+  });
+  it('separates no preference from a failed read and offers a real next action', () => {
+    const unset = reasoningView(
+      'claude',
+      observed({ current: null, preferenceState: 'unset', writable: true }),
+    );
+    assert.equal(unset.label, 'No saved preference');
+    assert.equal(unset.action.kind, 'effort');
+    assert.match(unset.description, /default or another/);
+    const unreadable = reasoningView(
+      'claude',
+      observed({
+        current: null,
+        preferenceState: 'unreadable',
+        preferenceReason: 'Settings could not be read.',
+      }),
+    );
+    assert.equal(unreadable.state, 'unavailable');
+    assert.equal(unreadable.description, 'Settings could not be read.');
+    assert.equal(unreadable.action.topic, 'claude-effort');
+  });
+  it('does not pass raw values or private settings into the guided report', () => {
+    const view = reasoningView(
+      'claude',
+      observed({
+        current: 'private-unrecognized-value',
+        path: '/private-home/settings.json',
+        files: ['/private-file'],
+      }),
+    );
+    assert.equal(view.value, null);
+    assert.ok(!JSON.stringify(view).includes('private-'));
+  });
+  it('rejects inherited object keys as effort values', () => {
+    for (const current of ['__proto__', 'toString', 'constructor']) {
+      const view = reasoningView('claude', observed({ current }));
+      assert.equal(view.value, null);
+      assert.equal(view.state, 'unavailable');
+      assert.equal(typeof view.label, 'string');
+    }
+  });
+  it('keeps the UI grouped, keyboard-navigable, neutral and explicitly approved', () => {
+    assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 3);
+    assert.ok(GUIDE_HTML.includes('aria-controls="view-rules"'));
+    assert.ok(GUIDE_HTML.includes('aria-label="Appearance"'));
+    assert.ok(!GUIDE_HTML.includes('Less setup. More useful work.'));
+    assert.ok(!GUIDE_CSS.includes('radial-gradient'));
+    assert.ok(!GUIDE_CSS.includes('--qe-'));
+    assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
+    assert.ok(GUIDE_JS.includes('What you can do'));
+    assert.ok(GUIDE_JS.includes('Inside Claude Code'));
+    assert.ok(!GUIDE_JS.includes("['Evidence'"));
+    assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 });

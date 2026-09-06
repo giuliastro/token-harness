@@ -47,50 +47,83 @@ export async function readClaudeNativeEffort(
     maxOutputBytes: 128 * 1024,
   };
   const versionResult = await context.runner.run({ ...request, args: ['--version'] });
-  const version = /\b(\d+\.\d+\.\d+)\b/.exec(versionResult.stdout)?.[1];
-  if (
-    versionResult.failure !== null ||
-    versionResult.exitCode !== 0 ||
-    versionResult.stdoutTruncated ||
-    version === undefined ||
-    !REVIEWED_VERSIONS.has(version)
-  ) {
-    return null;
-  }
-  const help = await context.runner.run({ ...request, args: ['--help'] });
-  if (help.failure !== null || help.exitCode !== 0 || help.stdoutTruncated) return null;
-  const advertised = /--effort\s+<level>[\s\S]{0,120}?\(([^)]+)\)/.exec(help.stdout)?.[1];
-  if (advertised === undefined) return null;
-  const levels = new Set(advertised.split(',').map((part) => part.trim()));
-  const supported = PERSISTENT_EFFORTS.filter((level) => levels.has(level));
-  if (supported.length === 0) return null;
-
+  const version =
+    versionResult.failure === null && versionResult.exitCode === 0 && !versionResult.stdoutTruncated
+      ? /\b(\d+\.\d+\.\d+)\b/.exec(versionResult.stdout)?.[1]
+      : undefined;
   const environment = context.runner.readNativeConfigurationEnvironment?.() ?? null;
-  // A custom root is not guessed. This initial path only manages the standard user scope.
   const path = context.fs.join(context.paths.home, '.claude', 'settings.json');
   const observation: NativeEffortObservation = {
-    harnessVersion: version,
-    supported: [...supported],
+    harnessVersion: version ?? 'unknown',
+    supported: [],
     current: null,
+    preferenceState: 'unreadable',
+    preferenceReason: 'The user preference has not been read.',
     source: 'native-cli+filesystem',
     verification: 'config-only',
     writable: false,
-    reason: 'The native configuration environment was not observed',
+    writeBlock: null,
+    reason: '',
     path,
     files: [],
     environment,
   };
-  if (environment === null) return observation;
+  const block = (code: NonNullable<NativeEffortObservation['writeBlock']>, reason: string) => {
+    // Keep the first reason a change is not admissible. Readability is reported separately.
+    if (observation.writeBlock === null) {
+      observation.writeBlock = code;
+      observation.reason = reason;
+    }
+  };
+
+  // Exact-version admission belongs to mutation, not observation. A newer CLI must not
+  // hide a readable saved preference or be silently admitted for writes by reading it.
+  if (version === undefined) {
+    block(
+      'cli',
+      'The Claude version could not be checked. Use /effort inside Claude to change it.',
+    );
+  } else if (!REVIEWED_VERSIONS.has(version)) {
+    block(
+      'version',
+      'Claude ' +
+        version +
+        ' is not reviewed for automatic preference changes. Readable user settings are still shown.',
+    );
+  } else {
+    const help = await context.runner.run({ ...request, args: ['--help'] });
+    if (help.failure === null && help.exitCode === 0 && !help.stdoutTruncated) {
+      const advertised = /--effort\s+<level>[\s\S]{0,120}?\(([^)]+)\)/.exec(help.stdout)?.[1];
+      const levels = new Set(advertised?.split(',').map((part) => part.trim()) ?? []);
+      observation.supported = PERSISTENT_EFFORTS.filter((level) => levels.has(level));
+    }
+    if (observation.supported.length === 0)
+      block(
+        'cli',
+        'This Claude CLI did not expose the reviewed effort controls. Use /effort inside Claude.',
+      );
+  }
+  if (environment === null) {
+    observation.preferenceReason =
+      'The Claude configuration environment could not be inspected, so the user settings location is not confirmed.';
+    block('environment', observation.preferenceReason);
+    return observation;
+  }
+  if (environment.claudeConfigDirectory !== null) {
+    observation.preferenceReason =
+      'Claude uses a custom configuration location. This reader does not inspect that location.';
+    block('custom-root', observation.preferenceReason);
+    return observation;
+  }
   if (
-    environment.claudeConfigDirectory !== null ||
     environment.claudeEffortOverridden ||
     environment.claudeModelOverridden ||
     environment.claudeBackendOverridden
-  ) {
-    observation.reason =
-      'A custom Claude root, effort/model environment or backend override is present; leave it untouched';
-    return observation;
-  }
+  )
+    block(
+      'override',
+      'A Claude environment override is present. The saved user preference may not be the level used by your session.',
+    );
 
   const paths = [path];
   let directory = context.projectRoot;
@@ -103,60 +136,89 @@ export async function readClaudeNativeEffort(
     const parent = context.fs.dirname(directory);
     if (parent === directory || parent === '') break;
     if (++depth > 64) {
-      observation.reason = 'The settings hierarchy exceeds the inspection bound';
-      return observation;
+      block(
+        'settings',
+        'The settings hierarchy exceeds the inspection bound. No change is allowed.',
+      );
+      break;
     }
     directory = parent;
   }
-  let blocked: string | null = null;
   for (const file of [...new Set(paths)]) {
+    const userFile = file === path;
     try {
       const stat = await context.fs.stat(file);
       if (stat === null) {
         observation.files.push({ path: file, digest: null });
+        if (userFile) {
+          observation.preferenceState = 'unset';
+          observation.preferenceReason =
+            'No user settings file exists. The active model default or other settings may apply.';
+        }
         continue;
       }
-      if (stat.kind !== 'file' || stat.byteLength > MAX_SETTINGS_BYTES) {
-        blocked = 'A settings document cannot be safely inspected';
-        break;
-      }
+      if (stat.kind !== 'file' || stat.byteLength > MAX_SETTINGS_BYTES)
+        throw new Error('unreadable settings');
       const bytes = await context.fs.readFile(file);
-      if (bytes.length > MAX_SETTINGS_BYTES) {
-        blocked = 'A settings document is too large';
-        break;
-      }
+      if (bytes.length > MAX_SETTINGS_BYTES) throw new Error('oversized settings');
       observation.files.push({ path: file, digest: digestBytes(bytes) });
       const parsed = parseJsonDocumentText(decoder.decode(bytes));
-      if (parsed.state !== 'parsed' || !record(parsed.document)) {
-        blocked = 'A settings document is malformed or contains unsupported comments';
-        break;
-      }
+      if (parsed.state !== 'parsed' || !record(parsed.document))
+        throw new Error('unsupported settings document');
       const settings = parsed.document;
-      if (settings['alwaysThinkingEnabled'] === false || hasEffortEnvironment(settings)) {
-        blocked = 'A settings-level thinking, model or backend override is present';
-        break;
-      }
-      if (file !== path && Object.hasOwn(settings, 'effortLevel')) {
-        blocked = 'A project or local effort preference takes precedence; leave it untouched';
-        break;
-      }
-      if (file === path && Object.hasOwn(settings, 'effortLevel')) {
-        const value = settings['effortLevel'];
-        if (typeof value !== 'string' || !supported.includes(value as (typeof supported)[number])) {
-          blocked = 'The user effort preference is not a reviewed persistent value';
-          break;
+      if (userFile) {
+        if (!Object.hasOwn(settings, 'effortLevel')) {
+          observation.preferenceState = 'unset';
+          observation.preferenceReason =
+            'No effort preference is saved in the user settings. A model default or another settings layer may apply.';
+        } else {
+          const value = settings['effortLevel'];
+          if (typeof value === 'string' && PERSISTENT_EFFORTS.some((level) => level === value)) {
+            observation.current = value;
+            observation.preferenceState = 'configured';
+            observation.preferenceReason =
+              'Read from Claude user settings. Project, organization, environment or session overrides may still apply.';
+          } else {
+            observation.preferenceState = 'unreadable';
+            observation.preferenceReason =
+              'The saved effort value is not a recognized persistent level. It was left unchanged.';
+            block('settings', observation.preferenceReason);
+          }
         }
-        observation.current = value;
       }
+      if (settings['alwaysThinkingEnabled'] === false || hasEffortEnvironment(settings))
+        block(
+          'override',
+          'A settings-level thinking, model or backend override is present. The saved effort is not proof of the active session level.',
+        );
+      if (!userFile && Object.hasOwn(settings, 'effortLevel'))
+        block(
+          'override',
+          'A project or local effort preference takes precedence. Change it in Claude or in that project, not in the global user preference.',
+        );
     } catch {
-      blocked = 'A settings document could not be read safely';
+      if (userFile) {
+        observation.preferenceState = 'unreadable';
+        observation.preferenceReason =
+          'The user settings could not be read safely: inaccessible, malformed, oversized, or using unsupported comments.';
+      }
+      block(
+        'settings',
+        'A settings document could not be safely inspected. Check Claude settings before changing the preference.',
+      );
       break;
     }
   }
-  observation.writable = blocked === null;
-  observation.reason =
-    blocked ??
-    'Only the persisted user preference is observed; managed policy and running-session overrides may still take precedence';
+  // A readable but unreviewed value must never become a writable target.
+  if (observation.current !== null && !observation.supported.includes(observation.current))
+    block(
+      'cli',
+      'The installed CLI does not advertise the saved effort level for managed changes.',
+    );
+  observation.writable = observation.writeBlock === null;
+  if (observation.writable)
+    observation.reason =
+      'Only the persisted user preference is observed; managed policy and running-session overrides may still take precedence';
   return observation;
 }
 

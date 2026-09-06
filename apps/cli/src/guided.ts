@@ -4,6 +4,7 @@ import type {
   BudgetReport,
   CliEnvelope,
   ContextReport,
+  HarnessContextObservation,
   Diagnostic,
   DoctorReport,
   MetricsReport,
@@ -19,6 +20,30 @@ export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
 export type GuideCall = <T>(args: readonly string[]) => Promise<CliEnvelope<T>>;
+export interface GuideAction {
+  kind: 'setup' | 'effort' | 'verify' | 'help' | 'refresh';
+  label: string;
+  harness?: GuideHarness;
+  topic?:
+    | 'claude-effort'
+    | 'codex-effort'
+    | 'claude-tools'
+    | 'codex-tools'
+    | 'measurements'
+    | 'cclimits'
+    | 'python'
+    | 'claude-login'
+    | 'compatibility';
+}
+export interface GuideReasoning {
+  label: string;
+  value: string | null;
+  state: 'saved' | 'default' | 'unavailable';
+  description: string;
+  observed: string;
+  changeNote: string;
+  action: GuideAction;
+}
 export interface GuideRule {
   id: string;
   title: string;
@@ -34,6 +59,8 @@ export interface GuideRule {
   what: string;
   why: string;
   evidence: string;
+  next?: string;
+  action?: GuideAction;
 }
 export interface GuideAgent {
   id: GuideHarness;
@@ -43,6 +70,8 @@ export interface GuideAgent {
   state: string;
   providers: string[];
   effort: string | null;
+  reasoning: GuideReasoning;
+  allowanceAction: GuideAction;
   rules: GuideRule[];
   allowance: Array<{
     label: string;
@@ -232,9 +261,110 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
   };
 }
 
-function agentRules(id: string, providers: string[], context: ContextReport | null): GuideRule[] {
+const EFFORT_LABELS: Readonly<Record<string, string>> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Maximum',
+};
+
+/** Show a saved value even when writes are unreviewed. Never infer the active session. */
+export function reasoningView(
+  id: GuideHarness,
+  observation: HarnessContextObservation | undefined,
+): GuideReasoning {
+  const native = observation?.nativeEffort;
+  const raw = id === 'claude' ? native?.current : observation?.reasoningEffort;
+  const value = raw && Object.hasOwn(EFFORT_LABELS, raw) ? raw : null;
+  const unset =
+    id === 'claude' &&
+    (native?.preferenceState === 'unset' ||
+      (native?.preferenceState === undefined && native?.writable && native.current === null));
+  const origin = observation?.managedConfigFieldOrigins?.find(
+    (item) => item.keyPath === 'model_reasoning_effort',
+  );
+  const canEdit =
+    id === 'claude'
+      ? native?.writable === true
+      : observation?.managedConfigTarget != null &&
+        observation.managedConfigOriginsObserved &&
+        (origin === undefined || origin.matchesManagedTarget);
+  const action: GuideAction = canEdit
+    ? { kind: 'effort', label: 'Adjust reasoning', harness: id }
+    : {
+        kind: 'help',
+        label: id === 'claude' ? 'Change in Claude' : 'Change in Codex',
+        harness: id,
+        topic: id === 'claude' ? 'claude-effort' : 'codex-effort',
+      };
+  const description =
+    value !== null
+      ? id === 'claude'
+        ? 'Saved user preference. A running session or another settings layer can use a different level.'
+        : 'Read from effective Codex configuration. This is not a live session reading.'
+      : unset
+        ? 'No reasoning preference is saved in Claude user settings. The model default or another settings layer may apply.'
+        : id === 'claude'
+          ? (native?.preferenceReason ??
+            'The Claude preference reader is unavailable. This does not mean reasoning is disabled.')
+          : 'Codex did not expose a recognized reasoning preference. Check its model controls to see the current session level.';
+  return {
+    label:
+      value !== null
+        ? EFFORT_LABELS[value]!
+        : unset
+          ? 'No saved preference'
+          : 'Could not read preference',
+    value,
+    state: value !== null ? 'saved' : unset ? 'default' : 'unavailable',
+    description,
+    observed:
+      id === 'claude'
+        ? native == null
+          ? 'No user preference observation is available. No active session was inspected.'
+          : (value !== null || unset
+              ? 'Claude user settings inspected'
+              : 'Claude user settings not readable') +
+            ' (CLI ' +
+            native.harnessVersion +
+            '). The active session was not inspected.'
+        : 'Source: Codex configuration reader. Running-session overrides are not observed here.',
+    changeNote: canEdit
+      ? 'Choose Adjust reasoning, select your work, then review and approve the change. It stays saved for future sessions until changed again.'
+      : id === 'claude'
+        ? (native?.reason || 'No reviewed preference change is available from this app.') +
+          ' Open Claude and use /effort to inspect or change the level there; then refresh this page.'
+        : 'This app cannot safely change the effective setting. Open Codex and use /model to review the reasoning controls; then refresh this page.',
+    action,
+  };
+}
+function allowanceAction(diagnostics: readonly Diagnostic[]): GuideAction {
+  const codes = new Set(diagnostics.map((entry) => entry.code));
+  if (
+    codes.has('cclimits-not-installed') ||
+    codes.has('cclimits-readonly-flags-unsupported') ||
+    codes.has('cclimits-claude-source-unsupported')
+  )
+    return { kind: 'help', label: 'Set up allowance reader', topic: 'cclimits' };
+  if (codes.has('cclimits-python-unavailable'))
+    return { kind: 'help', label: 'Fix Python setup', topic: 'python' };
+  if (
+    codes.has('cclimits-claude-credentials-unavailable') ||
+    codes.has('cclimits-claude-token-expired')
+  )
+    return { kind: 'help', label: 'Sign-in instructions', topic: 'claude-login' };
+  return { kind: 'help', label: 'Resolve missing data', topic: 'compatibility' };
+}
+function agentRules(
+  id: GuideHarness,
+  providers: string[],
+  context: ContextReport | null,
+): GuideRule[] {
   const observation = context?.harnesses.find((item) => item.harnessId === id);
-  const effort = observation?.nativeEffort?.current ?? observation?.reasoningEffort ?? null;
+  const reasoning = reasoningView(id, observation);
   return [
     ...['rtk', 'harnesstrim']
       .filter((provider) => providers.includes(provider))
@@ -246,38 +376,68 @@ function agentRules(id: string, providers: string[], context: ContextReport | nu
           mode: provider === 'rtk' ? 'automatic' : 'integration',
           what:
             provider === 'rtk'
-              ? 'Rewrites supported shell commands through RTK, which filters their output before the agent reads it. Coverage depends on the command and installed integration.'
-              : 'Shortens supported output through the installed adapter or opt-in agent instructions. On skills-only installations, the agent must actually invoke the reducer; it is not a transparent hook.',
-          why: "Reduces repeated output and routine success noise while retaining the provider's diagnostic signals. The exact filter depends on the command, provider and version.",
+              ? 'Filters output from supported shell commands before the agent reads it. It removes routine noise, not the command itself.'
+              : 'Shortens supported output through the installed adapter or agent instructions. A skills-only installation needs the agent to invoke the reducer.',
+          why: 'Less routine output occupies less context. Coverage and retained diagnostics depend on the provider and command.',
           evidence:
-            'Configuration detected. This does not prove that every command is intercepted. Recorded results are shown separately.',
+            'Integration configuration was found. This is not proof that every command was intercepted. Recorded savings are separate measurements.',
+          next:
+            provider === 'rtk'
+              ? 'Keep using your agent normally. Check integrations here, then look at Recorded savings after running commands.'
+              : 'Check the integration first. Open Measurement help for how to enable local records or use a skills-only installation.',
+          action:
+            provider === 'rtk'
+              ? { kind: 'verify', label: 'Check integrations', harness: id }
+              : { kind: 'help', label: 'Measurement help', harness: id, topic: 'measurements' },
         }),
       ),
+    ...(!providers.length
+      ? [
+          {
+            id: `${id}-setup`,
+            title: 'Output reduction',
+            state: 'Not configured',
+            mode: 'not-enabled' as const,
+            what: 'No configured output optimizer was detected for this agent.',
+            why: 'A supported integration is needed before automatic output reduction can run.',
+            evidence: 'No configured provider reported this agent.',
+            next: 'Check setup to preview supported integration changes. Nothing is installed or changed without your approval.',
+            action: { kind: 'setup' as const, label: 'Check setup', harness: id },
+          },
+        ]
+      : []),
     {
       id: `${id}-effort`,
       title: 'Reasoning effort',
-      state: effort ?? 'Not observed',
+      state: reasoning.label,
       mode: 'preference',
-      what:
-        effort === null
-          ? 'The current persistent preference could not be read.'
-          : `Current observed preference: ${effort}. Session or project overrides may still apply.`,
-      why: 'Simple tasks can use less reasoning; difficult work needs enough reasoning to avoid failed attempts.',
-      evidence:
-        'Setup never changes this automatically. A task setting applies to future sessions until changed again, not just one task.',
+      what: reasoning.description,
+      why: 'Simple tasks may need less reasoning. Difficult work needs enough reasoning to avoid repeated failed attempts.',
+      evidence: reasoning.observed,
+      next: reasoning.changeNote,
+      action: reasoning.action,
     },
     {
       id: `${id}-mcp`,
       title: 'Connected tools',
       state:
         observation === undefined || !['observed', 'partial'].includes(observation.state)
-          ? 'Not observed'
+          ? 'Inventory unavailable'
           : `${observation.mcpServers.length}${observation.mcpInventoryTruncated ? '+' : ''} connections`,
       mode: 'observation',
-      what: 'Reads the inventory of connected tool servers without removing them.',
-      why: 'Large or unused tool inventories can occupy context, but a tool count alone does not justify disabling anything.',
+      what: 'Lists connected tool servers. It does not remove tools or decide which ones your task needs.',
+      why: 'Large tool inventories can occupy context, but a count alone does not justify disabling a tool.',
       evidence:
-        'Observation only. Token Harness does not currently prove which tools your task needs.',
+        observation === undefined
+          ? 'No tool inventory returned.'
+          : 'Source: installed agent tool inventory. Per-task usage is not measured.',
+      next: 'Open the agent tool settings to inspect connections or fix authentication. Disable a tool only when you know the task does not need it.',
+      action: {
+        kind: 'help',
+        label: 'Manage connected tools',
+        harness: id,
+        topic: id === 'claude' ? 'claude-tools' : 'codex-tools',
+      },
     },
   ];
 }
@@ -315,6 +475,8 @@ const SAFETY_RULES: GuideRule[] = [
 const TASK_RULES: GuideRule[] = [
   {
     id: 'task-match',
+    next: 'Use Adjust reasoning on an agent card, choose the type of work and approve the preview. Reopen that agent to load the saved preference.',
+    action: { kind: 'effort', label: 'Choose task settings' },
     title: 'Match reasoning to task difficulty',
     state: 'On request, not automatic',
     mode: 'advice',
@@ -325,6 +487,8 @@ const TASK_RULES: GuideRule[] = [
   },
   {
     id: 'quota-context',
+    next: 'Review the task settings for a supported agent. When session context is too large, compact it inside that agent; nothing is cleared from this dashboard.',
+    action: { kind: 'help', label: 'Session and tool guidance', topic: 'compatibility' },
     title: 'Protect allowance without sacrificing difficult work',
     state: 'Used by task previews',
     mode: 'advice',
@@ -451,7 +615,9 @@ export class GuideService {
               : 'Ready to set up',
         providers: providers.map(name),
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
-        rules: agentRules(agent.harnessId, providers, context.data),
+        reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
+        allowanceAction: allowanceAction(usage?.diagnostics ?? []),
+        rules: agentRules(agent.harnessId as GuideHarness, providers, context.data),
         allowance: (usage?.windows ?? []).map((window) => ({
           label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
           remaining: window.remainingPercent,
@@ -489,7 +655,7 @@ export class GuideService {
       );
     if ((status.data?.problemCount ?? 0) > 0)
       notices.push(
-        'An integration has changed or needs verification. Use Check integrations below; existing settings are not repaired silently.',
+        'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
       );
     return {
       generatedAt: new Date(this.now()).toISOString(),

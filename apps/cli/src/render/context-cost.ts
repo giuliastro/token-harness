@@ -82,7 +82,9 @@ export function renderContextReport(report: ContextReport, context: RenderContex
       lines.push(
         truncate(
           '  user effort preference: ' +
-            text(harness.nativeEffort.current) +
+            (harness.nativeEffort.preferenceState === 'unset'
+              ? 'no saved preference'
+              : (harness.nativeEffort.current ?? 'unreadable')) +
             ' (config-only; ' +
             (harness.nativeEffort.writable ? 'reviewable' : 'read-only') +
             ')',

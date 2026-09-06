@@ -13,6 +13,7 @@ import {
   type PlanReport,
   type CliEnvelope,
   type ApplyReport,
+  type ContextReport,
   type CompatibilityRow,
   harnessId,
   providerId,
@@ -390,6 +391,60 @@ describe('Claude native effort policy through public plan/apply', () => {
     cases[0]!.environmentObserved = false;
     cases[3]!.version = '2.1.999';
     for (const w of cases) assert.equal((await plan(w)).envelope.data?.actions.length, 0);
+  });
+  it('observes a saved effort on a newer CLI without admitting a managed write', async () => {
+    const w = world('{"effortLevel":"medium","permissions":{"allow":["Read"]}}');
+    w.version = '2.1.999';
+    const read = await invoke<ContextReport>(w, ['context']);
+    const effort = read.envelope.data?.harnesses[0]?.nativeEffort;
+    assert.equal(effort?.current, 'medium');
+    assert.equal(effort?.preferenceState, 'configured');
+    assert.equal(effort?.writable, false);
+    assert.equal(effort?.writeBlock, 'version');
+    assert.deepEqual(effort?.supported, []);
+    const original = readFileSync(w.config, 'utf8');
+    assert.equal((await plan(w)).envelope.data?.actions.length, 0);
+    assert.equal(readFileSync(w.config, 'utf8'), original);
+  });
+  it('distinguishes an absent preference from an unreadable document', async () => {
+    for (const contents of [null, '{"permissions":{"allow":["Read"]}}']) {
+      const w = world(contents);
+      const read = await invoke<ContextReport>(w, ['context']);
+      const effort = read.envelope.data?.harnesses[0]?.nativeEffort;
+      assert.equal(effort?.current, null);
+      assert.equal(effort?.preferenceState, 'unset');
+    }
+    const w = world('{invalid-private-settings');
+    const read = await invoke<ContextReport>(w, ['context']);
+    const effort = read.envelope.data?.harnesses[0]?.nativeEffort;
+    assert.equal(effort?.current, null);
+    assert.equal(effort?.preferenceState, 'unreadable');
+    assert.equal(effort?.writable, false);
+    assert.ok(!JSON.stringify(read.envelope).includes('invalid-private-settings'));
+  });
+  it('keeps the saved value visible when a project or environment overrides it', async () => {
+    for (const scope of ['project', 'environment']) {
+      const w = world();
+      if (scope === 'project')
+        writeFileSync(join(w.project, '.claude', 'settings.local.json'), '{"effortLevel":"xhigh"}');
+      else w.environment.claudeEffortOverridden = true;
+      const read = await invoke<ContextReport>(w, ['context']);
+      const effort = read.envelope.data?.harnesses[0]?.nativeEffort;
+      assert.equal(effort?.current, 'high');
+      assert.equal(effort?.preferenceState, 'configured');
+      assert.equal(effort?.writable, false);
+      assert.equal(effort?.writeBlock, 'override');
+      assert.equal((await plan(w)).envelope.data?.actions.length, 0);
+    }
+  });
+  it('does not report an uninspected custom settings root as the default', async () => {
+    const w = world('{"effortLevel":"high"}');
+    w.environment.claudeConfigDirectory = '/custom/private-claude-root';
+    const read = await invoke<ContextReport>(w, ['context']);
+    const effort = read.envelope.data?.harnesses[0]?.nativeEffort;
+    assert.equal(effort?.current, null);
+    assert.equal(effort?.preferenceState, 'unreadable');
+    assert.equal(effort?.writable, false);
   });
   it('requires an explicit task; critical work never gets low effort or persisted max', async () => {
     const w = world();

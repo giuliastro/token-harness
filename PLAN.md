@@ -1989,3 +1989,14 @@ Not claimed: automatic model/task routing, guaranteed runtime interception on sk
 integrations, automatic installation of arbitrary/unreviewed providers, disk-wide project discovery,
 or causal subscription/euro savings. These need their own lifecycle and empirical evidence.
 The default product path no longer depends on understanding the diagnostic CLI or on another AI.
+
+
+## Dashboard clarity (2026-09-06)
+
+Separated read-only Claude preference observation from exact-version write admission.
+Saved, absent and unreadable preferences are distinct; project/environment overrides
+block writes without hiding the saved user value. No write compatibility gate was widened.
+Grouped the default UI into Overview, Rules & settings and Activity, with contextual
+preview/help actions, native-command location guidance, clipboard-only prompts, and a
+neutral system/light/dark palette. Rule evidence is now an actual observation, not a
+substitute for explaining how to make a change. See `docs/spikes/dashboard-clarity.md`.

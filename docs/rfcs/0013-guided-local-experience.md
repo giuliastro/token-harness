@@ -56,8 +56,8 @@ Quota windows are separate observations, never evidence that the same percentage
 Dependency-free browser UI using semantic HTML, existing Node server and embedded assets.
 No new frontend runtime dependency. One main heading, responsive single-column mobile layout,
 native confirmation dialog, visible keyboard focus, live progress/errors, and empty states.
-Dark HSL tokens, translucent content surfaces and solid dialog surfaces follow the UI token
-contract. New components: results panel, rule disclosures, review dialog and activity report.
+The September 6 clarity revision uses neutral graphite/mint tokens, solid surfaces and
+system/light/dark themes, independent of a corporate design system. New components: results panel, rule disclosures, review dialog and activity report.
 The new surface is operational UI, not a marketing landing page.
 
 Rules have explicit modes: automatic integration, persistent user preference, observation,
@@ -82,3 +82,13 @@ now accepts its existing `--plan` selector as an expected latest-plan guard, ref
 unrelated transaction instead of undoing it. No historical arbitrary transaction is selectable
 from the browser. Multi-agent application remains separate transactions; one undo reverses
 only the last successful one. Closing the dashboard clears this in-memory shortcut, not backups.
+
+
+## September 6 clarity revision
+
+The interface groups Overview, Rules & settings, and Activity into accessible tabs.
+Agent-level actions either open a reviewed task preview or explain the specific native
+manual step. Observed state is separate from behavior and next steps. Reading a recognized
+saved Claude effort no longer requires a reviewed write version; mutation admission is
+unchanged. Missing, unreadable and overridden preferences remain distinct. See
+`docs/spikes/dashboard-clarity.md` for the UI and observation contract.

@@ -51,9 +51,25 @@ token-harness savings
 Optional windows are `--since 7d` and `--since 30d`. The advanced `metrics` command remains
 project-scoped; opening the app from its installation folder does not change the savings scope.
 
+### Find what you need
+
+The app has three tabs: **Overview** for agents and recorded savings, **Rules & settings**
+for one agent's rules at a time, and **Activity** for checks and guarded undo. Theme follows
+your system; the header also offers light and dark modes.
+
+Each rule shows what was actually **observed**, separately from how it works. Actions sit
+next to the relevant state: **Adjust reasoning** opens the supported review/apply flow;
+**Change in Claude/Codex** explains native steps when an automatic write is not available.
+Missing allowance data and measurement records have their own setup/help actions.
+
+A saved Claude effort can be displayed even on an unreviewed CLI version. That does not
+admit automatic writes on that version. **No saved preference** means the user field is
+absent, not that reasoning is disabled. A failed read is a separate state with a cause.
+The displayed preference is not a live reading of an already-running session.
+
 ### The rules are visible
 
-**What is being optimized?** explains each configured rule: what it does, why it is used,
+**Rules & settings** explains each configured rule: what it does, why it is used,
 its mode, and the evidence available. Automatic integrations, persistent preferences,
 observations and features that are not enabled are explicitly distinguished.
 
