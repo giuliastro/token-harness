@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "ef1f7b9ea1e44e19a01e50f84dbfbec329df3fce"
+          test "$(git rev-parse HEAD^)" = "f640fc7d4abf5253256364016aeebcde04d12797"
           : > /tmp/outcome-reviewed.patch.bz2
           for blob in 0e6a80af4f94d2cddaa8bcd093c659c0623ed8ea fa2111613bdd7122583b01b83c9d1016f8709f84; do
             gh api "repos/giuliastro/token-harness/git/blobs/$blob" --jq .content | base64 --decode >> /tmp/outcome-reviewed.patch.bz2
@@ -34,6 +34,8 @@ jobs:
           git apply --check /tmp/outcome-reviewed.patch
           git apply --index --whitespace=error /tmp/outcome-reviewed.patch
           git rm -- .github/workflows/outcome-apply-reviewed.yml
+          echo "REVIEWED_TREE=$(git write-tree)" >> "$GITHUB_ENV"
+          git config core.fileMode false
       - name: Install locked development dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck
@@ -55,8 +57,10 @@ jobs:
       - name: Commit only the verified change to the isolated feature branch
         run: |
           set -euo pipefail
-          git diff --quiet
+          git status --short
+          git diff --exit-code
           test -z "$(git ls-files --others --exclude-standard)"
+          test "$(git write-tree)" = "$REVIEWED_TREE"
           git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
