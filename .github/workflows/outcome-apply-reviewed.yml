@@ -1,0 +1,64 @@
+name: Apply reviewed outcome optimizer
+on:
+  push:
+    branches: [feature/outcome-aware-effort-optimizer]
+    paths: [.github/workflows/outcome-apply-reviewed.yml]
+permissions:
+  contents: write
+concurrency:
+  group: reviewed-outcome-optimizer
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+      - name: Verify exact base and reviewed patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "ef1f7b9ea1e44e19a01e50f84dbfbec329df3fce"
+          : > /tmp/outcome-reviewed.patch.bz2
+          for blob in 0e6a80af4f94d2cddaa8bcd093c659c0623ed8ea fa2111613bdd7122583b01b83c9d1016f8709f84; do
+            gh api "repos/giuliastro/token-harness/git/blobs/$blob" --jq .content | base64 --decode >> /tmp/outcome-reviewed.patch.bz2
+          done
+          bzip2 --decompress --stdout /tmp/outcome-reviewed.patch.bz2 > /tmp/outcome-reviewed.patch
+          echo '5a10fd79114ea50b894446b100d5162dcc4af526734d03c59ae69b2be0a7f5e6  /tmp/outcome-reviewed.patch' | sha256sum --check
+          git apply --check /tmp/outcome-reviewed.patch
+          git apply --index --whitespace=error /tmp/outcome-reviewed.patch
+          git rm -- .github/workflows/outcome-apply-reviewed.yml
+      - name: Install locked development dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Format
+        run: pnpm format:check
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Bundle smoke
+        run: pnpm smoke
+      - name: Package
+        run: pnpm package
+      - name: Install smoke
+        run: pnpm smoke:install
+      - name: Commit only the verified change to the isolated feature branch
+        run: |
+          set -euo pipefail
+          git diff --quiet
+          test -z "$(git ls-files --others --exclude-standard)"
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: learn native effort from controlled project task outcomes' -m 'Add quality-gated repeated-pair learning, boundary-policy capture, bounded project attribution and native-plan identity guards. Preserve joint 5h/7d constraints, catalog floors, explicit approval and exact rollback. Add 96 tests with 240 invariant combinations. No UI, billing, dependency or persistent workflow changes.'
+          git push origin HEAD:refs/heads/feature/outcome-aware-effort-optimizer
