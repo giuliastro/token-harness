@@ -102,8 +102,11 @@ Usage
                                  --failed-attempts <n> [--project <dir>] [--json]
 
 Run this after the benchmark task. It requires the capture from benchmark-start,
-verifies it belongs to the same project, observes quota again, and writes an
-immutable schema-1 receipt under Token Harness state.
+verifies it belongs to the same project, observes quota and configured policy
+again, and writes an immutable schema-1 receipt under Token Harness state.
+Matching start/end policy is config-only evidence, not active-session proof.
+Controlled recent pairs can refine optimize advice; legacy receipts remain valid
+for reports but cannot steer outcome-based effort learning.
 
 When ccusage 20.x is available, start and finish snapshot cumulative session
 counters and record localUsage only when exactly one harness session changed

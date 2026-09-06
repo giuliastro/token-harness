@@ -10,6 +10,7 @@ import {
   EXIT_CODES,
   TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION,
   commandResult,
+  benchmarkPolicySnapshot,
   completeTaskBenchmarkCapture,
   deriveTaskLocalUsage,
   diagnostic,
@@ -201,7 +202,9 @@ export async function runBenchmarkStart(
     runHistory({ ...observedContext, since: '1d', until: null }),
   ]);
   const budget = budgetResult.data?.harnesses.find((item) => item.harnessId === harness);
-  const policy = contextResult.data?.harnesses.find((item) => item.harnessId === harness);
+  const policy = benchmarkPolicySnapshot(
+    contextResult.data?.harnesses.find((item) => item.harnessId === harness),
+  );
   const localSessionsBefore =
     historyResult.data?.source.state === 'available'
       ? snapshotTaskLocalSessions(historyResult.data.sessions)
@@ -322,6 +325,22 @@ export async function runBenchmarkFinish(
     });
   }
 
+  if (qualityGate === 'passed' && failedAttempts === attempts) {
+    return commandResult({
+      command: 'benchmark-finish',
+      exitCode: EXIT_CODES['usage-error'],
+      data: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'benchmark-passed-without-successful-attempt',
+          message: 'A passed task must include at least one successful attempt',
+          remediation: 'Correct the quality gate or attempt counts before finishing this capture',
+        }),
+      ],
+    });
+  }
+
   const paths = statePaths(context, benchmarkId, variant);
   if (paths === null || context.adapters === null) {
     return commandResult({
@@ -412,8 +431,9 @@ export async function runBenchmarkFinish(
 
   const completedAt = context.now();
   const completedContext = fixedContext(context, parsed.capture.harnessId, completedAt);
-  const [budgetResult, historyResult] = await Promise.all([
+  const [budgetResult, contextResult, historyResult] = await Promise.all([
     runBudget(completedContext),
+    runContext(completedContext),
     runHistory({ ...completedContext, since: '1d', until: null }),
   ]);
   const budget = budgetResult.data?.harnesses.find(
@@ -436,6 +456,9 @@ export async function runBenchmarkFinish(
     attempts,
     failedAttempts,
     localUsage,
+    policyAtFinish: benchmarkPolicySnapshot(
+      contextResult.data?.harnesses.find((item) => item.harnessId === parsed.capture.harnessId),
+    ),
   });
   if (!completed.ok) {
     return commandResult({
@@ -479,6 +502,10 @@ export async function runBenchmarkFinish(
       capturePath: paths.capturePath,
       receiptPath: paths.receiptPath,
     },
-    diagnostics: [...budgetResult.diagnostics, ...historyResult.diagnostics],
+    diagnostics: [
+      ...budgetResult.diagnostics,
+      ...historyResult.diagnostics,
+      ...contextResult.diagnostics,
+    ],
   });
 }

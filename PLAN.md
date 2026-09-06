@@ -1676,8 +1676,22 @@ classes, reserve-aware five-hour/weekly pacing, context-first pressure, quality 
 model catalog discovery, and effort recommendations restricted to levels the current model advertises.
 It deliberately keeps the current model until benchmarked model-tier quality/quota evidence exists.
 The history tranche adds a ccusage-backed local token-volume burn trend as workload evidence without converting it
-to subscription quota. Still open: failed-attempt/escalation history and empirical model-tier
-ranking.
+to subscription quota. The controlled failed-attempt/effort tranche is described below;
+continuous runtime learning and empirical model-tier ranking remain open.
+
+**Outcome-aware effort milestone (2026-09-06, RFC 0015):** the native optimizer now
+refines its task/budget recommendation from repeated, project-attributed, quality-gated
+benchmark pairs. At least three recent non-overlapping comparisons must support a
+candidate without adverse or unknown outcomes. Retry/quality recovery can justify higher
+effort only with healthy independent 5h/weekly evidence; lower effort requires repeated
+success, supported catalog membership and the task quality floor. Corrupt/partial history,
+changed policy boundaries and model/verbosity drift at native planning fail closed. The
+existing capture commands now observe policy at both task boundaries; legacy receipts
+remain readable but cannot steer learning. Both Codex and Claude native planners consume
+the result without new UI or billing behavior. See
+[the milestone report](docs/milestones/outcome-aware-effort.md) for the evidence and scope.
+This closes the first controlled failed-attempt/effort learning slice, not continuous
+runtime learning, empirical model-tier ranking or a measured subscription-savings claim.
 
 Add `token-harness optimize` with profiles:
 

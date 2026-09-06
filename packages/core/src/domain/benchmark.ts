@@ -7,6 +7,7 @@
  */
 
 import type { UsageConfidence, UsageWindowSnapshot } from './budget.js';
+import type { BenchmarkPolicySnapshot } from './context-cost.js';
 import type { SessionHistoryRow } from './history.js';
 import { isHarnessId, type HarnessId } from './ids.js';
 import { isTaskClass, type TaskClass } from './optimizer.js';
@@ -79,6 +80,8 @@ export interface TaskBenchmarkReceipt {
   /** Local token volume is evidence about workload, not backend subscription quota. */
   localUsage: TaskLocalUsage | null;
   outcome: TaskBenchmarkOutcome;
+  /** Additive schema-1 witness; absent in legacy receipts. Configuration, not live-session proof. */
+  policyAtFinish?: BenchmarkPolicySnapshot | null;
 }
 
 export interface TaskBenchmarkCapture {
@@ -376,6 +379,18 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
   };
 }
 
+function parseBoundaryPolicy(value: unknown): BenchmarkPolicySnapshot | null | undefined {
+  if (value === null) return null;
+  const row = record(value);
+  if (row === null || row['verification'] !== 'config-only') return undefined;
+  const model = optionalText(row['model']);
+  const reasoningEffort = optionalText(row['reasoningEffort']);
+  const verbosity = optionalText(row['verbosity']);
+  if (model === undefined || reasoningEffort === undefined || verbosity === undefined)
+    return undefined;
+  return { model, reasoningEffort, verbosity, verification: 'config-only' };
+}
+
 /** Runtime parser for a locally persisted in-progress benchmark capture. */
 export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureParseResult {
   const row = record(value);
@@ -474,6 +489,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   const usageAfter = parseUsageWindows(row['usageAfter']);
   const localUsage = parseLocalUsage(row['localUsage']);
   const outcome = parseOutcome(row['outcome']);
+  const hasBoundaryPolicy = Object.hasOwn(row, 'policyAtFinish');
+  const policyAtFinish = hasBoundaryPolicy ? parseBoundaryPolicy(row['policyAtFinish']) : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -493,7 +510,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
     usageBefore === null ||
     usageAfter === null ||
     localUsage === undefined ||
-    outcome === null
+    outcome === null ||
+    (hasBoundaryPolicy && policyAtFinish === undefined)
   ) {
     return {
       ok: false,
@@ -519,6 +537,7 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
       usageAfter,
       localUsage,
       outcome,
+      ...(hasBoundaryPolicy ? { policyAtFinish: policyAtFinish ?? null } : {}),
     },
   };
 }
@@ -531,6 +550,7 @@ export interface CompleteTaskBenchmarkCaptureInput {
   failedAttempts: number;
   errorCodes?: string[];
   localUsage?: TaskLocalUsage | null;
+  policyAtFinish?: BenchmarkPolicySnapshot | null;
 }
 
 export function completeTaskBenchmarkCapture(
@@ -551,6 +571,7 @@ export function completeTaskBenchmarkCapture(
     usageBefore: capture.usageBefore,
     usageAfter: input.usageAfter,
     localUsage: input.localUsage ?? null,
+    ...(input.policyAtFinish !== undefined ? { policyAtFinish: input.policyAtFinish } : {}),
     outcome: {
       qualityGate: input.qualityGate,
       attempts: input.attempts,

@@ -49,6 +49,7 @@ import {
 } from './contract.js';
 
 import { readClaudeNativeEffort } from './claude-policy.js';
+import { readClaudeBenchmarkPolicy } from './claude-benchmark-policy.js';
 
 const CLAUDE = harnessId('claude');
 
@@ -814,6 +815,7 @@ async function observeContext(
   });
 
   const nativeEffort = await readClaudeNativeEffort(context);
+  const benchmarkPolicy = await readClaudeBenchmarkPolicy(context, nativeEffort);
 
   const empty = (
     state: HarnessContextObservation['state'],
@@ -822,6 +824,7 @@ async function observeContext(
     harnessId: CLAUDE,
     state,
     nativeEffort,
+    benchmarkPolicy,
     model: null,
     reasoningEffort: null,
     verbosity: null,
