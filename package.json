@@ -26,7 +26,8 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "start": "npm run build && node dist/bundle/token-harness.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

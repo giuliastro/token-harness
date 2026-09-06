@@ -37,6 +37,9 @@ export interface MetricsErrorRow {
 }
 
 export interface ProviderSavingsRow {
+  /** Optional before/after counts for the same changed payloads as saved. */
+  before?: number;
+  after?: number;
   providerId: ProviderId;
   saved: number;
   unit: SavingsUnit;
@@ -53,6 +56,10 @@ export interface ProviderSavingsRow {
 }
 
 export interface MetricsReport {
+  /** Explicit scope for the guided all-project report. */
+  scope?: 'all-projects';
+  firstRecordedAt?: string | null;
+  lastRecordedAt?: string | null;
   /** Inclusive window start, ISO 8601 date. */
   windowStart: string;
   /** Inclusive window end, ISO 8601 date. */

@@ -6,119 +6,104 @@ Token Harness checks your coding agents, shows subscription allowance when it ca
 observed reliably, reduces avoidable context overhead, and recommends useful actions.
 It runs locally and never presents local token estimates as subscription quota.
 
-## The easy path
+## Open it. Approve setup. Keep coding.
 
-You need [Node.js 22.13 or newer](https://nodejs.org/) and at least one signed-in coding
-agent such as Claude Code or Codex.
-
-Open a terminal and paste:
+You need [Node.js 22.13 or newer](https://nodejs.org/) and an installed, signed-in
+Claude Code or Codex. Install Token Harness, then open it:
 
 ```sh
 npm install --global token-harness@latest
-token-harness setup
+token-harness
 ```
 
-That is the whole first-time check. `setup` tells you:
+The browser is now the primary interface. **Set up automatically** checks both agents and
+prepares the supported integration changes. It describes each change in plain language.
+Choose **Approve and apply** to apply the reviewed configuration with backups and verification.
+There are no plan IDs to copy and no daily command sequence to remember.
 
-- which coding agents it found;
-- which optimizers are already active;
-- whether the current setup works;
-- what it changed, if anything;
-- exactly one next step.
+Already configured? The app shows your existing integrations without replacing them.
+An absent provider or an unreviewed version combination is explained rather than installed
+or forced silently. Automatic setup covers the reviewed integration paths, not every possible
+provider/version. Token Harness does not install Claude Code or Codex or log you in.
 
-The first run does not change Claude Code, Codex, or project configuration. If Token
-Harness finds a supported improvement, it shows the safe plan and may suggest:
+### Daily use
+
+Continue launching `claude` or `codex` as usual. Supported output integrations operate in the
+agent, not in the dashboard. You can close the page and its terminal without disabling those
+integrations. Open `token-harness` whenever you want to see results; the visible dashboard
+imports available provider records and refreshes its readings automatically.
+
+**Recorded savings** shows retained history across locally recorded projects, with date bounds,
+provider, measurement class, units, changed-output counts, and before/after values. It does not
+add incompatible provider figures together. Negative results remain visible. No telemetry is
+shown as **not measured**, never a reassuring zero or an invented subscription saving.
+Some provider records may predate Token Harness; locally stored records are not guaranteed
+complete lifetime history. RTK history is imported directly. HarnessTrim project-local records
+must have been imported from their project, or exposed through a configured known metrics path;
+the app does not crawl your disk looking for private projects.
+
+For a terminal-only summary, the one command is:
 
 ```sh
-token-harness setup --yes
+token-harness savings
 ```
 
-`--yes` is always explicit. The change is backed up, applied transactionally, and
-verified. Unsupported combinations are left untouched.
+Optional windows are `--since 7d` and `--since 30d`. The advanced `metrics` command remains
+project-scoped; opening the app from its installation folder does not change the savings scope.
 
-## Open the dashboard
+### The rules are visible
 
-After setup, run:
+**What is being optimized?** explains each configured rule: what it does, why it is used,
+its mode, and the evidence available. Automatic integrations, persistent preferences,
+observations and features that are not enabled are explicitly distinguished.
+
+RTK's supported command integration can reduce output automatically. HarnessTrim can use
+adapters or skills/instructions, depending on the installation; skills-only is not a transparent
+hook, and the agent must actually use the reducer. Configured never means every command was
+intercepted. Provider telemetry and its exact/estimated classification remain separate evidence.
+
+**Optional: match reasoning to your work** lets you choose the agent and the type of work
+without learning CLI flags. It previews the actual supported effort/verbosity change, then
+applies only after approval. **This is a persistent preference for future sessions, not an
+automatic per-task switch.** It does not switch models, billing, login, or hook trust. The
+baseline automatic setup never guesses a task or quietly lowers reasoning.
+
+**Check integrations** performs the existing integration checks from the UI.
+**Undo last change**, available after an application in that dashboard session, previews a
+whole-file backup restoration. It refuses to undo a newer unrelated transaction. It restores
+only the last successful agent transaction; manual edits to those same files after that
+transaction would also be restored, as the confirmation explains.
+
+### Run the current source
+
+From an existing clone, after installing its dependencies, one command builds and opens the app:
 
 ```sh
-token-harness ui
+npm start
 ```
 
-The dashboard opens in your browser and answers three questions in this order:
-
-1. **Can I work normally right now?**
-2. **What is actually active and useful?**
-3. **Is there one action worth taking?**
-
-It shows active/relevant coding agents first, their optimization providers, observable
-allowance windows, and task guidance. Tools that are absent do not get large cards;
-secondary detected tools are kept out of the main path.
-
-The page is served only on `127.0.0.1`: no Electron app, account, or cloud service.
-
-### What happens after the dashboard?
-
-Usually: **nothing else. You are done.**
-
-Token Harness is not a launcher and it does not need to stay between you and your coding
-agent. Continue exactly as you normally would:
+For a fresh clone:
 
 ```sh
-claude
-codex
-opencode
+git clone https://github.com/giuliastro/token-harness.git
+cd token-harness
+npx --yes pnpm@10.33.4 install --frozen-lockfile
+npm start
 ```
 
-Use whichever of those you already use. RTK, HarnessTrim, or another configured provider
-runs automatically through that coding agent's integration. You do **not** need a special
-`token-harness run` command.
+This uses the clone, not an older global installation. An unmerged branch or unpublished main
+change is not automatically available through `token-harness@latest`.
 
-You can close the dashboard whenever you want. Use `Ctrl+C` in the terminal to stop its
-local web server. Closing it does not disable configured optimizers.
+### Advanced and AI-assisted use
 
-Open it again later with `token-harness ui` when you want a status check. If you do not
-want it to open a browser:
+An AI may use the existing JSON CLI to inspect, plan and apply an explicitly approved change.
+That is optional: another AI subscription is not required to operate the app. No persistent
+agent, background model calls or task classifier runs behind your back.
 
-```sh
-token-harness ui --no-open
-```
-
-## Daily use
-
-There is no mandatory command loop. These are tools you use when they answer a question:
-
-| When you want to know... | Run |
-| --- | --- |
-| Is everything still connected? | `token-harness ui` |
-| What should I do before a demanding task? | `token-harness optimize --task hard --profile quality` |
-| Is an integration actually working? | `token-harness verify` |
-| How much reducer saving has been measured? | `token-harness metrics --since 7d` |
-| Are safer provider updates available? | `token-harness update` |
-
-If a command finishes with **no action required**, stop there and use your coding agent
-normally. Token Harness should not send you around a `ui → optimize → ui` loop.
-
-## Ask your AI to install Token Harness
-
-You can give this prompt to Claude Code or Codex:
-
-```text
-Install the latest stable Token Harness from npm on this computer, then run
-`token-harness setup`. Do not install or replace Claude Code, Codex, or any
-optimization provider unless Token Harness's supported plan explicitly requires it.
-
-Explain the setup result in plain language: what was detected, what already works,
-what would change, and the single next step. Do not expose credentials, cookies,
-tokens, raw home paths, or private project contents. If setup proposes a supported
-configuration change, show me the short plan and ask before running
-`token-harness setup --yes`. After an approved change, verify it and open
-`token-harness ui` once. Then tell me clearly that setup is complete and that I should
-continue using my normal coding-agent command. Do not invent additional Token Harness
-steps when no action is required.
-```
-
-The AI should ask before the `--yes` step because that is the point where coding-agent
-configuration may change.
+The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
+`verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
+schema-1 report; `ui --read-only` opens the legacy read-only dashboard. `ui --no-open` starts
+the guided app without launching a browser. Stop either local server with Ctrl+C.
 
 ## What normal output looks like
 
@@ -167,26 +152,10 @@ token-harness ui --json
 
 `--json` keeps the complete schema-1 result and diagnostics; it is not shortened.
 
-## Three commands to remember
+## Two entry points to remember
 
-```sh
-token-harness setup
-token-harness ui
-token-harness optimize
-```
-
-| Command | Answer |
-| --- | --- |
-| `setup` | Is Token Harness ready, and what is my one next step? |
-| `ui` | What is active, how much allowance is visible, and do I need to do anything? |
-| `optimize` | What is the best evidence-based action for the task I am starting? |
-
-For example:
-
-```sh
-token-harness optimize --task hard --profile quality
-token-harness optimize --task mechanical --profile economy
-```
+`token-harness` opens the application. `token-harness savings` prints recorded results.
+The advanced commands below are implementation tools, not a required user workflow.
 
 ## Safety and privacy
 
@@ -194,19 +163,23 @@ Token Harness is conservative by design:
 
 - normal read-only commands do not change coding-agent or project configuration;
 - `setup --yes`, `apply --yes`, `update --yes`, `rollback --yes`, and
-  `uninstall --yes` are the explicit configuration-changing forms;
+  `uninstall --yes` are the explicit CLI configuration-changing forms; the guided UI uses
+  a reviewed preview and explicit **Approve and apply** instead;
 - plans are checked again immediately before they are applied;
 - existing files are backed up before a managed write;
 - only exact Token Harness-owned entries are removed by `uninstall`;
 - newer or untested combinations are reported, not guessed;
 - an available provider update outside reviewed compatibility is kept out rather than
   forced, and the installed working version stays in place;
-- the dashboard binds only to the local loopback address and provides no mutation API;
+- the guided app binds only to 127.0.0.1 and protects its fixed local controls with exact
+  Host/Origin checks, a per-process anti-forgery token and single-use approval tickets;
+- the legacy read-only dashboard and external status seam remain read-only;
 - source code, prompts, command contents, credentials, and cookies are not sent to a
   Token Harness service.
 
 Plans, receipts, metrics, and backups stay in the local Token Harness state directory.
-See [RFC 0004](docs/rfcs/0004-safety-and-installation.md) for the execution model and
+See [RFC 0013](docs/rfcs/0013-guided-local-experience.md) for the local browser trust boundary,
+[RFC 0004](docs/rfcs/0004-safety-and-installation.md) for the execution model and
 [RFC 0006](docs/rfcs/0006-cli-contract.md) for CLI/JSON guarantees.
 
 ## Supported optimizations

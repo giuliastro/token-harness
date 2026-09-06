@@ -1972,3 +1972,20 @@ Acceptance:
   broader provider lifecycle recordings including WSL, empirical model ranking, and reviewed
   policy extensions for profiles/context-output budgets/MCP controls. See the detailed evidence
   and scope in `docs/spikes/claude-codex-native-policy.md`.
+
+
+## Guided local experience (2026-09-05, RFC 0013)
+
+Implemented: no-command/start/ui entry point, explicit browser preview/approval over existing
+plan/apply, optional task preference selection, recorded all-project savings, per-rule explanations,
+auto-refresh, in-session activity and guarded undo of the last successful dashboard transaction.
+`npm start` builds and launches the clone. The legacy CLI/JSON and `ui --read-only` are preserved.
+
+Security: fixed local actions only, exact loopback/Host/Origin, CSRF token, bounded JSON,
+short-lived single-use preview tickets, operation serialization and existing drift checks.
+Tests cover the real Claude transaction path plus browser boundary and all-project accounting.
+
+Not claimed: automatic model/task routing, guaranteed runtime interception on skills-only
+integrations, automatic installation of arbitrary/unreviewed providers, disk-wide project discovery,
+or causal subscription/euro savings. These need their own lifecycle and empirical evidence.
+The default product path no longer depends on understanding the diagnostic CLI or on another AI.

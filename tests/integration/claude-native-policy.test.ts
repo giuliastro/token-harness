@@ -19,7 +19,7 @@ import {
 } from '@token-harness/core';
 import { FIXTURES_ROOT } from '@token-harness/tests';
 import { NodeFileSystem } from '@token-harness/platform';
-import { run } from 'token-harness';
+import { run, GuideService, createGuideCall, type RunOptions } from 'token-harness';
 
 const root = mkdtempSync(join(tmpdir(), 'th-claude-policy-'));
 after(() => rmSync(root, { recursive: true, force: true }));
@@ -116,16 +116,8 @@ function runner(w: World): ProcessRunner {
     },
   };
 }
-async function invoke<T>(w: World, argv: string[]) {
-  let output = '';
-  const code = await run({
-    argv: [...argv, '--json'],
-    streams: {
-      out: (text) => {
-        output += text;
-      },
-      err: () => undefined,
-    },
+function optionsForWorld(w: World): Omit<RunOptions, 'argv' | 'streams'> {
+  return {
     platform: facts,
     cwd: w.project,
     home: w.home,
@@ -158,6 +150,19 @@ async function invoke<T>(w: World, argv: string[]) {
         cache: join(w.home, 'cache'),
       },
       projectIdFor: (path) => deriveProjectId(path, 'a'.repeat(64), facts.os === 'windows'),
+    },
+  };
+}
+async function invoke<T>(w: World, argv: string[]) {
+  let output = '';
+  const code = await run({
+    ...optionsForWorld(w),
+    argv: [...argv, '--json'],
+    streams: {
+      out: (text) => {
+        output += text;
+      },
+      err: () => undefined,
     },
   });
   return { code, envelope: JSON.parse(output) as CliEnvelope<T> };
@@ -457,5 +462,71 @@ describe('Claude native effort policy through public plan/apply', () => {
       assert.equal((await plan(w)).envelope.data?.actions.length, 0);
       assert.equal(readFileSync(w.config, 'utf8'), config);
     }
+  });
+});
+
+describe('guided UI through the actual command and transaction pipeline', () => {
+  it('reviews, applies and restores a real Claude preference without user-visible plan IDs', async () => {
+    const w = world();
+    const before = readFileSync(w.config, 'utf8');
+    const service = new GuideService(
+      createGuideCall(optionsForWorld(w)),
+      () => w.clock++,
+      () => 'review-ticket',
+    );
+    const preview = await service.preview({
+      action: 'effort',
+      harness: 'claude',
+      task: 'mechanical',
+    });
+    assert.ok(preview.ticket);
+    assert.equal(preview.changes.length, 1);
+    assert.equal(readFileSync(w.config, 'utf8'), before);
+    assert.equal((await service.apply({ ticket: preview.ticket })).ok, true);
+    assert.equal(JSON.parse(readFileSync(w.config, 'utf8')).effortLevel, 'low');
+    const undo = await service.preview({ action: 'undo' });
+    assert.equal((await service.apply({ ticket: undo.ticket })).ok, true);
+    assert.equal(readFileSync(w.config, 'utf8'), before);
+    assert.ok(w.calls.every((call) => !call.args.includes('-p') && !call.args.includes('login')));
+  });
+  it('does not bypass configuration drift after a browser preview', async () => {
+    const w = world();
+    const service = new GuideService(
+      createGuideCall(optionsForWorld(w)),
+      () => w.clock++,
+      () => 'ticket',
+    );
+    const preview = await service.preview({
+      action: 'effort',
+      harness: 'claude',
+      task: 'mechanical',
+    });
+    assert.ok(preview.ticket);
+    writeFileSync(w.config, '{"effortLevel":"medium","manual":true}');
+    const before = readFileSync(w.config, 'utf8');
+    assert.equal((await service.apply({ ticket: preview.ticket })).ok, false);
+    assert.equal(readFileSync(w.config, 'utf8'), before);
+  });
+  it('refuses to undo an unrelated change made after the reviewed browser transaction', async () => {
+    const w = world();
+    const service = new GuideService(
+      createGuideCall(optionsForWorld(w)),
+      () => w.clock++,
+      () => 'ticket',
+    );
+    const preview = await service.preview({
+      action: 'effort',
+      harness: 'claude',
+      task: 'mechanical',
+    });
+    assert.equal((await service.apply({ ticket: preview.ticket })).ok, true);
+    const undo = await service.preview({ action: 'undo' });
+    const another = await plan(w, 'critical', 'quality');
+    const id = another.envelope.data?.planId;
+    assert.ok(id);
+    assert.equal((await apply(w, id)).code, 0);
+    const before = readFileSync(w.config, 'utf8');
+    assert.equal((await service.apply({ ticket: undo.ticket })).ok, false);
+    assert.equal(readFileSync(w.config, 'utf8'), before);
   });
 });

@@ -168,10 +168,12 @@ try {
   const help = run(['--help']);
   check('--help exits 0 and prints usage', help.status === 0 && help.stdout.includes('Usage'));
   check(
-    '--help leads with setup and the local dashboard',
-    ['token-harness setup', 'ui          Open the local dashboard'].every((text) =>
-      help.stdout.includes(text),
-    ),
+    '--help leads with the guided application and recorded savings',
+    [
+      'token-harness\n',
+      'savings     Recorded output savings',
+      'ui          Open the guided local application',
+    ].every((text) => help.stdout.includes(text)),
   );
   check(
     '--help exposes the cross-harness release surfaces',

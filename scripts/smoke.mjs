@@ -72,17 +72,26 @@ try {
     ['doctor', 'plan', 'status'].every((c) => help.stdout.includes(c)),
   );
   check(
-    '--help leads with setup and the local dashboard',
-    ['token-harness setup', 'ui          Open the local dashboard'].every((text) =>
-      help.stdout.includes(text),
-    ),
+    '--help leads with the guided application and recorded savings',
+    [
+      'token-harness\n',
+      'savings     Recorded output savings',
+      'ui          Open the guided local application',
+    ].every((text) => help.stdout.includes(text)),
   );
   check(
     '--help lists cross-harness surfaces',
     ['handoff', 'transfer', 'schedule', 'transfer-record'].every((c) => help.stdout.includes(c)),
   );
 
-  for (const command of ['handoff', 'transfer', 'transfer-record', 'schedule']) {
+  for (const command of [
+    'handoff',
+    'transfer',
+    'transfer-record',
+    'schedule',
+    'start',
+    'savings',
+  ]) {
     const commandHelp = runBundle([command, '--help']);
     check(`${command} --help exits 0`, commandHelp.status === 0, `exit ${commandHelp.status}`);
     check(

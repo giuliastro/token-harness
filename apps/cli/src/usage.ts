@@ -16,19 +16,22 @@ import type { AvailableCommand } from './argv.js';
 
 const ROOT_USAGE = `token-harness — simple Claude Code and Codex efficiency
 
-New here? Run one command
-  token-harness setup
+New here? Open the application
+  token-harness
 
-It detects what is installed, checks what works, and prepares only supported
-changes. It ends with one next step. Nothing changes without an explicit
---yes.
+Review setup, approve changes and see recorded savings in the browser.
+No command copying or plan IDs. Keep using your coding agent normally.
+An AI may use the CLI, but is not required to operate Token Harness.
 
 Usage
+  token-harness
   token-harness <command> [flags]
 
 Everyday commands
+  start       Open the guided local application (same as no command)
+  savings     Recorded output savings across all locally recorded projects
   setup       Guided detection, safe configuration, and verification
-  ui          Open the local dashboard in your browser
+  ui          Open the guided local application in your browser
   optimize    Show the best evidence-based action for the current task
   status      Show active harnesses, providers, and configuration health
 
