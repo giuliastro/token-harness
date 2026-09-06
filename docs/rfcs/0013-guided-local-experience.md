@@ -56,8 +56,8 @@ Quota windows are separate observations, never evidence that the same percentage
 Dependency-free browser UI using semantic HTML, existing Node server and embedded assets.
 No new frontend runtime dependency. One main heading, responsive single-column mobile layout,
 native confirmation dialog, visible keyboard focus, live progress/errors, and empty states.
-Dark HSL tokens, translucent content surfaces and solid dialog surfaces follow the UI token
-contract. New components: results panel, rule disclosures, review dialog and activity report.
+The September 6 clarity revision uses neutral graphite/mint tokens, solid surfaces and
+system/light/dark themes, independent of a corporate design system. New components: results panel, rule disclosures, review dialog and activity report.
 The new surface is operational UI, not a marketing landing page.
 
 Rules have explicit modes: automatic integration, persistent user preference, observation,
@@ -82,3 +82,41 @@ now accepts its existing `--plan` selector as an expected latest-plan guard, ref
 unrelated transaction instead of undoing it. No historical arbitrary transaction is selectable
 from the browser. Multi-agent application remains separate transactions; one undo reverses
 only the last successful one. Closing the dashboard clears this in-memory shortcut, not backups.
+
+
+## September 6 clarity revision
+
+The interface groups Overview, Rules & settings, and Activity into accessible tabs.
+Agent-level actions either open a reviewed task preview or explain the specific native
+manual step. Observed state is separate from behavior and next steps. Reading a recognized
+saved Claude effort no longer requires a reviewed write version; mutation admission is
+unchanged. Missing, unreadable and overridden preferences remain distinct. See
+`docs/spikes/dashboard-clarity.md` for the UI and observation contract.
+
+## Progressive observation and voluntary sharing (2026-09-06)
+
+Observation progress is data, not a simulated timer. Five read stages (agent inventory,
+allowance, preferences/tools, reduction records and configuration status) report working,
+ready or attention through the existing protected `/api/activity` endpoint. Projected agent
+cards and savings become visible as their inputs arrive. Pending preference/allowance fields
+are not mislabeled unavailable. A failed observer does not discard other completed readings.
+No additional subprocesses are launched by a progress poll. The UI exposes animation, named
+stages, elapsed waiting text, errors and reduced-motion alternatives. A completed configuration
+read is never presented as runtime interception proof. During a mutation, progress names the
+actual operation; internal transaction substeps are not fabricated.
+
+Impact percentages use one provider/class/unit row's comparable before/after volumes for the
+same recorded changed outputs. Increases contribute to that row's net result. Missing or
+inconsistent baselines, non-finite counts and simulations receive no percentage/share claim.
+Estimates remain labeled in the UI, text and image. Near-total reductions with nonzero output
+are never rounded to 100%. Provider rows are not summed or relabeled as subscription savings.
+
+Sharing is an explicit client-side action following a frozen preview. It exports only an
+allowlisted provider name, numeric aggregates, measurement class, reporting window, limitation
+text and the public project URL. No paths, prompts, accounts, allowance balances, private IDs
+or session tokens are exported. No social SDK, tracking pixel, webhook, credential or remote
+upload is introduced. X opens a short post draft; Reddit opens its composer with title/link
+(the longer summary must be pasted for a text post); Discord uses copy-and-paste. PNG cards
+are rendered locally from the same snapshot. Clipboard/native-share failures offer manual
+copy, and downloads do not imply an uploaded attachment or published post. Existing loopback,
+Origin, CSRF, approval and transaction boundaries remain unchanged.

@@ -2003,3 +2003,28 @@ Not claimed: automatic model/task routing, guaranteed runtime interception on sk
 integrations, automatic installation of arbitrary/unreviewed providers, disk-wide project discovery,
 or causal subscription/euro savings. These need their own lifecycle and empirical evidence.
 The default product path no longer depends on understanding the diagnostic CLI or on another AI.
+
+
+## Dashboard clarity (2026-09-06)
+
+Separated read-only Claude preference observation from exact-version write admission.
+Saved, absent and unreadable preferences are distinct; project/environment overrides
+block writes without hiding the saved user value. No write compatibility gate was widened.
+Grouped the default UI into Overview, Rules & settings and Activity, with contextual
+preview/help actions, native-command location guidance, clipboard-only prompts, and a
+neutral system/light/dark palette. Rule evidence is now an actual observation, not a
+substitute for explaining how to make a change. See `docs/spikes/dashboard-clarity.md`.
+
+## Progress and shareable recorded impact (2026-09-06)
+
+- Five real observation stages, progressive agent/results rendering and per-section waiting
+  states replace the silent all-at-once load. Progress polling never re-runs the CLI probes.
+- Per-source impact stories use comparable before/after counts, with explicit estimates,
+  negative net effects and the recorded-changed-output denominator. No mixed provider total,
+  session-wide percentage, euro conversion or subscription saving is inferred.
+- Client-side sharing includes a frozen preview, X/Reddit composer links, copy for Discord,
+  clipboard fallback, optional device sharing and a local PNG card. No account connection,
+  social SDK, tracking or automatic post is required.
+- Regression coverage includes delayed/failed observations, concurrent reads, private data
+  exclusions, invalid/missing/negative measurement cases and rounding boundaries.
+- Authenticated task-quality and subscription-quota A/B evidence remains separate and open.

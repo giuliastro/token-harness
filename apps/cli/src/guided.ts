@@ -4,6 +4,7 @@ import type {
   BudgetReport,
   CliEnvelope,
   ContextReport,
+  HarnessContextObservation,
   Diagnostic,
   DoctorReport,
   MetricsReport,
@@ -14,11 +15,36 @@ import type {
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import { runMetrics } from './commands/metrics.js';
+import { savingsImpact, type GuideImpact } from './guided-impact.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
 export type GuideCall = <T>(args: readonly string[]) => Promise<CliEnvelope<T>>;
+export interface GuideAction {
+  kind: 'setup' | 'effort' | 'verify' | 'help' | 'refresh';
+  label: string;
+  harness?: GuideHarness;
+  topic?:
+    | 'claude-effort'
+    | 'codex-effort'
+    | 'claude-tools'
+    | 'codex-tools'
+    | 'measurements'
+    | 'cclimits'
+    | 'python'
+    | 'claude-login'
+    | 'compatibility';
+}
+export interface GuideReasoning {
+  label: string;
+  value: string | null;
+  state: 'saved' | 'default' | 'unavailable';
+  description: string;
+  observed: string;
+  changeNote: string;
+  action: GuideAction;
+}
 export interface GuideRule {
   id: string;
   title: string;
@@ -34,6 +60,8 @@ export interface GuideRule {
   what: string;
   why: string;
   evidence: string;
+  next?: string;
+  action?: GuideAction;
 }
 export interface GuideAgent {
   id: GuideHarness;
@@ -43,6 +71,8 @@ export interface GuideAgent {
   state: string;
   providers: string[];
   effort: string | null;
+  reasoning: GuideReasoning;
+  allowanceAction: GuideAction;
   rules: GuideRule[];
   allowance: Array<{
     label: string;
@@ -51,6 +81,7 @@ export interface GuideAgent {
     source: string;
   }>;
   allowanceNote: string;
+  pending?: Array<'reasoning' | 'allowance'>;
 }
 export interface GuideSavings {
   period: GuidePeriod;
@@ -66,6 +97,7 @@ export interface GuideSavings {
     after: number | null;
     operations: number;
     agents: string[];
+    impact: GuideImpact;
   }>;
   errors: number;
   inflated: number;
@@ -225,6 +257,11 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
         after: row.after ?? null,
         operations: row.operations,
         agents: row.harnesses.map(name),
+        impact: savingsImpact(row, {
+          start: report?.windowStart ?? '',
+          end: report?.windowEnd ?? '',
+          all: period === 'all',
+        }),
       })),
     errors: report?.errors ?? 0,
     inflated: report?.inflatedOperations ?? 0,
@@ -232,9 +269,110 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
   };
 }
 
-function agentRules(id: string, providers: string[], context: ContextReport | null): GuideRule[] {
+const EFFORT_LABELS: Readonly<Record<string, string>> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Maximum',
+};
+
+/** Show a saved value even when writes are unreviewed. Never infer the active session. */
+export function reasoningView(
+  id: GuideHarness,
+  observation: HarnessContextObservation | undefined,
+): GuideReasoning {
+  const native = observation?.nativeEffort;
+  const raw = id === 'claude' ? native?.current : observation?.reasoningEffort;
+  const value = raw && Object.hasOwn(EFFORT_LABELS, raw) ? raw : null;
+  const unset =
+    id === 'claude' &&
+    (native?.preferenceState === 'unset' ||
+      (native?.preferenceState === undefined && native?.writable && native.current === null));
+  const origin = observation?.managedConfigFieldOrigins?.find(
+    (item) => item.keyPath === 'model_reasoning_effort',
+  );
+  const canEdit =
+    id === 'claude'
+      ? native?.writable === true
+      : observation?.managedConfigTarget != null &&
+        observation.managedConfigOriginsObserved &&
+        (origin === undefined || origin.matchesManagedTarget);
+  const action: GuideAction = canEdit
+    ? { kind: 'effort', label: 'Adjust reasoning', harness: id }
+    : {
+        kind: 'help',
+        label: id === 'claude' ? 'Change in Claude' : 'Change in Codex',
+        harness: id,
+        topic: id === 'claude' ? 'claude-effort' : 'codex-effort',
+      };
+  const description =
+    value !== null
+      ? id === 'claude'
+        ? 'Saved user preference. A running session or another settings layer can use a different level.'
+        : 'Read from effective Codex configuration. This is not a live session reading.'
+      : unset
+        ? 'No reasoning preference is saved in Claude user settings. The model default or another settings layer may apply.'
+        : id === 'claude'
+          ? (native?.preferenceReason ??
+            'The Claude preference reader is unavailable. This does not mean reasoning is disabled.')
+          : 'Codex did not expose a recognized reasoning preference. Check its model controls to see the current session level.';
+  return {
+    label:
+      value !== null
+        ? EFFORT_LABELS[value]!
+        : unset
+          ? 'No saved preference'
+          : 'Could not read preference',
+    value,
+    state: value !== null ? 'saved' : unset ? 'default' : 'unavailable',
+    description,
+    observed:
+      id === 'claude'
+        ? native == null
+          ? 'No user preference observation is available. No active session was inspected.'
+          : (value !== null || unset
+              ? 'Claude user settings inspected'
+              : 'Claude user settings not readable') +
+            ' (CLI ' +
+            native.harnessVersion +
+            '). The active session was not inspected.'
+        : 'Source: Codex configuration reader. Running-session overrides are not observed here.',
+    changeNote: canEdit
+      ? 'Choose Adjust reasoning, select your work, then review and approve the change. It stays saved for future sessions until changed again.'
+      : id === 'claude'
+        ? (native?.reason || 'No reviewed preference change is available from this app.') +
+          ' Open Claude and use /effort to inspect or change the level there; then refresh this page.'
+        : 'This app cannot safely change the effective setting. Open Codex and use /model to review the reasoning controls; then refresh this page.',
+    action,
+  };
+}
+function allowanceAction(diagnostics: readonly Diagnostic[]): GuideAction {
+  const codes = new Set(diagnostics.map((entry) => entry.code));
+  if (
+    codes.has('cclimits-not-installed') ||
+    codes.has('cclimits-readonly-flags-unsupported') ||
+    codes.has('cclimits-claude-source-unsupported')
+  )
+    return { kind: 'help', label: 'Set up allowance reader', topic: 'cclimits' };
+  if (codes.has('cclimits-python-unavailable'))
+    return { kind: 'help', label: 'Fix Python setup', topic: 'python' };
+  if (
+    codes.has('cclimits-claude-credentials-unavailable') ||
+    codes.has('cclimits-claude-token-expired')
+  )
+    return { kind: 'help', label: 'Sign-in instructions', topic: 'claude-login' };
+  return { kind: 'help', label: 'Resolve missing data', topic: 'compatibility' };
+}
+function agentRules(
+  id: GuideHarness,
+  providers: string[],
+  context: ContextReport | null,
+): GuideRule[] {
   const observation = context?.harnesses.find((item) => item.harnessId === id);
-  const effort = observation?.nativeEffort?.current ?? observation?.reasoningEffort ?? null;
+  const reasoning = reasoningView(id, observation);
   return [
     ...['rtk', 'harnesstrim']
       .filter((provider) => providers.includes(provider))
@@ -246,38 +384,68 @@ function agentRules(id: string, providers: string[], context: ContextReport | nu
           mode: provider === 'rtk' ? 'automatic' : 'integration',
           what:
             provider === 'rtk'
-              ? 'Rewrites supported shell commands through RTK, which filters their output before the agent reads it. Coverage depends on the command and installed integration.'
-              : 'Shortens supported output through the installed adapter or opt-in agent instructions. On skills-only installations, the agent must actually invoke the reducer; it is not a transparent hook.',
-          why: "Reduces repeated output and routine success noise while retaining the provider's diagnostic signals. The exact filter depends on the command, provider and version.",
+              ? 'Filters output from supported shell commands before the agent reads it. It removes routine noise, not the command itself.'
+              : 'Shortens supported output through the installed adapter or agent instructions. A skills-only installation needs the agent to invoke the reducer.',
+          why: 'Less routine output occupies less context. Coverage and retained diagnostics depend on the provider and command.',
           evidence:
-            'Configuration detected. This does not prove that every command is intercepted. Recorded results are shown separately.',
+            'Integration configuration was found. This is not proof that every command was intercepted. Recorded savings are separate measurements.',
+          next:
+            provider === 'rtk'
+              ? 'Keep using your agent normally. Check integrations here, then look at Recorded savings after running commands.'
+              : 'Check the integration first. Open Measurement help for how to enable local records or use a skills-only installation.',
+          action:
+            provider === 'rtk'
+              ? { kind: 'verify', label: 'Check integrations', harness: id }
+              : { kind: 'help', label: 'Measurement help', harness: id, topic: 'measurements' },
         }),
       ),
+    ...(!providers.length
+      ? [
+          {
+            id: `${id}-setup`,
+            title: 'Output reduction',
+            state: 'Not configured',
+            mode: 'not-enabled' as const,
+            what: 'No configured output optimizer was detected for this agent.',
+            why: 'A supported integration is needed before automatic output reduction can run.',
+            evidence: 'No configured provider reported this agent.',
+            next: 'Check setup to preview supported integration changes. Nothing is installed or changed without your approval.',
+            action: { kind: 'setup' as const, label: 'Check setup', harness: id },
+          },
+        ]
+      : []),
     {
       id: `${id}-effort`,
       title: 'Reasoning effort',
-      state: effort ?? 'Not observed',
+      state: reasoning.label,
       mode: 'preference',
-      what:
-        effort === null
-          ? 'The current persistent preference could not be read.'
-          : `Current observed preference: ${effort}. Session or project overrides may still apply.`,
-      why: 'Simple tasks can use less reasoning; difficult work needs enough reasoning to avoid failed attempts.',
-      evidence:
-        'Setup never changes this automatically. A task setting applies to future sessions until changed again, not just one task.',
+      what: reasoning.description,
+      why: 'Simple tasks may need less reasoning. Difficult work needs enough reasoning to avoid repeated failed attempts.',
+      evidence: reasoning.observed,
+      next: reasoning.changeNote,
+      action: reasoning.action,
     },
     {
       id: `${id}-mcp`,
       title: 'Connected tools',
       state:
         observation === undefined || !['observed', 'partial'].includes(observation.state)
-          ? 'Not observed'
+          ? 'Inventory unavailable'
           : `${observation.mcpServers.length}${observation.mcpInventoryTruncated ? '+' : ''} connections`,
       mode: 'observation',
-      what: 'Reads the inventory of connected tool servers without removing them.',
-      why: 'Large or unused tool inventories can occupy context, but a tool count alone does not justify disabling anything.',
+      what: 'Lists connected tool servers. It does not remove tools or decide which ones your task needs.',
+      why: 'Large tool inventories can occupy context, but a count alone does not justify disabling a tool.',
       evidence:
-        'Observation only. Token Harness does not currently prove which tools your task needs.',
+        observation === undefined
+          ? 'No tool inventory returned.'
+          : 'Source: installed agent tool inventory. Per-task usage is not measured.',
+      next: 'Open the agent tool settings to inspect connections or fix authentication. Disable a tool only when you know the task does not need it.',
+      action: {
+        kind: 'help',
+        label: 'Manage connected tools',
+        harness: id,
+        topic: id === 'claude' ? 'claude-tools' : 'codex-tools',
+      },
     },
   ];
 }
@@ -315,6 +483,8 @@ const SAFETY_RULES: GuideRule[] = [
 const TASK_RULES: GuideRule[] = [
   {
     id: 'task-match',
+    next: 'Use Adjust reasoning on an agent card, choose the type of work and approve the preview. Reopen that agent to load the saved preference.',
+    action: { kind: 'effort', label: 'Choose task settings' },
     title: 'Match reasoning to task difficulty',
     state: 'On request, not automatic',
     mode: 'advice',
@@ -325,6 +495,8 @@ const TASK_RULES: GuideRule[] = [
   },
   {
     id: 'quota-context',
+    next: 'Review the task settings for a supported agent. When session context is too large, compact it inside that agent; nothing is cleared from this dashboard.',
+    action: { kind: 'help', label: 'Session and tool guidance', topic: 'compatibility' },
     title: 'Protect allowance without sacrificing difficult work',
     state: 'Used by task previews',
     mode: 'advice',
@@ -375,8 +547,29 @@ function describeChange(action: PlannedAction, harness: string): GuidePreview['c
   };
 }
 
+type GuideRead<T> = Pick<CliEnvelope<T>, 'data' | 'diagnostics' | 'exitCode'>;
+type GuideStageId = 'agents' | 'allowance' | 'rules' | 'savings' | 'checks';
+export interface GuideLoading {
+  run: number;
+  period: GuidePeriod;
+  startedAt: string;
+  running: boolean;
+  stages: Array<{ id: GuideStageId; label: string; state: 'working' | 'ready' | 'attention' }>;
+  agents: GuideAgent[] | null;
+  savings: GuideSavings | null;
+}
+const READ_STAGES: Array<{ id: GuideStageId; label: string }> = [
+  { id: 'agents', label: 'Finding agents and output integrations' },
+  { id: 'allowance', label: 'Checking allowance with agents and companions' },
+  { id: 'rules', label: 'Reading saved preferences and connected tools' },
+  { id: 'savings', label: 'Importing recorded reductions' },
+  { id: 'checks', label: 'Checking integration configuration' },
+];
+
 export class GuideService {
   private approval: Approval | null = null;
+  private loading: GuideLoading | null = null;
+  private readSequence = 0;
   private busy = false;
   private lastApplied: { plan: string; network: boolean } | null = null;
   private reading: Promise<GuideOverview> | null = null;
@@ -390,8 +583,18 @@ export class GuideService {
     this.now = now;
     this.random = random;
   }
-  status(): { busy: boolean; activity: GuideActivity[]; canUndo: boolean } {
-    return { busy: this.busy, activity: [...this.activity], canUndo: this.lastApplied !== null };
+  status(): {
+    busy: boolean;
+    activity: GuideActivity[];
+    canUndo: boolean;
+    loading: GuideLoading | null;
+  } {
+    return {
+      busy: this.busy,
+      activity: [...this.activity],
+      canUndo: this.lastApplied !== null,
+      loading: this.loading === null ? null : structuredClone(this.loading),
+    };
   }
   private record(message: string, state: GuideActivity['state']): void {
     this.activity.unshift({ at: new Date(this.now()).toISOString(), message, state });
@@ -414,59 +617,71 @@ export class GuideService {
       return value;
     } finally {
       this.reading = null;
+      if (this.loading !== null) this.loading.running = false;
     }
   }
   private async collect(period: GuidePeriod): Promise<GuideOverview> {
-    const [doctor, budget, context, metrics, status] = await Promise.all([
-      this.call<DoctorReport>(['doctor']),
-      this.call<BudgetReport>(['budget']),
-      this.call<ContextReport>(['context']),
-      this.call<MetricsReport>(['savings', '--since', period === 'all' ? '1970-01-01' : period]),
-      this.call<StatusReport>(['status']),
+    const loading: GuideLoading = {
+      run: ++this.readSequence,
+      period,
+      startedAt: new Date(this.now()).toISOString(),
+      running: true,
+      stages: READ_STAGES.map((stage) => ({ ...stage, state: 'working' })),
+      agents: null,
+      savings: null,
+    };
+    this.loading = loading;
+    const empty = <T>(): GuideRead<T> => ({ data: null, diagnostics: [], exitCode: 9 });
+    let doctor = empty<DoctorReport>(),
+      budget = empty<BudgetReport>(),
+      context = empty<ContextReport>();
+    const observe = async <T>(id: GuideStageId, args: string[]): Promise<GuideRead<T>> => {
+      let result: GuideRead<T>;
+      try {
+        result = await this.call<T>(args);
+      } catch {
+        result = empty<T>();
+      } // Only bounded UI copy; never leak a subprocess error or private path.
+      const stage = loading.stages.find((item) => item.id === id)!;
+      stage.state =
+        result.data === null ||
+        result.exitCode !== 0 ||
+        result.diagnostics.some((item) => item.severity === 'warning' || item.severity === 'error')
+          ? 'attention'
+          : 'ready';
+      return result;
+    };
+    const updateAgents = (): void => {
+      if (doctor.data === null) return;
+      loading.agents = this.agentView(doctor, budget, context, {
+        rules: loading.stages.find((item) => item.id === 'rules')?.state !== 'working',
+        allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
+      });
+    };
+    const [, , , metrics, status] = await Promise.all([
+      observe<DoctorReport>('agents', ['doctor']).then((result) => {
+        doctor = result;
+        updateAgents();
+      }),
+      observe<BudgetReport>('allowance', ['budget']).then((result) => {
+        budget = result;
+        updateAgents();
+      }),
+      observe<ContextReport>('rules', ['context']).then((result) => {
+        context = result;
+        updateAgents();
+      }),
+      observe<MetricsReport>('savings', [
+        'savings',
+        '--since',
+        period === 'all' ? '1970-01-01' : period,
+      ]).then((result) => {
+        loading.savings = savingsView(result.data, period);
+        return result;
+      }),
+      observe<StatusReport>('checks', ['status']),
     ]);
-    const present = (doctor.data?.harnesses ?? []).filter(
-      (item) =>
-        item.state !== 'absent' && (item.harnessId === 'claude' || item.harnessId === 'codex'),
-    );
-    const agents = present.map((agent): GuideAgent => {
-      const providers = (doctor.data?.providers ?? [])
-        .filter(
-          (provider) =>
-            provider.state === 'configured' &&
-            provider.configuredHarnesses.includes(agent.harnessId),
-        )
-        .map((p) => p.providerId);
-      const usage = budget.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
-      const observed = context.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
-      return {
-        id: agent.harnessId as GuideHarness,
-        name: name(agent.harnessId),
-        version: agent.version,
-        configured: providers.length > 0,
-        state:
-          agent.state === 'broken'
-            ? 'Needs attention'
-            : providers.length > 0
-              ? 'Integration configured'
-              : 'Ready to set up',
-        providers: providers.map(name),
-        effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
-        rules: agentRules(agent.harnessId, providers, context.data),
-        allowance: (usage?.windows ?? []).map((window) => ({
-          label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
-          remaining: window.remainingPercent,
-          resetsAt: window.resetsAt,
-          source:
-            window.confidence === 'cached'
-              ? 'Cached observation'
-              : 'Reported by the agent or companion',
-        })),
-        allowanceNote: explainGuideIssue(
-          usage?.diagnostics ?? [],
-          'Allowance cannot currently be read. Optimization can still work; this is not a zero balance.',
-        ),
-      };
-    });
+    const agents = this.agentView(doctor, budget, context, { rules: true, allowance: true });
     const notices: string[] = [];
     if (doctor.data === null)
       notices.push(
@@ -487,9 +702,13 @@ export class GuideService {
       notices.push(
         'Some measurement sources are unavailable or incomplete. The results below cover readable records only; they are not a complete session-wide total.',
       );
+    if (status.data === null)
+      notices.push(
+        'The integration configuration check could not finish. Use Check integrations in Activity to try again. No agent settings changed.',
+      );
     if ((status.data?.problemCount ?? 0) > 0)
       notices.push(
-        'An integration has changed or needs verification. Use Check integrations below; existing settings are not repaired silently.',
+        'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
       );
     return {
       generatedAt: new Date(this.now()).toISOString(),
@@ -498,6 +717,62 @@ export class GuideService {
       rules: [...SAFETY_RULES, ...TASK_RULES],
       notices,
     };
+  }
+  private agentView(
+    doctor: GuideRead<DoctorReport>,
+    budget: GuideRead<BudgetReport>,
+    context: GuideRead<ContextReport>,
+    complete: { rules: boolean; allowance: boolean },
+  ): GuideAgent[] {
+    const present = (doctor.data?.harnesses ?? []).filter(
+      (item) =>
+        item.state !== 'absent' && (item.harnessId === 'claude' || item.harnessId === 'codex'),
+    );
+    return present.map((agent): GuideAgent => {
+      const providers = (doctor.data?.providers ?? [])
+        .filter(
+          (provider) =>
+            provider.state === 'configured' &&
+            provider.configuredHarnesses.includes(agent.harnessId),
+        )
+        .map((p) => p.providerId);
+      const usage = budget.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
+      const observed = context.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
+      return {
+        pending: [
+          ...(!complete.rules ? ['reasoning' as const] : []),
+          ...(!complete.allowance ? ['allowance' as const] : []),
+        ],
+        id: agent.harnessId as GuideHarness,
+        name: name(agent.harnessId),
+        version: agent.version,
+        configured: providers.length > 0,
+        state:
+          agent.state === 'broken'
+            ? 'Needs attention'
+            : providers.length > 0
+              ? 'Integration configured'
+              : 'Ready to set up',
+        providers: providers.map(name),
+        effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
+        reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
+        allowanceAction: allowanceAction(usage?.diagnostics ?? []),
+        rules: agentRules(agent.harnessId as GuideHarness, providers, context.data),
+        allowance: (usage?.windows ?? []).map((window) => ({
+          label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
+          remaining: window.remainingPercent,
+          resetsAt: window.resetsAt,
+          source:
+            window.confidence === 'cached'
+              ? 'Cached observation'
+              : 'Reported by the agent or companion',
+        })),
+        allowanceNote: explainGuideIssue(
+          usage?.diagnostics ?? [],
+          'Allowance cannot currently be read. Optimization can still work; this is not a zero balance.',
+        ),
+      };
+    });
   }
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
     if (this.busy)
@@ -572,6 +847,10 @@ export class GuideService {
         plans: string[] = [];
       let network = false;
       for (const agent of selected) {
+        this.record(
+          `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
+          'working',
+        );
         const args = ['plan', '--harness', agent.harnessId];
         if (data['action'] === 'effort')
           args.push(
@@ -666,6 +945,10 @@ export class GuideService {
       const messages: string[] = [];
       let appliedPlans = 0;
       for (const plan of approval.plans) {
+        this.record(
+          `${approval.operation === 'rollback' ? 'Restoring' : 'Applying'} reviewed change ${appliedPlans + 1} of ${approval.plans.length}. The transaction runs its backup and safety checks.`,
+          'working',
+        );
         let result: CliEnvelope<ApplyReport>;
         try {
           result = await this.call<ApplyReport>([approval.operation, '--plan', plan, '--yes']);
@@ -752,6 +1035,10 @@ export class GuideService {
       }
       for (const agent of present) {
         const harness = agent.harnessId;
+        this.record(
+          `Checking ${name(harness)} configuration and available execution evidence. No settings changed.`,
+          'working',
+        );
         const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
         const healthy = result.data?.healthyAtDeclaredTier === true;
         if (!healthy) ok = false;

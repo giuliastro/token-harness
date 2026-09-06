@@ -94,6 +94,11 @@ export interface ManagedConfigFieldOriginObservation {
 
 /** File-based Claude preference, not a claim about an active session or a native model catalog. */
 export interface NativeEffortObservation {
+  /** Readability of the persisted user field, independent of managed-write eligibility. */
+  preferenceState?: 'configured' | 'unset' | 'unreadable';
+  /** Bounded, non-sensitive explanation of the read result. Never raw parser errors. */
+  preferenceReason?: string;
+  writeBlock?: 'version' | 'cli' | 'environment' | 'custom-root' | 'override' | 'settings' | null;
   harnessVersion: string;
   supported: string[];
   current: string | null;
