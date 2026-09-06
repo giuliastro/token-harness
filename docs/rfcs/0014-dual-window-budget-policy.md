@@ -77,7 +77,11 @@ invented or ranked by its name. Context cleanup precedes optional escalation.
 
 The CLI uses the same joint decision for explanatory recommendations and effort
 selection. Existing consumers keep the same command, envelope and configuration
-transaction contracts; UI source files are out of scope.
+transaction contracts; UI source files are out of scope. The cross-harness scheduler's
+budget hydration also maps a live reserve breach/exhaustion to its existing
+`over-pace` safety gate, with a distinct `budget-reserve-protected` reason when the
+linear pacing deadband alone would have called the allowance healthy. Explicit
+user-supplied scheduler evidence keeps its existing precedence.
 
 ## Validation and claims
 

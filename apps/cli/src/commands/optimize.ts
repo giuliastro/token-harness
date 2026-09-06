@@ -6,6 +6,7 @@
 
 import {
   EXIT_CODES,
+  assessBudgetDecision,
   assessMcpServer,
   assessWindowPace,
   chooseSupportedEffort,
@@ -130,16 +131,9 @@ function contextEvidence(
   };
 }
 
-function resetSoon(pace: WindowPaceAssessment): boolean {
-  if (pace.minutesToReset === null) return false;
-  if (pace.scope === 'five-hour') return pace.minutesToReset <= 60;
-  if (pace.scope === 'weekly') return pace.minutesToReset <= 12 * 60;
-  return false;
-}
-
 function quotaEvidence(pace: readonly WindowPaceAssessment[]): RecommendationEvidence[] {
   return pace
-    .filter((item) => item.state !== 'unknown')
+    .filter((item) => item.state !== 'unknown' && item.scope !== 'credit')
     .map((item) => ({
       code: 'quota-' + item.scope,
       summary:
@@ -164,7 +158,9 @@ function verbosityTarget(input: {
   const pressured =
     input.profile === 'economy' ||
     input.contextPressure === 'high' ||
-    input.pace.some((item) => item.state === 'over-pace');
+    ['conserve', 'wait-for-reset'].includes(
+      assessBudgetDecision(input.pace, input.taskClass).state,
+    );
   if (pressured && (input.taskClass === 'mechanical' || input.taskClass === 'standard')) {
     return 'low';
   }
@@ -192,7 +188,8 @@ function adviceForHarness(input: {
   const diagnostics = [...context.diagnostics];
   const pressure = contextEvidence(contextReport, context);
   const recommendations: OptimizationRecommendation[] = [];
-  const paceEvidence = quotaEvidence(budgetWindows);
+  const budgetDecision = assessBudgetDecision(budgetWindows, taskClass);
+  const paceEvidence = [...quotaEvidence(budgetWindows), ...budgetDecision.reasons];
   const historyEvidence: RecommendationEvidence[] =
     localBurnTrend === null || localBurnTrend.state === 'unknown'
       ? []
@@ -208,10 +205,8 @@ function adviceForHarness(input: {
               '; this is workload history, not subscription quota',
           },
         ];
-  const overPace = budgetWindows.some((item) => item.state === 'over-pace');
-  const underPaceSoon =
-    (taskClass === 'hard' || taskClass === 'critical') &&
-    budgetWindows.some((item) => item.state === 'under-pace' && resetSoon(item));
+  const overPace = ['conserve', 'wait-for-reset'].includes(budgetDecision.state);
+  const underPaceSoon = budgetDecision.allowEffortIncrease;
 
   const mcpAssessments = context.mcpServers.map((server) => assessMcpServer(server));
 
@@ -273,7 +268,16 @@ function adviceForHarness(input: {
     });
   }
 
-  if (overPace) {
+  if (budgetDecision.state === 'wait-for-reset') {
+    recommendations.push({
+      area: 'quota',
+      priority: 'first',
+      action:
+        'Save a checkpoint and recheck the exhausted allowance after its reset; do not buy or redeem credits automatically',
+      target: budgetDecision.recheckAt,
+      evidence: paceEvidence,
+    });
+  } else if (overPace) {
     recommendations.push({
       area: 'quota',
       priority: pressure.pressure === 'high' ? 'next' : 'first',
@@ -289,16 +293,14 @@ function adviceForHarness(input: {
       target: null,
       evidence: [...paceEvidence, ...historyEvidence],
     });
-  } else if (
-    budgetWindows.length === 0 ||
-    budgetWindows.every((item) => item.state === 'unknown')
-  ) {
+  } else if (budgetDecision.state === 'unknown') {
     recommendations.push({
       area: 'quota',
       priority: 'optional',
-      action: 'Keep pacing unknown; do not infer subscription headroom from local token counts',
+      action:
+        'Keep the task-class policy without a quota bonus; refresh incomplete or ambiguous allowance evidence',
       target: null,
-      evidence: [{ code: 'quota-unknown', summary: 'no paceable live usage window was observed' }],
+      evidence: budgetDecision.reasons,
     });
   }
 
@@ -474,6 +476,7 @@ function adviceForHarness(input: {
     localBurnTrend,
     recentSession,
     pace: budgetWindows,
+    budgetDecision,
     recommendations,
     diagnostics,
   };
@@ -535,9 +538,12 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
       (item) => item.harnessId === harnessContext.harnessId,
     );
     const pace =
-      budget?.windows.map((window) =>
-        assessWindowPace(window, report.observedAt, reservePercent),
-      ) ?? [];
+      budget?.state === 'observed' &&
+      budget.windows.every((window) => window.harnessId === harnessContext.harnessId)
+        ? budget.windows.map((window) =>
+            assessWindowPace(window, report.observedAt, reservePercent),
+          )
+        : [];
     report.harnesses.push(
       adviceForHarness({
         contextReport,

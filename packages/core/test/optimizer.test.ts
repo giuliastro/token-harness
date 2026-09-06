@@ -74,8 +74,23 @@ describe('quality-floor effort policy', () => {
     );
   });
 
-  it('can spend under-used headroom near reset on a hard task', () => {
-    const pace = [assessWindowPace(window(30), '2026-08-30T15:30:00.000Z', 20)];
+  it('can spend under-used headroom near reset only with both included windows safe', () => {
+    const now = '2026-08-30T15:30:00.000Z';
+    const pace = [
+      assessWindowPace({ ...window(30), observedAt: now }, now, 20),
+      assessWindowPace(
+        {
+          ...window(20),
+          scope: 'weekly',
+          window: 'secondary',
+          windowDurationMinutes: 10080,
+          resetsAt: '2026-09-02T15:30:00.000Z',
+          observedAt: now,
+        },
+        now,
+        20,
+      ),
+    ];
     assert.equal(pace[0]?.state, 'under-pace');
     assert.equal(
       chooseSupportedEffort({

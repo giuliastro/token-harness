@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   harnessId,
   hydrateCrossHarnessPaceFromBudget,
+  scheduleCrossHarness,
   type BudgetReport,
   type CrossHarnessSchedulerInput,
   type UsageConfidence,
@@ -192,4 +193,34 @@ test('an unobserved budget state does not turn into headroom', () => {
   assert.equal(hydrated.input.candidate.fiveHourPace, 'unknown');
   assert.equal(hydrated.input.candidate.weeklyPace, 'unknown');
   assert.equal(hydrated.notes.filter((entry) => entry.code === 'budget-not-observed').length, 2);
+});
+
+test('a weekly reserve breach inside the pacing deadband vetoes a transfer', () => {
+  const budget = report();
+  const weekly = budget.harnesses[1]!.windows[1]!;
+  weekly.usedPercent = 81;
+  weekly.remainingPercent = 19;
+  weekly.resetsAt = '2026-09-04T13:01:00.000Z';
+  const input = schedulerInput();
+  input.candidate.quality = 'passed';
+  input.candidate.qualityTaskClass = 'hard';
+  input.candidate.qualitySamples = 3;
+  input.transfer.benefit = 'proven-positive';
+  const hydrated = hydrateCrossHarnessPaceFromBudget(input, budget);
+  assert.equal(hydrated.input.candidate.weeklyPace, 'over-pace');
+  assert.ok(hydrated.notes.some((item) => item.code === 'budget-reserve-protected'));
+  assert.equal(scheduleCrossHarness(hydrated.input).decision, 'stay');
+});
+
+test('a stale candidate weekly observation never authorizes a switch', () => {
+  const budget = report();
+  budget.harnesses[1]!.windows[1]!.observedAt = '2026-09-04T12:54:59.000Z';
+  const input = schedulerInput();
+  input.candidate.quality = 'passed';
+  input.candidate.qualityTaskClass = 'hard';
+  input.candidate.qualitySamples = 3;
+  input.transfer.benefit = 'proven-positive';
+  const hydrated = hydrateCrossHarnessPaceFromBudget(input, budget);
+  assert.equal(hydrated.input.candidate.weeklyPace, 'unknown');
+  assert.equal(scheduleCrossHarness(hydrated.input).decision, 'insufficient-evidence');
 });

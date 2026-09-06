@@ -1,5 +1,5 @@
 /**
- * Advisory quota optimizer — RFC 0011 Phase 18.3.
+ * Advisory quota optimizer — RFC 0011 Phase 18.3 and RFC 0014.
  *
  * This module contains deterministic policy only. It does not observe the machine and it cannot
  * mutate a harness. Provider quota percentages remain observations; policy thresholds below are
@@ -7,10 +7,14 @@
  */
 
 import type { UsageWindowSnapshot } from './budget.js';
+import { assessBudgetDecision, type BudgetDecision } from './budget-policy.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
+
+export { assessBudgetDecision } from './budget-policy.js';
+export type { BudgetDecision, BudgetDecisionState } from './budget-policy.js';
 
 export const TASK_CLASSES = ['mechanical', 'standard', 'hard', 'critical'] as const;
 export type TaskClass = (typeof TASK_CLASSES)[number];
@@ -40,6 +44,12 @@ export interface WindowPaceAssessment {
   minutesToReset: number | null;
   resetsAt: string | null;
   reason: string;
+  /** Additive evidence fields. No provider-neutral or cross-window total is implied. */
+  bucketId?: string | null;
+  observationAgeMinutes?: number | null;
+  spendableRemainingPercent?: number | null;
+  /** Advisory allocation, NOT a measured burn rate, token count, or exhaustion forecast. */
+  spendablePercentPerHour?: number | null;
 }
 
 export interface RecommendationEvidence {
@@ -80,6 +90,8 @@ export interface HarnessOptimizationAdvice {
   /** Most recently observed local session candidate; never asserted to be the active session. */
   recentSession: SessionBoundarySignal | null;
   pace: WindowPaceAssessment[];
+  /** Additive joint five-hour/weekly decision. Older saved reports may omit it. */
+  budgetDecision?: BudgetDecision;
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
 }
@@ -142,84 +154,112 @@ function effortRank(value: string | null): number | null {
   return rank === -1 ? null : rank;
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
+function validPercent(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && value >= 0 && value <= 100;
 }
+
+/** Freshness is product policy; it is deliberately not inferred from the backend quota formula. */
+export const QUOTA_MAX_AGE_MS = 5 * 60_000;
+export const QUOTA_CLOCK_SKEW_MS = 60_000;
 
 export function assessWindowPace(
   window: UsageWindowSnapshot,
   now: string,
   reservePercent: number,
 ): WindowPaceAssessment {
+  const nowMs = Date.parse(now);
+  const observedMs = Date.parse(window.observedAt);
+  const ageMs = nowMs - observedMs;
   const base = {
     harnessId: window.harnessId,
     scope: window.scope,
-    usedPercent: window.usedPercent,
-    remainingPercent: window.remainingPercent,
+    usedPercent: validPercent(window.usedPercent) ? window.usedPercent : null,
+    remainingPercent: validPercent(window.remainingPercent) ? window.remainingPercent : null,
     reservePercent,
     resetsAt: window.resetsAt,
+    bucketId: window.bucketId,
+    observationAgeMinutes: Number.isFinite(ageMs) ? Math.max(0, ageMs / 60_000) : null,
+    spendableRemainingPercent: null,
+    spendablePercentPerHour: null,
   };
-
+  const unknown = (reason: string): WindowPaceAssessment => ({
+    ...base,
+    state: 'unknown',
+    targetUsedPercent: null,
+    minutesToReset: null,
+    reason,
+  });
   if (window.confidence === 'cached' || window.confidence === 'estimated') {
-    return {
-      ...base,
-      state: 'unknown',
-      targetUsedPercent: null,
-      minutesToReset: null,
-      reason: 'cached or estimated usage is displayed but not used for live pacing',
-    };
+    return unknown('cached or estimated usage is displayed but not used for live pacing');
   }
-
   if (
-    window.usedPercent === null ||
+    !['authoritative', 'reported'].includes(window.confidence) ||
+    !['native-rpc', 'native-cli', 'companion-cli'].includes(window.source)
+  ) {
+    return unknown('only observed native or reviewed companion quota is used for live pacing');
+  }
+  if (
+    !Number.isFinite(nowMs) ||
+    !Number.isFinite(observedMs) ||
+    ageMs > QUOTA_MAX_AGE_MS ||
+    ageMs < -QUOTA_CLOCK_SKEW_MS
+  ) {
+    return unknown(
+      'the quota observation is stale, future-dated, or invalid; refresh before pacing',
+    );
+  }
+  if (!Number.isFinite(reservePercent) || reservePercent < 0 || reservePercent > 95) {
+    return unknown('the configured reserve must be finite and between 0 and 95 percent');
+  }
+  if (
+    !validPercent(window.usedPercent) ||
     window.windowDurationMinutes === null ||
+    !Number.isFinite(window.windowDurationMinutes) ||
+    window.windowDurationMinutes <= 0 ||
     window.resetsAt === null
   ) {
-    return {
-      ...base,
-      state: 'unknown',
-      targetUsedPercent: null,
-      minutesToReset: null,
-      reason: 'usage, duration, and reset are all required for pacing',
-    };
+    return unknown('valid usage, duration, and reset are all required for pacing');
   }
-
-  const nowMs = Date.parse(now);
+  if (
+    window.remainingPercent !== null &&
+    (!validPercent(window.remainingPercent) ||
+      Math.abs(window.usedPercent + window.remainingPercent - 100) > 1)
+  ) {
+    return unknown('reported used and remaining percentages are invalid or inconsistent');
+  }
   const resetMs = Date.parse(window.resetsAt);
   const durationMs = window.windowDurationMinutes * 60_000;
-  if (!Number.isFinite(nowMs) || !Number.isFinite(resetMs) || durationMs <= 0 || nowMs >= resetMs) {
-    return {
-      ...base,
-      state: 'unknown',
-      targetUsedPercent: null,
-      minutesToReset: null,
-      reason: 'the usage window timing is stale or invalid',
-    };
+  if (
+    !Number.isFinite(resetMs) ||
+    !Number.isFinite(durationMs) ||
+    nowMs >= resetMs ||
+    observedMs >= resetMs
+  ) {
+    return unknown('the usage window timing is stale or invalid');
   }
-
   const startMs = resetMs - durationMs;
-  if (nowMs < startMs) {
-    return {
-      ...base,
-      state: 'unknown',
-      targetUsedPercent: null,
-      minutesToReset: Math.round((resetMs - nowMs) / 60_000),
-      reason: 'the observation precedes the implied window start',
-    };
+  if (nowMs < startMs || observedMs < startMs) {
+    return unknown('the observation precedes the implied window start');
   }
 
-  const elapsedFraction = clamp((nowMs - startMs) / durationMs, 0, 1);
-  const spendablePercent = 100 - clamp(reservePercent, 0, 95);
-  const targetUsedPercent = spendablePercent * elapsedFraction;
-  const delta = window.usedPercent - targetUsedPercent;
-  // An eight-point deadband prevents tiny backend/reporting fluctuations from flipping advice.
+  const remainingPercent = Math.min(window.remainingPercent ?? 100, 100 - window.usedPercent);
+  const usedPercent = 100 - remainingPercent;
+  const elapsedFraction = (nowMs - startMs) / durationMs;
+  const targetUsedPercent = (100 - reservePercent) * elapsedFraction;
+  const delta = usedPercent - targetUsedPercent;
+  // An eight-point deadband prevents backend rounding from constantly flipping pacing.
+  // Reserve/exhaustion are separate vetoes in the joint policy, never hidden by the deadband.
   const state: PaceState = delta > 8 ? 'over-pace' : delta < -8 ? 'under-pace' : 'on-pace';
-
+  const spendableRemainingPercent = Math.max(0, remainingPercent - reservePercent);
   return {
     ...base,
+    usedPercent,
+    remainingPercent,
     state,
     targetUsedPercent: Math.round(targetUsedPercent * 10) / 10,
-    minutesToReset: Math.max(0, Math.round((resetMs - nowMs) / 60_000)),
+    minutesToReset: (resetMs - nowMs) / 60_000,
+    spendableRemainingPercent,
+    spendablePercentPerHour: spendableRemainingPercent / ((resetMs - nowMs) / 3_600_000),
     reason:
       state === 'over-pace'
         ? 'usage is materially ahead of the linear spendable allowance'
@@ -227,18 +267,6 @@ export function assessWindowPace(
           ? 'usage is materially behind the linear spendable allowance'
           : 'usage is within the pacing deadband',
   };
-}
-
-function targetEffort(task: TaskClass, profile: BudgetProfile): string {
-  const effective = profile === 'custom' ? 'balanced' : profile;
-  return PROFILE_TARGET[effective][task];
-}
-
-function isResetSoon(pace: WindowPaceAssessment): boolean {
-  if (pace.minutesToReset === null) return false;
-  if (pace.scope === 'five-hour') return pace.minutesToReset <= 60;
-  if (pace.scope === 'weekly') return pace.minutesToReset <= 12 * 60;
-  return false;
 }
 
 export function chooseSupportedEffort(input: {
@@ -251,37 +279,34 @@ export function chooseSupportedEffort(input: {
   contextPressure: ContextPressure;
 }): string | null {
   const floorRank = effortRank(QUALITY_FLOOR[input.taskClass]);
-  let targetRank = effortRank(targetEffort(input.taskClass, input.profile));
-  if (floorRank === null || targetRank === null) return input.current ?? input.defaultEffort;
+  const effective = input.profile === 'custom' ? 'balanced' : input.profile;
+  let targetRank = effortRank(PROFILE_TARGET[effective][input.taskClass]);
+  if (floorRank === null || targetRank === null) return null;
 
-  const overPace = input.pace.some((item) => item.state === 'over-pace');
-  const underPaceNearReset =
-    (input.taskClass === 'hard' || input.taskClass === 'critical') &&
-    input.pace.some((item) => item.state === 'under-pace' && isResetSoon(item));
-
-  if (overPace) targetRank = Math.max(floorRank, targetRank - 1);
-  if (underPaceNearReset) targetRank = Math.min(EFFORT_ORDER.length - 1, targetRank + 1);
-
+  const budget = assessBudgetDecision(input.pace, input.taskClass);
+  if (budget.state === 'conserve' || budget.state === 'wait-for-reset') {
+    targetRank = Math.max(floorRank, targetRank - 1);
+  } else if (budget.allowEffortIncrease) {
+    targetRank = Math.min(EFFORT_ORDER.length - 1, targetRank + 1);
+  }
   const currentRank = effortRank(input.current ?? input.defaultEffort);
   if (input.contextPressure === 'high' && currentRank !== null && targetRank > currentRank) {
     targetRank = Math.max(floorRank, currentRank);
   }
-
   const ranked = input.supported
     .map((value) => ({ value, rank: effortRank(value) }))
     .filter((item): item is { value: string; rank: number } => item.rank !== null)
     .filter((item) => item.rank >= floorRank);
-
   if (ranked.length === 0) {
+    // Preserve a supported unranked current value, but never endorse a known below-floor one.
     const fallback = input.current ?? input.defaultEffort;
-    return fallback !== null && input.supported.includes(fallback) ? fallback : null;
+    return fallback !== null && effortRank(fallback) === null && input.supported.includes(fallback)
+      ? fallback
+      : null;
   }
-
   ranked.sort((left, right) => {
-    const leftDistance = Math.abs(left.rank - targetRank);
-    const rightDistance = Math.abs(right.rank - targetRank);
-    if (leftDistance !== rightDistance) return leftDistance - rightDistance;
-    return left.rank - right.rank;
+    const distance = Math.abs(left.rank - targetRank) - Math.abs(right.rank - targetRank);
+    return distance !== 0 ? distance : left.rank - right.rank;
   });
   return ranked[0]?.value ?? null;
 }
