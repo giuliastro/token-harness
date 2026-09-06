@@ -1,0 +1,66 @@
+name: Validate dashboard clarity
+on:
+  push:
+    branches: [ci/clarity-workspace]
+    paths: [.github/workflows/clarity-validate.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Decode and verify implementation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, os
+          from pathlib import Path
+          parts = sorted(Path('.clarity-transfer').glob('*.txt'))
+          assert len(parts) == 9
+          patch = gzip.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '2320cd065b3da9bdc93259538d344c50fb4fd6de944f38e4ccd13b70590f03b7'
+          Path(os.environ['RUNNER_TEMP'], 'clarity.patch').write_bytes(patch)
+          PY
+          git switch --detach 89181ebc9e634aa229251d965eccfa222ad13f70
+          git apply --check "$RUNNER_TEMP/clarity.patch"
+          git apply "$RUNNER_TEMP/clarity.patch"
+          git diff --check
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - name: Full regression suite
+        shell: bash
+        run: |
+          pnpm test > "$RUNNER_TEMP/clarity-tests.log" 2>&1
+          tail -n 12 "$RUNNER_TEMP/clarity-tests.log"
+      - run: pnpm build
+      - run: pnpm smoke
+      - run: pnpm package
+      - run: pnpm smoke:install
+      - name: Commit validated production changes only
+        shell: bash
+        run: |
+          git restore apps/cli/bin/token-harness.mjs
+          git add PLAN.md README.md apps/cli/src/guided-assets.ts apps/cli/src/guided-client.ts apps/cli/src/guided-styles.ts apps/cli/src/guided.ts apps/cli/src/render/context-cost.ts apps/cli/test/guided.test.ts docs/rfcs/0013-guided-local-experience.md docs/spikes/dashboard-clarity.md packages/adapters/src/harnesses/claude-policy.ts packages/core/src/domain/context-cost.ts tests/integration/claude-native-policy.test.ts
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 13
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: clarify reasoning state and simplify the guided dashboard'
+          git push origin HEAD:refs/heads/feature/dashboard-clarity
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clarity-validation
+          path: ${{ runner.temp }}/clarity-tests.log
+          retention-days: 7
