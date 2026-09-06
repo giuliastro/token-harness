@@ -50,6 +50,11 @@ Local full suite: 1,656 passed, 8 skipped, 0 failed (1,664 total), with four tes
 constrained workspace. Typecheck, lint, formatting, build, bundle smoke and installed-package
 smoke passed. The unchanged default runner is also used by GitHub CI.
 
+The SHA-256-verified implementation also passed the independent Node 22.13.0 pipeline in
+[workflow 34020647885](https://github.com/giuliastro/token-harness/actions/runs/34020647885),
+including the default full test runner, typecheck, lint, formatting, build, bundle smoke and
+installed-package smoke. Temporary transfer files and workflows are not in the feature branch.
+
 Browser checks use real compiled client assets and synthetic snapshots captured separately from
 the actual loopback HTTP handler and guide service. Browser navigation is administratively blocked
 in the execution environment, so visual/interaction checks run offline, not against authenticated
