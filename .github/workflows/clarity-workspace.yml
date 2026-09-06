@@ -20,7 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Archive source and public dependencies only
         run: |
-          git rev-parse HEAD^ > WORKSPACE_BASE
+          git rev-parse HEAD > WORKSPACE_BASE
           tar --exclude='./.git' -czf "$RUNNER_TEMP/clarity-workspace.tar.gz" .
       - uses: actions/upload-artifact@v4
         with:
