@@ -1,0 +1,29 @@
+name: UI clarity workspace
+on:
+  push:
+    branches: [ci/clarity-workspace]
+    paths: [.github/workflows/clarity-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Archive source and public dependencies only
+        run: |
+          git rev-parse HEAD^ > WORKSPACE_BASE
+          tar --exclude='./.git' -czf "$RUNNER_TEMP/clarity-workspace.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clarity-workspace
+          path: ${{ runner.temp }}/clarity-workspace.tar.gz
+          retention-days: 1
