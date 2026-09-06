@@ -12,6 +12,14 @@ const count = value => new Intl.NumberFormat(undefined, { maximumFractionDigits:
 const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
 const shortDate = value => value ? new Date(value).toLocaleDateString() : 'not recorded';
 let csrf = '', current = null, ticket = null, working = false, reading = false;
+let shownSavings = null, loadStarted = 0, readEpoch = 0, activityPending = false;
+let progressKey = '', partialAgentsKey = '', partialSavingsKey = '', currentAgents = [];
+let shareOptions = [], shareSnapshot = null, shareTrigger = null, shareCanvas = null;
+const READ_LABELS = [
+  ['agents','Finding agents and output integrations'], ['allowance','Checking allowance with agents and companions'],
+  ['rules','Reading saved preferences and connected tools'], ['savings','Importing recorded reductions'],
+  ['checks','Checking integration configuration'],
+];
 let trigger = null, triggerKey = null, selectedView = 'overview', selectedRules = null, previewAction = null;
 const VIEW_COPY = {
   overview: ['Overview', 'Your agents and recorded results, in one place.'],
@@ -122,23 +130,24 @@ async function request(path, body) {
 }
 function error(message) { $('error').textContent = message; $('error').hidden = false; }
 function announce(message) { $('announcement').textContent = message; }
-function lock(value) {
+function lock(value, message = 'Checking current state. No additional change is being started.') {
   working = value;
   document.querySelectorAll('[data-operation],#setup,#task-review,#verify,#undo,#refresh,#period,#harness,#task').forEach(element => { element.disabled = value; });
   $('approve').disabled = value; $('close').disabled = value;
   $('review-content').setAttribute('aria-busy', String(value));
-  $('dialog-status').textContent = value ? 'Working locally. Please wait...' : '';
-  $('live-status').textContent = value ? 'An approved operation is being processed' : 'Changes always need approval';
+  $('dialog-status').textContent = value ? message : '';
+  $('dialog-status').classList.toggle('is-loading', value);
+  $('live-status').textContent = value ? message : 'Changes always need approval';
   if (!value && current) $('setup').disabled = current.agents.length === 0;
 }
 function actionButton(action, key, cls = 'secondary') {
   const button = node('button', action.label, cls);
-  button.type = 'button'; button.dataset.operation = action.kind; button.dataset.focus = key; button.disabled = working;
+  button.type = 'button'; button.dataset.operation = action.kind; button.dataset.focus = key; button.disabled = working || (reading && ['setup','effort','verify'].includes(action.kind));
   button.addEventListener('click', () => performAction(action));
   return button;
 }
 function performAction(action) {
-  if (working) return;
+  if (working || (reading && ['setup','effort','verify'].includes(action.kind))) return;
   if (action.kind === 'setup') return preview({ action: 'setup', ...(action.harness ? { harness: action.harness } : {}) });
   if (action.kind === 'effort') return showTask(action.harness);
   if (action.kind === 'verify') return verify();
@@ -174,13 +183,15 @@ function renderRules(data) {
     button.id = 'rules-tab-' + item.id; button.dataset.focus = button.id;
     button.setAttribute('role','tab'); button.setAttribute('aria-controls','rules');
     button.setAttribute('aria-selected',String(item.id === selectedRules)); button.tabIndex = item.id === selectedRules ? 0 : -1;
-    button.addEventListener('click', () => { selectedRules = item.id; renderRules(current); $('rules-tab-' + item.id).focus(); });
+    button.addEventListener('click', () => { selectedRules = item.id; renderRules({agents:currentAgents,rules:current?.rules || []}); $('rules-tab-' + item.id).focus(); });
     return button;
   });
   $('rule-filters').replaceChildren(...filters);
   $('rules').setAttribute('aria-labelledby','rules-tab-' + selectedRules);
   const list = selectedRules === 'general' ? data.rules : data.agents.find(agent => agent.id === selectedRules)?.rules || [];
-  $('rules').replaceChildren(...list.map(renderRule));
+  const agent=data.agents.find(agent=>agent.id===selectedRules);
+  if(agent?.pending?.includes('reasoning'))$('rules').replaceChildren(node('p','Reading saved preferences and connected tools...','section-loading is-loading'));
+  else $('rules').replaceChildren(...list.map(renderRule));
 }
 function renderRule(rule) {
   const card = node('article', undefined, 'rule');
@@ -206,19 +217,25 @@ function renderAgent(agent) {
   const head = node('div', undefined, 'agent-head'), title = node('div', undefined, 'agent-title');
   title.append(node('h2',agent.name),node('span',agent.version ? 'v' + agent.version : 'version unavailable','version'));
   const needsAttention=agent.state==='Needs attention';
-  head.append(title,node('span',needsAttention ? 'Needs attention' : agent.configured ? 'Configured' : 'Setup needed','pill' + (agent.configured && !needsAttention ? ' good' : ' warn'))); card.append(head);
+  head.append(title,node('span',needsAttention ? 'Needs attention' : agent.configured ? 'Configured' : 'Setup needed','pill' + (agent.configured && !needsAttention ? ' good' : ' warn'))); card.append(head); card.dataset.agent=agent.id;
   const integration = node('div',undefined,'agent-line'), integrationText = node('div');
   integrationText.append(node('span','Optimizer','key'), node('span',agent.providers.length ? agent.providers.join(', ') : 'Not configured'));
   integration.append(integrationText);
   const rulesButton=node('button','View rules','text-button'); rulesButton.type='button'; rulesButton.dataset.focus=agent.id+'-rules';
-  rulesButton.addEventListener('click',()=>{selectedRules=agent.id;renderRules(current);selectView('rules',true);}); integration.append(rulesButton); card.append(integration);
+  rulesButton.addEventListener('click',()=>{selectedRules=agent.id;renderRules({agents:currentAgents,rules:current?.rules || []});selectView('rules',true);}); integration.append(rulesButton); card.append(integration);
   const reasoning = agent.reasoning;
   const line = node('div',undefined,'agent-line'), text=node('div');
-  text.append(node('span','Reasoning','key'),node('strong',reasoning.label));
-  line.append(text,actionButton(reasoning.action,agent.id+'-reasoning','text-button')); card.append(line);
-  if (reasoning.state === 'unavailable' || reasoning.state === 'default') card.append(node('p',reasoning.description,'subtle-note'));
+  text.append(node('span','Reasoning','key'),node('strong',agent.pending?.includes('reasoning') ? 'Reading saved preference...' : reasoning.label));
+  line.append(text);if(!agent.pending?.includes('reasoning'))line.append(actionButton(reasoning.action,agent.id+'-reasoning','text-button'));  card.append(line);
+  if (agent.pending?.includes('reasoning')) { const pending=node('p',undefined,'section-loading caption'); pending.append(node('span',undefined,'spinner'),node('span','Reading preferences and connected tools...'));pending.firstChild.setAttribute('aria-hidden','true');card.append(pending); }
+  else if (reasoning.state === 'unavailable' || reasoning.state === 'default') card.append(node('p',reasoning.description,'subtle-note'));
   else card.append(node('p',reasoning.action.kind === 'help' ? 'Saved preference is readable; changes from this app are not available.' : 'Saved preference, not a live session reading.','subtle-note'));
   if (agent.effort === 'low') card.append(node('p','Using low reasoning? Review it before difficult work.','low-note'));
+  if (agent.pending?.includes('allowance')) {
+    const waiting=node('div',undefined,'allowance section-loading');
+    waiting.append(node('span',undefined,'spinner'),node('span','Checking allowance and reset times...','caption'));
+    waiting.firstChild.setAttribute('aria-hidden','true'); card.append(waiting);
+  } else {
   const allowance=node('div',undefined,'allowance' + (!agent.allowance.length ? ' full' : ''));
   if (!agent.allowance.length) {
     const missing=node('div',undefined,'allowance-missing');
@@ -230,37 +247,172 @@ function renderAgent(agent) {
     const reset=window.resetsAt ? 'Resets ' + date(window.resetsAt) : 'Reset time unavailable';
     item.append(node('span',(window.source === 'Cached observation' ? 'Cached. ' : '') + reset,'caption')); allowance.append(item);
   }
-  card.append(allowance); return card;
+  card.append(allowance);  }
+ return card;
 }
 function renderSavings(savings) {
+  shownSavings=savings;
   $('savings').replaceChildren(); $('savings').setAttribute('aria-busy','false');
   if (!savings.rows.length) {
     const empty=node('div',undefined,'empty');
-    empty.append(node('h3','No reductions measured yet'),node('p','This is not a measured zero. Use a configured agent; this page checks for new records automatically.'));
+    empty.append(node('h3','Your next reduced output starts the story'),node('p','No reductions measured in this period yet. Use a configured agent normally; available records appear here automatically. Missing data is not zero savings.'));
     empty.append(actionButton({kind:'help',label:'Enable or check measurements',topic:'measurements'},'empty-measurements')); $('savings').append(empty);
   }
-  for (const row of savings.rows) {
+  savings.rows.forEach((row,index) => {
     const item=node('div',undefined,'saving-row' + (row.saved < 0 ? ' negative' : ''));
-    const source=node('div'); source.append(node('h3',row.provider),node('span',row.measurement,'caption'),node('span',row.agents.length ? row.agents.join(', ') : 'Agent not recorded','caption'));
+    const source=node('div',undefined,'impact-summary');
+    source.append(node('p',row.provider+' / '+row.measurement,'caption'));
+    source.append(node('h3',row.impact?.headline || (row.saved<0 ? 'Output increased' : 'Recorded output reduction'),'impact-headline'));
+    source.append(node('p',row.impact?.detail || 'Scope: recorded changed outputs only.','caption'));
     const breakdown=node('div',undefined,'breakdown');
     if (row.before !== null && row.after !== null) {
       breakdown.append(node('p',count(row.before)+' \u2192 '+count(row.after),'volume'));
       breakdown.append(node('span',row.unit+' before / after','caption'));
     }
     breakdown.append(node('span',count(row.operations)+' recorded changed outputs','caption'));
+    breakdown.append(node('span',row.agents.length ? row.agents.join(', ') : 'Agent not recorded','caption'));
     const amount=node('div',undefined,'amount');
     amount.append(node('span',count(Math.abs(row.saved)),'number'),node('span',row.unit + (row.saved < 0 ? ' added, not saved' : ' removed'),'unit'));
+    if(row.impact?.share) {
+      const share=node('button','Share result','secondary'); share.type='button'; share.dataset.focus='share-'+index;
+      share.addEventListener('click',()=>showShare(index)); amount.append(share);
+    }
     item.append(source,breakdown,amount); $('savings').append(item);
-  }
+  });
   $('savings-dates').textContent=savings.firstRecordedAt ? 'Available history: '+shortDate(savings.firstRecordedAt)+' to '+shortDate(savings.lastRecordedAt)+'. All recorded projects.' : 'No dated records in this period.';
-  $('savings-note').textContent=savings.note+(savings.errors ? ' Recorded errors: '+count(savings.errors)+'.' : '')+(savings.inflated ? ' Outputs that grew: '+count(savings.inflated)+'.' : '');
-  $('export').disabled=false;
+  $('savings-note').textContent=savings.note;
+  $('savings-quality').textContent=[savings.errors ? count(savings.errors)+' recorded reducer errors' : '',savings.inflated ? count(savings.inflated)+' recorded outputs grew (included in the net result)' : ''].filter(Boolean).join('. ');
+  $('export').disabled=reading;
+}
+function shareCard(snapshot) {
+  const canvas=document.createElement('canvas'); canvas.width=1200;canvas.height=630;
+  const ctx=canvas.getContext('2d'); if(!ctx)throw new Error('Image export is not available in this browser. Copy the summary instead.');
+  const tokens=getComputedStyle(document.documentElement);
+  const color=name=>tokens.getPropertyValue(name).trim();
+  ctx.fillStyle=color('--bg');ctx.fillRect(0,0,1200,630);
+  ctx.fillStyle=color('--accent');ctx.fillRect(52,52,5,526);
+  ctx.fillStyle=color('--text');ctx.font='600 28px system-ui, sans-serif';ctx.fillText('Token Harness',84,85);
+  ctx.fillStyle=color('--muted');ctx.font='21px system-ui, sans-serif';ctx.fillText(snapshot.provider+' / '+snapshot.measurement,84,137);
+  function wrap(text,x,y,width,font,lineHeight) {
+    ctx.font=font;let line='';
+    for(const word of text.split(' ')) {
+      const next=line ? line+' '+word : word;
+      if(ctx.measureText(next).width>width && line){ctx.fillText(line,x,y);y+=lineHeight;line=word;}else line=next;
+    }
+    ctx.fillText(line,x,y);return y;
+  }
+  ctx.fillStyle=color('--accent');
+  const headline=snapshot.title.slice(snapshot.provider.length+2);
+  wrap(headline,84,225,1030,'600 60px system-ui, sans-serif',70);
+  ctx.fillStyle=color('--text');ctx.font='28px system-ui, sans-serif';ctx.fillText(snapshot.beforeAfter,84,352);
+  ctx.fillStyle=color('--muted');ctx.font='22px system-ui, sans-serif';ctx.fillText(snapshot.operations,84,389);ctx.fillText(snapshot.window,84,433);
+  ctx.strokeStyle=color('--line');ctx.beginPath();ctx.moveTo(84,463);ctx.lineTo(1130,463);ctx.stroke();
+  wrap(snapshot.caveat,84,501,1020,'19px system-ui, sans-serif',27);
+  ctx.font='18px system-ui, sans-serif';ctx.fillText('github.com/giuliastro/token-harness',84,570);
+  return canvas;
+}
+function updateShare() {
+  const selected=shareOptions[Number($('share-result').value)]; if(!selected)return;
+  shareSnapshot=structuredClone(selected.share);const data=shareSnapshot;
+  $('share-text').value=data.text; $('share-status').textContent='';
+  const x=new URL('https://twitter.com/intent/tweet');x.searchParams.set('text',data.shortText);x.searchParams.set('url',data.url);
+  const reddit=new URL('https://www.reddit.com/submit');reddit.searchParams.set('url',data.url);
+  reddit.searchParams.set('title',data.title+' ('+data.measurement+'; changed outputs only; '+data.window+')');
+  $('share-x').href=x.href;$('share-reddit').href=reddit.href;
+  $('share-native').hidden=typeof navigator.share!=='function';
+  try{shareCanvas=shareCard(data);$('share-image').src=shareCanvas.toDataURL('image/png');$('share-image').hidden=false;$('share-png').disabled=false;}
+  catch(e){shareCanvas=null;$('share-image').hidden=true;$('share-png').disabled=true;$('share-status').textContent=e.message;}
+}
+function showShare(index) {
+  if(!shownSavings || working)return;
+  shareOptions=shownSavings.rows.map((row,index)=>({index,share:row.impact?.share})).filter(item=>item.share);
+  if(!shareOptions.length)return;
+  $('share-result').replaceChildren(...shareOptions.map((item,i)=>{
+    const option=node('option',item.share.provider+' / '+item.share.measurement);option.value=String(i);return option;
+  }));
+  $('share-result').value=String(Math.max(0,shareOptions.findIndex(item=>item.index===index)));
+  shareTrigger=document.activeElement;updateShare();$('share-dialog').showModal();$('share-result').focus();
+}
+async function copyShare(discord=false) {
+  if(!shareSnapshot)return;
+  const data=shareSnapshot;
+  const text=discord ? '**'+data.title+'**\n'+data.text.split('\n').slice(1).join('\n') : data.text;
+  try{await navigator.clipboard.writeText(text);$('share-status').textContent=discord ? 'Copied. Paste into your chosen Discord channel. Nothing has been sent.' : 'Summary copied. Paste it where you want to share it.';}
+  catch{ $('share-text').value=text;$('share-text').focus();$('share-text').select();$('share-status').textContent='Clipboard access is unavailable. The text is selected: copy it manually.'; }
+}
+$('share-copy').addEventListener('click',()=>copyShare());
+$('share-discord').addEventListener('click',()=>copyShare(true));
+$('share-result').addEventListener('change',updateShare);
+$('share-close').addEventListener('click',()=>$('share-dialog').close());
+$('share-dialog').addEventListener('close',()=>{shareSnapshot=null;shareCanvas=null;if(shareTrigger?.isConnected)shareTrigger.focus({preventScroll:true});else $('period').focus();});
+$('share-png').addEventListener('click',()=>{
+  if(!shareCanvas)return;
+  shareCanvas.toBlob(blob=>{
+    if(!blob){$('share-status').textContent='Image export failed. Copy the summary instead.';return;}
+    const url=URL.createObjectURL(blob),link=node('a');link.href=url;link.download='token-harness-recorded-impact.png';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('share-status').textContent='Image prepared for download. Attach it to your post; it is not uploaded automatically.';
+  },'image/png');
+});
+$('share-native').addEventListener('click',async()=>{
+  if(!shareSnapshot)return;
+  try{await navigator.share({title:shareSnapshot.title,text:shareSnapshot.text});$('share-status').textContent='The device sharing dialog was opened.';}
+  catch(e){if(e.name!=='AbortError')$('share-status').textContent='Device sharing is unavailable. Use Copy summary or Save image.';}
+});
+
+function readControls(value) {
+  for(const id of ['refresh','period','setup','verify'])$(id).disabled=value || working;
+  document.querySelectorAll('[data-operation="setup"],[data-operation="effort"],[data-operation="verify"]').forEach(button=>{button.disabled=value || working;});
+  if(!value)$('setup').disabled=working || !current?.agents.length;
+}
+function sectionLoading(id,workingNow,text) {
+  const element=$(id+'-loading'); element.hidden=!workingNow;
+  if(text)element.lastElementChild.textContent=text;
+}
+function displayProgress(loading) {
+  if(!reading || !loading || loading.period!==$('period').value || !loading.running)return;
+  const focusKey=document.activeElement?.dataset?.focus;
+  const disclosures=new Set([...$('rules').querySelectorAll('details[open]')].map(item=>item.dataset.rule));
+  const key=JSON.stringify(loading.stages);
+  if(key!==progressKey) {
+    progressKey=key;
+    $('load-progress').replaceChildren(...loading.stages.map(stage=>{
+      const item=node('div',undefined,'load-step '+stage.state); item.dataset.stage=stage.id;
+      const icon=node('span',stage.state==='ready' ? '\u2713' : stage.state==='attention' ? '!' : '', stage.state==='working' ? 'spinner' : 'step-icon'); icon.setAttribute('aria-hidden','true');
+      item.append(icon,node('span',stage.label+(stage.state==='ready' ? ': checked' : stage.state==='attention' ? ': needs attention' : '...')));return item;
+    }));
+    const pending=loading.stages.filter(stage=>stage.state==='working');
+    const message=pending.length ? (loading.stages.length-pending.length)+' of '+loading.stages.length+' checks finished. '+pending.map(stage=>stage.label).join('; ')+'.' : 'Checks finished. Preparing your overview.';
+    $('updated').textContent=message; announce(message);
+  }
+  const isWorking=id=>loading.stages.some(stage=>stage.id===id && stage.state==='working');
+  sectionLoading('agents',isWorking('agents') || isWorking('allowance') || isWorking('rules'),isWorking('agents') ? 'Finding agents and output integrations...' : 'Agents found. Remaining settings and allowance checks are in progress...');
+  sectionLoading('rules',isWorking('rules'));
+  sectionLoading('savings',isWorking('savings'));
+  $('rules').setAttribute('aria-busy',String(isWorking('rules')));
+  $('agents').setAttribute('aria-busy',String(isWorking('agents') || isWorking('rules') || isWorking('allowance')));
+  if(loading.agents!==null) {
+    const key=JSON.stringify(loading.agents);
+    if(key!==partialAgentsKey) {
+      partialAgentsKey=key; currentAgents=loading.agents;
+      $('agents').replaceChildren(...loading.agents.map(renderAgent));
+      if(!isWorking('rules'))renderRules({agents:loading.agents,rules:current?.rules || []});
+    }
+  }
+  if(loading.savings!==null) {
+    const key=JSON.stringify(loading.savings);
+    if(key!==partialSavingsKey){partialSavingsKey=key;renderSavings(loading.savings);}
+  }
+  for(const detail of $('rules').querySelectorAll('details'))detail.open=disclosures.has(detail.dataset.rule);
+  if(focusKey && !$('review').open && !$('share-dialog').open) {
+    const focus=[...document.querySelectorAll('[data-focus]')].find(element=>element.dataset.focus===focusKey);
+    if(focus)focus.focus({preventScroll:true});
+  }
 }
 function render(data) {
   const focusKey=document.activeElement?.dataset?.focus;
   const openRules=new Set([...$('rules').querySelectorAll('details[open]')].map(item=>item.dataset.rule));
   const noticesOpen=$('notices').querySelector('details')?.open;
-  current=data; $('error').hidden=true;
+  current=data; currentAgents=data.agents; $('error').hidden=true;
   $('updated').textContent='Checked '+new Date(data.generatedAt).toLocaleTimeString()+'. Refreshes while visible.';
   $('notices').replaceChildren();
   if (data.notices.length) {
@@ -284,18 +436,30 @@ function render(data) {
   }
 }
 async function refresh() {
-  if (working || reading) return;
-  reading=true; $('refresh').disabled=true; $('updated').textContent='Reading settings and available measurements...';
+  if (working || reading || $('share-dialog').open) return;
+  reading=true; const epoch=++readEpoch; loadStarted=Date.now(); progressKey=''; partialAgentsKey=''; partialSavingsKey='';
+  shownSavings=null; readControls(true); $('export').disabled=true;
+  $('reading-spinner').hidden=false;
+  $('updated').textContent='Checking agents, settings and measurements. No settings are being changed.';
+  $('live-status').textContent='Read-only checks';
+  for(const id of ['agents','rules','savings'])sectionLoading(id,true);
+  for(const id of ['agents','rules','savings'])$(id).setAttribute('aria-busy','true');
+  document.querySelectorAll('.amount button').forEach(button=>{button.disabled=true;});
+  displayProgress({period:$('period').value,running:true,stages:READ_LABELS.map(([id,label])=>({id,label,state:'working'})),agents:null,savings:null});
   try { csrf=(await request('/api/session')).token; render(await request('/api/overview?period='+$('period').value)); }
   catch (e) {
-    error(e.message || 'Could not read this app. Check that its terminal is still open.');
-    $('updated').textContent='Refresh failed. Previous readings may be out of date.';
-    $('agents').setAttribute('aria-busy','false'); $('savings').setAttribute('aria-busy','false');
-    if (!current) {
-      $('agents').replaceChildren(node('p','Could not load your agents. Use Refresh to try the read again.','empty'));
-      $('savings').replaceChildren(node('p','Measurements are unavailable until the connection is restored.','empty'));
+    error((e.name==='TimeoutError' ? 'A check took too long. Nothing was changed. Use Refresh to try again.' : e.message) || 'Could not read this app. Check that its terminal is still open.');
+    $('updated').textContent='Refresh failed. Any displayed figures are previous or partial readings.';
+    if (!current && !partialAgentsKey) $('agents').replaceChildren(node('p','Could not load your agents. Use Refresh to try the read again.','empty'));
+    if (!current && !partialSavingsKey) $('savings').replaceChildren(node('p','Measurements are unavailable until the connection is restored.','empty'));
+  } finally {
+    if(epoch===readEpoch) {
+      reading=false; readControls(false); $('reading-spinner').hidden=true;
+      for(const id of ['agents','rules','savings']){sectionLoading(id,false);$(id).setAttribute('aria-busy','false');}
+      $('load-progress').replaceChildren(); $('live-status').textContent='Changes always need approval';
+      $('export').disabled=!current;
     }
-  } finally { reading=false; $('refresh').disabled=working; }
+  }
 }
 function showDialog(title) {
   if (!$('review').open) { trigger=document.activeElement; triggerKey=trigger?.dataset?.focus; }
@@ -324,7 +488,7 @@ function showTask(harness) {
 }
 function showHelp(topic, harness) {
   const help=HELP[topic] || HELP.compatibility; showDialog(help.title);
-  const agent=current?.agents.find(item=>item.id===harness);
+  const agent=currentAgents.find(item=>item.id===harness);
   if ((topic==='claude-effort' || topic==='codex-effort') && agent) {
     const observed=node('div',undefined,'read-only-box');
     observed.append(node('strong',agent.reasoning.label),node('p',agent.reasoning.description),node('p',agent.reasoning.changeNote)); $('review-content').append(observed);
@@ -361,7 +525,7 @@ function resultView(data) {
 async function preview(body) {
   if (working || !csrf) return;
   previewAction=body;
-  showDialog(body.action==='effort' ? 'Preparing a reasoning preview' : body.action==='undo' ? 'Preparing a restore preview' : 'Checking your setup'); lock(true);
+  showDialog(body.action==='effort' ? 'Preparing a reasoning preview' : body.action==='undo' ? 'Preparing a restore preview' : 'Checking your setup'); lock(true, 'Reading current settings. Nothing is being changed.');
   $('review-content').append(node('p','Reading current settings. Nothing is being changed.'));
   try {
     const data=await request('/api/preview',body); $('review-title').textContent=data.title; $('review-content').replaceChildren();
@@ -377,28 +541,36 @@ async function preview(body) {
     ticket=data.ticket; $('approve').hidden=!ticket;
     if(!ticket) $('review-content').append(actionButton({kind:'help',label:'What can I do next?',harness:body.harness,topic:body.action==='effort' ? body.harness==='claude' ? 'claude-effort' : 'codex-effort' : 'compatibility'},'preview-help'));
   } catch(e) { $('review-error').textContent=e.message; $('review-error').hidden=false; }
-  finally { lock(false); activity(); if(ticket)$('approve').focus(); }
+  finally { lock(false); activity(); if(ticket){$('dialog-status').textContent='Preview ready. Waiting for your approval.';$('approve').focus();} }
 }
 async function verify() {
-  if(working || !csrf)return; showDialog('Checking integrations'); lock(true);
+  if(working || !csrf)return; showDialog('Checking integrations'); lock(true, 'Checking configuration and execution evidence. Nothing is being changed.');
   $('review-content').append(node('p','Checking configuration and available evidence. No agent settings are changed.'));
   try { resultView(await request('/api/verify',{})); }
   catch(e) { $('review-error').textContent=e.message; $('review-error').hidden=false; }
   finally { lock(false); activity(); }
 }
 async function activity() {
+  if(activityPending)return;
+  activityPending=true; const epoch=readEpoch;
   try {
     const data=await request('/api/activity'); $('undo').hidden=!data.canUndo;
+    if(epoch===readEpoch)displayProgress(data.loading);
+    if(working && data.busy && data.activity[0]?.state==='working') {
+      $('dialog-status').textContent=data.activity[0].message;
+      $('live-status').textContent=data.activity[0].message;
+    }
     if(!data.activity.length)return;
-    $('activity').replaceChildren(...data.activity.map(item=>{
-      const row=node('div',undefined,'activity-row '+item.state),time=node('time',new Date(item.at).toLocaleTimeString()); time.dateTime=item.at;
-      row.append(time,node('p',item.message)); return row;
+    $('activity').replaceChildren(...data.activity.map((item,index)=>{
+      const row=node('div',undefined,'activity-row '+item.state+(data.busy && index===0 ? ' active-operation' : '')),time=node('time',new Date(item.at).toLocaleTimeString());time.dateTime=item.at;
+      row.append(time,node('p',item.message));return row;
     }));
-  } catch { /* The main refresh presents connection errors once. */ }
+  } catch { /* The foreground request owns errors; a progress poll is not another operation. */ }
+  finally { activityPending=false; }
 }
 $('approve').addEventListener('click',async()=>{
   if(!ticket || working)return;
-  const approved=ticket; ticket=null; lock(true); $('approve').hidden=true;
+  const approved=ticket; ticket=null; lock(true, 'Applying only the changes you approved, with backups and safety checks.'); $('approve').hidden=true;
   $('review-content').replaceChildren(node('p','Backing up, applying the changes you approved, and checking the result...'));
   try { resultView(await request('/api/apply',{ticket:approved})); }
   catch(e) { $('review-error').textContent=e.message+' No automatic retry was made. Check the current state before trying again.'; $('review-error').hidden=false; }
@@ -424,7 +596,10 @@ $('export').addEventListener('click',()=>{
   const url=URL.createObjectURL(new Blob([JSON.stringify(current,null,2)],{type:'application/json'}));
   const link=node('a'); link.href=url;link.download='token-harness-report.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-(async()=>{try{csrf=(await request('/api/session')).token;await refresh();activity();}catch(e){error(e.message);}})();
-setInterval(()=>{if(!document.hidden && !working && !$('review').open){refresh();activity();}},30000);
-setInterval(()=>{if(working)activity();},1500);
+refresh().then(()=>activity());
+setInterval(()=>{if(!document.hidden && !working && !$('review').open && !$('share-dialog').open){refresh();activity();}},30000);
+setInterval(()=>{
+  if(!document.hidden && (working || reading))activity();
+  if(reading && Date.now()-loadStarted>10000)$('live-status').textContent='Still checking ('+Math.floor((Date.now()-loadStarted)/1000)+'s). Ready results appear as they arrive.';
+},750);
 `;

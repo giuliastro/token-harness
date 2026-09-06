@@ -15,6 +15,7 @@ import type {
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import { runMetrics } from './commands/metrics.js';
+import { savingsImpact, type GuideImpact } from './guided-impact.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -80,6 +81,7 @@ export interface GuideAgent {
     source: string;
   }>;
   allowanceNote: string;
+  pending?: Array<'reasoning' | 'allowance'>;
 }
 export interface GuideSavings {
   period: GuidePeriod;
@@ -95,6 +97,7 @@ export interface GuideSavings {
     after: number | null;
     operations: number;
     agents: string[];
+    impact: GuideImpact;
   }>;
   errors: number;
   inflated: number;
@@ -254,6 +257,11 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
         after: row.after ?? null,
         operations: row.operations,
         agents: row.harnesses.map(name),
+        impact: savingsImpact(row, {
+          start: report?.windowStart ?? '',
+          end: report?.windowEnd ?? '',
+          all: period === 'all',
+        }),
       })),
     errors: report?.errors ?? 0,
     inflated: report?.inflatedOperations ?? 0,
@@ -539,8 +547,29 @@ function describeChange(action: PlannedAction, harness: string): GuidePreview['c
   };
 }
 
+type GuideRead<T> = Pick<CliEnvelope<T>, 'data' | 'diagnostics' | 'exitCode'>;
+type GuideStageId = 'agents' | 'allowance' | 'rules' | 'savings' | 'checks';
+export interface GuideLoading {
+  run: number;
+  period: GuidePeriod;
+  startedAt: string;
+  running: boolean;
+  stages: Array<{ id: GuideStageId; label: string; state: 'working' | 'ready' | 'attention' }>;
+  agents: GuideAgent[] | null;
+  savings: GuideSavings | null;
+}
+const READ_STAGES: Array<{ id: GuideStageId; label: string }> = [
+  { id: 'agents', label: 'Finding agents and output integrations' },
+  { id: 'allowance', label: 'Checking allowance with agents and companions' },
+  { id: 'rules', label: 'Reading saved preferences and connected tools' },
+  { id: 'savings', label: 'Importing recorded reductions' },
+  { id: 'checks', label: 'Checking integration configuration' },
+];
+
 export class GuideService {
   private approval: Approval | null = null;
+  private loading: GuideLoading | null = null;
+  private readSequence = 0;
   private busy = false;
   private lastApplied: { plan: string; network: boolean } | null = null;
   private reading: Promise<GuideOverview> | null = null;
@@ -554,8 +583,18 @@ export class GuideService {
     this.now = now;
     this.random = random;
   }
-  status(): { busy: boolean; activity: GuideActivity[]; canUndo: boolean } {
-    return { busy: this.busy, activity: [...this.activity], canUndo: this.lastApplied !== null };
+  status(): {
+    busy: boolean;
+    activity: GuideActivity[];
+    canUndo: boolean;
+    loading: GuideLoading | null;
+  } {
+    return {
+      busy: this.busy,
+      activity: [...this.activity],
+      canUndo: this.lastApplied !== null,
+      loading: this.loading === null ? null : structuredClone(this.loading),
+    };
   }
   private record(message: string, state: GuideActivity['state']): void {
     this.activity.unshift({ at: new Date(this.now()).toISOString(), message, state });
@@ -578,21 +617,118 @@ export class GuideService {
       return value;
     } finally {
       this.reading = null;
+      if (this.loading !== null) this.loading.running = false;
     }
   }
   private async collect(period: GuidePeriod): Promise<GuideOverview> {
-    const [doctor, budget, context, metrics, status] = await Promise.all([
-      this.call<DoctorReport>(['doctor']),
-      this.call<BudgetReport>(['budget']),
-      this.call<ContextReport>(['context']),
-      this.call<MetricsReport>(['savings', '--since', period === 'all' ? '1970-01-01' : period]),
-      this.call<StatusReport>(['status']),
+    const loading: GuideLoading = {
+      run: ++this.readSequence,
+      period,
+      startedAt: new Date(this.now()).toISOString(),
+      running: true,
+      stages: READ_STAGES.map((stage) => ({ ...stage, state: 'working' })),
+      agents: null,
+      savings: null,
+    };
+    this.loading = loading;
+    const empty = <T>(): GuideRead<T> => ({ data: null, diagnostics: [], exitCode: 9 });
+    let doctor = empty<DoctorReport>(),
+      budget = empty<BudgetReport>(),
+      context = empty<ContextReport>();
+    const observe = async <T>(id: GuideStageId, args: string[]): Promise<GuideRead<T>> => {
+      let result: GuideRead<T>;
+      try {
+        result = await this.call<T>(args);
+      } catch {
+        result = empty<T>();
+      } // Only bounded UI copy; never leak a subprocess error or private path.
+      const stage = loading.stages.find((item) => item.id === id)!;
+      stage.state =
+        result.data === null ||
+        result.exitCode !== 0 ||
+        result.diagnostics.some((item) => item.severity === 'warning' || item.severity === 'error')
+          ? 'attention'
+          : 'ready';
+      return result;
+    };
+    const updateAgents = (): void => {
+      if (doctor.data === null) return;
+      loading.agents = this.agentView(doctor, budget, context, {
+        rules: loading.stages.find((item) => item.id === 'rules')?.state !== 'working',
+        allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
+      });
+    };
+    const [, , , metrics, status] = await Promise.all([
+      observe<DoctorReport>('agents', ['doctor']).then((result) => {
+        doctor = result;
+        updateAgents();
+      }),
+      observe<BudgetReport>('allowance', ['budget']).then((result) => {
+        budget = result;
+        updateAgents();
+      }),
+      observe<ContextReport>('rules', ['context']).then((result) => {
+        context = result;
+        updateAgents();
+      }),
+      observe<MetricsReport>('savings', [
+        'savings',
+        '--since',
+        period === 'all' ? '1970-01-01' : period,
+      ]).then((result) => {
+        loading.savings = savingsView(result.data, period);
+        return result;
+      }),
+      observe<StatusReport>('checks', ['status']),
     ]);
+    const agents = this.agentView(doctor, budget, context, { rules: true, allowance: true });
+    const notices: string[] = [];
+    if (doctor.data === null)
+      notices.push(
+        'The agent inventory could not be read. Check the local installation and refresh.',
+      );
+    if (
+      metrics.data === null ||
+      metrics.diagnostics.some((entry) => entry.code === 'metrics-store-unavailable')
+    )
+      notices.push(
+        'Measurement records could not be read. Missing measurements are not reported as zero savings.',
+      );
+    if (
+      metrics.diagnostics.some(
+        (entry) => entry.severity === 'warning' || entry.severity === 'error',
+      )
+    )
+      notices.push(
+        'Some measurement sources are unavailable or incomplete. The results below cover readable records only; they are not a complete session-wide total.',
+      );
+    if (status.data === null)
+      notices.push(
+        'The integration configuration check could not finish. Use Check integrations in Activity to try again. No agent settings changed.',
+      );
+    if ((status.data?.problemCount ?? 0) > 0)
+      notices.push(
+        'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
+      );
+    return {
+      generatedAt: new Date(this.now()).toISOString(),
+      agents,
+      savings: savingsView(metrics.data, period),
+      rules: [...SAFETY_RULES, ...TASK_RULES],
+      notices,
+    };
+  }
+  private agentView(
+    doctor: GuideRead<DoctorReport>,
+    budget: GuideRead<BudgetReport>,
+    context: GuideRead<ContextReport>,
+    complete: { rules: boolean; allowance: boolean },
+  ): GuideAgent[] {
     const present = (doctor.data?.harnesses ?? []).filter(
       (item) =>
         item.state !== 'absent' && (item.harnessId === 'claude' || item.harnessId === 'codex'),
     );
-    const agents = present.map((agent): GuideAgent => {
+    return present.map((agent): GuideAgent => {
       const providers = (doctor.data?.providers ?? [])
         .filter(
           (provider) =>
@@ -603,6 +739,10 @@ export class GuideService {
       const usage = budget.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
       const observed = context.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
       return {
+        pending: [
+          ...(!complete.rules ? ['reasoning' as const] : []),
+          ...(!complete.allowance ? ['allowance' as const] : []),
+        ],
         id: agent.harnessId as GuideHarness,
         name: name(agent.harnessId),
         version: agent.version,
@@ -633,37 +773,6 @@ export class GuideService {
         ),
       };
     });
-    const notices: string[] = [];
-    if (doctor.data === null)
-      notices.push(
-        'The agent inventory could not be read. Check the local installation and refresh.',
-      );
-    if (
-      metrics.data === null ||
-      metrics.diagnostics.some((entry) => entry.code === 'metrics-store-unavailable')
-    )
-      notices.push(
-        'Measurement records could not be read. Missing measurements are not reported as zero savings.',
-      );
-    if (
-      metrics.diagnostics.some(
-        (entry) => entry.severity === 'warning' || entry.severity === 'error',
-      )
-    )
-      notices.push(
-        'Some measurement sources are unavailable or incomplete. The results below cover readable records only; they are not a complete session-wide total.',
-      );
-    if ((status.data?.problemCount ?? 0) > 0)
-      notices.push(
-        'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
-      );
-    return {
-      generatedAt: new Date(this.now()).toISOString(),
-      agents,
-      savings: savingsView(metrics.data, period),
-      rules: [...SAFETY_RULES, ...TASK_RULES],
-      notices,
-    };
   }
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
     if (this.busy)
@@ -738,6 +847,10 @@ export class GuideService {
         plans: string[] = [];
       let network = false;
       for (const agent of selected) {
+        this.record(
+          `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
+          'working',
+        );
         const args = ['plan', '--harness', agent.harnessId];
         if (data['action'] === 'effort')
           args.push(
@@ -832,6 +945,10 @@ export class GuideService {
       const messages: string[] = [];
       let appliedPlans = 0;
       for (const plan of approval.plans) {
+        this.record(
+          `${approval.operation === 'rollback' ? 'Restoring' : 'Applying'} reviewed change ${appliedPlans + 1} of ${approval.plans.length}. The transaction runs its backup and safety checks.`,
+          'working',
+        );
         let result: CliEnvelope<ApplyReport>;
         try {
           result = await this.call<ApplyReport>([approval.operation, '--plan', plan, '--yes']);
@@ -918,6 +1035,10 @@ export class GuideService {
       }
       for (const agent of present) {
         const harness = agent.harnessId;
+        this.record(
+          `Checking ${name(harness)} configuration and available execution evidence. No settings changed.`,
+          'working',
+        );
         const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
         const healthy = result.data?.healthyAtDeclaredTier === true;
         if (!healthy) ok = false;
