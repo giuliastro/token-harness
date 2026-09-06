@@ -19,6 +19,7 @@ export * from './domain/cross-harness-transfer-receipt.js';
 export * from './domain/handoff.js';
 export * from './domain/history.js';
 export * from './domain/optimizer.js';
+export * from './domain/outcome-learning.js';
 export * from './domain/action-conflicts.js';
 export * from './domain/capabilities.js';
 export * from './domain/compatibility-rows.js';

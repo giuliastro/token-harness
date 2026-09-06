@@ -29,6 +29,7 @@ import {
   EXIT_CODES,
   admitManagedMutation,
   commandResult,
+  benchmarkPolicySnapshot,
   diagnostic,
   harnessId,
   isProfileId,
@@ -42,6 +43,8 @@ import {
   type CommandResult,
   type Diagnostic,
   type HarnessConfigSummary,
+  type HarnessContextObservation,
+  type HarnessOptimizationAdvice,
   type HarnessId,
   type HarnessManifest,
   type ManagedIntegration,
@@ -64,6 +67,57 @@ import type { CommandContext } from './context.js';
 /** RFC 0003 §Profiles: `safe` is the default and `balanced` does not exist. */
 const DEFAULT_PROFILE: ProfileId = 'safe';
 const CODEX = harnessId('codex');
+
+/** Learned single-control experiments must still describe the native plan observation. */
+function admitOutcomePolicy(
+  advice: HarnessOptimizationAdvice,
+  observation: HarnessContextObservation,
+  diagnostics: Diagnostic[],
+): boolean {
+  const learning = advice.effortLearning;
+  if (learning?.state === 'deferred') {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'outcome-native-policy-deferred',
+        subject: advice.harnessId,
+        message:
+          'Outcome evidence defers native policy changes until context or allowance is reviewed',
+        remediation:
+          'Inspect token-harness optimize for the decision and re-observe before making a new plan',
+      }),
+    );
+    return false;
+  }
+  if (learning?.state !== 'learned') return true;
+  const observed = benchmarkPolicySnapshot(observation);
+  const catalog = observation.availableModels.find(
+    (model) => model.model === observation.model || model.id === observation.model,
+  );
+  const supported = catalog?.supportedReasoningEfforts ?? observation.nativeEffort?.supported ?? [];
+  if (
+    observed === null ||
+    observed.model !== learning.policy.model ||
+    observed.verbosity !== learning.policy.verbosity ||
+    observed.reasoningEffort !== advice.currentEffort ||
+    advice.recommendedEffort === null ||
+    !supported.includes(advice.recommendedEffort)
+  ) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'outcome-native-policy-drift',
+        subject: advice.harnessId,
+        message:
+          'The configured policy or supported effort catalog changed after outcome-based advice',
+        remediation:
+          'Re-run the native plan against a stable model, effort and verbosity configuration',
+      }),
+    );
+    return false;
+  }
+  return true;
+}
 
 async function appendCodexNativePolicy(
   context: CommandContext,
@@ -107,6 +161,8 @@ async function appendCodexNativePolicy(
     );
     return;
   }
+
+  if (!admitOutcomePolicy(advice, observation, diagnostics)) return;
 
   const target = observation.managedConfigTarget;
   const catalogModel =
@@ -477,9 +533,10 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       const advice = optimization.data?.harnesses.find(
         (item) => item.harnessId === harnessId('claude'),
       );
-      const native = observation.data?.harnesses.find(
+      const observed = observation.data?.harnesses.find(
         (item) => item.harnessId === harnessId('claude'),
-      )?.nativeEffort;
+      );
+      const native = observed?.nativeEffort;
       if (advice !== undefined && native != null && advice.currentEffort !== native.current) {
         diagnostics.push(
           diagnostic({
@@ -490,7 +547,11 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
             remediation: 'Re-run the plan against a stable configuration',
           }),
         );
-      } else {
+      } else if (
+        advice === undefined ||
+        observed === undefined ||
+        admitOutcomePolicy(advice, observed, diagnostics)
+      ) {
         const result = planClaudeNativeEffort(native, advice?.recommendedEffort ?? null);
         // Guard before another provider writes an unrelated hook in the same settings file.
         actions.unshift(...result.actions);

@@ -10,6 +10,9 @@ import {
   assessMcpServer,
   assessWindowPace,
   chooseSupportedEffort,
+  refineEffortWithOutcomes,
+  benchmarkPolicySnapshot,
+  type TaskBenchmarkReceipt,
   commandResult,
   diagnostic,
   type BudgetProfile,
@@ -32,6 +35,7 @@ import { runBudget } from './budget.js';
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
 import { runHistory } from './history.js';
+import { readOptimizationHistory } from './optimization-history.js';
 
 const DEFAULT_RESERVE = 20;
 
@@ -171,6 +175,8 @@ function adviceForHarness(input: {
   contextReport: ContextReport;
   context: HarnessContextObservation;
   budgetWindows: ReturnType<typeof assessWindowPace>[];
+  benchmarkReceipts: readonly TaskBenchmarkReceipt[] | null;
+  observedAt: string;
   localBurnTrend: LocalBurnTrend | null;
   recentSession: SessionBoundarySignal | null;
   taskClass: TaskClass;
@@ -361,7 +367,7 @@ function adviceForHarness(input: {
     catalogModel?.defaultReasoningEffort ??
     nativeEffort?.current ??
     null;
-  const recommendedEffort =
+  const baseRecommendedEffort =
     catalogModel === null && (nativeEffort == null || !nativeEffort.writable)
       ? null
       : chooseSupportedEffort({
@@ -373,6 +379,34 @@ function adviceForHarness(input: {
           pace: budgetWindows,
           contextPressure: pressure.pressure,
         });
+
+  const capturedPolicy = benchmarkPolicySnapshot(context);
+  const effortLearning = refineEffortWithOutcomes({
+    harnessId: context.harnessId,
+    model: capturedPolicy?.model ?? null,
+    verbosity: capturedPolicy?.verbosity ?? null,
+    taskClass,
+    profile,
+    supported: catalogModel?.supportedReasoningEfforts ?? nativeEffort?.supported ?? [],
+    baseEffort: baseRecommendedEffort,
+    budget: budgetDecision,
+    contextPressure: pressure.pressure,
+    now: input.observedAt,
+    receipts: input.benchmarkReceipts,
+  });
+  const recommendedEffort = effortLearning.recommendedEffort;
+  if (effortLearning.state === 'learned' || effortLearning.state === 'deferred') {
+    recommendations.push({
+      area: 'history',
+      priority: 'first',
+      action:
+        effortLearning.state === 'deferred'
+          ? 'Review task outcomes and quota/context constraints before another native policy change'
+          : 'Use the effort supported by repeated project task outcomes; keep verbosity unchanged',
+      target: recommendedEffort,
+      evidence: effortLearning.reasons,
+    });
+  }
 
   if (context.model !== null && catalogModel === null && context.availableModels.length > 0) {
     diagnostics.push(
@@ -432,13 +466,18 @@ function adviceForHarness(input: {
     });
   }
 
-  const recommendedVerbosity = verbosityTarget({
-    current: context.verbosity,
-    taskClass,
-    profile,
-    pace: budgetWindows,
-    contextPressure: pressure.pressure,
-  });
+  const recommendedVerbosity =
+    effortLearning.state === 'deferred'
+      ? null
+      : effortLearning.state === 'learned'
+        ? context.verbosity
+        : verbosityTarget({
+            current: context.verbosity,
+            taskClass,
+            profile,
+            pace: budgetWindows,
+            contextPressure: pressure.pressure,
+          });
   if (recommendedVerbosity !== null) {
     recommendations.push({
       area: 'verbosity',
@@ -470,6 +509,7 @@ function adviceForHarness(input: {
     recommendedModel,
     currentEffort,
     recommendedEffort,
+    effortLearning,
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,
@@ -501,10 +541,11 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
   }
   const reservePercent = context.reservePercent ?? DEFAULT_RESERVE;
 
-  const [budgetResult, contextResult, historyResult] = await Promise.all([
+  const [budgetResult, contextResult, historyResult, outcomeHistory] = await Promise.all([
     runBudget(context),
     runContext(context),
     runHistory(context),
+    readOptimizationHistory(context),
   ]);
   const contextReport = contextResult.data;
   const budgetReport = budgetResult.data;
@@ -549,6 +590,8 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         contextReport,
         context: harnessContext,
         budgetWindows: pace,
+        benchmarkReceipts: outcomeHistory.receipts,
+        observedAt: report.observedAt,
         localBurnTrend:
           historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
             ?.burnTrend ?? null,

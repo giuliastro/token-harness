@@ -8,6 +8,7 @@
 
 import type { UsageWindowSnapshot } from './budget.js';
 import { assessBudgetDecision, type BudgetDecision } from './budget-policy.js';
+import type { EffortLearningDecision } from './outcome-learning.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
@@ -92,6 +93,8 @@ export interface HarnessOptimizationAdvice {
   pace: WindowPaceAssessment[];
   /** Additive joint five-hour/weekly decision. Older saved reports may omit it. */
   budgetDecision?: BudgetDecision;
+  /** Additive project-local feedback; legacy reports may omit it. */
+  effortLearning?: EffortLearningDecision;
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
 }
@@ -148,10 +151,14 @@ const PROFILE_TARGET: Readonly<
   },
 };
 
-function effortRank(value: string | null): number | null {
+export function effortRank(value: string | null): number | null {
   if (value === null) return null;
   const rank = (EFFORT_ORDER as readonly string[]).indexOf(value);
   return rank === -1 ? null : rank;
+}
+
+export function taskEffortFloor(task: TaskClass): string {
+  return QUALITY_FLOOR[task];
 }
 
 function validPercent(value: number | null): value is number {

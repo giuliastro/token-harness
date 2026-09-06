@@ -106,7 +106,17 @@ export interface NativeEffortObservation {
   environment: NativeConfigurationEnvironment | null;
 }
 
+/** Policy observed at a task boundary; never proof of the running session's settings. */
+export interface BenchmarkPolicySnapshot {
+  model: string | null;
+  reasoningEffort: string | null;
+  verbosity: string | null;
+  verification: 'config-only';
+}
+
 export interface HarnessContextObservation {
+  /** Optional persisted identity for controlled benchmarking, not an effective-session reading. */
+  benchmarkPolicy?: BenchmarkPolicySnapshot | null;
   nativeEffort?: NativeEffortObservation | null;
   harnessId: HarnessId;
   state: ContextObservationState;
@@ -227,5 +237,31 @@ export function assessMcpServer(server: McpServerObservation): McpServerAssessme
     action,
     hasRemovalEvidence: false,
     reason,
+  };
+}
+
+/** Resolve only observed configuration/catalog defaults; do not guess a model from its name. */
+export function benchmarkPolicySnapshot(
+  observation: HarnessContextObservation | undefined,
+): BenchmarkPolicySnapshot | null {
+  if (
+    observation === undefined ||
+    observation.state === 'absent' ||
+    observation.state === 'unavailable'
+  )
+    return null;
+  if (observation.benchmarkPolicy !== undefined) return observation.benchmarkPolicy;
+  const model = observation.availableModels.find(
+    (item) => item.model === observation.model || item.id === observation.model,
+  );
+  return {
+    model: observation.model,
+    reasoningEffort:
+      observation.reasoningEffort ??
+      model?.defaultReasoningEffort ??
+      observation.nativeEffort?.current ??
+      null,
+    verbosity: observation.verbosity,
+    verification: 'config-only',
   };
 }
