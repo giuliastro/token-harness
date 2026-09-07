@@ -1,6 +1,6 @@
 {
   "name": "token-harness",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Quota-aware efficiency layer for Claude Code and Codex subscription limits.",
   "private": true,
   "type": "module",
