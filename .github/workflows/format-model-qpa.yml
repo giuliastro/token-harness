@@ -1,0 +1,44 @@
+name: format-model-qpa
+
+on:
+  push:
+    branches: [feature/model-quality-per-allowance]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/model-quality-per-allowance
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format milestone files
+        run: >-
+          pnpm exec prettier --write
+          apps/cli/src/commands/optimize.ts
+          docs/milestones/model-quality-per-allowance.md
+          docs/rfcs/0018-model-quality-per-allowance.md
+          packages/core/src/domain/model-learning.ts
+          packages/core/src/domain/model-quality-per-allowance.ts
+          packages/core/src/domain/optimizer.ts
+          packages/core/src/index.ts
+          packages/core/test/model-learning.test.ts
+          packages/core/test/model-quality-per-allowance.test.ts
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name giuliastro
+          git config user.email giuliaccio@gmail.com
+          git add -A
+          git commit -m "style: format model quality per allowance"
+          git push origin HEAD:feature/model-quality-per-allowance
