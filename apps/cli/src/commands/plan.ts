@@ -76,7 +76,12 @@ function admitOutcomePolicy(
 ): boolean {
   const effortLearning = advice.effortLearning;
   const verbosityLearning = advice.verbosityLearning;
-  if (effortLearning?.state === 'deferred' || verbosityLearning?.state === 'deferred') {
+  const modelLearning = advice.modelLearning;
+  if (
+    effortLearning?.state === 'deferred' ||
+    verbosityLearning?.state === 'deferred' ||
+    modelLearning?.state === 'deferred'
+  ) {
     diagnostics.push(
       diagnostic({
         severity: 'info',
@@ -91,7 +96,12 @@ function admitOutcomePolicy(
     return false;
   }
 
-  if (effortLearning?.state !== 'learned' && verbosityLearning?.state !== 'learned') return true;
+  if (
+    effortLearning?.state !== 'learned' &&
+    verbosityLearning?.state !== 'learned' &&
+    modelLearning?.state !== 'learned'
+  )
+    return true;
   const observed = benchmarkPolicySnapshot(observation);
   if (observed === null) {
     diagnostics.push(
@@ -164,6 +174,45 @@ function admitOutcomePolicy(
     }
   }
 
+  const modelChange =
+    modelLearning?.state === 'learned' &&
+    advice.recommendedModel !== null &&
+    advice.recommendedModel !== advice.currentModel;
+  if (modelChange && modelLearning !== undefined) {
+    const canonicalModels = new Set(
+      observation.availableModels
+        .filter(
+          (model) =>
+            model.id === advice.recommendedModel || model.model === advice.recommendedModel,
+        )
+        .map((model) => model.model),
+    );
+    if (
+      observation.modelCatalogTruncated ||
+      observed.model !== advice.currentModel ||
+      observed.model !== modelLearning.baseModel ||
+      observed.reasoningEffort !== modelLearning.policy.reasoningEffort ||
+      observed.verbosity !== modelLearning.policy.verbosity ||
+      advice.recommendedEffort !== advice.currentEffort ||
+      advice.recommendedVerbosity !== advice.currentVerbosity ||
+      advice.recommendedModel !== modelLearning.candidateModel ||
+      canonicalModels.size !== 1
+    ) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'model-native-policy-drift',
+          subject: advice.harnessId,
+          message:
+            'Model, fixed effort/verbosity, or the complete native catalog changed after the learned model recommendation',
+          remediation:
+            'Re-run token-harness optimize and plan against one stable model catalog and native policy tuple',
+        }),
+      );
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -221,6 +270,10 @@ async function appendCodexNativePolicy(
         ) ?? null);
   const observedCurrentEffort =
     observation.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
+  let modelReference: {
+    requested: string;
+    resolution: 'native-catalog';
+  } | null = null;
   const edits: Array<{
     keyPath: string;
     value: string;
@@ -228,7 +281,7 @@ async function appendCodexNativePolicy(
   }> = [];
 
   const consider = (input: {
-    keyPath: 'model_reasoning_effort' | 'model_verbosity';
+    keyPath: 'model' | 'model_reasoning_effort' | 'model_verbosity';
     adviceCurrent: string | null;
     observedCurrent: string | null;
     recommended: string | null;
@@ -281,6 +334,45 @@ async function appendCodexNativePolicy(
       );
       return;
     }
+    if (input.keyPath === 'model') {
+      if (
+        advice.modelLearning?.state !== 'learned' ||
+        input.recommended !== advice.modelLearning.candidateModel ||
+        observation.modelCatalogTruncated
+      ) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'codex-native-model-unproven',
+            subject: CODEX,
+            message:
+              'A managed Codex model change requires the learned model candidate and a complete native catalog',
+            remediation:
+              'Keep the model recommendation advisory until RFC 0018 evidence and the complete catalog agree',
+          }),
+        );
+        return;
+      }
+      const canonicalModels = new Set(
+        observation.availableModels
+          .filter((model) => model.id === input.recommended || model.model === input.recommended)
+          .map((model) => model.model),
+      );
+      if (canonicalModels.size !== 1) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'codex-native-model-reference-ambiguous',
+            subject: CODEX,
+            message:
+              'The learned Codex model recommendation does not resolve uniquely in the current native catalog',
+            remediation: 'Re-run the plan after the Codex model catalog is stable',
+          }),
+        );
+        return;
+      }
+      modelReference = { requested: input.recommended, resolution: 'native-catalog' };
+    }
     edits.push({
       keyPath: input.keyPath,
       value: input.recommended,
@@ -288,6 +380,12 @@ async function appendCodexNativePolicy(
     });
   };
 
+  consider({
+    keyPath: 'model',
+    adviceCurrent: advice.currentModel,
+    observedCurrent: observation.model,
+    recommended: advice.recommendedModel,
+  });
   consider({
     keyPath: 'model_reasoning_effort',
     adviceCurrent: advice.currentEffort,
@@ -325,7 +423,7 @@ async function appendCodexNativePolicy(
     path: target.path,
     edits,
     policyGuard: 'subscription-safe',
-    modelReference: null,
+    modelReference,
     expectedVersion: target.version,
     reloadUserConfig: true,
   });
