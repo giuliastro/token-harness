@@ -81,7 +81,7 @@ function paired(input: {
         id: `case-${String(index)}`,
         variant: 'baseline',
         model: 'model-a',
-        quality: input.baseQuality,
+        ...(input.baseQuality === undefined ? {} : { quality: input.baseQuality }),
         tokens: input.baseTokens ?? 100,
         startMinute: minute,
       }),
@@ -89,7 +89,9 @@ function paired(input: {
         id: `case-${String(index)}`,
         variant: 'optimized',
         model: input.candidateModel ?? 'model-b',
-        quality: input.candidateQuality,
+        ...(input.candidateQuality === undefined
+          ? {}
+          : { quality: input.candidateQuality }),
         tokens: input.candidateTokens ?? 80,
         startMinute: minute + 10,
       }),
