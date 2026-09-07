@@ -59,7 +59,9 @@ interface BaseScheduleData {
 
 interface CapacityScheduleData extends BaseScheduleData {
   evidence: BaseScheduleData['evidence'] & {
-    current: BaseScheduleData['evidence']['current'] & { acceptedTasksRemaining: number | null };
+    current: BaseScheduleData['evidence']['current'] & {
+      acceptedTasksRemaining: number | null;
+    };
     candidate: BaseScheduleData['evidence']['candidate'] & {
       acceptedTasksRemaining: number | null;
     };
@@ -229,7 +231,9 @@ export async function scheduleCapacityMain(
   try {
     envelope = JSON.parse(stdout) as CliEnvelope<BaseScheduleData>;
   } catch {
-    output.err('internal-error: schedule capacity layer could not parse the base schedule report\n');
+    output.err(
+      'internal-error: schedule capacity layer could not parse the base schedule report\n',
+    );
     return 70;
   }
   if (envelope.data === null) {
