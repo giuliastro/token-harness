@@ -1,0 +1,298 @@
+name: patch-managed-model-policy
+
+on:
+  push:
+    branches: [feature/codex-managed-model-policy]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/codex-managed-model-policy
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply reviewed planner and executor changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          plan = Path('apps/cli/src/commands/plan.ts')
+          text = plan.read_text()
+
+          old = """  const effortLearning = advice.effortLearning;
+  const verbosityLearning = advice.verbosityLearning;
+  if (effortLearning?.state === 'deferred' || verbosityLearning?.state === 'deferred') {
+"""
+          new = """  const effortLearning = advice.effortLearning;
+  const verbosityLearning = advice.verbosityLearning;
+  const modelLearning = advice.modelLearning;
+  if (
+    effortLearning?.state === 'deferred' ||
+    verbosityLearning?.state === 'deferred' ||
+    modelLearning?.state === 'deferred'
+  ) {
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = """  if (effortLearning?.state !== 'learned' && verbosityLearning?.state !== 'learned') return true;
+"""
+          new = """  if (
+    effortLearning?.state !== 'learned' &&
+    verbosityLearning?.state !== 'learned' &&
+    modelLearning?.state !== 'learned'
+  )
+    return true;
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          marker = """  return true;
+}
+
+async function appendCodexNativePolicy(
+"""
+          model_guard = """  const modelChange =
+    modelLearning?.state === 'learned' &&
+    advice.recommendedModel !== null &&
+    advice.recommendedModel !== advice.currentModel;
+  if (modelChange && modelLearning !== undefined) {
+    const canonicalModels = new Set(
+      observation.availableModels
+        .filter(
+          (model) =>
+            model.id === advice.recommendedModel || model.model === advice.recommendedModel,
+        )
+        .map((model) => model.model),
+    );
+    if (
+      observation.modelCatalogTruncated ||
+      observed.model !== advice.currentModel ||
+      observed.model !== modelLearning.baseModel ||
+      observed.reasoningEffort !== modelLearning.policy.reasoningEffort ||
+      observed.verbosity !== modelLearning.policy.verbosity ||
+      advice.recommendedEffort !== advice.currentEffort ||
+      advice.recommendedVerbosity !== advice.currentVerbosity ||
+      advice.recommendedModel !== modelLearning.candidateModel ||
+      canonicalModels.size !== 1
+    ) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'model-native-policy-drift',
+          subject: advice.harnessId,
+          message:
+            'Model, fixed effort/verbosity, or the complete native catalog changed after the learned model recommendation',
+          remediation:
+            'Re-run token-harness optimize and plan against one stable model catalog and native policy tuple',
+        }),
+      );
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function appendCodexNativePolicy(
+"""
+          assert marker in text
+          text = text.replace(marker, model_guard, 1)
+
+          old = """  const observedCurrentEffort =
+    observation.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
+  const edits: Array<{
+"""
+          new = """  const observedCurrentEffort =
+    observation.reasoningEffort ?? catalogModel?.defaultReasoningEffort ?? null;
+  let modelReference: {
+    requested: string;
+    resolution: 'native-catalog';
+  } | null = null;
+  const edits: Array<{
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = """    keyPath: 'model_reasoning_effort' | 'model_verbosity';
+"""
+          new = """    keyPath: 'model' | 'model_reasoning_effort' | 'model_verbosity';
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = """    edits.push({
+      keyPath: input.keyPath,
+      value: input.recommended,
+      mergeStrategy: 'replace',
+    });
+  };
+
+  consider({
+    keyPath: 'model_reasoning_effort',
+"""
+          new = """    if (input.keyPath === 'model') {
+      if (
+        advice.modelLearning?.state !== 'learned' ||
+        input.recommended !== advice.modelLearning.candidateModel ||
+        observation.modelCatalogTruncated
+      ) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'codex-native-model-unproven',
+            subject: CODEX,
+            message:
+              'A managed Codex model change requires the learned model candidate and a complete native catalog',
+            remediation:
+              'Keep the model recommendation advisory until RFC 0018 evidence and the complete catalog agree',
+          }),
+        );
+        return;
+      }
+      const canonicalModels = new Set(
+        observation.availableModels
+          .filter(
+            (model) =>
+              model.id === input.recommended || model.model === input.recommended,
+          )
+          .map((model) => model.model),
+      );
+      if (canonicalModels.size !== 1) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'codex-native-model-reference-ambiguous',
+            subject: CODEX,
+            message:
+              'The learned Codex model recommendation does not resolve uniquely in the current native catalog',
+            remediation: 'Re-run the plan after the Codex model catalog is stable',
+          }),
+        );
+        return;
+      }
+      modelReference = { requested: input.recommended, resolution: 'native-catalog' };
+    }
+    edits.push({
+      keyPath: input.keyPath,
+      value: input.recommended,
+      mergeStrategy: 'replace',
+    });
+  };
+
+  consider({
+    keyPath: 'model',
+    adviceCurrent: advice.currentModel,
+    observedCurrent: observation.model,
+    recommended: advice.recommendedModel,
+  });
+  consider({
+    keyPath: 'model_reasoning_effort',
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = """    policyGuard: 'subscription-safe',
+    modelReference: null,
+"""
+          new = """    policyGuard: 'subscription-safe',
+    modelReference,
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+          plan.write_text(text)
+
+          actions = Path('packages/core/src/state/actions.ts')
+          text = actions.read_text()
+          old = "const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set(['model_reasoning_effort', 'model_verbosity']);"
+          new = "const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set([\n  'model',\n  'model_reasoning_effort',\n  'model_verbosity',\n]);"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = """  const modelEdits = action.edits.filter((edit) => edit.keyPath === 'model');
+  if (action.modelReference === null && modelEdits.length > 0) {
+"""
+          new = """  const modelEdits = action.edits.filter((edit) => edit.keyPath === 'model');
+  if (
+    action.policyGuard === 'subscription-safe' &&
+    modelEdits.length > 0 &&
+    action.edits.length !== 1
+  ) {
+    return refusal(
+      action,
+      'codex-native-policy-mixed-model-edit',
+      action.path,
+      'A subscription-safe Codex model change must be the only native control changed in its batch',
+      'Recompute the plan so model, reasoning effort and verbosity are learned and applied one control at a time',
+    );
+  }
+  if (action.modelReference === null && modelEdits.length > 0) {
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+          text = text.replace(
+            'provider, auth, model, and service-tier changes require a separately reviewed policy path',
+            'provider, auth, and service-tier changes require a separately reviewed policy path',
+            1,
+          )
+          actions.write_text(text)
+
+          plan_doc = Path('PLAN.md')
+          text = plan_doc.read_text()
+          text = text.replace(
+            'continuous runtime learning and empirical model-tier ranking remain open.',
+            'continuous runtime learning remains open; RFC 0018 now supplies the first project-local, outcome- and allowance-gated advisory model ranking.',
+            1,
+          )
+          text = text.replace(
+            'future model edits are forced through apply-time native-catalog resolution;',
+            'model edits are forced through apply-time native-catalog resolution and only a learned RFC 0018 recommendation may plan one;',
+            1,
+          )
+          old = """Model switching remains advisory until
+model-tier quota benchmarks exist, so this resolver is infrastructure rather than an automatic
+optimizer decision.
+"""
+          new = """RFC 0018 now supplies project-local model quality/allowance evidence. RFC 0019 activates the reviewed
+Codex model path only for a learned recommendation whose fixed effort/verbosity tuple and complete
+catalog survive the planner's second observation. Apply still resolves the logical model reference
+again against `model/list`, and model changes remain single-control rather than sharing a batch with
+effort or verbosity.
+"""
+          assert old in text
+          text = text.replace(old, new, 1)
+          text += """
+
+## Managed Codex model policy milestone (2026-09-07, RFC 0019)
+
+The advisory model decision from RFC 0018 can now cross into `plan --native-policy` for Codex, but
+only as a model-only `subscription-safe` batch. The planner re-observes the configured base model,
+fixed effort/verbosity, writable origin, target version and complete model catalog after optimizer
+advice is frozen. Any drift or non-user-layer ownership keeps the recommendation advisory.
+
+The stored action carries a logical `modelReference`, not a blindly writable string. Apply re-reads
+`model/list`, refuses missing/truncated/ambiguous resolution before snapshot/write, canonicalizes the
+model, performs the versioned `config/batchWrite`, verifies the effective value with `config/read`,
+and relies on the existing transaction snapshot for byte-for-byte rollback. Provider, auth and
+service-tier fields remain outside the subscription-safe set.
+"""
+          plan_doc.write_text(text)
+      - name: Format touched files
+        run: pnpm exec prettier --write apps/cli/src/commands/plan.ts packages/core/src/state/actions.ts PLAN.md
+      - name: Commit exact patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/cli/src/commands/plan.ts packages/core/src/state/actions.ts PLAN.md
+          git commit -m "feat: admit reviewed Codex model policy"
+          git push origin HEAD:feature/codex-managed-model-policy
