@@ -27,6 +27,12 @@ export interface HarnessSchedulingEvidence {
   qualityTaskClass: TaskClass | null;
   /** Number of empirical quality-passed/failed observations behind `quality`. */
   qualitySamples: number;
+  /**
+   * Optional conservative whole-task capacity derived inside this harness's own quota domain.
+   * Null/undefined means unknown. Zero means the measured safe allowance is below one empirical
+   * quality-passed task equivalent for this task class.
+   */
+  acceptedTasksRemaining?: number | null;
 }
 
 export interface CrossHarnessTransferEvidence {
@@ -67,12 +73,19 @@ function reason(code: string, summary: string): CrossHarnessDecisionReason {
 }
 
 function hasPressure(evidence: HarnessSchedulingEvidence): boolean {
-  return evidence.fiveHourPace === 'over-pace' || evidence.weeklyPace === 'over-pace';
+  return (
+    evidence.fiveHourPace === 'over-pace' ||
+    evidence.weeklyPace === 'over-pace' ||
+    evidence.acceptedTasksRemaining === 0
+  );
 }
 
 function hasSafeHeadroom(evidence: HarnessSchedulingEvidence): boolean {
   const live = [evidence.fiveHourPace, evidence.weeklyPace];
-  return live.every((state) => state === 'under-pace' || state === 'on-pace');
+  return (
+    live.every((state) => state === 'under-pace' || state === 'on-pace') &&
+    evidence.acceptedTasksRemaining !== 0
+  );
 }
 
 function validateTransfer(
@@ -118,10 +131,25 @@ function validateQuality(
   return null;
 }
 
+function validateCapacity(
+  evidence: HarnessSchedulingEvidence,
+  subject: 'current' | 'candidate',
+): CrossHarnessDecisionReason | null {
+  const value = evidence.acceptedTasksRemaining;
+  if (value === undefined || value === null) return null;
+  if (!Number.isInteger(value) || value < 0) {
+    return reason(
+      'invalid-capacity-evidence',
+      `${subject} accepted-task capacity must be a non-negative whole number when present`,
+    );
+  }
+  return null;
+}
+
 /**
  * Recommend switching only when every required dimension is positively evidenced:
  *
- * - the current harness is under allowance pressure;
+ * - the current harness is under allowance pressure, including measured capacity below one task;
  * - the candidate is available and has independently assessed headroom;
  * - quality for the same task class is empirically passed;
  * - the compact handoff fits its configured budget;
@@ -161,6 +189,16 @@ export function scheduleCrossHarness(
       ...base,
       decision: 'stay',
       reasons: [reason('candidate-unavailable', 'the candidate harness is not currently usable')],
+    };
+  }
+
+  const currentCapacityProblem = validateCapacity(input.current, 'current');
+  const candidateCapacityProblem = validateCapacity(input.candidate, 'candidate');
+  if (currentCapacityProblem !== null || candidateCapacityProblem !== null) {
+    return {
+      ...base,
+      decision: 'insufficient-evidence',
+      reasons: [currentCapacityProblem ?? candidateCapacityProblem!],
     };
   }
 
@@ -207,6 +245,18 @@ export function scheduleCrossHarness(
   }
 
   if (!hasSafeHeadroom(input.candidate)) {
+    if (input.candidate.acceptedTasksRemaining === 0) {
+      return {
+        ...base,
+        decision: 'stay',
+        reasons: [
+          reason(
+            'candidate-capacity-below-one',
+            'candidate safe allowance is below one empirical accepted-task equivalent',
+          ),
+        ],
+      };
+    }
     if (input.candidate.fiveHourPace === 'unknown' || input.candidate.weeklyPace === 'unknown') {
       return {
         ...base,
@@ -270,26 +320,45 @@ export function scheduleCrossHarness(
     };
   }
 
+  const reasons = [
+    input.current.acceptedTasksRemaining === 0
+      ? reason(
+          'current-capacity-below-one',
+          'current safe allowance is below one empirical accepted-task equivalent',
+        )
+      : reason(
+          'current-over-pace',
+          'the current harness is over pace in at least one observed allowance window',
+        ),
+    reason(
+      'candidate-headroom',
+      'the candidate is on pace or under pace in its observed allowance windows',
+    ),
+  ];
+  if (
+    input.candidate.acceptedTasksRemaining !== undefined &&
+    input.candidate.acceptedTasksRemaining !== null
+  ) {
+    reasons.push(
+      reason(
+        'candidate-capacity-sufficient',
+        `candidate has ${String(input.candidate.acceptedTasksRemaining)} conservative accepted-task equivalents remaining`,
+      ),
+    );
+  }
+  reasons.push(
+    reason(
+      'candidate-quality-passed',
+      'quality-gated empirical evidence passes for this task class',
+    ),
+    reason(
+      'transfer-benefit-positive',
+      'comparable evidence says expected switch benefit exceeds handoff cost',
+    ),
+  );
   return {
     ...base,
     decision: 'switch',
-    reasons: [
-      reason(
-        'current-over-pace',
-        'the current harness is over pace in at least one observed allowance window',
-      ),
-      reason(
-        'candidate-headroom',
-        'the candidate is on pace or under pace in its observed allowance windows',
-      ),
-      reason(
-        'candidate-quality-passed',
-        'quality-gated empirical evidence passes for this task class',
-      ),
-      reason(
-        'transfer-benefit-positive',
-        'comparable evidence says expected switch benefit exceeds handoff cost',
-      ),
-    ],
+    reasons,
   };
 }
