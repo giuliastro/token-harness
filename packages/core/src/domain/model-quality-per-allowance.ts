@@ -24,10 +24,17 @@ function evidence(code: string, summary: string): RecommendationEvidence {
 
 function matchesCapacity(
   estimate: AcceptedTaskCapacityEstimate | null,
-  input: { taskClass: TaskClass; model: string | null; reasoningEffort: string | null; verbosity: string | null },
+  input: {
+    harnessId: ModelLearningDecision['harnessId'];
+    taskClass: TaskClass;
+    model: string | null;
+    reasoningEffort: string | null;
+    verbosity: string | null;
+  },
 ): boolean {
   if (estimate === null) return true;
   return (
+    estimate.harnessId === input.harnessId &&
     estimate.taskClass === input.taskClass &&
     estimate.policy !== undefined &&
     estimate.policy.model === input.model &&
@@ -36,7 +43,9 @@ function matchesCapacity(
   );
 }
 
-function complete(estimate: AcceptedTaskCapacityEstimate | null): estimate is AcceptedTaskCapacityEstimate {
+function complete(
+  estimate: AcceptedTaskCapacityEstimate | null,
+): estimate is AcceptedTaskCapacityEstimate {
   return (
     estimate !== null &&
     estimate.status === 'estimated' &&
@@ -83,19 +92,23 @@ export function refineModelForAllowance(input: {
   }
 
   const identity = {
+    harnessId: input.learning.harnessId,
     taskClass: input.taskClass,
     reasoningEffort: input.learning.policy.reasoningEffort,
     verbosity: input.learning.policy.verbosity,
   };
   if (
     !matchesCapacity(input.baseCapacity, { ...identity, model: input.learning.baseModel }) ||
-    !matchesCapacity(input.candidateCapacity, { ...identity, model: input.learning.candidateModel })
+    !matchesCapacity(input.candidateCapacity, {
+      ...identity,
+      model: input.learning.candidateModel,
+    })
   ) {
     result.state = 'kept';
     result.reasons.push(
       evidence(
         'model-capacity-policy-mismatch',
-        'Exact-policy capacity does not match the model, effort, verbosity and task class under evaluation',
+        'Exact-policy capacity does not match the harness, model, effort, verbosity and task class under evaluation',
       ),
     );
     return result;
