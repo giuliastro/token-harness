@@ -34,6 +34,21 @@ function estimated(estimate: AcceptedTaskCapacityEstimate | null): boolean {
   return estimate?.status === 'estimated';
 }
 
+function capacityMatchesPolicy(input: {
+  estimate: AcceptedTaskCapacityEstimate | null;
+  taskClass: TaskClass;
+  effort: string;
+  learning: EffortLearningDecision;
+}): boolean {
+  if (input.estimate === null) return true;
+  return (
+    input.estimate.taskClass === input.taskClass &&
+    input.estimate.policy?.model === input.learning.policy.model &&
+    input.estimate.policy?.reasoningEffort === input.effort &&
+    input.estimate.policy?.verbosity === input.learning.policy.verbosity
+  );
+}
+
 function p75Costs(estimate: AcceptedTaskCapacityEstimate): [number, number] | null {
   const fiveHour = estimate.fiveHour.p75UsedPercentPerAcceptedTask;
   const weekly = estimate.weekly.p75UsedPercentPerAcceptedTask;
@@ -72,6 +87,30 @@ export function refineEffortForAllowance(input: {
       { ...base, state: 'unavailable' },
       'quality-per-allowance-no-learned-alternative',
       'No learned alternative effort is eligible for allowance refinement',
+    );
+  }
+
+  if (
+    !capacityMatchesPolicy({
+      estimate: input.baseCapacity,
+      taskClass: input.taskClass,
+      effort: input.learning.baseEffort,
+      learning: input.learning,
+    }) ||
+    !capacityMatchesPolicy({
+      estimate: input.candidateCapacity,
+      taskClass: input.taskClass,
+      effort: input.learning.candidateEffort,
+      learning: input.learning,
+    }) ||
+    (input.baseCapacity !== null &&
+      input.candidateCapacity !== null &&
+      input.baseCapacity.harnessId !== input.candidateCapacity.harnessId)
+  ) {
+    return result(
+      { ...base, state: 'unavailable', recommendedEffort: input.learning.baseEffort },
+      'quality-per-allowance-capacity-mismatch',
+      'Accepted-task capacity evidence does not match the exact learned task policy and cannot refine effort',
     );
   }
 
