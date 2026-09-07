@@ -1677,7 +1677,7 @@ model catalog discovery, and effort recommendations restricted to levels the cur
 It deliberately keeps the current model until benchmarked model-tier quality/quota evidence exists.
 The history tranche adds a ccusage-backed local token-volume burn trend as workload evidence without converting it
 to subscription quota. The controlled failed-attempt/effort tranche is described below;
-continuous runtime learning and empirical model-tier ranking remain open.
+continuous runtime learning remains open; RFC 0018 now supplies the first project-local, outcome- and allowance-gated advisory model ranking.
 
 **Outcome-aware effort milestone (2026-09-06, RFC 0015):** the native optimizer now
 refines its task/budget recommendation from repeated, project-attributed, quality-gated
@@ -1761,9 +1761,11 @@ a separately reviewed policy path. The transaction layer is nevertheless ready f
 path: any reviewed top-level `model` edit must carry a native-catalog model reference, and apply
 resolves it against the installed Codex `model/list` immediately before mutation. Missing,
 truncated, or ambiguous catalogs stop before snapshot/write, and the resolved canonical `model`
-value is the value verified after `config/batchWrite`. Model switching remains advisory until
-model-tier quota benchmarks exist, so this resolver is infrastructure rather than an automatic
-optimizer decision.
+value is the value verified after `config/batchWrite`. RFC 0018 now supplies project-local model quality/allowance evidence. RFC 0019 activates the reviewed
+Codex model path only for a learned recommendation whose fixed effort/verbosity tuple and complete
+catalog survive the planner's second observation. Apply still resolves the logical model reference
+again against `model/list`, and model changes remain single-control rather than sharing a batch with
+effort or verbosity.
 
 Only after 18.1–18.3 are stable, extend plan/apply/rollback to native configuration surfaces that can
 be owned surgically.
@@ -1788,7 +1790,7 @@ Acceptance for the initial managed Codex slice (`model_reasoning_effort` and
 
 - user-owned profile entries remain user-owned;
 - both managed fields have absent/brownfield/drift/rollback coverage;
-- future model edits are forced through apply-time native-catalog resolution;
+- model edits are forced through apply-time native-catalog resolution and only a learned RFC 0018 recommendation may plan one;
 - the `subscription-safe` executor guard prevents the managed slice from silently enabling a
   pay-as-you-go path.
 
@@ -2040,3 +2042,17 @@ reserved for repeated quality/retry recovery and measured zero accepted-task cap
 Effort and verbosity are never learned in the same optimizer step. The former pressure-only
 verbosity downgrade is intentionally removed so unknown allowance benefit cannot masquerade as an
 optimization. Managed Codex planning re-observes the exact tuple and fails closed on drift.
+
+
+## Managed Codex model policy milestone (2026-09-07, RFC 0019)
+
+The advisory model decision from RFC 0018 can now cross into `plan --native-policy` for Codex, but
+only as a model-only `subscription-safe` batch. The planner re-observes the configured base model,
+fixed effort/verbosity, writable origin, target version and complete model catalog after optimizer
+advice is frozen. Any drift or non-user-layer ownership keeps the recommendation advisory.
+
+The stored action carries a logical `modelReference`, not a blindly writable string. Apply re-reads
+`model/list`, refuses missing/truncated/ambiguous resolution before snapshot/write, canonicalizes the
+model, performs the versioned `config/batchWrite`, verifies the effective value with `config/read`,
+and relies on the existing transaction snapshot for byte-for-byte rollback. Provider, auth and
+service-tier fields remain outside the subscription-safe set.

@@ -1168,7 +1168,11 @@ async function applyDelegatedProviderInstall(
  * restore that snapshot on any later failure. A configVersionConflict is drift, never a retry
  * against bytes the user did not review.
  */
-const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set(['model_reasoning_effort', 'model_verbosity']);
+const SUBSCRIPTION_SAFE_CODEX_KEYS = new Set([
+  'model',
+  'model_reasoning_effort',
+  'model_verbosity',
+]);
 const CODEX_APPLY_MODEL_REQUEST_ID = 'token-harness-apply-model-list';
 const CODEX_CONFIG_WRITE_REQUEST_ID = 'token-harness-config-batch-write';
 const CODEX_CONFIG_VERIFY_REQUEST_ID = 'token-harness-config-verify';
@@ -1199,7 +1203,7 @@ async function applyCodexConfigBatchWrite(
       'The subscription-safe Codex policy tried to edit ' +
         String(unsafe?.keyPath ?? 'an unknown key') +
         ', which is outside its quota-safe write set',
-      'Recompute the plan with the current Token Harness build; provider, auth, model, and service-tier changes require a separately reviewed policy path',
+      'Recompute the plan with the current Token Harness build; provider, auth, and service-tier changes require a separately reviewed policy path',
     );
   }
 
@@ -1216,6 +1220,19 @@ async function applyCodexConfigBatchWrite(
   if (action.edits.length === 0) return outcome(action, 'already-satisfied');
 
   const modelEdits = action.edits.filter((edit) => edit.keyPath === 'model');
+  if (
+    action.policyGuard === 'subscription-safe' &&
+    modelEdits.length > 0 &&
+    action.edits.length !== 1
+  ) {
+    return refusal(
+      action,
+      'codex-native-policy-mixed-model-edit',
+      action.path,
+      'A subscription-safe Codex model change must be the only native control changed in its batch',
+      'Recompute the plan so model, reasoning effort and verbosity are learned and applied one control at a time',
+    );
+  }
   if (action.modelReference === null && modelEdits.length > 0) {
     return refusal(
       action,
