@@ -25,6 +25,7 @@ export interface ModelCandidateEvidence {
 }
 
 export interface ModelLearningDecision {
+  harnessId: HarnessId;
   state: 'unavailable' | 'insufficient-evidence' | 'learned' | 'deferred';
   verification: 'config-only';
   policy: { reasoningEffort: string | null; verbosity: string | null };
@@ -178,6 +179,7 @@ function compare(base: TaskBenchmarkReceipt, candidate: TaskBenchmarkReceipt): P
  */
 export function refineModelWithOutcomes(input: ModelLearningInput): ModelLearningDecision {
   const decision: ModelLearningDecision = {
+    harnessId: input.harnessId,
     state: 'insufficient-evidence',
     verification: 'config-only',
     policy: { reasoningEffort: input.reasoningEffort, verbosity: input.verbosity },
