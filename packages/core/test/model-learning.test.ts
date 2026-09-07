@@ -57,13 +57,15 @@ function receipt(
   };
 }
 
-function pairs(input: {
-  baseQuality?: TaskQualityGate;
-  candidateQuality?: TaskQualityGate;
-  baseTokens?: number;
-  candidateTokens?: number;
-  candidateModel?: string;
-} = {}): TaskBenchmarkReceipt[] {
+function pairs(
+  input: {
+    baseQuality?: TaskQualityGate;
+    candidateQuality?: TaskQualityGate;
+    baseTokens?: number;
+    candidateTokens?: number;
+    candidateModel?: string;
+  } = {},
+): TaskBenchmarkReceipt[] {
   const baseQuality = input.baseQuality ?? 'passed';
   const candidateQuality = input.candidateQuality ?? 'passed';
   const baseTokens = input.baseTokens ?? 100;
