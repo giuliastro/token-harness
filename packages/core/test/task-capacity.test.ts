@@ -166,7 +166,10 @@ describe('accepted-task capacity', () => {
     failed.outcome = { ...failed.outcome, qualityGate: 'failed' };
     const otherHarness = receipt('hard-claude', 10, 10);
     otherHarness.harnessId = CLAUDE;
-    otherHarness.usageBefore = otherHarness.usageBefore.map((row) => ({ ...row, harnessId: CLAUDE }));
+    otherHarness.usageBefore = otherHarness.usageBefore.map((row) => ({
+      ...row,
+      harnessId: CLAUDE,
+    }));
     otherHarness.usageAfter = otherHarness.usageAfter.map((row) => ({ ...row, harnessId: CLAUDE }));
     const stale = receipt('hard-stale', 10, 10);
     stale.startedAt = '2026-08-01T07:00:00.000Z';
