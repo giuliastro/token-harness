@@ -1,7 +1,7 @@
 # Verbosity quality-per-allowance milestone
 
 Date: 2026-09-07
-Status: merge candidate; full CI pending
+Status: validated for merge — CI #800
 RFC: 0017
 
 ## Goal
@@ -25,6 +25,6 @@ Make native verbosity a measured optimization rather than a pressure heuristic. 
 
 The implementation reads only the same bounded current-project benchmark evidence already used by the optimizer. It does not execute tasks, install an external observer, read provider credentials, redeem credits, or translate local token counters into subscription quota. Claude/Codex raw percentages remain incomparable across providers.
 
-## Validation target
+## Validation
 
-The merge gate is full repository CI on Windows, macOS and Ubuntu: install, typecheck, lint, format, tests, build, bundle smoke, package staging, and install smoke. This candidate is not complete until that gate passes on the final head.
+CI #800 passed the full repository gate on Windows, macOS and Ubuntu: install, typecheck, lint, format, tests, build, bundle smoke, package staging, and install smoke. The native policy integration tests also verify the single-control invariant: an effort-only change leaves verbosity unchanged, while learned verbosity remains separately guarded by exact policy identity and allowance evidence.
