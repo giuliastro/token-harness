@@ -6,6 +6,7 @@ import {
   refineEffortForAllowance,
   type AcceptedTaskCapacityEstimate,
   type EffortLearningDecision,
+  type TaskClass,
 } from '../src/index.js';
 
 const CODEX = harnessId('codex');
@@ -36,10 +37,11 @@ function capacity(
   fiveHourCost: number,
   weeklyCost: number,
   remaining = 4,
+  taskClass: TaskClass = 'standard',
 ): AcceptedTaskCapacityEstimate {
   return {
     harnessId: CODEX,
-    taskClass: 'standard',
+    taskClass,
     policy: { model: 'gpt-5.6', reasoningEffort: effort, verbosity: 'low' },
     status: 'estimated',
     acceptedTasksRemaining: remaining,
@@ -142,12 +144,27 @@ describe('quality per allowance effort refinement', () => {
     const decision = refineEffortForAllowance({
       taskClass: 'critical',
       learning: learning('high', 'low'),
-      baseCapacity: capacity('high', 8, 12),
-      candidateCapacity: capacity('low', 2, 3),
+      baseCapacity: capacity('high', 8, 12, 4, 'critical'),
+      candidateCapacity: capacity('low', 2, 3, 4, 'critical'),
     });
 
     assert.equal(decision.state, 'unavailable');
     assert.equal(decision.recommendedEffort, 'high');
     assert.equal(decision.reasons[0]?.code, 'quality-per-allowance-policy-unranked');
+  });
+
+  it('rejects capacity evidence from a different exact policy instead of refining from it', () => {
+    const mismatched = capacity('low', 2, 3);
+    mismatched.policy = { ...mismatched.policy!, verbosity: 'high' };
+    const decision = refineEffortForAllowance({
+      taskClass: 'standard',
+      learning: learning('medium', 'low'),
+      baseCapacity: capacity('medium', 6, 9),
+      candidateCapacity: mismatched,
+    });
+
+    assert.equal(decision.state, 'unavailable');
+    assert.equal(decision.recommendedEffort, 'medium');
+    assert.equal(decision.reasons[0]?.code, 'quality-per-allowance-capacity-mismatch');
   });
 });
