@@ -16,6 +16,8 @@ import {
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
   refineEffortWithOutcomes,
+  refineModelForAllowance,
+  refineModelWithOutcomes,
   refineVerbosityForAllowance,
   refineVerbosityWithOutcomes,
   VERBOSITY_LEVELS,
@@ -86,10 +88,21 @@ function contextEvidence(
   // budget evidence when there is a measured numerator; otherwise fall back to discovered
   // candidates and state that admission is not proven.
   if (
-    harness.projectDocMaxBytes !== null &&
-    harness.projectDocMaxBytes > 0 &&
-    instructionBytes > 0
+    context.harnesses === undefined ||
+    harness.projectDocMaxBytes === null ||
+    harness.projectDocMaxBytes <= 0 ||
+    instructionBytes <= 0
   ) {
+    if (discoveredBytes > 0) {
+      if (discoveredBytes >= 32 * 1024) score = Math.max(score, 1);
+      evidence.push({
+        code: 'instruction-candidates',
+        summary:
+          String(discoveredBytes) +
+          'B of instruction candidates; admitted bytes are not fully proven',
+      });
+    }
+  } else {
     const ratio = instructionBytes / harness.projectDocMaxBytes;
     if (ratio >= 0.75) score = Math.max(score, 2);
     else if (ratio >= 0.5) score = Math.max(score, 1);
@@ -100,14 +113,6 @@ function contextEvidence(
         'B known loaded of ' +
         String(harness.projectDocMaxBytes) +
         'B project-doc budget',
-    });
-  } else if (discoveredBytes > 0) {
-    if (discoveredBytes >= 32 * 1024) score = Math.max(score, 1);
-    evidence.push({
-      code: 'instruction-candidates',
-      summary:
-        String(discoveredBytes) +
-        'B of instruction candidates; admitted bytes are not fully proven',
     });
   }
 
@@ -465,6 +470,82 @@ function adviceForHarness(input: {
           candidateCapacity: exactVerbosityCapacity(verbosityLearning.candidateVerbosity),
         });
 
+  const preModelRecommendedVerbosity =
+    effortLearning.state === 'deferred' || qualityPerAllowance.state === 'deferred'
+      ? null
+      : recommendedEffort !== currentEffort
+        ? context.verbosity
+        : verbosityLearning === null
+          ? context.verbosity
+          : verbosityLearning.state === 'deferred'
+            ? null
+            : verbosityPerAllowance === null
+              ? verbosityLearning.baseVerbosity
+              : verbosityPerAllowance.state === 'unavailable'
+                ? verbosityLearning.baseVerbosity
+                : verbosityPerAllowance.recommendedVerbosity;
+
+  const catalogModelNames = [
+    ...new Set(context.availableModels.flatMap((model) => [model.id, model.model])),
+  ];
+  const canLearnModel =
+    capturedPolicy !== null &&
+    capturedPolicy.model !== null &&
+    capturedPolicy.reasoningEffort !== null &&
+    capturedPolicy.reasoningEffort === currentEffort &&
+    capturedPolicy.verbosity !== null &&
+    capturedPolicy.verbosity === context.verbosity &&
+    catalogModel !== null &&
+    !context.modelCatalogTruncated &&
+    recommendedEffort === currentEffort &&
+    preModelRecommendedVerbosity === context.verbosity &&
+    effortLearning.state !== 'learned' &&
+    effortLearning.state !== 'deferred' &&
+    verbosityLearning?.state !== 'learned' &&
+    verbosityLearning?.state !== 'deferred' &&
+    qualityPerAllowance.state !== 'deferred' &&
+    verbosityPerAllowance?.state !== 'deferred';
+  const modelLearning = canLearnModel
+    ? refineModelWithOutcomes({
+        harnessId: context.harnessId,
+        baseModel: capturedPolicy.model,
+        reasoningEffort: capturedPolicy.reasoningEffort,
+        verbosity: capturedPolicy.verbosity,
+        taskClass,
+        availableModels: catalogModelNames,
+        now: input.observedAt,
+        receipts: input.benchmarkReceipts,
+      })
+    : null;
+  const exactModelCapacity = (model: string | null) =>
+    model === null ||
+    capturedPolicy === null ||
+    capturedPolicy.reasoningEffort === null ||
+    capturedPolicy.verbosity === null ||
+    input.benchmarkReceipts === null
+      ? null
+      : estimateAcceptedTaskCapacityForPolicy({
+          report: budgetReport,
+          receipts: input.benchmarkReceipts,
+          harnessId: context.harnessId,
+          taskClass,
+          reservePercent,
+          policy: {
+            model,
+            reasoningEffort: capturedPolicy.reasoningEffort,
+            verbosity: capturedPolicy.verbosity,
+          },
+        });
+  const modelPerAllowance =
+    modelLearning === null
+      ? null
+      : refineModelForAllowance({
+          taskClass,
+          learning: modelLearning,
+          baseCapacity: exactModelCapacity(modelLearning.baseModel),
+          candidateCapacity: exactModelCapacity(modelLearning.candidateModel),
+        });
+
   if (effortLearning.state === 'learned' || effortLearning.state === 'deferred') {
     const allowanceEvidence =
       qualityPerAllowance.state === 'unavailable' ? [] : qualityPerAllowance.reasons;
@@ -499,21 +580,49 @@ function adviceForHarness(input: {
     );
   }
 
-  const recommendedModel = catalogModel === null ? null : context.model;
+  const recommendedModel =
+    catalogModel === null
+      ? null
+      : modelLearning === null
+        ? context.model
+        : modelLearning.state === 'deferred'
+          ? null
+          : modelPerAllowance === null || modelPerAllowance.state === 'unavailable'
+            ? context.model
+            : modelPerAllowance.recommendedModel;
   if (catalogModel !== null) {
+    const modelEvidence: RecommendationEvidence[] = [
+      {
+        code: 'model-catalog',
+        summary:
+          catalogModel.displayName +
+          ' is present in the installed native catalog; no cost or quality tier is inferred from its name',
+      },
+      ...(modelLearning?.reasons ?? []),
+      ...(modelPerAllowance?.reasons ?? []),
+    ];
     recommendations.push({
       area: 'model',
-      priority: 'optional',
-      action: 'Keep the current discovered model until model-tier quota benchmarks exist',
+      priority:
+        modelPerAllowance?.state === 'quality-recovery'
+          ? 'first'
+          : modelPerAllowance?.state === 'allowance-efficient'
+            ? 'next'
+            : 'optional',
+      action:
+        modelLearning?.state === 'deferred' || modelPerAllowance?.state === 'deferred'
+          ? 'Checkpoint or recheck allowance before another model change; no proven catalog alternative currently fits the safe capacity'
+          : recommendedModel === context.model
+            ? modelPerAllowance?.state === 'kept'
+              ? 'Keep the current model because the outcome-safe alternative does not improve backend allowance throughput'
+              : modelPerAllowance?.state === 'capacity-unproven'
+                ? 'Keep the current model until both models have complete exact-policy five-hour and weekly allowance evidence'
+                : 'Keep the current discovered model until repeated paired outcome and allowance evidence proves an alternative'
+            : modelPerAllowance?.state === 'allowance-efficient'
+              ? 'Use the quality-gated catalog model that improves accepted-task throughput per included allowance'
+              : 'Use the catalog model supported by repeated quality/retry recovery evidence',
       target: recommendedModel,
-      evidence: [
-        {
-          code: 'model-catalog',
-          summary:
-            catalogModel.displayName +
-            ' is present in the installed Codex catalog; no cost ranking is inferred from its name',
-        },
-      ],
+      evidence: modelEvidence,
     });
   }
 
@@ -556,20 +665,7 @@ function adviceForHarness(input: {
     });
   }
 
-  const recommendedVerbosity =
-    effortLearning.state === 'deferred' || qualityPerAllowance.state === 'deferred'
-      ? null
-      : recommendedEffort !== currentEffort
-        ? context.verbosity
-        : verbosityLearning === null
-          ? context.verbosity
-          : verbosityLearning.state === 'deferred'
-            ? null
-            : verbosityPerAllowance === null
-              ? verbosityLearning.baseVerbosity
-              : verbosityPerAllowance.state === 'unavailable'
-                ? verbosityLearning.baseVerbosity
-                : verbosityPerAllowance.recommendedVerbosity;
+  const recommendedVerbosity = preModelRecommendedVerbosity;
   if (recommendedVerbosity !== null) {
     const verbosityEvidence: RecommendationEvidence[] = [
       { code: 'task-class', summary: taskClass + ' task' },
@@ -610,6 +706,7 @@ function adviceForHarness(input: {
     recommendedEffort,
     effortLearning,
     ...(verbosityLearning === null ? {} : { verbosityLearning }),
+    ...(modelLearning === null ? {} : { modelLearning }),
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,
