@@ -16,6 +16,7 @@ export * from './domain/cross-harness-scheduler.js';
 export * from './domain/cross-harness-transfer.js';
 export * from './domain/cross-harness-transfer-evidence.js';
 export * from './domain/cross-harness-transfer-receipt.js';
+export * from './domain/task-capacity.js';
 export * from './domain/handoff.js';
 export * from './domain/history.js';
 export * from './domain/optimizer.js';
