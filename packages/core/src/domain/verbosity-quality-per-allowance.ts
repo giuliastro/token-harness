@@ -1,9 +1,6 @@
 import type { RecommendationEvidence, TaskClass } from './optimizer.js';
 import type { AcceptedTaskCapacityEstimate } from './task-capacity.js';
-import {
-  verbosityRank,
-  type VerbosityLearningDecision,
-} from './verbosity-learning.js';
+import { verbosityRank, type VerbosityLearningDecision } from './verbosity-learning.js';
 
 export interface VerbosityPerAllowanceDecision {
   state:

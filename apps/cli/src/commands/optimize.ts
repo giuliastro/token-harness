@@ -16,6 +16,9 @@ import {
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
   refineEffortWithOutcomes,
+  refineVerbosityForAllowance,
+  refineVerbosityWithOutcomes,
+  VERBOSITY_LEVELS,
   type BudgetProfile,
   type BudgetReport,
   type CommandResult,
@@ -152,26 +155,6 @@ function quotaEvidence(pace: readonly WindowPaceAssessment[]): RecommendationEvi
         '%, ' +
         item.state,
     }));
-}
-
-function verbosityTarget(input: {
-  current: string | null;
-  taskClass: TaskClass;
-  profile: BudgetProfile;
-  pace: readonly WindowPaceAssessment[];
-  contextPressure: ContextPressure;
-}): string | null {
-  if (input.current === null || !['low', 'medium', 'high'].includes(input.current)) return null;
-  const pressured =
-    input.profile === 'economy' ||
-    input.contextPressure === 'high' ||
-    ['conserve', 'wait-for-reset'].includes(
-      assessBudgetDecision(input.pace, input.taskClass).state,
-    );
-  if (pressured && (input.taskClass === 'mechanical' || input.taskClass === 'standard')) {
-    return 'low';
-  }
-  return input.current;
 }
 
 function adviceForHarness(input: {
@@ -427,6 +410,61 @@ function adviceForHarness(input: {
     qualityPerAllowance.state === 'unavailable'
       ? effortLearning.recommendedEffort
       : qualityPerAllowance.recommendedEffort;
+
+  const canLearnVerbosity =
+    capturedPolicy !== null &&
+    capturedPolicy.model !== null &&
+    capturedPolicy.reasoningEffort !== null &&
+    capturedPolicy.reasoningEffort === currentEffort &&
+    capturedPolicy.verbosity !== null &&
+    VERBOSITY_LEVELS.includes(capturedPolicy.verbosity as (typeof VERBOSITY_LEVELS)[number]) &&
+    recommendedEffort === currentEffort &&
+    effortLearning.state !== 'learned' &&
+    effortLearning.state !== 'deferred' &&
+    qualityPerAllowance.state !== 'deferred';
+  const verbosityLearning = canLearnVerbosity
+    ? refineVerbosityWithOutcomes({
+        harnessId: context.harnessId,
+        model: capturedPolicy.model,
+        reasoningEffort: capturedPolicy.reasoningEffort,
+        taskClass,
+        supported: VERBOSITY_LEVELS,
+        baseVerbosity: capturedPolicy.verbosity,
+        budget: budgetDecision,
+        contextPressure: pressure.pressure,
+        now: input.observedAt,
+        receipts: input.benchmarkReceipts,
+      })
+    : null;
+  const exactVerbosityCapacity = (verbosity: string | null) =>
+    verbosity === null ||
+    capturedPolicy === null ||
+    capturedPolicy.model === null ||
+    capturedPolicy.reasoningEffort === null ||
+    input.benchmarkReceipts === null
+      ? null
+      : estimateAcceptedTaskCapacityForPolicy({
+          report: budgetReport,
+          receipts: input.benchmarkReceipts,
+          harnessId: context.harnessId,
+          taskClass,
+          reservePercent,
+          policy: {
+            model: capturedPolicy.model,
+            reasoningEffort: capturedPolicy.reasoningEffort,
+            verbosity,
+          },
+        });
+  const verbosityPerAllowance =
+    verbosityLearning === null
+      ? null
+      : refineVerbosityForAllowance({
+          taskClass,
+          learning: verbosityLearning,
+          baseCapacity: exactVerbosityCapacity(verbosityLearning.baseVerbosity),
+          candidateCapacity: exactVerbosityCapacity(verbosityLearning.candidateVerbosity),
+        });
+
   if (effortLearning.state === 'learned' || effortLearning.state === 'deferred') {
     const allowanceEvidence =
       qualityPerAllowance.state === 'unavailable' ? [] : qualityPerAllowance.reasons;
@@ -507,32 +545,52 @@ function adviceForHarness(input: {
     });
   }
 
+  if (verbosityLearning?.state === 'deferred' || verbosityPerAllowance?.state === 'deferred') {
+    recommendations.push({
+      area: 'history',
+      priority: 'first',
+      action:
+        'Checkpoint, recheck allowance or reduce context before applying the quality-recovery verbosity change',
+      target: null,
+      evidence: [...(verbosityLearning?.reasons ?? []), ...(verbosityPerAllowance?.reasons ?? [])],
+    });
+  }
+
   const recommendedVerbosity =
     effortLearning.state === 'deferred' || qualityPerAllowance.state === 'deferred'
       ? null
-      : effortLearning.state === 'learned'
+      : recommendedEffort !== currentEffort
         ? context.verbosity
-        : verbosityTarget({
-            current: context.verbosity,
-            taskClass,
-            profile,
-            pace: budgetWindows,
-            contextPressure: pressure.pressure,
-          });
+        : verbosityLearning === null
+          ? context.verbosity
+          : verbosityLearning.state === 'deferred'
+            ? null
+            : verbosityPerAllowance === null
+              ? verbosityLearning.baseVerbosity
+              : verbosityPerAllowance.state === 'unavailable'
+                ? verbosityLearning.baseVerbosity
+                : verbosityPerAllowance.recommendedVerbosity;
   if (recommendedVerbosity !== null) {
+    const verbosityEvidence: RecommendationEvidence[] = [
+      { code: 'task-class', summary: taskClass + ' task' },
+      ...paceEvidence,
+      ...pressure.evidence,
+      ...(verbosityLearning?.reasons ?? []),
+      ...(verbosityPerAllowance?.reasons ?? []),
+    ];
     recommendations.push({
       area: 'verbosity',
-      priority: 'optional',
+      priority: verbosityPerAllowance?.state === 'quality-recovery' ? 'next' : 'optional',
       action:
         recommendedVerbosity === context.verbosity
-          ? 'Keep the current verbosity'
-          : 'Use lower verbosity for this task while quota/context is pressured',
+          ? verbosityPerAllowance?.state === 'kept'
+            ? 'Keep current verbosity because the lower candidate has not improved backend allowance throughput'
+            : 'Keep the current verbosity until exact single-control outcome and allowance evidence supports a change'
+          : verbosityPerAllowance?.state === 'allowance-efficient'
+            ? 'Use the quality-gated lower verbosity that improves accepted-task throughput per included allowance'
+            : 'Use the higher verbosity supported by repeated quality/retry recovery evidence',
       target: recommendedVerbosity,
-      evidence: [
-        { code: 'task-class', summary: taskClass + ' task' },
-        ...paceEvidence,
-        ...pressure.evidence,
-      ],
+      evidence: verbosityEvidence,
     });
   }
 
@@ -551,6 +609,7 @@ function adviceForHarness(input: {
     currentEffort,
     recommendedEffort,
     effortLearning,
+    verbosityLearning: verbosityLearning ?? undefined,
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,

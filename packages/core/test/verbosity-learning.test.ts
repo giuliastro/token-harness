@@ -106,10 +106,7 @@ describe('outcome-aware verbosity', () => {
 
   it('needs three distinct paired experiments', () => {
     for (const count of [0, 1, 2]) {
-      assert.equal(
-        refineVerbosityWithOutcomes(input(pairs(count))).state,
-        'insufficient-evidence',
-      );
+      assert.equal(refineVerbosityWithOutcomes(input(pairs(count))).state, 'insufficient-evidence');
     }
   });
 
@@ -118,7 +115,12 @@ describe('outcome-aware verbosity', () => {
       if (row.variant === 'baseline') {
         return {
           ...withVerbosity(row, 'low'),
-          outcome: { qualityGate: 'passed' as const, attempts: 3, failedAttempts: 2, errorCodes: [] },
+          outcome: {
+            qualityGate: 'passed' as const,
+            attempts: 3,
+            failedAttempts: 2,
+            errorCodes: [],
+          },
         };
       }
       return {
@@ -158,7 +160,12 @@ describe('outcome-aware verbosity', () => {
       if (row.variant === 'baseline') {
         return {
           ...withVerbosity(row, 'low'),
-          outcome: { qualityGate: 'failed' as const, attempts: 1, failedAttempts: 1, errorCodes: [] },
+          outcome: {
+            qualityGate: 'failed' as const,
+            attempts: 1,
+            failedAttempts: 1,
+            errorCodes: [],
+          },
         };
       }
       return withVerbosity(row, 'medium');

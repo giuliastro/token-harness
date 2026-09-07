@@ -2028,3 +2028,15 @@ substitute for explaining how to make a change. See `docs/spikes/dashboard-clari
 - Regression coverage includes delayed/failed observations, concurrent reads, private data
   exclusions, invalid/missing/negative measurement cases and rounding boundaries.
 - Authenticated task-quality and subscription-quota A/B evidence remains separate and open.
+
+
+## Verbosity quality-per-allowance milestone (2026-09-07, RFC 0017)
+
+The optimizer now treats native verbosity as a separate learned control. Model and reasoning effort
+must remain fixed across project-local paired receipts. A lower verbosity is actionable only after
+repeated quality/retry no-regression evidence and complete exact-policy p75 backend quota cost that
+is non-worse in both five-hour and weekly windows and better in at least one. Higher verbosity is
+reserved for repeated quality/retry recovery and measured zero accepted-task capacity defers it.
+Effort and verbosity are never learned in the same optimizer step. The former pressure-only
+verbosity downgrade is intentionally removed so unknown allowance benefit cannot masquerade as an
+optimization. Managed Codex planning re-observes the exact tuple and fails closed on drift.

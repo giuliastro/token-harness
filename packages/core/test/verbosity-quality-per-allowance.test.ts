@@ -10,10 +10,7 @@ import {
 
 const CODEX = harnessId('codex');
 
-function learning(
-  baseVerbosity: string,
-  candidateVerbosity: string,
-): VerbosityLearningDecision {
+function learning(baseVerbosity: string, candidateVerbosity: string): VerbosityLearningDecision {
   return {
     state: 'learned',
     verification: 'config-only',
@@ -150,9 +147,6 @@ describe('verbosity quality per allowance', () => {
     });
     assert.equal(decision.state, 'unavailable');
     assert.equal(decision.recommendedVerbosity, 'medium');
-    assert.equal(
-      decision.reasons[0]?.code,
-      'verbosity-quality-per-allowance-capacity-mismatch',
-    );
+    assert.equal(decision.reasons[0]?.code, 'verbosity-quality-per-allowance-capacity-mismatch');
   });
 });

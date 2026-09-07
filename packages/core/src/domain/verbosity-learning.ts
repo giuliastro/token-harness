@@ -106,7 +106,10 @@ function overlaps(a: TaskBenchmarkReceipt, b: TaskBenchmarkReceipt): boolean {
 
 function tokenVolume(row: TaskBenchmarkReceipt): number | null {
   const usage = row.localUsage;
-  if (usage === null || !Object.values(usage).every((value) => Number.isSafeInteger(value) && value >= 0)) {
+  if (
+    usage === null ||
+    !Object.values(usage).every((value) => Number.isSafeInteger(value) && value >= 0)
+  ) {
     return null;
   }
   const total =
@@ -267,7 +270,11 @@ export function refineVerbosityWithOutcomes(
         'Invalid outcome counts prevent a learned verbosity change',
       );
     }
-    if (!stablePolicy(row) || verbosityRank(row.verbosity) === null || !input.supported.includes(row.verbosity!)) {
+    if (
+      !stablePolicy(row) ||
+      verbosityRank(row.verbosity) === null ||
+      !input.supported.includes(row.verbosity!)
+    ) {
       decision.ignoredReceipts += 1;
       continue;
     }
@@ -370,7 +377,8 @@ export function refineVerbosityWithOutcomes(
         candidate.losses === 0 &&
         candidate.inconclusive === 0 &&
         candidate.qualityFailures === 0 &&
-        (!higher || candidate.bases.quality + candidate.bases.attempts >= VERBOSITY_LEARNING_MIN_PAIRS)
+        (!higher ||
+          candidate.bases.quality + candidate.bases.attempts >= VERBOSITY_LEARNING_MIN_PAIRS)
       );
     })
     .sort(
