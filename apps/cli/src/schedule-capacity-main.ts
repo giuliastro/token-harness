@@ -169,9 +169,8 @@ export async function scheduleCapacityMain(
   let budgetObserved = false;
   let budgetValue: Awaited<ReturnType<NonNullable<ScheduleRuntime['observeBudget']>>> = null;
   let qualityObserved = false;
-  let qualityValue: Awaited<
-    ReturnType<NonNullable<ScheduleRuntime['observeQualityReceipts']>>
-  > = null;
+  let qualityValue: Awaited<ReturnType<NonNullable<ScheduleRuntime['observeQualityReceipts']>>> =
+    null;
 
   const cachedRuntime: ScheduleRuntime = {
     ...(runtime?.observeBudget === undefined
