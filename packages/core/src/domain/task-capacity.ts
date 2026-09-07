@@ -74,10 +74,7 @@ function recentQualityPassedReceipts(input: {
   });
 }
 
-function quotaCosts(
-  receipts: readonly TaskBenchmarkReceipt[],
-  scope: CapacityScope,
-): number[] {
+function quotaCosts(receipts: readonly TaskBenchmarkReceipt[], scope: CapacityScope): number[] {
   const costs: number[] = [];
   for (const receipt of receipts) {
     const matches = comparableQuotaDeltas(receipt).filter((delta) => delta.scope === scope);
@@ -103,11 +100,7 @@ function liveSpendable(input: {
     (window) => window.harnessId === input.harnessId && window.scope === input.scope,
   );
   if (windows.length !== 1) return null;
-  const assessment = assessWindowPace(
-    windows[0]!,
-    input.report.observedAt,
-    input.reservePercent,
-  );
+  const assessment = assessWindowPace(windows[0]!, input.report.observedAt, input.reservePercent);
   return assessment.state === 'unknown' ? null : assessment.spendableRemainingPercent ?? null;
 }
 
@@ -132,8 +125,7 @@ function estimateScope(input: {
     sampleCount: costs.length,
     p75UsedPercentPerAcceptedTask: cost,
     spendableRemainingPercent: spendable,
-    taskEquivalents:
-      cost !== null && cost > 0 && spendable !== null ? spendable / cost : null,
+    taskEquivalents: cost !== null && cost > 0 && spendable !== null ? spendable / cost : null,
   };
 }
 
