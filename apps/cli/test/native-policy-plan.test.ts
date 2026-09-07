@@ -251,7 +251,7 @@ const USER_EFFORT = {
 };
 
 describe('Codex native policy planning', () => {
-  it('turns reviewed optimizer deltas into one versioned atomic Codex batch', async () => {
+  it('turns the reviewed effort delta into one atomic batch without an unproven verbosity change', async () => {
     const computed = await computePlan(
       context({
         effortOrigin: USER_EFFORT,
@@ -272,8 +272,11 @@ describe('Codex native policy planning', () => {
     assert.equal(action.reloadUserConfig, true);
     assert.deepEqual(action.edits, [
       { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
-      { keyPath: 'model_verbosity', value: 'low', mergeStrategy: 'replace' },
     ]);
+    assert.equal(
+      action.edits.some((edit) => edit.keyPath === 'model_verbosity'),
+      false,
+    );
     assert.equal(action.riskClass, 'reversible');
     assert.deepEqual(action.affectedPaths, [CONFIG]);
   });

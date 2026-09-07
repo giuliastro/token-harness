@@ -9,6 +9,7 @@
 import type { UsageWindowSnapshot } from './budget.js';
 import { assessBudgetDecision, type BudgetDecision } from './budget-policy.js';
 import type { EffortLearningDecision } from './outcome-learning.js';
+import type { VerbosityLearningDecision } from './verbosity-learning.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
@@ -95,6 +96,8 @@ export interface HarnessOptimizationAdvice {
   budgetDecision?: BudgetDecision;
   /** Additive project-local feedback; legacy reports may omit it. */
   effortLearning?: EffortLearningDecision;
+  /** Additive single-control verbosity feedback; legacy reports may omit it. */
+  verbosityLearning?: VerbosityLearningDecision;
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
 }

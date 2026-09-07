@@ -74,8 +74,9 @@ function admitOutcomePolicy(
   observation: HarnessContextObservation,
   diagnostics: Diagnostic[],
 ): boolean {
-  const learning = advice.effortLearning;
-  if (learning?.state === 'deferred') {
+  const effortLearning = advice.effortLearning;
+  const verbosityLearning = advice.verbosityLearning;
+  if (effortLearning?.state === 'deferred' || verbosityLearning?.state === 'deferred') {
     diagnostics.push(
       diagnostic({
         severity: 'info',
@@ -89,33 +90,80 @@ function admitOutcomePolicy(
     );
     return false;
   }
-  if (learning?.state !== 'learned') return true;
+
+  if (effortLearning?.state !== 'learned' && verbosityLearning?.state !== 'learned') return true;
   const observed = benchmarkPolicySnapshot(observation);
-  const catalog = observation.availableModels.find(
-    (model) => model.model === observation.model || model.id === observation.model,
-  );
-  const supported = catalog?.supportedReasoningEfforts ?? observation.nativeEffort?.supported ?? [];
-  if (
-    observed === null ||
-    observed.model !== learning.policy.model ||
-    observed.verbosity !== learning.policy.verbosity ||
-    observed.reasoningEffort !== advice.currentEffort ||
-    advice.recommendedEffort === null ||
-    !supported.includes(advice.recommendedEffort)
-  ) {
+  if (observed === null) {
     diagnostics.push(
       diagnostic({
         severity: 'warning',
         code: 'outcome-native-policy-drift',
         subject: advice.harnessId,
-        message:
-          'The configured policy or supported effort catalog changed after outcome-based advice',
+        message: 'The configured native policy could not be re-observed after outcome-based advice',
         remediation:
           'Re-run the native plan against a stable model, effort and verbosity configuration',
       }),
     );
     return false;
   }
+
+  if (effortLearning?.state === 'learned') {
+    const catalog = observation.availableModels.find(
+      (model) => model.model === observation.model || model.id === observation.model,
+    );
+    const supported =
+      catalog?.supportedReasoningEfforts ?? observation.nativeEffort?.supported ?? [];
+    if (
+      observed.model !== effortLearning.policy.model ||
+      observed.verbosity !== effortLearning.policy.verbosity ||
+      observed.reasoningEffort !== advice.currentEffort ||
+      advice.recommendedEffort === null ||
+      !supported.includes(advice.recommendedEffort)
+    ) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'outcome-native-policy-drift',
+          subject: advice.harnessId,
+          message:
+            'The configured policy or supported effort catalog changed after outcome-based advice',
+          remediation:
+            'Re-run the native plan against a stable model, effort and verbosity configuration',
+        }),
+      );
+      return false;
+    }
+  }
+
+  if (verbosityLearning?.state === 'learned') {
+    const knownVerbosity =
+      advice.recommendedVerbosity !== null &&
+      ['low', 'medium', 'high'].includes(advice.recommendedVerbosity);
+    if (
+      observed.model !== verbosityLearning.policy.model ||
+      observed.reasoningEffort !== verbosityLearning.policy.reasoningEffort ||
+      observed.verbosity !== advice.currentVerbosity ||
+      advice.recommendedEffort !== advice.currentEffort ||
+      advice.recommendedVerbosity === null ||
+      !knownVerbosity ||
+      (advice.recommendedVerbosity !== advice.currentVerbosity &&
+        advice.recommendedVerbosity !== verbosityLearning.candidateVerbosity)
+    ) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'verbosity-native-policy-drift',
+          subject: advice.harnessId,
+          message:
+            'Model, effort or verbosity changed after the single-control verbosity recommendation',
+          remediation:
+            'Re-run token-harness optimize and plan against one stable native policy tuple',
+        }),
+      );
+      return false;
+    }
+  }
+
   return true;
 }
 
