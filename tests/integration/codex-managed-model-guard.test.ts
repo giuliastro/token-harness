@@ -15,12 +15,7 @@ import {
 import { NodeFileSystem } from '@token-harness/platform';
 
 const FACTS: PlatformFacts = {
-  os:
-    process.platform === 'win32'
-      ? 'windows'
-      : process.platform === 'darwin'
-        ? 'macos'
-        : 'linux',
+  os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
   osDisplayName: 'test',
   arch: 'x64',
   nodeVersion: process.versions.node,
@@ -44,8 +39,7 @@ describe('managed Codex model guard', () => {
     mkdirSync(project, { recursive: true });
     mkdirSync(state, { recursive: true });
     const path = join(project, 'config.toml');
-    const original =
-      'model = "gpt-5.6-codex"\nmodel_reasoning_effort = "medium"\n# user comment\n';
+    const original = 'model = "gpt-5.6-codex"\nmodel_reasoning_effort = "medium"\n# user comment\n';
     writeFileSync(path, original);
 
     const fs = new NodeFileSystem(FACTS);
