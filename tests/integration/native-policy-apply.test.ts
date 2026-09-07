@@ -342,7 +342,7 @@ async function nativePlan(place: World): Promise<Captured<PlanReport>> {
 }
 
 describe('persisted Codex native policy', () => {
-  it('persists the exact reviewed atomic batch and applies that stored plan', async () => {
+  it('persists and applies the reviewed effort-only batch while preserving verbosity', async () => {
     const place = world();
     const planned = await nativePlan(place);
 
@@ -359,8 +359,11 @@ describe('persisted Codex native policy', () => {
     assert.equal(action.policyGuard, 'subscription-safe');
     assert.deepEqual(action.edits, [
       { keyPath: 'model_reasoning_effort', value: 'low', mergeStrategy: 'replace' },
-      { keyPath: 'model_verbosity', value: 'low', mergeStrategy: 'replace' },
     ]);
+    assert.equal(
+      action.edits.some((edit) => edit.keyPath === 'model_verbosity'),
+      false,
+    );
 
     const applied = await invoke<ApplyReport>(['apply', '--yes', '--plan', planId], place);
 
@@ -368,9 +371,9 @@ describe('persisted Codex native policy', () => {
     assert.equal(applied.data?.outcome, 'committed');
     assert.equal(applied.data?.fromStoredPlan, true);
     assert.equal(place.effort, 'low');
-    assert.equal(place.verbosity, 'low');
+    assert.equal(place.verbosity, 'medium');
     assert.match(readFileSync(place.config, 'utf8'), /model_reasoning_effort = "low"/);
-    assert.match(readFileSync(place.config, 'utf8'), /model_verbosity = "low"/);
+    assert.match(readFileSync(place.config, 'utf8'), /model_verbosity = "medium"/);
   });
 
   it('rejects the stored action as drift when Codex config version changes before apply', async () => {
