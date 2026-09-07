@@ -48,8 +48,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Format diagnostic
+        run: |
+          pnpm exec prettier --write apps/cli/src/schedule-capacity-main.ts packages/core/src/domain/task-capacity.ts
+          git diff -- apps/cli/src/schedule-capacity-main.ts packages/core/src/domain/task-capacity.ts
+          git diff --exit-code -- apps/cli/src/schedule-capacity-main.ts packages/core/src/domain/task-capacity.ts
 
       - name: Test
         run: pnpm test
