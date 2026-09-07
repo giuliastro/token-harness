@@ -9,11 +9,13 @@ import {
 } from '../src/index.js';
 
 const CODEX = harnessId('codex');
+const CLAUDE = harnessId('claude');
 
 function learning(
   intent: 'allowance-efficiency' | 'quality-recovery' = 'allowance-efficiency',
 ): ModelLearningDecision {
   return {
+    harnessId: CODEX,
     state: 'learned',
     verification: 'config-only',
     policy: { reasoningEffort: 'medium', verbosity: 'medium' },
@@ -139,6 +141,21 @@ describe('model quality per allowance refinement', () => {
   it('rejects exact-capacity evidence from another policy tuple', () => {
     const mismatched = capacity('model-b', 4, 8);
     mismatched.policy = { ...mismatched.policy!, verbosity: 'high' };
+    const decision = refineModelForAllowance({
+      taskClass: 'standard',
+      learning: learning(),
+      baseCapacity: capacity('model-a', 6, 9),
+      candidateCapacity: mismatched,
+    });
+
+    assert.equal(decision.state, 'kept');
+    assert.equal(decision.recommendedModel, 'model-a');
+    assert.equal(decision.reasons[0]?.code, 'model-capacity-policy-mismatch');
+  });
+
+  it('rejects exact-capacity evidence from another harness', () => {
+    const mismatched = capacity('model-b', 4, 8);
+    mismatched.harnessId = CLAUDE;
     const decision = refineModelForAllowance({
       taskClass: 'standard',
       learning: learning(),
