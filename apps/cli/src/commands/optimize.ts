@@ -609,7 +609,7 @@ function adviceForHarness(input: {
     currentEffort,
     recommendedEffort,
     effortLearning,
-    verbosityLearning: verbosityLearning ?? undefined,
+    ...(verbosityLearning === null ? {} : { verbosityLearning }),
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,
