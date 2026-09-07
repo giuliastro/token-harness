@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   estimateAcceptedTaskCapacity,
+  estimateAcceptedTaskCapacityForPolicy,
   harnessId,
   type BudgetReport,
   type TaskBenchmarkReceipt,
@@ -192,5 +193,27 @@ describe('accepted-task capacity', () => {
     assert.equal(estimate.status, 'estimated');
     assert.equal(estimate.eligibleReceipts, 3);
     assert.equal(estimate.acceptedTasksRemaining, 2);
+  });
+
+  it('isolates model, effort and verbosity when capacity is used for native policy refinement', () => {
+    const high = [receipt('high-a', 2, 5), receipt('high-b', 4, 6), receipt('high-c', 3, 4)];
+    const low = [receipt('low-a', 20, 25), receipt('low-b', 18, 24), receipt('low-c', 19, 23)].map(
+      (item) => ({ ...item, reasoningEffort: 'low' }),
+    );
+    const verbose = receipt('verbose', 30, 30);
+    verbose.verbosity = 'high';
+
+    const estimate = estimateAcceptedTaskCapacityForPolicy({
+      report: report(),
+      receipts: [...high, ...low, verbose],
+      harnessId: CODEX,
+      taskClass: 'hard',
+      policy: { model: 'gpt-5.6', reasoningEffort: 'high', verbosity: 'low' },
+    });
+
+    assert.equal(estimate.status, 'estimated');
+    assert.equal(estimate.eligibleReceipts, 3);
+    assert.equal(estimate.fiveHour.p75UsedPercentPerAcceptedTask, 4);
+    assert.equal(estimate.weekly.p75UsedPercentPerAcceptedTask, 6);
   });
 });
