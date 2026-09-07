@@ -1,5 +1,10 @@
 import type { EffortLearningDecision } from './outcome-learning.js';
-import { effortRank, taskEffortFloor, type RecommendationEvidence, type TaskClass } from './optimizer.js';
+import {
+  effortRank,
+  taskEffortFloor,
+  type RecommendationEvidence,
+  type TaskClass,
+} from './optimizer.js';
 import type { AcceptedTaskCapacityEstimate } from './task-capacity.js';
 
 /**
