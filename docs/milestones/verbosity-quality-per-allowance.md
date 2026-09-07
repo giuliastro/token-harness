@@ -1,7 +1,7 @@
 # Verbosity quality-per-allowance milestone
 
 Date: 2026-09-07
-Status: implementation branch
+Status: merge candidate; full CI pending
 RFC: 0017
 
 ## Goal
@@ -27,4 +27,4 @@ The implementation reads only the same bounded current-project benchmark evidenc
 
 ## Validation target
 
-The merge gate is full repository CI on Windows, macOS and Ubuntu: install, typecheck, lint, format, tests, build, bundle smoke, package staging, and install smoke. The final status of this document should be updated after that gate passes.
+The merge gate is full repository CI on Windows, macOS and Ubuntu: install, typecheck, lint, format, tests, build, bundle smoke, package staging, and install smoke. This candidate is not complete until that gate passes on the final head.
