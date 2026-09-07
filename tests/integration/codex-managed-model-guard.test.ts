@@ -15,7 +15,12 @@ import {
 import { NodeFileSystem } from '@token-harness/platform';
 
 const FACTS: PlatformFacts = {
-  os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
+  os:
+    process.platform === 'win32'
+      ? 'windows'
+      : process.platform === 'darwin'
+        ? 'macos'
+        : 'linux',
   osDisplayName: 'test',
   arch: 'x64',
   nodeVersion: process.versions.node,
