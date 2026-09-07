@@ -101,7 +101,7 @@ function liveSpendable(input: {
   );
   if (windows.length !== 1) return null;
   const assessment = assessWindowPace(windows[0]!, input.report.observedAt, input.reservePercent);
-  return assessment.state === 'unknown' ? null : assessment.spendableRemainingPercent ?? null;
+  return assessment.state === 'unknown' ? null : (assessment.spendableRemainingPercent ?? null);
 }
 
 function estimateScope(input: {
