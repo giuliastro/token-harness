@@ -160,7 +160,7 @@ describe('capacity-aware installed schedule flow', () => {
     assert.match(output.stdout(), /recommendation: switch/);
     assert.match(output.stdout(), /Accepted-task capacity:/);
     assert.match(output.stdout(), /current: 0 accepted task\(s\)/);
-    assert.match(output.stdout(), /candidate: 15 accepted task\(s\)/);
+    assert.match(output.stdout(), /candidate: 10 accepted task\(s\)/);
     assert.match(output.stdout(), /current-capacity-below-one/);
     assert.match(output.stdout(), /candidate-capacity-sufficient/);
   });
@@ -191,7 +191,7 @@ describe('capacity-aware installed schedule flow', () => {
     assert.equal(envelope.data.evidence.current.acceptedTasksRemaining, 0);
     assert.equal(envelope.data.capacityEvidence.current.status, 'estimated');
     assert.equal(envelope.data.capacityEvidence.current.fiveHour.p75UsedPercentPerAcceptedTask, 6);
-    assert.equal(envelope.data.capacityEvidence.candidate.acceptedTasksRemaining, 15);
+    assert.equal(envelope.data.capacityEvidence.candidate.acceptedTasksRemaining, 10);
   });
 
   it('does not perform hidden capacity observations when explicit evidence skipped them', async () => {
