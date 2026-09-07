@@ -139,10 +139,10 @@ async function appendCodexNativePolicy(
   }
 
   const nativeContext: CommandContext = { ...context, harness: CODEX };
-  const [optimization, contextResult] = await Promise.all([
-    runOptimize(nativeContext),
-    runContext(nativeContext),
-  ]);
+  const optimization = await runOptimize(nativeContext);
+  // Freeze optimizer advice first, then re-observe native config. These snapshots are a true
+  // before/after guard; concurrent reads cannot prove that configuration stayed stable.
+  const contextResult = await runContext(nativeContext);
   const advice = optimization.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;
   const observation =
     contextResult.data?.harnesses.find((item) => item.harnessId === CODEX) ?? null;

@@ -9,13 +9,15 @@ import {
   assessBudgetDecision,
   assessMcpServer,
   assessWindowPace,
-  chooseSupportedEffort,
-  refineEffortWithOutcomes,
   benchmarkPolicySnapshot,
-  type TaskBenchmarkReceipt,
+  chooseSupportedEffort,
   commandResult,
   diagnostic,
+  estimateAcceptedTaskCapacityForPolicy,
+  refineEffortForAllowance,
+  refineEffortWithOutcomes,
   type BudgetProfile,
+  type BudgetReport,
   type CommandResult,
   type ContextPressure,
   type ContextReport,
@@ -27,6 +29,7 @@ import {
   type OptimizationRecommendation,
   type RecommendationEvidence,
   type SessionBoundarySignal,
+  type TaskBenchmarkReceipt,
   type TaskClass,
   type WindowPaceAssessment,
 } from '@token-harness/core';
@@ -174,9 +177,11 @@ function verbosityTarget(input: {
 function adviceForHarness(input: {
   contextReport: ContextReport;
   context: HarnessContextObservation;
+  budgetReport: BudgetReport;
   budgetWindows: ReturnType<typeof assessWindowPace>[];
   benchmarkReceipts: readonly TaskBenchmarkReceipt[] | null;
   observedAt: string;
+  reservePercent: number;
   localBurnTrend: LocalBurnTrend | null;
   recentSession: SessionBoundarySignal | null;
   taskClass: TaskClass;
@@ -185,11 +190,13 @@ function adviceForHarness(input: {
   const {
     context,
     contextReport,
+    budgetReport,
     budgetWindows,
     localBurnTrend,
     recentSession,
     taskClass,
     profile,
+    reservePercent,
   } = input;
   const diagnostics = [...context.diagnostics];
   const pressure = contextEvidence(contextReport, context);
@@ -394,17 +401,50 @@ function adviceForHarness(input: {
     now: input.observedAt,
     receipts: input.benchmarkReceipts,
   });
-  const recommendedEffort = effortLearning.recommendedEffort;
+
+  const exactCapacity = (effort: string | null) =>
+    effort === null || capturedPolicy === null || input.benchmarkReceipts === null
+      ? null
+      : estimateAcceptedTaskCapacityForPolicy({
+          report: budgetReport,
+          receipts: input.benchmarkReceipts,
+          harnessId: context.harnessId,
+          taskClass,
+          reservePercent,
+          policy: {
+            model: capturedPolicy.model,
+            reasoningEffort: effort,
+            verbosity: capturedPolicy.verbosity,
+          },
+        });
+  const qualityPerAllowance = refineEffortForAllowance({
+    taskClass,
+    learning: effortLearning,
+    baseCapacity: exactCapacity(effortLearning.baseEffort),
+    candidateCapacity: exactCapacity(effortLearning.candidateEffort),
+  });
+  const recommendedEffort =
+    qualityPerAllowance.state === 'unavailable'
+      ? effortLearning.recommendedEffort
+      : qualityPerAllowance.recommendedEffort;
   if (effortLearning.state === 'learned' || effortLearning.state === 'deferred') {
+    const allowanceEvidence =
+      qualityPerAllowance.state === 'unavailable' ? [] : qualityPerAllowance.reasons;
     recommendations.push({
       area: 'history',
       priority: 'first',
       action:
         effortLearning.state === 'deferred'
           ? 'Review task outcomes and quota/context constraints before another native policy change'
-          : 'Use the effort supported by repeated project task outcomes; keep verbosity unchanged',
+          : qualityPerAllowance.state === 'kept'
+            ? 'Keep the base effort because the quality-gated lower effort does not improve backend allowance throughput'
+            : qualityPerAllowance.state === 'deferred'
+              ? 'Checkpoint or switch harness before spending more reasoning effort on this task'
+              : qualityPerAllowance.state === 'allowance-efficient'
+                ? 'Use the quality-gated effort that increases accepted-task throughput per included allowance'
+                : 'Use the effort supported by repeated project task outcomes; keep verbosity unchanged',
       target: recommendedEffort,
-      evidence: effortLearning.reasons,
+      evidence: [...effortLearning.reasons, ...allowanceEvidence],
     });
   }
 
@@ -446,6 +486,7 @@ function adviceForHarness(input: {
         summary: taskClass + ' task under the ' + profile + ' profile',
       },
       ...paceEvidence,
+      ...(qualityPerAllowance.state === 'unavailable' ? [] : qualityPerAllowance.reasons),
     ];
     if (nativeEffort != null)
       evidence.push({
@@ -467,7 +508,7 @@ function adviceForHarness(input: {
   }
 
   const recommendedVerbosity =
-    effortLearning.state === 'deferred'
+    effortLearning.state === 'deferred' || qualityPerAllowance.state === 'deferred'
       ? null
       : effortLearning.state === 'learned'
         ? context.verbosity
@@ -589,9 +630,11 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
       adviceForHarness({
         contextReport,
         context: harnessContext,
+        budgetReport,
         budgetWindows: pace,
         benchmarkReceipts: outcomeHistory.receipts,
         observedAt: report.observedAt,
+        reservePercent,
         localBurnTrend:
           historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
             ?.burnTrend ?? null,

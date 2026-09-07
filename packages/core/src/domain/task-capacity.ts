@@ -17,6 +17,12 @@ export const ACCEPTED_TASK_CAPACITY_RESERVE_PERCENT = 20;
 
 type CapacityScope = Extract<UsageWindowScope, 'five-hour' | 'weekly'>;
 
+export interface AcceptedTaskCapacityPolicy {
+  model: string | null;
+  reasoningEffort: string | null;
+  verbosity: string | null;
+}
+
 export interface AcceptedTaskCapacityWindow {
   scope: CapacityScope;
   sampleCount: number;
@@ -31,6 +37,8 @@ export interface AcceptedTaskCapacityWindow {
 export interface AcceptedTaskCapacityEstimate {
   harnessId: HarnessId;
   taskClass: TaskClass;
+  /** Exact model/effort/verbosity boundary when the estimate is policy-scoped. */
+  policy?: AcceptedTaskCapacityPolicy;
   status: 'estimated' | 'insufficient-evidence';
   /** Conservative whole accepted-task equivalents constrained by both five-hour and weekly limits. */
   acceptedTasksRemaining: number | null;
@@ -47,12 +55,25 @@ function p75(values: readonly number[]): number | null {
   return sorted[index] ?? null;
 }
 
+function samePolicy(
+  receipt: TaskBenchmarkReceipt,
+  policy: AcceptedTaskCapacityPolicy | null,
+): boolean {
+  return (
+    policy === null ||
+    (receipt.model === policy.model &&
+      receipt.reasoningEffort === policy.reasoningEffort &&
+      receipt.verbosity === policy.verbosity)
+  );
+}
+
 function recentQualityPassedReceipts(input: {
   receipts: readonly TaskBenchmarkReceipt[];
   harnessId: HarnessId;
   taskClass: TaskClass;
   observedAt: string;
   maxAgeMs: number;
+  policy: AcceptedTaskCapacityPolicy | null;
 }): TaskBenchmarkReceipt[] {
   const now = Date.parse(input.observedAt);
   if (!Number.isFinite(now)) return [];
@@ -60,7 +81,8 @@ function recentQualityPassedReceipts(input: {
     if (
       receipt.harnessId !== input.harnessId ||
       receipt.taskClass !== input.taskClass ||
-      receipt.outcome.qualityGate !== 'passed'
+      receipt.outcome.qualityGate !== 'passed' ||
+      !samePolicy(receipt, input.policy)
     ) {
       return false;
     }
@@ -129,11 +151,12 @@ function estimateScope(input: {
   };
 }
 
-export function estimateAcceptedTaskCapacity(input: {
+function estimate(input: {
   report: BudgetReport;
   receipts: readonly TaskBenchmarkReceipt[];
   harnessId: HarnessId;
   taskClass: TaskClass;
+  policy: AcceptedTaskCapacityPolicy | null;
   reservePercent?: number;
   minSamples?: number;
   maxAgeMs?: number;
@@ -147,6 +170,7 @@ export function estimateAcceptedTaskCapacity(input: {
     taskClass: input.taskClass,
     observedAt: input.report.observedAt,
     maxAgeMs,
+    policy: input.policy,
   });
   const fiveHour = estimateScope({
     report: input.report,
@@ -165,19 +189,21 @@ export function estimateAcceptedTaskCapacity(input: {
     minSamples,
   });
   const reasons: string[] = [];
-  for (const estimate of [fiveHour, weekly]) {
-    if (estimate.sampleCount < minSamples) {
+  for (const scope of [fiveHour, weekly]) {
+    if (scope.sampleCount < minSamples) {
       reasons.push(
-        `${estimate.scope}: ${String(estimate.sampleCount)} positive comparable quota samples; ${String(minSamples)} required`,
+        `${scope.scope}: ${String(scope.sampleCount)} positive comparable quota samples; ${String(minSamples)} required`,
       );
-    } else if (estimate.spendableRemainingPercent === null) {
-      reasons.push(`${estimate.scope}: fresh unambiguous live allowance is unavailable`);
+    } else if (scope.spendableRemainingPercent === null) {
+      reasons.push(`${scope.scope}: fresh unambiguous live allowance is unavailable`);
     }
   }
+  const policy = input.policy === null ? {} : { policy: { ...input.policy } };
   if (fiveHour.taskEquivalents === null || weekly.taskEquivalents === null) {
     return {
       harnessId: input.harnessId,
       taskClass: input.taskClass,
+      ...policy,
       status: 'insufficient-evidence',
       acceptedTasksRemaining: null,
       eligibleReceipts: eligible.length,
@@ -193,6 +219,7 @@ export function estimateAcceptedTaskCapacity(input: {
   return {
     harnessId: input.harnessId,
     taskClass: input.taskClass,
+    ...policy,
     status: 'estimated',
     acceptedTasksRemaining,
     eligibleReceipts: eligible.length,
@@ -202,4 +229,36 @@ export function estimateAcceptedTaskCapacity(input: {
       'capacity is the minimum of independently normalized five-hour and weekly accepted-task equivalents',
     ],
   };
+}
+
+export function estimateAcceptedTaskCapacity(input: {
+  report: BudgetReport;
+  receipts: readonly TaskBenchmarkReceipt[];
+  harnessId: HarnessId;
+  taskClass: TaskClass;
+  reservePercent?: number;
+  minSamples?: number;
+  maxAgeMs?: number;
+}): AcceptedTaskCapacityEstimate {
+  return estimate({ ...input, policy: null });
+}
+
+/**
+ * Same-harness capacity at one exact model/effort/verbosity boundary.
+ *
+ * This is the only capacity form suitable for choosing between native reasoning policies: mixing
+ * receipts from different models or verbosity settings could attribute somebody else's quota cost
+ * to the effort being evaluated.
+ */
+export function estimateAcceptedTaskCapacityForPolicy(input: {
+  report: BudgetReport;
+  receipts: readonly TaskBenchmarkReceipt[];
+  harnessId: HarnessId;
+  taskClass: TaskClass;
+  policy: AcceptedTaskCapacityPolicy;
+  reservePercent?: number;
+  minSamples?: number;
+  maxAgeMs?: number;
+}): AcceptedTaskCapacityEstimate {
+  return estimate({ ...input, policy: input.policy });
 }
