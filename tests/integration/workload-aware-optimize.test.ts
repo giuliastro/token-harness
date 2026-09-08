@@ -367,7 +367,9 @@ describe('workload-aware optimize', () => {
     assert.equal(advice.budgetDecision?.allowEffortIncrease, false);
     assert.equal(advice.recommendedEffort, 'low');
     const workloadAdvice = advice.recommendations.find(
-      (item) => item.area === 'quota' && item.evidence.some((row) => row.code === 'workload-capacity-shortfall'),
+      (item) =>
+        item.area === 'quota' &&
+        item.evidence.some((row) => row.code === 'workload-capacity-shortfall'),
     );
     assert.ok(workloadAdvice);
     assert.equal(workloadAdvice.target, '3');
