@@ -365,7 +365,7 @@ describe('workload-aware optimize', () => {
     assert.equal(advice.workloadCoverage?.limitingScope, 'five-hour');
     assert.equal(advice.budgetDecision?.state, 'conserve');
     assert.equal(advice.budgetDecision?.allowEffortIncrease, false);
-    assert.equal(advice.recommendedEffort, 'low');
+    assert.equal(advice.recommendedEffort, 'medium');
     const workloadAdvice = advice.recommendations.find(
       (item) =>
         item.area === 'quota' &&

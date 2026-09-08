@@ -208,10 +208,20 @@ function adviceForHarness(input: {
     tasksRemaining: input.tasksRemaining,
     capacity: workloadCapacity,
   });
-  const budgetDecision = constrainBudgetForWorkload(
-    assessBudgetDecision(budgetWindows, taskClass),
-    workloadCoverage,
-  );
+  const rawBudgetDecision = assessBudgetDecision(budgetWindows, taskClass);
+  const budgetDecision = constrainBudgetForWorkload(rawBudgetDecision, workloadCoverage);
+  // A workload shortfall can suppress quota-derived headroom and veto costlier learned recovery,
+  // but it is not independent quality evidence for lowering the profile's base effort.
+  const effortBudgetDecision =
+    workloadCoverage.protectCapacity &&
+    rawBudgetDecision.state !== 'conserve' &&
+    rawBudgetDecision.state !== 'wait-for-reset'
+      ? {
+          ...rawBudgetDecision,
+          allowEffortIncrease: false,
+          reasons: budgetDecision.reasons,
+        }
+      : budgetDecision;
   const paceEvidence = [...quotaEvidence(budgetWindows), ...budgetDecision.reasons];
   const historyEvidence: RecommendationEvidence[] =
     localBurnTrend === null || localBurnTrend.state === 'unknown'
@@ -407,7 +417,7 @@ function adviceForHarness(input: {
           profile,
           pace: budgetWindows,
           contextPressure: pressure.pressure,
-          budgetDecision,
+          budgetDecision: effortBudgetDecision,
         });
   const effortLearning = refineEffortWithOutcomes({
     harnessId: context.harnessId,
