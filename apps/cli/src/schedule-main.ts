@@ -48,6 +48,7 @@ Evidence flags
   --candidate-quality <passed|failed|unknown>                   default: unknown
   --candidate-quality-task <mechanical|standard|hard|critical>
   --candidate-quality-samples <n>                               default: 0
+  --tasks-left <n>                                                explicit remaining accepted tasks
   --candidate-unavailable                                      mark candidate unusable
   --handoff-file <path>                                        measure the exact current handoff file
   --handoff-bytes <n>                                          current handoff size when no file is supplied
@@ -157,6 +158,7 @@ interface Args {
   maxHandoffBytes: number;
   transferBenefit: TransferBenefitState;
   transferExplicit: boolean;
+  tasksRemaining: number | null;
   json: boolean;
   help: boolean;
   version: boolean;
@@ -218,6 +220,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
     maxHandoffBytes: DEFAULT_MAX_HANDOFF_BYTES,
     transferBenefit: 'unknown',
     transferExplicit: false,
+    tasksRemaining: null,
     json: false,
     help: false,
     version: false,
@@ -257,6 +260,7 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
       '--candidate-quality',
       '--candidate-quality-task',
       '--candidate-quality-samples',
+      '--tasks-left',
       '--handoff-file',
       '--handoff-bytes',
       '--max-handoff-bytes',
@@ -351,6 +355,11 @@ function parse(argv: readonly string[]): { args: Args; diagnostics: Diagnostic[]
         args.qualityExplicit = true;
         const n = parseInteger(name, value, 0, diagnostics);
         if (n !== null) args.candidateQualitySamples = n;
+        break;
+      }
+      case '--tasks-left': {
+        const n = parseInteger(name, value, 1, diagnostics);
+        if (n !== null) args.tasksRemaining = n;
         break;
       }
       case '--handoff-file':
@@ -543,6 +552,7 @@ function render(report: ScheduleReport): string {
     `Current: ${report.currentHarness}`,
     `Candidate: ${report.candidateHarness}`,
     `Task class: ${report.taskClass}`,
+    `Tasks left: ${report.tasksRemaining === null ? 'unspecified' : String(report.tasksRemaining)}`,
     `Budget evidence: ${report.budgetEvidence.status}`,
     `Quality evidence: ${report.qualityEvidence.status}`,
     `Transfer evidence: ${report.transferEvidence.status}`,
@@ -668,6 +678,7 @@ export async function scheduleMain(
   const qualityTask = parsed.args.candidateQualityTask;
   const initialInput: CrossHarnessSchedulerInput = {
     taskClass,
+    tasksRemaining: parsed.args.tasksRemaining,
     current: {
       harnessId: harnessId(parsed.args.current!),
       available: true,

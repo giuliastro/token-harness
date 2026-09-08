@@ -27,6 +27,7 @@ interface BaseScheduleData {
   currentHarness: string;
   candidateHarness: string;
   taskClass: TaskClass;
+  tasksRemaining: number | null;
   reasons: { code: string; summary: string }[];
   evidence: {
     current: { fiveHourPace: PaceState; weeklyPace: PaceState };
@@ -96,6 +97,7 @@ function render(report: CapacityScheduleData): string {
     `Current: ${report.currentHarness}`,
     `Candidate: ${report.candidateHarness}`,
     `Task class: ${report.taskClass}`,
+    `Tasks left: ${report.tasksRemaining === null ? 'unspecified' : String(report.tasksRemaining)}`,
     `Budget evidence: ${report.budgetEvidence.status}`,
     `Quality evidence: ${report.qualityEvidence.status}`,
     `Transfer evidence: ${report.transferEvidence.status}`,
@@ -244,6 +246,7 @@ export async function scheduleCapacityMain(
   const base = envelope.data;
   const schedulerInput: CrossHarnessSchedulerInput = {
     taskClass: base.taskClass,
+    tasksRemaining: base.tasksRemaining,
     current: {
       harnessId: harnessId(base.currentHarness),
       available: true,

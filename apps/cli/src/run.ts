@@ -414,6 +414,7 @@ export async function run(options: RunOptions): Promise<number> {
     taskClass: invocation.options.task,
     budgetProfile: invocation.options.profile,
     reservePercent: invocation.options.reservePercent,
+    tasksRemaining: invocation.options.tasksLeft,
     nativePolicy: invocation.options.nativePolicy,
     since: invocation.options.since,
     until: invocation.options.until,

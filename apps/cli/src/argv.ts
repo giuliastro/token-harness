@@ -95,6 +95,8 @@ export interface CommandOptions {
   task: TaskClass | null;
   profile: BudgetProfile | null;
   reservePercent: number | null;
+  /** Explicit accepted tasks remaining before the next allowance re-observation. */
+  tasksLeft: number | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
   /** Show the full technical human report. JSON is already complete. */
@@ -127,6 +129,7 @@ const VALUE_FLAGS = new Set([
   '--task',
   '--profile',
   '--reserve',
+  '--tasks-left',
 ]);
 
 /**
@@ -204,6 +207,7 @@ export function parseArgv(
     task: null,
     profile: null,
     reservePercent: null,
+    tasksLeft: null,
     nativePolicy: false,
     verbose: false,
     yes: false,
@@ -453,6 +457,22 @@ export function parseArgv(
           );
         } else {
           options.reservePercent = parsed;
+        }
+        break;
+      }
+      case '--tasks-left': {
+        const parsed = Number(value);
+        if (!Number.isSafeInteger(parsed) || parsed < 1) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-tasks-left',
+              message: `Tasks left ${JSON.stringify(value)} must be a positive whole number`,
+              remediation: 'Use a value such as --tasks-left 5',
+            }),
+          );
+        } else {
+          options.tasksLeft = parsed;
         }
         break;
       }

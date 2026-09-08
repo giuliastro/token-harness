@@ -7,11 +7,13 @@
 import {
   EXIT_CODES,
   assessBudgetDecision,
+  assessWorkloadCoverage,
   assessMcpServer,
   assessWindowPace,
   benchmarkPolicySnapshot,
   chooseSupportedEffort,
   commandResult,
+  constrainBudgetForWorkload,
   diagnostic,
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
@@ -170,6 +172,7 @@ function adviceForHarness(input: {
   benchmarkReceipts: readonly TaskBenchmarkReceipt[] | null;
   observedAt: string;
   reservePercent: number;
+  tasksRemaining: number | null;
   localBurnTrend: LocalBurnTrend | null;
   recentSession: SessionBoundarySignal | null;
   taskClass: TaskClass;
@@ -189,7 +192,26 @@ function adviceForHarness(input: {
   const diagnostics = [...context.diagnostics];
   const pressure = contextEvidence(contextReport, context);
   const recommendations: OptimizationRecommendation[] = [];
-  const budgetDecision = assessBudgetDecision(budgetWindows, taskClass);
+  const capturedPolicy = benchmarkPolicySnapshot(context);
+  const workloadCapacity =
+    input.tasksRemaining === null || capturedPolicy === null || input.benchmarkReceipts === null
+      ? null
+      : estimateAcceptedTaskCapacityForPolicy({
+          report: budgetReport,
+          receipts: input.benchmarkReceipts,
+          harnessId: context.harnessId,
+          taskClass,
+          reservePercent,
+          policy: capturedPolicy,
+        });
+  const workloadCoverage = assessWorkloadCoverage({
+    tasksRemaining: input.tasksRemaining,
+    capacity: workloadCapacity,
+  });
+  const budgetDecision = constrainBudgetForWorkload(
+    assessBudgetDecision(budgetWindows, taskClass),
+    workloadCoverage,
+  );
   const paceEvidence = [...quotaEvidence(budgetWindows), ...budgetDecision.reasons];
   const historyEvidence: RecommendationEvidence[] =
     localBurnTrend === null || localBurnTrend.state === 'unknown'
@@ -269,7 +291,19 @@ function adviceForHarness(input: {
     });
   }
 
-  if (budgetDecision.state === 'wait-for-reset') {
+  if (workloadCoverage.state === 'shortfall' || workloadCoverage.state === 'exhausted') {
+    recommendations.push({
+      area: 'quota',
+      priority: 'first',
+      action:
+        workloadCoverage.state === 'exhausted'
+          ? 'Checkpoint or switch harness: the current exact policy has no conservative accepted-task capacity for the stated workload'
+          : 'Protect capacity or switch harness: the current exact policy does not cover the stated remaining tasks',
+      target:
+        workloadCoverage.shortfallTasks === null ? null : String(workloadCoverage.shortfallTasks),
+      evidence: [...workloadCoverage.reasons, ...quotaEvidence(budgetWindows)],
+    });
+  } else if (budgetDecision.state === 'wait-for-reset') {
     recommendations.push({
       area: 'quota',
       priority: 'first',
@@ -373,9 +407,8 @@ function adviceForHarness(input: {
           profile,
           pace: budgetWindows,
           contextPressure: pressure.pressure,
+          budgetDecision,
         });
-
-  const capturedPolicy = benchmarkPolicySnapshot(context);
   const effortLearning = refineEffortWithOutcomes({
     harnessId: context.harnessId,
     model: capturedPolicy?.model ?? null,
@@ -714,6 +747,7 @@ function adviceForHarness(input: {
     recentSession,
     pace: budgetWindows,
     budgetDecision,
+    ...(input.tasksRemaining === null ? {} : { workloadCoverage }),
     recommendations,
     diagnostics,
   };
@@ -755,6 +789,7 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
     taskClass,
     profile,
     reservePercent,
+    tasksRemaining: context.tasksRemaining ?? null,
     harnesses: [],
   };
 
@@ -791,6 +826,7 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         benchmarkReceipts: outcomeHistory.receipts,
         observedAt: report.observedAt,
         reservePercent,
+        tasksRemaining: context.tasksRemaining ?? null,
         localBurnTrend:
           historyReport?.harnesses.find((item) => item.harnessId === harnessContext.harnessId)
             ?.burnTrend ?? null,

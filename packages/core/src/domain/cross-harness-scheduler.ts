@@ -50,6 +50,8 @@ export interface CrossHarnessTransferEvidence {
 
 export interface CrossHarnessSchedulerInput {
   taskClass: TaskClass;
+  /** Explicit accepted tasks that should fit without assuming capacity after a future reset. */
+  tasksRemaining?: number | null;
   current: HarnessSchedulingEvidence;
   candidate: HarnessSchedulingEvidence;
   transfer: CrossHarnessTransferEvidence;
@@ -62,6 +64,7 @@ export interface CrossHarnessDecisionReason {
 
 export interface CrossHarnessSchedulerDecision {
   decision: CrossHarnessDecisionKind;
+  tasksRemaining: number | null;
   currentHarness: HarnessId;
   candidateHarness: HarnessId;
   taskClass: TaskClass;
@@ -72,19 +75,30 @@ function reason(code: string, summary: string): CrossHarnessDecisionReason {
   return { code, summary };
 }
 
-function hasPressure(evidence: HarnessSchedulingEvidence): boolean {
+function hasPressure(evidence: HarnessSchedulingEvidence, tasksRemaining: number | null): boolean {
   return (
     evidence.fiveHourPace === 'over-pace' ||
     evidence.weeklyPace === 'over-pace' ||
-    evidence.acceptedTasksRemaining === 0
+    evidence.acceptedTasksRemaining === 0 ||
+    (tasksRemaining !== null &&
+      evidence.acceptedTasksRemaining !== undefined &&
+      evidence.acceptedTasksRemaining !== null &&
+      evidence.acceptedTasksRemaining < tasksRemaining)
   );
 }
 
-function hasSafeHeadroom(evidence: HarnessSchedulingEvidence): boolean {
+function hasSafeHeadroom(
+  evidence: HarnessSchedulingEvidence,
+  tasksRemaining: number | null,
+): boolean {
   const live = [evidence.fiveHourPace, evidence.weeklyPace];
   return (
     live.every((state) => state === 'under-pace' || state === 'on-pace') &&
-    evidence.acceptedTasksRemaining !== 0
+    evidence.acceptedTasksRemaining !== 0 &&
+    (tasksRemaining === null ||
+      (evidence.acceptedTasksRemaining !== undefined &&
+        evidence.acceptedTasksRemaining !== null &&
+        evidence.acceptedTasksRemaining >= tasksRemaining))
   );
 }
 
@@ -161,7 +175,9 @@ function validateCapacity(
 export function scheduleCrossHarness(
   input: CrossHarnessSchedulerInput,
 ): CrossHarnessSchedulerDecision {
+  const tasksRemaining = input.tasksRemaining ?? null;
   const base = {
+    tasksRemaining,
     currentHarness: input.current.harnessId,
     candidateHarness: input.candidate.harnessId,
     taskClass: input.taskClass,
@@ -189,6 +205,19 @@ export function scheduleCrossHarness(
       ...base,
       decision: 'stay',
       reasons: [reason('candidate-unavailable', 'the candidate harness is not currently usable')],
+    };
+  }
+
+  if (tasksRemaining !== null && (!Number.isSafeInteger(tasksRemaining) || tasksRemaining <= 0)) {
+    return {
+      ...base,
+      decision: 'insufficient-evidence',
+      reasons: [
+        reason(
+          'invalid-workload-target',
+          'remaining workload must be a positive whole number of accepted tasks',
+        ),
+      ],
     };
   }
 
@@ -224,7 +253,23 @@ export function scheduleCrossHarness(
     };
   }
 
-  if (!hasPressure(input.current)) {
+  if (!hasPressure(input.current, tasksRemaining)) {
+    if (
+      tasksRemaining !== null &&
+      (input.current.acceptedTasksRemaining === undefined ||
+        input.current.acceptedTasksRemaining === null)
+    ) {
+      return {
+        ...base,
+        decision: 'insufficient-evidence',
+        reasons: [
+          reason(
+            'current-workload-capacity-unknown',
+            'current harness capacity for the stated remaining workload is unknown',
+          ),
+        ],
+      };
+    }
     if (input.current.fiveHourPace === 'unknown' || input.current.weeklyPace === 'unknown') {
       return {
         ...base,
@@ -244,7 +289,40 @@ export function scheduleCrossHarness(
     };
   }
 
-  if (!hasSafeHeadroom(input.candidate)) {
+  if (!hasSafeHeadroom(input.candidate, tasksRemaining)) {
+    if (
+      tasksRemaining !== null &&
+      (input.candidate.acceptedTasksRemaining === undefined ||
+        input.candidate.acceptedTasksRemaining === null)
+    ) {
+      return {
+        ...base,
+        decision: 'insufficient-evidence',
+        reasons: [
+          reason(
+            'candidate-workload-capacity-unknown',
+            'candidate capacity for the stated remaining workload is unknown',
+          ),
+        ],
+      };
+    }
+    if (
+      tasksRemaining !== null &&
+      input.candidate.acceptedTasksRemaining !== undefined &&
+      input.candidate.acceptedTasksRemaining !== null &&
+      input.candidate.acceptedTasksRemaining < tasksRemaining
+    ) {
+      return {
+        ...base,
+        decision: 'stay',
+        reasons: [
+          reason(
+            'candidate-capacity-below-workload',
+            `candidate has ${String(input.candidate.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`,
+          ),
+        ],
+      };
+    }
     if (input.candidate.acceptedTasksRemaining === 0) {
       return {
         ...base,
@@ -321,15 +399,23 @@ export function scheduleCrossHarness(
   }
 
   const reasons = [
-    input.current.acceptedTasksRemaining === 0
+    tasksRemaining !== null &&
+    input.current.acceptedTasksRemaining !== undefined &&
+    input.current.acceptedTasksRemaining !== null &&
+    input.current.acceptedTasksRemaining < tasksRemaining
       ? reason(
-          'current-capacity-below-one',
-          'current safe allowance is below one empirical accepted-task equivalent',
+          'current-capacity-below-workload',
+          `current harness has ${String(input.current.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`,
         )
-      : reason(
-          'current-over-pace',
-          'the current harness is over pace in at least one observed allowance window',
-        ),
+      : input.current.acceptedTasksRemaining === 0
+        ? reason(
+            'current-capacity-below-one',
+            'current safe allowance is below one empirical accepted-task equivalent',
+          )
+        : reason(
+            'current-over-pace',
+            'the current harness is over pace in at least one observed allowance window',
+          ),
     reason(
       'candidate-headroom',
       'the candidate is on pace or under pace in its observed allowance windows',
@@ -340,10 +426,15 @@ export function scheduleCrossHarness(
     input.candidate.acceptedTasksRemaining !== null
   ) {
     reasons.push(
-      reason(
-        'candidate-capacity-sufficient',
-        `candidate has ${String(input.candidate.acceptedTasksRemaining)} conservative accepted-task equivalents remaining`,
-      ),
+      tasksRemaining !== null
+        ? reason(
+            'candidate-workload-covered',
+            `candidate has ${String(input.candidate.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`,
+          )
+        : reason(
+            'candidate-capacity-sufficient',
+            `candidate has ${String(input.candidate.acceptedTasksRemaining)} conservative accepted-task equivalents remaining`,
+          ),
     );
   }
   reasons.push(
