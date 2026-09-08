@@ -140,6 +140,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
   const diagnostics: Diagnostic[] = [];
 
   let stored: StoredPlan | null = null;
+  let storedAgentSkill = false;
   let planningContext = context;
   const rejectedReport = (): ApplyReport => ({
     ...emptyReport('rejected'),
@@ -216,7 +217,13 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
         );
         return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
       }
-      planningContext = { ...context, harness: stored.harness, provider };
+      storedAgentSkill = stored.actions.some((action) => action.id.startsWith('agent-skill:'));
+      planningContext = {
+        ...context,
+        harness: stored.harness,
+        provider,
+        agentSkill: storedAgentSkill,
+      };
     } catch {
       diagnostics.push(
         diagnostic({
@@ -235,6 +242,19 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
   // Only the stored actions execute; this computation still enforces the normal gates.
   const computed = await computePlan(planningContext);
   diagnostics.push(...computed.diagnostics);
+
+  if (stored !== null && storedAgentSkill && computed.report.planId !== stored.planId) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'agent-skill-plan-drift',
+        subject: stored.harness,
+        message: 'The Agent Skill target changed after the reviewed preview',
+        remediation: 'Review a fresh Enable in-session guidance preview; nothing was written',
+      }),
+    );
+    return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
+  }
 
   if (computed.blocked.length > 0 && computed.report.actions.length === 0) {
     /**

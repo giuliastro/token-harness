@@ -133,11 +133,12 @@ verbosity change, the harness must first build a reviewed plan, explain the exac
 and wait for your explicit approval before `apply`. A saved preference may affect future sessions;
 it is not silently presented as a live change to the current session.
 
-Phase 18.13 ships the portable skill source rather than hard-coding harness-specific skill folders.
-Install or import the `skills/token-harness` directory with a supported Agent Skills mechanism.
-A later reviewed phase can bundle and install it from the guided app once current Claude/Codex
-skill-discovery locations and ownership semantics are fixture-tested. The browser remains fully
-usable without any skill or second AI subscription.
+The guided app can now preview **Enable in-session guidance** for each detected Claude Code or
+Codex installation. It installs the same portable skill into the agent's documented user-level
+Agent Skills directory through the normal transactional plan/apply path. Existing `token-harness
+skill directories are left user-owned and are never overwritten or silently adopted. The browser
+remains fully usable without any skill or second AI subscription. See
+[RFC 0023](docs/rfcs/0023-guided-agent-skill-install.md) for the install and ownership boundary.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing

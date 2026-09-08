@@ -7,6 +7,10 @@ import { REPO_ROOT } from '../src/index.js';
 
 const SKILL_PATH = join(REPO_ROOT, 'skills', 'token-harness', 'SKILL.md');
 const SKILL = readFileSync(SKILL_PATH, 'utf8');
+const INSTALLABLE_SOURCE = readFileSync(
+  join(REPO_ROOT, 'apps', 'cli', 'src', 'agent-skill.ts'),
+  'utf8',
+);
 
 function frontmatterField(name: string): string | null {
   const match = new RegExp(`^${name}:\\s*(.+)$`, 'm').exec(SKILL);
@@ -14,6 +18,14 @@ function frontmatterField(name: string): string | null {
 }
 
 describe('agent-native Token Harness skill', () => {
+  it('keeps the bundled install payload byte-identical to SKILL.md', () => {
+    const match = /TOKEN_HARNESS_AGENT_SKILL\s*=\s*("(?:\\.|[^"\\])*")\s*;/s.exec(
+      INSTALLABLE_SOURCE,
+    );
+    assert.ok(match?.[1], 'installable skill source must expose one JSON string literal');
+    assert.equal(JSON.parse(match[1]), SKILL);
+  });
+
   it('has a compact portable Agent Skills frontmatter contract', () => {
     assert.match(SKILL, /^---\n[\s\S]*?\n---\n/);
     assert.equal(frontmatterField('name'), 'token-harness');

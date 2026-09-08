@@ -22,7 +22,7 @@ export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
 export type GuideCall = <T>(args: readonly string[]) => Promise<CliEnvelope<T>>;
 export interface GuideAction {
-  kind: 'setup' | 'effort' | 'verify' | 'help' | 'refresh';
+  kind: 'setup' | 'effort' | 'skill' | 'verify' | 'help' | 'refresh';
   label: string;
   harness?: GuideHarness;
   topic?:
@@ -426,6 +426,21 @@ function agentRules(
       action: reasoning.action,
     },
     {
+      id: `${id}-guidance`,
+      title: 'In-session Token Harness guidance',
+      state: 'Optional',
+      mode: 'integration',
+      what:
+        id === 'claude'
+          ? 'Installs the portable Token Harness Agent Skill in ~/.claude/skills/token-harness so Claude can consult the local controller when a task needs it.'
+          : 'Installs the portable Token Harness Agent Skill in ~/.agents/skills/token-harness so Codex can consult the local controller when a task needs it.',
+      why: 'The harness can ask Token Harness for quota-aware, quality-gated advice without making advanced CLI flags the human workflow.',
+      evidence:
+        'Installation is local, previewed and transactional. An existing token-harness skill directory is never overwritten or silently adopted.',
+      next: 'Enable this once, then keep coding normally. Ask the agent to use Token Harness for a task when you want an explicit check; the skill also activates on relevant allowance decisions.',
+      action: { kind: 'skill', label: 'Enable in-session guidance', harness: id },
+    },
+    {
       id: `${id}-mcp`,
       title: 'Connected tools',
       state:
@@ -792,10 +807,12 @@ export class GuideService {
     const data = input as Record<string, unknown>;
     if (
       Object.keys(data).some((key) => !['action', 'harness', 'task'].includes(key)) ||
-      !['setup', 'effort', 'undo'].includes(String(data['action'])) ||
+      !['setup', 'effort', 'skill', 'undo'].includes(String(data['action'])) ||
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
-      (data['action'] === 'effort' && (data['harness'] === undefined || data['task'] === undefined))
+      (data['action'] === 'effort' &&
+        (data['harness'] === undefined || data['task'] === undefined)) ||
+      (data['action'] === 'skill' && data['harness'] === undefined)
     )
       throw new GuideError(400, 'Choose a supported agent and task.');
     return this.exclusive(async () => {
@@ -852,7 +869,9 @@ export class GuideService {
           'working',
         );
         const args = ['plan', '--harness', agent.harnessId];
-        if (data['action'] === 'effort')
+        if (data['action'] === 'skill') {
+          args.push('--provider', 'none', '--agent-skill');
+        } else if (data['action'] === 'effort')
           args.push(
             '--provider',
             'none',
@@ -881,13 +900,24 @@ export class GuideService {
               result.diagnostics,
               data['action'] === 'effort'
                 ? 'No supported preference change is needed or available. Your current preference is kept.'
-                : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
+                : data['action'] === 'skill'
+                  ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
+                  : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
             )}`,
           );
           continue;
         }
         plans.push(report.planId);
-        changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
+        if (data['action'] === 'skill') {
+          changes.push({
+            title: `${name(agent.harnessId)}: enable in-session guidance`,
+            description:
+              'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
+            files: 1,
+          });
+        } else {
+          changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
+        }
         network ||= report.network.length > 0;
       }
       if (selected.length === 0)
@@ -901,7 +931,12 @@ export class GuideService {
           id,
           expires,
           plans,
-          description: data['action'] === 'effort' ? 'Task preference' : 'Integration setup',
+          description:
+            data['action'] === 'effort'
+              ? 'Task preference'
+              : data['action'] === 'skill'
+                ? 'In-session guidance'
+                : 'Integration setup',
           operation: 'apply',
           network,
         };
@@ -918,7 +953,7 @@ export class GuideService {
         notices,
         expiresAt: id === null ? null : new Date(expires).toISOString(),
         network,
-        restart: data['action'] === 'effort',
+        restart: data['action'] === 'effort' || data['action'] === 'skill',
       };
     });
   }

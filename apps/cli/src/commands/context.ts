@@ -49,6 +49,8 @@ export interface CommandContext {
   tasksRemaining?: number | null;
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
+  /** Guided/internal Agent Skill installation, still executed through plan/apply. */
+  agentSkill?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
   /** Guided all-project observation; the legacy metrics CLI remains project-scoped. */
   metricsAllProjects?: boolean;

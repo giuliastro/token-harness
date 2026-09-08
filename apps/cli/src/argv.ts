@@ -99,6 +99,8 @@ export interface CommandOptions {
   tasksLeft: number | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
+  /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
+  agentSkill: boolean;
   /** Show the full technical human report. JSON is already complete. */
   verbose: boolean;
   /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
@@ -139,7 +141,7 @@ const VALUE_FLAGS = new Set([
  * an envelope when `--json` parsed; it is listed here so the main loop does not reject it as
  * unknown.
  */
-const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--verbose', '--yes']);
+const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--agent-skill', '--verbose', '--yes']);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
   return argv.some((token) => token === '--json' || token.startsWith('--json='));
@@ -209,6 +211,7 @@ export function parseArgv(
     reservePercent: null,
     tasksLeft: null,
     nativePolicy: false,
+    agentSkill: false,
     verbose: false,
     yes: false,
   };
@@ -252,6 +255,7 @@ export function parseArgv(
       // RFC 0006: "require either an interactive confirmation or `--yes`". This is the second.
       if (name === '--yes') options.yes = true;
       if (name === '--native-policy') options.nativePolicy = true;
+      if (name === '--agent-skill') options.agentSkill = true;
       if (name === '--verbose') options.verbose = true;
       continue;
     }
