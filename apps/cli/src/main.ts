@@ -51,7 +51,14 @@ import {
   type UiOptions,
 } from './ui.js';
 import { TOOL_VERSION } from './version.js';
-import { createGuideCall, GuideService, savingsView, type GuidePeriod } from './guided.js';
+import {
+  createGuideCall,
+  GuideService,
+  savingsView,
+  type GuideHarness,
+  type GuidePeriod,
+} from './guided.js';
+import { observeAgentSkill } from './agent-skill.js';
 import { createGuideHandler } from './guided-http.js';
 
 /**
@@ -422,6 +429,22 @@ async function runGuidedUi(
     createGuideCall(base),
     () => Date.now(),
     () => randomBytes(32).toString('hex'),
+    async (harness: GuideHarness) => {
+      if (base.adapters === null || base.adapters === undefined) {
+        return {
+          state: 'unavailable',
+          target: null,
+          detail:
+            'The local filesystem is unavailable, so the Agent Skill state cannot be checked.',
+        };
+      }
+      return observeAgentSkill({
+        fs: base.adapters.fs,
+        home: base.home,
+        stateRoot: base.stateRoot ?? null,
+        harness,
+      });
+    },
   );
   const token = randomBytes(32).toString('hex');
   let authority = '';

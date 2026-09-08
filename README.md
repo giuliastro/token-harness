@@ -133,11 +133,14 @@ verbosity change, the harness must first build a reviewed plan, explain the exac
 and wait for your explicit approval before `apply`. A saved preference may affect future sessions;
 it is not silently presented as a live change to the current session.
 
-The guided app can now preview **Enable in-session guidance** for each detected Claude Code or
+The guided app can preview **Enable in-session guidance** for each detected Claude Code or
 Codex installation. It installs the same portable skill into the agent's documented user-level
-Agent Skills directory through the normal transactional plan/apply path. Existing `token-harness
-skill directories are left user-owned and are never overwritten or silently adopted. The browser
-remains fully usable without any skill or second AI subscription. See
+Agent Skills directory through the normal transactional plan/apply path. The agent card then shows
+the live guidance state: **Enabled** when the exact skill is currently owned by Token Harness,
+**Enabled externally** for a byte-identical user-owned skill, or an explicit not-enabled,
+custom/conflict, or unavailable state. Existing `token-harness` skill directories are never
+overwritten or silently adopted, and matching bytes alone never create an ownership claim. The
+browser remains fully usable without any skill or second AI subscription. See
 [RFC 0023](docs/rfcs/0023-guided-agent-skill-install.md) for the install and ownership boundary.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,

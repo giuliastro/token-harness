@@ -14,6 +14,7 @@ import type {
   VerifyReport,
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
+import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 
@@ -63,6 +64,12 @@ export interface GuideRule {
   next?: string;
   action?: GuideAction;
 }
+export interface GuideGuidance {
+  state: 'managed' | 'external' | 'absent' | 'conflict' | 'unavailable';
+  label: string;
+  description: string;
+  action?: GuideAction;
+}
 export interface GuideAgent {
   id: GuideHarness;
   name: string;
@@ -72,6 +79,7 @@ export interface GuideAgent {
   providers: string[];
   effort: string | null;
   reasoning: GuideReasoning;
+  guidance?: GuideGuidance;
   allowanceAction: GuideAction;
   rules: GuideRule[];
   allowance: Array<{
@@ -366,10 +374,29 @@ function allowanceAction(diagnostics: readonly Diagnostic[]): GuideAction {
     return { kind: 'help', label: 'Sign-in instructions', topic: 'claude-login' };
   return { kind: 'help', label: 'Resolve missing data', topic: 'compatibility' };
 }
+function guidanceView(id: GuideHarness, observation: AgentSkillObservation): GuideGuidance {
+  const labels: Record<AgentSkillObservation['state'], string> = {
+    managed: 'Enabled',
+    external: 'Enabled externally',
+    absent: 'Not enabled',
+    conflict: 'Custom skill found',
+    unavailable: 'Not verified',
+  };
+  return {
+    state: observation.state,
+    label: labels[observation.state],
+    description: observation.detail,
+    ...(observation.state === 'absent'
+      ? { action: { kind: 'skill' as const, label: 'Enable in-session guidance', harness: id } }
+      : {}),
+  };
+}
+
 function agentRules(
   id: GuideHarness,
   providers: string[],
   context: ContextReport | null,
+  guidance?: GuideGuidance,
 ): GuideRule[] {
   const observation = context?.harnesses.find((item) => item.harnessId === id);
   const reasoning = reasoningView(id, observation);
@@ -428,17 +455,29 @@ function agentRules(
     {
       id: `${id}-guidance`,
       title: 'In-session Token Harness guidance',
-      state: 'Optional',
-      mode: 'integration',
+      state: guidance?.label ?? 'Optional',
+      mode: guidance?.state === 'absent' ? 'not-enabled' : 'integration',
       what:
-        id === 'claude'
+        guidance?.description ??
+        (id === 'claude'
           ? 'Installs the portable Token Harness Agent Skill in ~/.claude/skills/token-harness so Claude can consult the local controller when a task needs it.'
-          : 'Installs the portable Token Harness Agent Skill in ~/.agents/skills/token-harness so Codex can consult the local controller when a task needs it.',
+          : 'Installs the portable Token Harness Agent Skill in ~/.agents/skills/token-harness so Codex can consult the local controller when a task needs it.'),
       why: 'The harness can ask Token Harness for quota-aware, quality-gated advice without making advanced CLI flags the human workflow.',
       evidence:
-        'Installation is local, previewed and transactional. An existing token-harness skill directory is never overwritten or silently adopted.',
-      next: 'Enable this once, then keep coding normally. Ask the agent to use Token Harness for a task when you want an explicit check; the skill also activates on relevant allowance decisions.',
-      action: { kind: 'skill', label: 'Enable in-session guidance', harness: id },
+        guidance?.state === 'managed'
+          ? 'Live bytes match the bundled skill and the latest relevant committed transaction still owns that file.'
+          : guidance?.state === 'external'
+            ? 'The live file matches the bundled skill, but Token Harness has no current ownership claim and will not remove or replace it automatically.'
+            : 'Installation is local, previewed and transactional. An existing token-harness skill directory is never overwritten or silently adopted.',
+      next:
+        guidance?.state === 'managed'
+          ? 'Keep coding normally. Ask the agent to use Token Harness when you want an explicit quota-aware check.'
+          : guidance?.state === 'external'
+            ? 'The matching skill can be used as-is. Token Harness keeps it user-owned.'
+            : guidance?.state === 'conflict'
+              ? 'Review the existing skill manually. Token Harness will not overwrite it.'
+              : 'Enable this once, then keep coding normally. Ask the agent to use Token Harness for a task when you want an explicit check.',
+      ...(guidance?.action ? { action: guidance.action } : {}),
     },
     {
       id: `${id}-mcp`,
@@ -593,10 +632,19 @@ export class GuideService {
   private readonly call: GuideCall;
   private readonly now: () => number;
   private readonly random: () => string;
-  constructor(call: GuideCall, now: () => number, random: () => string) {
+  private readonly observeGuidance:
+    | ((harness: GuideHarness) => Promise<AgentSkillObservation>)
+    | null;
+  constructor(
+    call: GuideCall,
+    now: () => number,
+    random: () => string,
+    observeGuidance: ((harness: GuideHarness) => Promise<AgentSkillObservation>) | null = null,
+  ) {
     this.call = call;
     this.now = now;
     this.random = random;
+    this.observeGuidance = observeGuidance;
   }
   status(): {
     busy: boolean;
@@ -650,6 +698,7 @@ export class GuideService {
     let doctor = empty<DoctorReport>(),
       budget = empty<BudgetReport>(),
       context = empty<ContextReport>();
+    let guidance: Partial<Record<GuideHarness, GuideGuidance>> | undefined;
     const observe = async <T>(id: GuideStageId, args: string[]): Promise<GuideRead<T>> => {
       let result: GuideRead<T>;
       try {
@@ -668,10 +717,16 @@ export class GuideService {
     };
     const updateAgents = (): void => {
       if (doctor.data === null) return;
-      loading.agents = this.agentView(doctor, budget, context, {
-        rules: loading.stages.find((item) => item.id === 'rules')?.state !== 'working',
-        allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
-      });
+      loading.agents = this.agentView(
+        doctor,
+        budget,
+        context,
+        {
+          rules: loading.stages.find((item) => item.id === 'rules')?.state !== 'working',
+          allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
+        },
+        guidance,
+      );
     };
     const [, , , metrics, status] = await Promise.all([
       observe<DoctorReport>('agents', ['doctor']).then((result) => {
@@ -682,8 +737,25 @@ export class GuideService {
         budget = result;
         updateAgents();
       }),
-      observe<ContextReport>('rules', ['context']).then((result) => {
+      observe<ContextReport>('rules', ['context']).then(async (result) => {
         context = result;
+        if (this.observeGuidance !== null) {
+          guidance = {};
+          await Promise.all(
+            (['claude', 'codex'] as const).map(async (harness) => {
+              try {
+                guidance![harness] = guidanceView(harness, await this.observeGuidance!(harness));
+              } catch {
+                guidance![harness] = {
+                  state: 'unavailable',
+                  label: 'Not verified',
+                  description:
+                    'The Agent Skill state could not be checked. No ownership is assumed.',
+                };
+              }
+            }),
+          );
+        }
         updateAgents();
       }),
       observe<MetricsReport>('savings', [
@@ -696,7 +768,13 @@ export class GuideService {
       }),
       observe<StatusReport>('checks', ['status']),
     ]);
-    const agents = this.agentView(doctor, budget, context, { rules: true, allowance: true });
+    const agents = this.agentView(
+      doctor,
+      budget,
+      context,
+      { rules: true, allowance: true },
+      guidance,
+    );
     const notices: string[] = [];
     if (doctor.data === null)
       notices.push(
@@ -738,6 +816,7 @@ export class GuideService {
     budget: GuideRead<BudgetReport>,
     context: GuideRead<ContextReport>,
     complete: { rules: boolean; allowance: boolean },
+    guidance?: Partial<Record<GuideHarness, GuideGuidance>>,
   ): GuideAgent[] {
     const present = (doctor.data?.harnesses ?? []).filter(
       (item) =>
@@ -771,8 +850,16 @@ export class GuideService {
         providers: providers.map(name),
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
+        ...(guidance?.[agent.harnessId as GuideHarness]
+          ? { guidance: guidance[agent.harnessId as GuideHarness] }
+          : {}),
         allowanceAction: allowanceAction(usage?.diagnostics ?? []),
-        rules: agentRules(agent.harnessId as GuideHarness, providers, context.data),
+        rules: agentRules(
+          agent.harnessId as GuideHarness,
+          providers,
+          context.data,
+          guidance?.[agent.harnessId as GuideHarness],
+        ),
         allowance: (usage?.windows ?? []).map((window) => ({
           label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
           remaining: window.remainingPercent,
