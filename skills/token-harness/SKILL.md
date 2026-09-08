@@ -28,7 +28,9 @@ Do not run Token Harness before every trivial tool call. One observation at a me
 
 ## Explicit workload
 
-Only pass `--tasks-left N` when the remaining accepted-task count is explicit from the user or an explicit task list already in the conversation. Never infer it from token history, source files, GitHub issues, or a guessed backlog.
+Only pass `--tasks-left N` when the remaining accepted-task count is explicit from the user or an explicit task list already in the conversation. Never infer it from token history, source files, GitHub issues, or a guessed backlog. When it is explicit, add it to the same advisory call:
+
+`token-harness optimize --harness <claude|codex> --task <class> --profile balanced --tasks-left <N> --json`
 
 For multiple independent new tasks whose explicit list can be classified by task class, Token Harness can compare Claude and Codex with:
 
