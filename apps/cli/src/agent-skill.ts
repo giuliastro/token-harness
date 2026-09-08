@@ -1,4 +1,5 @@
 import {
+  FileJournalStore,
   diagnostic,
   digestBytes,
   type Diagnostic,
@@ -23,6 +24,141 @@ export interface AgentSkillInstallPlan {
   target: string | null;
   actions: PlannedAction[];
   diagnostics: Diagnostic[];
+}
+
+export type AgentSkillObservationState =
+  | 'managed'
+  | 'external'
+  | 'absent'
+  | 'conflict'
+  | 'unavailable';
+
+export interface AgentSkillObservation {
+  state: AgentSkillObservationState;
+  target: string | null;
+  detail: string;
+}
+
+function targetFor(
+  fsPort: FileSystemPort,
+  home: string,
+  harness: 'claude' | 'codex',
+): { directory: string; target: string } {
+  let cursor = home;
+  for (const segment of TARGETS[harness] ?? []) cursor = fsPort.join(cursor, segment);
+  return { directory: cursor, target: fsPort.join(cursor, 'SKILL.md') };
+}
+
+export async function observeAgentSkill(input: {
+  fs: FileSystemPort;
+  home: string | null;
+  stateRoot: string | null;
+  harness: 'claude' | 'codex';
+}): Promise<AgentSkillObservation> {
+  if (input.home === null) {
+    return {
+      state: 'unavailable',
+      target: null,
+      detail:
+        'The user home directory is unavailable, so the Agent Skill location cannot be checked.',
+    };
+  }
+  const resolved = targetFor(input.fs, input.home, input.harness);
+  if (!input.fs.isInside(resolved.target, input.home)) {
+    return {
+      state: 'unavailable',
+      target: resolved.target,
+      detail: 'The resolved Agent Skill location is outside the user home directory.',
+    };
+  }
+  const directoryStat = await input.fs.stat(resolved.directory);
+  if (directoryStat === null) {
+    return {
+      state: 'absent',
+      target: resolved.target,
+      detail: 'In-session guidance is not installed for this agent.',
+    };
+  }
+  if (directoryStat.kind !== 'directory') {
+    return {
+      state: 'conflict',
+      target: resolved.target,
+      detail: 'A user-owned path occupies the Token Harness Agent Skill location.',
+    };
+  }
+  const targetStat = await input.fs.stat(resolved.target);
+  if (targetStat?.kind !== 'file') {
+    return {
+      state: 'conflict',
+      target: resolved.target,
+      detail:
+        'A token-harness skill directory exists without the expected SKILL.md file. It is kept user-owned.',
+    };
+  }
+  const liveDigest = digestBytes(await input.fs.readFile(resolved.target));
+
+  let latestRelevant: Awaited<ReturnType<FileJournalStore['list']>>[number] | null = null;
+  if (input.stateRoot !== null) {
+    const journalRoot = input.fs.join(input.stateRoot, 'journals');
+    if ((await input.fs.stat(journalRoot))?.kind === 'directory') {
+      const journals = new FileJournalStore({
+        fs: input.fs,
+        journalRoot,
+        backupRoot: input.fs.join(input.stateRoot, 'backups'),
+      });
+      for (const journal of await journals.list()) {
+        const relevant = journal.entries.some(
+          (entry) =>
+            entry.snapshots.some((snapshot) => snapshot.path === resolved.target) ||
+            entry.ownership.some((artifact) => artifact.path === resolved.target),
+        );
+        if (!relevant) continue;
+        // The newest relevant transaction is authoritative even when it was rolled back.
+        // Falling through to an older commit could resurrect a stale ownership claim.
+        latestRelevant = journal;
+        break;
+      }
+    }
+  }
+
+  if (latestRelevant?.outcome === 'dirty' || latestRelevant?.outcome === 'in-progress') {
+    return {
+      state: 'unavailable',
+      target: resolved.target,
+      detail: 'A relevant Token Harness transaction is incomplete, so ownership is not claimed.',
+    };
+  }
+  const owned =
+    latestRelevant?.outcome === 'committed' &&
+    latestRelevant.ownership.some(
+      (artifact) =>
+        artifact.kind === 'owned-file' &&
+        artifact.path === resolved.target &&
+        artifact.digest === SKILL_DIGEST,
+    );
+  if (liveDigest !== SKILL_DIGEST) {
+    return {
+      state: 'conflict',
+      target: resolved.target,
+      detail: owned
+        ? 'The Token Harness-managed Agent Skill was modified after installation. It will not be overwritten automatically.'
+        : 'A custom token-harness Agent Skill exists here. It remains user-owned and is not overwritten.',
+    };
+  }
+  if (owned) {
+    return {
+      state: 'managed',
+      target: resolved.target,
+      detail:
+        'Enabled and managed by Token Harness. The installed file matches the bundled Agent Skill.',
+    };
+  }
+  return {
+    state: 'external',
+    target: resolved.target,
+    detail:
+      'A matching Token Harness Agent Skill is enabled but was not installed by the current Token Harness ownership journal.',
+  };
 }
 
 function createDirectoryAction(harness: HarnessId, path: string, index: number): PlannedAction {

@@ -2166,3 +2166,11 @@ left-edge text jump while asynchronous observations are loading.
 
 Next UX work should observe managed-skill ownership/status explicitly in Overview so an already
 Token-Harness-owned skill can display **Enabled** without requiring the user to open a preview.
+
+### Phase 18.13 - Guided Agent Skill state (completed)
+
+- Show live in-session guidance state directly on each Claude Code / Codex card.
+- Distinguish Token Harness-managed ownership from identical external/user-owned skills.
+- Treat modified/custom skill paths as conflicts and never overwrite them automatically.
+- Resolve ownership from the newest relevant effective transaction plus the live file digest, so rollback/uninstall cannot leave a ghost Enabled state.
+- Keep this state read-only; installation still requires the existing preview -> approval -> apply transaction.

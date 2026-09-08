@@ -224,11 +224,12 @@ function renderAgent(agent) {
   integration.append(integrationText);
   const rulesButton=node('button','View rules','text-button'); rulesButton.type='button'; rulesButton.dataset.focus=agent.id+'-rules';
   rulesButton.addEventListener('click',()=>{selectedRules=agent.id;renderRules({agents:currentAgents,rules:current?.rules || []});selectView('rules',true);}); integration.append(rulesButton); card.append(integration);
-  const guidanceRule=agent.rules.find(rule=>rule.id===agent.id+'-guidance');
-  if(guidanceRule?.action) {
-    const guidance=node('div',undefined,'agent-line'), guidanceText=node('div');
-    guidanceText.append(node('span','Guidance','key'),node('span','Available on demand'));
-    guidance.append(guidanceText,actionButton(guidanceRule.action,agent.id+'-guidance','text-button'));card.append(guidance);
+  if (agent.guidance) {
+    const guidanceLine=node('div',undefined,'agent-line'), guidanceText=node('div');
+    guidanceText.append(node('span','Guidance','key'),node('strong',agent.guidance.label)); guidanceLine.append(guidanceText);
+    if(agent.guidance.action)guidanceLine.append(actionButton(agent.guidance.action,agent.id+'-guidance','text-button'));
+    card.append(guidanceLine);
+    if(['external','conflict','unavailable'].includes(agent.guidance.state))card.append(node('p',agent.guidance.description,'subtle-note'));
   }
   const reasoning = agent.reasoning;
   const line = node('div',undefined,'agent-line'), text=node('div');

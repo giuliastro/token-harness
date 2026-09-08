@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { FileStat, FileSystemPort } from '@token-harness/core';
-import { harnessId } from '@token-harness/core';
+import { digestBytes, harnessId, type FileStat, type FileSystemPort } from '@token-harness/core';
 
-import { planAgentSkillInstall, TOKEN_HARNESS_AGENT_SKILL } from '../src/agent-skill.js';
+import {
+  observeAgentSkill,
+  planAgentSkillInstall,
+  TOKEN_HARNESS_AGENT_SKILL,
+} from '../src/agent-skill.js';
 
 function memoryFs(
   entries: Record<string, { kind: 'file' | 'directory'; content?: string }>,
@@ -27,7 +30,15 @@ function memoryFs(
     appendFile: async () => undefined,
     createDirectory: async () => undefined,
     remove: async () => undefined,
-    readDirectory: async () => [],
+    readDirectory: async (path) => {
+      const prefix = path.replace(/\/$/, '') + '/';
+      const names = Object.keys(entries)
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length).split('/')[0]);
+      return [
+        ...new Set(names.filter((name): name is string => name !== undefined && name !== '')),
+      ];
+    },
   };
 }
 
@@ -86,6 +97,79 @@ describe('guided Agent Skill installation planning', () => {
       plan.diagnostics.some((item) => item.code === 'agent-skill-already-present'),
       true,
     );
+  });
+
+  it('reports a matching user-owned skill as enabled externally', async () => {
+    const observation = await observeAgentSkill({
+      fs: memoryFs({
+        '/home/dev/.claude/skills/token-harness': { kind: 'directory' },
+        '/home/dev/.claude/skills/token-harness/SKILL.md': {
+          kind: 'file',
+          content: TOKEN_HARNESS_AGENT_SKILL,
+        },
+      }),
+      home: '/home/dev',
+      stateRoot: '/state',
+      harness: 'claude',
+    });
+    assert.equal(observation.state, 'external');
+  });
+
+  it('reports the skill as managed only when the newest relevant committed journal owns the live digest', async () => {
+    const target = '/home/dev/.claude/skills/token-harness/SKILL.md';
+    const digest = digestBytes(new TextEncoder().encode(TOKEN_HARNESS_AGENT_SKILL));
+    const journal = JSON.stringify({
+      schemaVersion: 1,
+      transactionId: 'tx1',
+      planId: 'abcd1234',
+      projectId: null,
+      projectRoot: '/project',
+      startedAt: '2026-09-08T20:00:00.000Z',
+      finishedAt: '2026-09-08T20:00:01.000Z',
+      outcome: 'committed',
+      entries: [
+        {
+          actionId: 'agent-skill:claude:write',
+          kind: 'write-owned-file',
+          status: 'applied',
+          snapshots: [{ path: target, kind: 'absent' }],
+          ownership: [{ kind: 'owned-file', path: target, digest, mode: '0644' }],
+          diagnostics: [],
+          packageInventory: null,
+        },
+      ],
+      ownership: [{ kind: 'owned-file', path: target, digest, mode: '0644' }],
+      pinned: false,
+      diagnostics: [],
+    });
+    const observation = await observeAgentSkill({
+      fs: memoryFs({
+        '/home/dev/.claude/skills/token-harness': { kind: 'directory' },
+        [target]: { kind: 'file', content: TOKEN_HARNESS_AGENT_SKILL },
+        '/state/journals': { kind: 'directory' },
+        '/state/journals/tx1.json': { kind: 'file', content: journal },
+      }),
+      home: '/home/dev',
+      stateRoot: '/state',
+      harness: 'claude',
+    });
+    assert.equal(observation.state, 'managed');
+  });
+
+  it('reports a custom same-name skill as a conflict instead of overwriting it', async () => {
+    const observation = await observeAgentSkill({
+      fs: memoryFs({
+        '/home/dev/.agents/skills/token-harness': { kind: 'directory' },
+        '/home/dev/.agents/skills/token-harness/SKILL.md': {
+          kind: 'file',
+          content: '# custom skill\n',
+        },
+      }),
+      home: '/home/dev',
+      stateRoot: '/state',
+      harness: 'codex',
+    });
+    assert.equal(observation.state, 'conflict');
   });
 
   it('refuses to overwrite an existing user-owned token-harness skill directory', async () => {
