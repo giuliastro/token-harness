@@ -18,7 +18,10 @@ describe('agent-native Token Harness skill', () => {
     assert.match(SKILL, /^---\n[\s\S]*?\n---\n/);
     assert.equal(frontmatterField('name'), 'token-harness');
     assert.ok((frontmatterField('description')?.length ?? 0) > 40);
-    assert.ok(SKILL.split('\n').length < 120, 'skill should remain compact for progressive disclosure');
+    assert.ok(
+      SKILL.split('\n').length < 120,
+      'skill should remain compact for progressive disclosure',
+    );
   });
 
   it('delegates policy to the machine-readable Token Harness CLI', () => {

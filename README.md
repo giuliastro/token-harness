@@ -112,14 +112,38 @@ change is not automatically available through `token-harness@latest`.
 
 ### Advanced and AI-assisted use
 
-An AI may use the existing JSON CLI to inspect, plan and apply an explicitly approved change.
-That is optional: another AI subscription is not required to operate the app. No persistent
-agent, background model calls or task classifier runs behind your back.
+The long CLI flag combinations are **not** the normal human interface. They are the controller API
+used by the app, automation, and optionally by a coding harness. Humans can keep using the browser
+and the two entry points above.
+
+For in-session use, this repository now includes a portable Agent Skill at
+[`skills/token-harness/SKILL.md`](skills/token-harness/SKILL.md). A compatible Claude Code or Codex
+skill mechanism can load it on demand, after which you can simply ask the harness to **use Token
+Harness for this task**. The skill classifies substantial work conservatively, calls the existing
+local `--json` optimizer at meaningful task boundaries, and can use explicit workload scheduling
+when you have actually supplied a backlog. It does not run Token Harness before every tool call.
+
+The skill is deliberately thin: Token Harness remains the deterministic policy engine. No MCP
+server, background model, persistent agent, or second quota formula is added just to make this work.
+Local tokens are still not subscription quota, and raw Claude/Codex percentages are still not a
+common currency.
+
+Agent use is read-only by default. If Token Harness recommends a persistent model, reasoning, or
+verbosity change, the harness must first build a reviewed plan, explain the exact proposed mutation,
+and wait for your explicit approval before `apply`. A saved preference may affect future sessions;
+it is not silently presented as a live change to the current session.
+
+Phase 18.13 ships the portable skill source rather than hard-coding harness-specific skill folders.
+Install or import the `skills/token-harness` directory with a supported Agent Skills mechanism.
+A later reviewed phase can bundle and install it from the guided app once current Claude/Codex
+skill-discovery locations and ownership semantics are fixture-tested. The browser remains fully
+usable without any skill or second AI subscription.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
 schema-1 report; `ui --read-only` opens the legacy read-only dashboard. `ui --no-open` starts
-the guided app without launching a browser. Stop either local server with Ctrl+C.
+the guided app without launching a browser. Stop either local server with Ctrl+C. See
+[RFC 0022](docs/rfcs/0022-agent-native-skill.md) for the agent-facing safety boundary.
 
 ## What normal output looks like
 

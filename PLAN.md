@@ -2118,3 +2118,31 @@ document the public contract.
 Next optimization work should use the observed allocation receipts to improve per-class capacity
 confidence and only then consider richer joint model/effort/verbosity allocation across harnesses.
 
+## Agent-native Token Harness milestone (2026-09-08, RFC 0022)
+
+**Phase 18.13 complete.** The advanced optimizer/scheduler CLI remains a machine-facing control
+surface rather than becoming the normal human workflow. A portable `skills/token-harness/SKILL.md`
+now lets a compatible Claude Code or Codex Agent Skills implementation invoke the existing local
+JSON contracts at meaningful task boundaries while the browser remains the primary human interface.
+
+The skill contains no duplicate quota math. It identifies the running harness, uses the existing
+four task classes conservatively, calls `optimize --json` for substantial work or explicit
+allowance questions, and uses `--tasks-left` or mixed `--workload` only when workload intent is
+explicit. It does not infer backlog from source code, issue counts or local token history.
+
+Agent use is advisory by default. Persistent model/reasoning/verbosity changes still cross the
+existing native-policy plan/apply boundary: the agent must summarize the concrete proposed mutation
+and receive explicit user approval before apply. Current-session state is not conflated with a
+persisted future-session preference.
+
+The integration deliberately adds no MCP server, background model or autonomous daemon. The skill
+is concise so supported Agent Skills implementations can use progressive disclosure rather than
+paying its full instruction cost on every turn. Static integration tests pin its frontmatter,
+controller calls, task taxonomy, explicit-workload rules and mutation/privacy invariants.
+
+This phase does **not** mutate Claude/Codex skill-discovery directories or pretend their installation
+paths are timeless. Next UX work should bundle the tested skill in the publishable artifact and add
+a guided **Enable in-session guidance** flow only after current harness/version/platform discovery
+and ownership semantics are verified with compatibility fixtures. That flow must be reversible and
+must not require the user to learn advanced CLI flags.
+
