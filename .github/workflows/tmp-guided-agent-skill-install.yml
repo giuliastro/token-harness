@@ -23,6 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node .tmp-guided-agent-skill-install.mjs
+      - run: node .tmp-fix-guided-agent-skill-finalizer.mjs
       - run: >-
           pnpm exec prettier --write
           apps/cli/src/agent-skill.ts
@@ -50,7 +51,7 @@ jobs:
       - run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add apps/cli/src apps/cli/test tests/integration/agent-skill.test.ts docs/rfcs/0023-guided-agent-skill-install.md README.md PLAN.md
+          git add -A
           if ! git diff --cached --quiet; then
             git commit -m "feat: enable guided in-session Token Harness"
             git push origin HEAD:feature/guided-agent-skill-install
