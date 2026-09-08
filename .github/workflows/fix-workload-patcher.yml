@@ -1,0 +1,39 @@
+name: fix-workload-patcher
+
+on:
+  push:
+    branches:
+      - feature/workload-aware-allowance
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/workload-aware-allowance
+      - name: Make apply help anchor specific
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/workload-controller-patch.yml')
+          text = p.read_text()
+          old = '''          rep('apps/cli/src/usage.ts',
+              "                      [--task <class>] [--profile <name>] [--reserve <0-95>]",
+              "                      [--task <class>] [--profile <name>] [--reserve <0-95>]\\n                      [--tasks-left <n>]")'''
+          new = '''          rep('apps/cli/src/usage.ts',
+              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]",
+              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]\\n                      [--tasks-left <n>]")'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one ambiguous usage call, got {text.count(old)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/workload-controller-patch.yml
+          git commit -m "chore: fix workload patch help anchor"
+          git push origin HEAD:feature/workload-aware-allowance
