@@ -21,16 +21,18 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path('.github/workflows/workload-controller-patch.yml')
-          text = p.read_text()
-          old = '''          rep('apps/cli/src/usage.ts',
-              "                      [--task <class>] [--profile <name>] [--reserve <0-95>]",
-              "                      [--task <class>] [--profile <name>] [--reserve <0-95>]\\n                      [--tasks-left <n>]")'''
-          new = '''          rep('apps/cli/src/usage.ts',
-              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]",
-              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]\\n                      [--tasks-left <n>]")'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one ambiguous usage call, got {text.count(old)}')
-          p.write_text(text.replace(old, new, 1))
+          lines = p.read_text().splitlines()
+          needle = '              "                      [--task <class>] [--profile <name>] [--reserve <0-95>]",'
+          matches = [i for i, line in enumerate(lines) if line == needle and i > 0 and "rep('apps/cli/src/usage.ts'" in lines[i - 1]]
+          if len(matches) != 1:
+              raise SystemExit(f'expected one ambiguous usage call, got {len(matches)}')
+          i = matches[0]
+          lines[i - 1:i + 2] = [
+              "          rep('apps/cli/src/usage.ts',",
+              '              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]",',
+              '              "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\\\\n                      [--provider <id>] [--project <dir>] [--native-policy]\\\\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]\\\\n                      [--tasks-left <n>]")',
+          ]
+          p.write_text('\n'.join(lines) + '\n')
           PY
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
