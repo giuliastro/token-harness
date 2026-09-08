@@ -2087,3 +2087,34 @@ Next optimization work should build on this outcome unit rather than raw provide
 prioritize mixed task-class workload composition and workload allocation across Claude/Codex only
 after enough per-class empirical receipts exist to keep those decisions evidence-backed.
 
+## Mixed task-class workload allocation milestone (2026-09-08, RFC 0021)
+
+**Phase 18.12 complete.** The installed `schedule` surface now accepts an explicit mixed backlog
+such as `--workload mechanical=2,standard=3,hard=1` for queued/new tasks while preserving the
+historical single-task scheduler unchanged.
+
+The allocator does not add per-class whole-task capacities, because those classes share the same
+provider allowance. Instead it accumulates each class's project-local p75 accepted-task cost against
+the harness's shared spendable five-hour and weekly windows and admits a placement only when both
+constraints still fit. Claude and Codex percentages remain independent observations rather than a
+provider-neutral currency.
+
+Candidate placements require at least three coherent quality-gated observations for the exact task
+class as well as complete accepted-task capacity evidence. Missing or conflicting evidence leaves
+work unallocated. Known combined-capacity exhaustion reports a shortfall instead of forecasting a
+future reset.
+
+The first allocator is deterministic and conservative: constrained/high-cost classes are placed
+first, then each task goes to the feasible harness with the lowest prospective peak utilization,
+with an exact tie preferring the current harness. The result is explicitly `stay`, `split`,
+`switch`, `shortfall`, or `insufficient-evidence`; it is not presented as globally optimal bin
+packing.
+
+Mixed mode deliberately excludes handoff, transfer-benefit, manual pace, and manual quality flags.
+It does not launch a harness, move an active session, redeem paid credits, change provider/auth, or
+infer task composition from source code, GitHub issues, or local token history. README and RFC 0021
+document the public contract.
+
+Next optimization work should use the observed allocation receipts to improve per-class capacity
+confidence and only then consider richer joint model/effort/verbosity allocation across harnesses.
+
