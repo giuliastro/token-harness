@@ -18,6 +18,7 @@ export * from './domain/cross-harness-transfer-evidence.js';
 export * from './domain/cross-harness-transfer-receipt.js';
 export * from './domain/task-capacity.js';
 export * from './domain/workload-coverage.js';
+export * from './domain/mixed-workload.js';
 export * from './domain/quality-per-allowance.js';
 export * from './domain/verbosity-quality-per-allowance.js';
 export * from './domain/model-quality-per-allowance.js';
