@@ -223,8 +223,8 @@ describe('mixed workload schedule mode', () => {
     assert.equal(envelope.data.allocations.reduce((sum, row) => sum + row.unallocated, 0), 0);
     assert.equal(envelope.data.evidence.budget, 'observed');
     assert.equal(envelope.data.evidence.receipts, 'observed');
-    assert.equal(envelope.data.evidence.candidateQuality.hard?.state, 'passed');
-    assert.equal(envelope.data.evidence.candidateQuality.hard?.samples, 3);
+    assert.equal(envelope.data.evidence.candidateQuality['hard']?.state, 'passed');
+    assert.equal(envelope.data.evidence.candidateQuality['hard']?.samples, 3);
   });
 
   it('rejects single-task and handoff evidence flags in mixed mode', async () => {
