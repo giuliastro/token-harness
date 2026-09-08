@@ -15,6 +15,7 @@ export type WorkloadCoverageState =
   | 'exhausted'
   | 'shortfall'
   | 'covered';
+export type WorkloadLimitingScope = 'five-hour' | 'weekly' | 'tie';
 
 export interface WorkloadCoverageDecision {
   state: WorkloadCoverageState;
@@ -22,6 +23,8 @@ export interface WorkloadCoverageDecision {
   acceptedTasksRemaining: number | null;
   shortfallTasks: number | null;
   coverageRatio: number | null;
+  /** Which currently observed allowance limits accepted-task capacity; no future reset is assumed. */
+  limitingScope: WorkloadLimitingScope | null;
   protectCapacity: boolean;
   reasons: RecommendationEvidence[];
 }
@@ -34,6 +37,28 @@ function validTarget(value: number | null): value is number {
   return value !== null && Number.isSafeInteger(value) && value > 0;
 }
 
+function limitingScope(capacity: AcceptedTaskCapacityEstimate): WorkloadLimitingScope | null {
+  const fiveHour = capacity.fiveHour.taskEquivalents;
+  const weekly = capacity.weekly.taskEquivalents;
+  if (
+    fiveHour === null ||
+    weekly === null ||
+    !Number.isFinite(fiveHour) ||
+    !Number.isFinite(weekly)
+  ) {
+    return null;
+  }
+  if (Math.abs(fiveHour - weekly) <= 1e-9) return 'tie';
+  return fiveHour < weekly ? 'five-hour' : 'weekly';
+}
+
+function scopeSummary(scope: WorkloadLimitingScope | null): string {
+  if (scope === 'five-hour') return '; the five-hour allowance is the current bottleneck';
+  if (scope === 'weekly') return '; the weekly allowance is the current bottleneck';
+  if (scope === 'tie') return '; five-hour and weekly allowance are equally limiting';
+  return '';
+}
+
 export function assessWorkloadCoverage(input: {
   tasksRemaining: number | null;
   capacity: AcceptedTaskCapacityEstimate | null;
@@ -44,6 +69,7 @@ export function assessWorkloadCoverage(input: {
     acceptedTasksRemaining: null,
     shortfallTasks: null,
     coverageRatio: null,
+    limitingScope: null,
     protectCapacity: false,
     reasons: [],
   };
@@ -91,6 +117,7 @@ export function assessWorkloadCoverage(input: {
   const remaining = input.tasksRemaining;
   base.acceptedTasksRemaining = available;
   base.coverageRatio = available / remaining;
+  base.limitingScope = limitingScope(capacity);
 
   if (available === 0) {
     base.state = 'exhausted';
@@ -99,7 +126,7 @@ export function assessWorkloadCoverage(input: {
     base.reasons.push(
       evidence(
         'workload-capacity-exhausted',
-        `The current exact policy has zero conservative accepted-task equivalents for ${String(remaining)} stated task(s)`,
+        `The current exact policy has zero conservative accepted-task equivalents for ${String(remaining)} stated task(s)${scopeSummary(base.limitingScope)}`,
       ),
     );
     return base;
@@ -112,7 +139,7 @@ export function assessWorkloadCoverage(input: {
     base.reasons.push(
       evidence(
         'workload-capacity-shortfall',
-        `The current exact policy covers ${String(available)} of ${String(remaining)} stated task(s); ${String(remaining - available)} task(s) are not covered by conservative included-allowance capacity`,
+        `The current exact policy covers ${String(available)} of ${String(remaining)} stated task(s); ${String(remaining - available)} task(s) are not covered by conservative included-allowance capacity${scopeSummary(base.limitingScope)}`,
       ),
     );
     return base;
@@ -123,7 +150,7 @@ export function assessWorkloadCoverage(input: {
   base.reasons.push(
     evidence(
       'workload-capacity-covered',
-      `The current exact policy has ${String(available)} conservative accepted-task equivalents for ${String(remaining)} stated task(s)`,
+      `The current exact policy has ${String(available)} conservative accepted-task equivalents for ${String(remaining)} stated task(s)${scopeSummary(base.limitingScope)}`,
     ),
   );
   return base;
