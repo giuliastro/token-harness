@@ -2056,3 +2056,34 @@ The stored action carries a logical `modelReference`, not a blindly writable str
 model, performs the versioned `config/batchWrite`, verifies the effective value with `config/read`,
 and relies on the existing transaction snapshot for byte-for-byte rollback. Provider, auth and
 service-tier fields remain outside the subscription-safe set.
+
+## Workload-aware allowance milestone (2026-09-08, RFC 0020)
+
+**Phase 18.11 complete.** `optimize`, native-policy planning and the cross-harness scheduler can now
+accept an explicit `--tasks-left N` backlog without inferring work from local token history. The
+controller compares that target only with conservative project-local accepted-task capacity for the
+exact harness/task/model/effort/verbosity boundary and requires complete five-hour plus weekly
+backend quota evidence before it can create pressure or headroom.
+
+A proven shortfall suppresses quota-derived effort escalation without weakening the task quality
+floor, reports the uncovered task count and identifies the five-hour, weekly or tied limiting scope.
+Cross-harness routing may use the same backlog, but a candidate with unknown or insufficient
+accepted-task capacity is not selected merely because its raw pace looks better. No future-reset
+capacity, paid overflow, token-to-quota conversion or automatic harness switch is introduced.
+
+Acceptance completed:
+
+- explicit positive whole-number workload target in the shared CLI and schedule surface;
+- exact-policy five-hour/weekly capacity gating with p75 empirical accepted-task cost and reserve;
+- covered, shortfall, exhausted and unknown workload states with limiting-scope evidence;
+- optimizer conservation and no quota-derived escalation when the stated backlog is not covered;
+- cross-harness routing tests for current shortfall, candidate coverage and candidate insufficiency;
+- end-to-end persisted benchmark test proving a five-task backlog can become a measured
+  five-hour-limited shortfall;
+- legacy behavior preserved when `--tasks-left` is absent;
+- RFC/README contract stating that local tokens and future resets are not subscription capacity.
+
+Next optimization work should build on this outcome unit rather than raw provider percentages:
+prioritize mixed task-class workload composition and workload allocation across Claude/Codex only
+after enough per-class empirical receipts exist to keep those decisions evidence-backed.
+
