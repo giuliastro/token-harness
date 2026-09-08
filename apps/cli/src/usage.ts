@@ -182,6 +182,7 @@ means unknown, not zero.`,
 Usage
   token-harness optimize [--json] [--harness <id>] [--project <dir>]
                          [--task <class>] [--profile <name>] [--reserve <0-95>]
+                         [--tasks-left <n>]
 
 Defaults to --task standard --profile balanced --reserve 20. The command is
 read-only. It combines live budget windows with context/MCP inventory and emits
@@ -195,7 +196,13 @@ the most recently observed session may produce conditional new-session/compact
 advice; it is never assumed to be the active session. MCP advice can flag a
 non-working server or a high-exposure hotspot, but never recommends removal
 without task-relevance or usage evidence. The custom profile currently requires
-an explicit --reserve and otherwise keeps the task quality-floor rules.`,
+an explicit --reserve and otherwise keeps the task quality-floor rules.
+
+--tasks-left states how many accepted tasks should fit in the currently observed
+included allowance without assuming capacity after a future reset. It is never
+inferred from ccusage or local tokens. When exact model/effort/verbosity benchmark
+evidence proves a shortfall, quota-derived effort escalation is suppressed and
+the report identifies whether five-hour or weekly allowance is the bottleneck.`,
 
   context: `token-harness context — audit context overhead before spending quota
 
@@ -232,6 +239,7 @@ Usage
   token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]
                       [--provider <id>] [--project <dir>] [--native-policy]
                       [--task <class>] [--profile <name>] [--reserve <0-95>]
+                      [--tasks-left <n>]
 
 Dry-run by default: without --yes the plan is computed and displayed and exit 8
 is returned, because nothing may change without an explicit decision.
@@ -342,7 +350,7 @@ not-exercised, which is not a failure.`,
 Usage
   token-harness plan [--json] [--harness <id>] [--provider <id>] [--project <dir>]
                      [--native-policy] [--task <class>] [--profile <name>]
-                     [--reserve <0-95>]
+                     [--reserve <0-95>] [--tasks-left <n>]
 
 Read-only. Exits 0 when a plan was produced, and 4 when a hard conflict prevents
 apply. Nothing is changed either way.

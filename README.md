@@ -239,6 +239,30 @@ Most people do not need this section. Run `token-harness <command> --help` for d
 | `handoff` | Build a bounded cross-harness handoff | No |
 | `benchmark*`, `transfer*` | Capture and compare empirical evidence | Local state only |
 
+## Workload-aware allowance planning
+
+If you know how many accepted tasks remain, the advanced CLI can ask whether that backlog fits the
+**currently observed** included allowance:
+
+```sh
+token-harness optimize --harness codex --task standard --tasks-left 5
+token-harness schedule --current codex --candidate claude --task-class standard --tasks-left 5
+```
+
+`--tasks-left` is explicit workload intent. Token Harness does not infer it from `ccusage`, local
+tokens, session length, or raw provider percentages. A workload-driven recommendation requires
+complete project-local benchmark evidence for the exact model + reasoning effort + verbosity policy
+in both the five-hour and weekly windows. If that evidence is incomplete, capacity stays unknown.
+
+When evidence proves that the current policy cannot cover the stated backlog, `optimize` protects
+capacity instead of spending a quota-derived effort bonus and reports whether the five-hour,
+weekly, or both windows are limiting. `schedule` can use the same target to consider the other
+harness, but only when that candidate has enough conservative accepted-task capacity and passes the
+existing quality, pace, availability, and transfer checks.
+
+No capacity after a future reset is assumed. Re-run the observation after the reset rather than
+treating a forecast as provider quota. See [RFC 0020](docs/rfcs/0020-workload-aware-allowance.md).
+
 ## Applying native recommendations
 
 `optimize` remains read-only. Review a plan before applying a supported native change:

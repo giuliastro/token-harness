@@ -25,7 +25,8 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
         report.profile +
         ' reserve=' +
         String(report.reservePercent) +
-        '%',
+        '%' +
+        (report.tasksRemaining == null ? '' : ' tasks-left=' + String(report.tasksRemaining)),
       78,
     ),
     '',
@@ -83,6 +84,33 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
     }
   }
   if (paceRows === 0) lines.push('  no paceable live quota window');
+
+  if (report.tasksRemaining != null) {
+    lines.push('', 'WORKLOAD');
+    for (const harness of report.harnesses) {
+      const coverage = harness.workloadCoverage;
+      lines.push(
+        truncate(
+          '  ' +
+            harness.harnessId +
+            ': ' +
+            (coverage === undefined
+              ? 'unknown'
+              : coverage.state +
+                '; capacity=' +
+                (coverage.acceptedTasksRemaining === null
+                  ? '?'
+                  : String(coverage.acceptedTasksRemaining)) +
+                '/' +
+                String(report.tasksRemaining) +
+                '; limiting=' +
+                (coverage.limitingScope ?? '?')),
+          78,
+        ),
+      );
+    }
+    lines.push('  current observed allowance only; no future reset capacity is assumed');
+  }
 
   lines.push('', 'LOCAL HISTORY');
   for (const harness of report.harnesses) {

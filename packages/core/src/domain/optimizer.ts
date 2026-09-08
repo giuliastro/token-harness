@@ -15,6 +15,7 @@ import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
 import type { PlatformFacts } from './platform.js';
+import type { WorkloadCoverageDecision } from './workload-coverage.js';
 
 export { assessBudgetDecision } from './budget-policy.js';
 export type { BudgetDecision, BudgetDecisionState } from './budget-policy.js';
@@ -95,6 +96,8 @@ export interface HarnessOptimizationAdvice {
   pace: WindowPaceAssessment[];
   /** Additive joint five-hour/weekly decision. Older saved reports may omit it. */
   budgetDecision?: BudgetDecision;
+  /** Optional explicit-backlog coverage. No workload is inferred when the user supplied none. */
+  workloadCoverage?: WorkloadCoverageDecision;
   /** Additive project-local feedback; legacy reports may omit it. */
   effortLearning?: EffortLearningDecision;
   /** Additive single-control verbosity feedback; legacy reports may omit it. */
@@ -112,6 +115,8 @@ export interface OptimizeReport {
   taskClass: TaskClass;
   profile: BudgetProfile;
   reservePercent: number;
+  /** Explicit user workload target for this optimization horizon; absent in legacy reports. */
+  tasksRemaining?: number | null;
   harnesses: HarnessOptimizationAdvice[];
 }
 
@@ -290,13 +295,15 @@ export function chooseSupportedEffort(input: {
   profile: BudgetProfile;
   pace: readonly WindowPaceAssessment[];
   contextPressure: ContextPressure;
+  /** Optional already-constrained joint budget; legacy callers keep the original policy. */
+  budgetDecision?: BudgetDecision;
 }): string | null {
   const floorRank = effortRank(QUALITY_FLOOR[input.taskClass]);
   const effective = input.profile === 'custom' ? 'balanced' : input.profile;
   let targetRank = effortRank(PROFILE_TARGET[effective][input.taskClass]);
   if (floorRank === null || targetRank === null) return null;
 
-  const budget = assessBudgetDecision(input.pace, input.taskClass);
+  const budget = input.budgetDecision ?? assessBudgetDecision(input.pace, input.taskClass);
   if (budget.state === 'conserve' || budget.state === 'wait-for-reset') {
     targetRank = Math.max(floorRank, targetRank - 1);
   } else if (budget.allowEffortIncrease) {
