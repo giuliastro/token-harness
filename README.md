@@ -249,10 +249,11 @@ token-harness optimize --harness codex --task standard --tasks-left 5
 token-harness schedule --current codex --candidate claude --task-class standard --tasks-left 5
 ```
 
-`--tasks-left` is explicit workload intent. Token Harness does not infer it from `ccusage`, local
-tokens, session length, or raw provider percentages. A workload-driven recommendation requires
-complete project-local benchmark evidence for the exact model + reasoning effort + verbosity policy
-in both the five-hour and weekly windows. If that evidence is incomplete, capacity stays unknown.
+`--tasks-left` is explicit workload intent for a backlog of one task class. Token Harness does not
+infer it from `ccusage`, local tokens, session length, or raw provider percentages. A workload-driven
+recommendation requires complete project-local benchmark evidence for the exact model + reasoning
+effort + verbosity policy in both the five-hour and weekly windows. If that evidence is incomplete,
+capacity stays unknown.
 
 When evidence proves that the current policy cannot cover the stated backlog, `optimize` protects
 capacity instead of spending a quota-derived effort bonus and reports whether the five-hour,
@@ -260,8 +261,30 @@ weekly, or both windows are limiting. `schedule` can use the same target to cons
 harness, but only when that candidate has enough conservative accepted-task capacity and passes the
 existing quality, pace, availability, and transfer checks.
 
+### Mixed task-class backlog
+
+For queued **new tasks** spanning more than one class, give `schedule` the mix explicitly:
+
+```sh
+token-harness schedule --current codex --candidate claude \
+  --workload mechanical=2,standard=3,hard=1
+```
+
+Mixed mode does not sum per-class task capacities as if they were separate quota buckets. It charges
+each proposed task's project-local p75 cost against the same shared five-hour and weekly allowance
+of that harness, then returns `stay`, `split`, `switch`, `shortfall`, or
+`insufficient-evidence`. Candidate assignments require at least three coherent quality-gated
+observations for the exact task class plus complete five-hour and weekly capacity evidence.
+Unproven work remains visibly unallocated.
+
+This mode is for queued/new tasks, not an in-progress handoff. Therefore `--workload` is mutually
+exclusive with `--task-class`, `--tasks-left`, manual pace/quality flags, and handoff/transfer
+flags. The allocator is deterministic and conservative; it does not claim globally optimal routing,
+launch either harness, or compare raw Claude and Codex percentages.
+
 No capacity after a future reset is assumed. Re-run the observation after the reset rather than
-treating a forecast as provider quota. See [RFC 0020](docs/rfcs/0020-workload-aware-allowance.md).
+treating a forecast as provider quota. See [RFC 0020](docs/rfcs/0020-workload-aware-allowance.md)
+and [RFC 0021](docs/rfcs/0021-mixed-workload-allocation.md).
 
 ## Applying native recommendations
 

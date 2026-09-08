@@ -1,8 +1,5 @@
 import { scheduleCapacityMain } from './schedule-capacity-main.js';
-import {
-  hasMixedWorkloadFlag,
-  scheduleMixedWorkloadMain,
-} from './schedule-mixed-workload.js';
+import { hasMixedWorkloadFlag, scheduleMixedWorkloadMain } from './schedule-mixed-workload.js';
 import type { ScheduleRuntime } from './schedule-main.js';
 
 interface Streams {

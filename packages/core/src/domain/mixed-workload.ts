@@ -86,7 +86,11 @@ function validDemand(demand: readonly MixedWorkloadDemand[]): boolean {
   if (demand.length === 0) return false;
   const seen = new Set<TaskClass>();
   for (const item of demand) {
-    if (!TASK_CLASSES.includes(item.taskClass) || !Number.isSafeInteger(item.count) || item.count <= 0) {
+    if (
+      !TASK_CLASSES.includes(item.taskClass) ||
+      !Number.isSafeInteger(item.count) ||
+      item.count <= 0
+    ) {
       return false;
     }
     if (seen.has(item.taskClass)) return false;
@@ -287,7 +291,12 @@ export function allocateMixedWorkload(input: {
       allocations: emptyAllocations,
       currentUsage: usageReport(input.current.harnessId, input.current.capacities, zero),
       candidateUsage: usageReport(input.candidate.harnessId, input.candidate.capacities, zero),
-      reasons: [reason('mixed-workload-invalid', 'mixed workload must contain unique task classes with positive whole-number counts')],
+      reasons: [
+        reason(
+          'mixed-workload-invalid',
+          'mixed workload must contain unique task classes with positive whole-number counts',
+        ),
+      ],
     };
   }
   if (input.current.harnessId === input.candidate.harnessId) {
@@ -297,16 +306,24 @@ export function allocateMixedWorkload(input: {
       allocations: emptyAllocations,
       currentUsage: usageReport(input.current.harnessId, input.current.capacities, zero),
       candidateUsage: usageReport(input.candidate.harnessId, input.candidate.capacities, zero),
-      reasons: [reason('mixed-workload-same-harness', 'mixed workload allocation requires two distinct harnesses')],
+      reasons: [
+        reason(
+          'mixed-workload-same-harness',
+          'mixed workload allocation requires two distinct harnesses',
+        ),
+      ],
     };
   }
 
   const currentUsage: MutableUsage = { fiveHour: 0, weekly: 0 };
   const candidateUsage: MutableUsage = { fiveHour: 0, weekly: 0 };
-  const remaining = new Map<TaskClass, number>(input.demand.map((item) => [item.taskClass, item.count]));
-  const allocations = new Map<TaskClass, { current: number; candidate: number; unallocated: number }>(
-    input.demand.map((item) => [item.taskClass, { current: 0, candidate: 0, unallocated: 0 }]),
+  const remaining = new Map<TaskClass, number>(
+    input.demand.map((item) => [item.taskClass, item.count]),
   );
+  const allocations = new Map<
+    TaskClass,
+    { current: number; candidate: number; unallocated: number }
+  >(input.demand.map((item) => [item.taskClass, { current: 0, candidate: 0, unallocated: 0 }]));
   const evidenceUnknown = new Set<TaskClass>();
 
   while ([...remaining.values()].some((count) => count > 0)) {
@@ -322,14 +339,18 @@ export function allocateMixedWorkload(input: {
         const feasibleCount = placements.filter((placement) =>
           fits(placement, placement.harness === 'current' ? currentUsage : candidateUsage),
         ).length;
-        const minCost = placements.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...placements.map(normalizedTaskCost));
+        const minCost =
+          placements.length === 0
+            ? Number.POSITIVE_INFINITY
+            : Math.min(...placements.map(normalizedTaskCost));
         return { taskClass: item.taskClass, placements, feasibleCount, minCost };
       })
       .sort((left, right) => {
         // One-harness-only classes are easiest to strand; place them first. Among equally
         // constrained classes, place the more expensive task first so cheap work cannot consume
         // the only headroom that could have admitted it.
-        if (left.feasibleCount !== right.feasibleCount) return left.feasibleCount - right.feasibleCount;
+        if (left.feasibleCount !== right.feasibleCount)
+          return left.feasibleCount - right.feasibleCount;
         if (left.minCost !== right.minCost) return right.minCost - left.minCost;
         return TASK_CLASSES.indexOf(right.taskClass) - TASK_CLASSES.indexOf(left.taskClass);
       });
@@ -392,10 +413,20 @@ export function allocateMixedWorkload(input: {
     }
   } else if (candidateTasks === 0) {
     decision = 'stay';
-    reasons.push(reason('mixed-workload-current-covers', 'The current harness can cover the full evidenced workload'));
+    reasons.push(
+      reason(
+        'mixed-workload-current-covers',
+        'The current harness can cover the full evidenced workload',
+      ),
+    );
   } else if (currentTasks === 0) {
     decision = 'switch';
-    reasons.push(reason('mixed-workload-candidate-covers', 'The candidate harness can cover the full evidenced workload with quality-gated capacity'));
+    reasons.push(
+      reason(
+        'mixed-workload-candidate-covers',
+        'The candidate harness can cover the full evidenced workload with quality-gated capacity',
+      ),
+    );
   } else {
     decision = 'split';
     reasons.push(
@@ -412,7 +443,11 @@ export function allocateMixedWorkload(input: {
     decision,
     allocations: allocationRows,
     currentUsage: usageReport(input.current.harnessId, input.current.capacities, currentUsage),
-    candidateUsage: usageReport(input.candidate.harnessId, input.candidate.capacities, candidateUsage),
+    candidateUsage: usageReport(
+      input.candidate.harnessId,
+      input.candidate.capacities,
+      candidateUsage,
+    ),
     reasons,
   };
 }

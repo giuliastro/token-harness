@@ -220,7 +220,10 @@ describe('mixed workload schedule mode', () => {
     assert.equal(envelope.data.decision, 'split');
     assert.equal(envelope.data.requestedTasks, 4);
     assert.equal(envelope.data.allocatedTasks, 4);
-    assert.equal(envelope.data.allocations.reduce((sum, row) => sum + row.unallocated, 0), 0);
+    assert.equal(
+      envelope.data.allocations.reduce((sum, row) => sum + row.unallocated, 0),
+      0,
+    );
     assert.equal(envelope.data.evidence.budget, 'observed');
     assert.equal(envelope.data.evidence.receipts, 'observed');
     assert.equal(envelope.data.evidence.candidateQuality['hard']?.state, 'passed');

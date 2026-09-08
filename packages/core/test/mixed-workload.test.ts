@@ -140,7 +140,10 @@ describe('mixed workload allocation', () => {
 
     assert.equal(decision.decision, 'split');
     assert.equal(decision.allocatedTasks, 4);
-    assert.equal(decision.allocations.reduce((sum, row) => sum + row.unallocated, 0), 0);
+    assert.equal(
+      decision.allocations.reduce((sum, row) => sum + row.unallocated, 0),
+      0,
+    );
     assert.ok(decision.allocations.some((row) => row.current > 0));
     assert.ok(decision.allocations.some((row) => row.candidate > 0));
   });

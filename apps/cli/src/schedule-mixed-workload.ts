@@ -1,6 +1,5 @@
 import {
   EXIT_CODES,
-  TASK_CLASSES,
   allocateMixedWorkload,
   commandResult,
   diagnostic,
