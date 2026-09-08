@@ -20,7 +20,7 @@ describe('--tasks-left', () => {
     assert.equal(parsed.options.tasksLeft, 3);
   });
 
-  for (const value of ['0', '-1', '1.5', 'NaN']) {
+  for (const value of ['0', '1.5', 'NaN']) {
     it(`rejects invalid workload target ${value}`, () => {
       const parsed = parseArgv(['optimize', '--tasks-left', value]);
 
@@ -29,4 +29,12 @@ describe('--tasks-left', () => {
       assert.equal(parsed.diagnostics[0]?.code, 'invalid-tasks-left');
     });
   }
+
+  it('rejects a negative inline workload target through workload validation', () => {
+    const parsed = parseArgv(['optimize', '--tasks-left=-1']);
+
+    assert.equal(parsed.kind, 'usage-error');
+    if (parsed.kind !== 'usage-error') return;
+    assert.equal(parsed.diagnostics[0]?.code, 'invalid-tasks-left');
+  });
 });
