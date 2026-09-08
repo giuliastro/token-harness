@@ -23,9 +23,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node .tmp-fix2-guidance-state-ui.mjs
+      - run: node .tmp-fix3-guidance-state-ui.mjs
       - run: node .tmp-guidance-state-ui.mjs
       - name: Remove temporary finalizer inputs
-        run: rm .tmp-guidance-state-ui.mjs .tmp-fix-guidance-state-ui.mjs .tmp-fix2-guidance-state-ui.mjs .github/workflows/tmp-guidance-state-ui.yml
+        run: rm .tmp-guidance-state-ui.mjs .tmp-fix-guidance-state-ui.mjs .tmp-fix2-guidance-state-ui.mjs .tmp-fix3-guidance-state-ui.mjs .github/workflows/tmp-guidance-state-ui.yml
       - run: >-
           pnpm exec prettier --write
           apps/cli/src/agent-skill.ts
