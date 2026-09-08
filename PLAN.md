@@ -2146,3 +2146,23 @@ a guided **Enable in-session guidance** flow only after current harness/version/
 and ownership semantics are verified with compatibility fixtures. That flow must be reversible and
 must not require the user to learn advanced CLI flags.
 
+
+
+## Guided Agent Skill installation milestone (2026-09-08, RFC 0023)
+
+**Phase 18.14 complete.** The guided app now exposes **Enable in-session guidance** for detected
+Claude Code and Codex agents. The browser remains the human interface; the installed portable skill
+uses the existing JSON controller at meaningful task boundaries.
+
+The installation is a normal reversible plan/apply transaction. Claude targets
+`~/.claude/skills/token-harness/SKILL.md`; Codex targets
+`$HOME/.agents/skills/token-harness/SKILL.md`. The exact harness version is captured by the stored
+plan, the skill payload is byte-identical to the repository SKILL.md, and a changed target or agent
+version fails closed before apply. Existing same-name skill directories are never overwritten or
+silently adopted.
+
+The initial Claude/Codex skeleton cards also share the final `agent` padding, eliminating the
+left-edge text jump while asynchronous observations are loading.
+
+Next UX work should observe managed-skill ownership/status explicitly in Overview so an already
+Token-Harness-owned skill can display **Enabled** without requiring the user to open a preview.

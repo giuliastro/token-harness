@@ -142,14 +142,15 @@ function lock(value, message = 'Checking current state. No additional change is 
 }
 function actionButton(action, key, cls = 'secondary') {
   const button = node('button', action.label, cls);
-  button.type = 'button'; button.dataset.operation = action.kind; button.dataset.focus = key; button.disabled = working || (reading && ['setup','effort','verify'].includes(action.kind));
+  button.type = 'button'; button.dataset.operation = action.kind; button.dataset.focus = key; button.disabled = working || (reading && ['setup','effort','skill','verify'].includes(action.kind));
   button.addEventListener('click', () => performAction(action));
   return button;
 }
 function performAction(action) {
-  if (working || (reading && ['setup','effort','verify'].includes(action.kind))) return;
+  if (working || (reading && ['setup','effort','skill','verify'].includes(action.kind))) return;
   if (action.kind === 'setup') return preview({ action: 'setup', ...(action.harness ? { harness: action.harness } : {}) });
   if (action.kind === 'effort') return showTask(action.harness);
+  if (action.kind === 'skill') return preview({ action: 'skill', harness: action.harness });
   if (action.kind === 'verify') return verify();
   if (action.kind === 'refresh') return refresh();
   if (action.kind === 'help') return showHelp(action.topic, action.harness);
@@ -223,6 +224,12 @@ function renderAgent(agent) {
   integration.append(integrationText);
   const rulesButton=node('button','View rules','text-button'); rulesButton.type='button'; rulesButton.dataset.focus=agent.id+'-rules';
   rulesButton.addEventListener('click',()=>{selectedRules=agent.id;renderRules({agents:currentAgents,rules:current?.rules || []});selectView('rules',true);}); integration.append(rulesButton); card.append(integration);
+  const guidanceRule=agent.rules.find(rule=>rule.id===agent.id+'-guidance');
+  if(guidanceRule?.action) {
+    const guidance=node('div',undefined,'agent-line'), guidanceText=node('div');
+    guidanceText.append(node('span','Guidance','key'),node('span','Available on demand'));
+    guidance.append(guidanceText,actionButton(guidanceRule.action,agent.id+'-guidance','text-button'));card.append(guidance);
+  }
   const reasoning = agent.reasoning;
   const line = node('div',undefined,'agent-line'), text=node('div');
   text.append(node('span','Reasoning','key'),node('strong',agent.pending?.includes('reasoning') ? 'Reading saved preference...' : reasoning.label));
@@ -361,7 +368,7 @@ $('share-native').addEventListener('click',async()=>{
 
 function readControls(value) {
   for(const id of ['refresh','period','setup','verify'])$(id).disabled=value || working;
-  document.querySelectorAll('[data-operation="setup"],[data-operation="effort"],[data-operation="verify"]').forEach(button=>{button.disabled=value || working;});
+  document.querySelectorAll('[data-operation="setup"],[data-operation="effort"],[data-operation="skill"],[data-operation="verify"]').forEach(button=>{button.disabled=value || working;});
   if(!value)$('setup').disabled=working || !current?.agents.length;
 }
 function sectionLoading(id,workingNow,text) {
@@ -525,7 +532,7 @@ function resultView(data) {
 async function preview(body) {
   if (working || !csrf) return;
   previewAction=body;
-  showDialog(body.action==='effort' ? 'Preparing a reasoning preview' : body.action==='undo' ? 'Preparing a restore preview' : 'Checking your setup'); lock(true, 'Reading current settings. Nothing is being changed.');
+  showDialog(body.action==='effort' ? 'Preparing a reasoning preview' : body.action==='skill' ? 'Preparing in-session guidance' : body.action==='undo' ? 'Preparing a restore preview' : 'Checking your setup'); lock(true, 'Reading current settings. Nothing is being changed.');
   $('review-content').append(node('p','Reading current settings. Nothing is being changed.'));
   try {
     const data=await request('/api/preview',body); $('review-title').textContent=data.title; $('review-content').replaceChildren();

@@ -58,6 +58,7 @@ import {
   type ResolverProvider,
 } from '@token-harness/core';
 
+import { planAgentSkillInstall } from '../agent-skill.js';
 import { PLANS_DIRECTORY } from './apply.js';
 import { runContext } from './context-cost.js';
 import { runOptimize } from './optimize.js';
@@ -657,6 +658,45 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
             managedIntegrations.push({ providerId: adapter.manifest.id, harnessId: harness });
           }
         }
+      }
+    }
+  }
+
+  if (context.agentSkill === true) {
+    if (
+      context.harness === null ||
+      (context.harness !== harnessId('claude') && context.harness !== harnessId('codex'))
+    ) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'agent-skill-harness-required',
+          subject: context.harness,
+          message: 'In-session guidance requires an explicit Claude Code or Codex harness',
+          remediation: 'Use the guided app to choose the installed agent',
+        }),
+      );
+    } else {
+      const detected = present.find((item) => item.id === context.harness);
+      if (detected === undefined || context.adapters === null) {
+        diagnostics.push(
+          diagnostic({
+            severity: 'warning',
+            code: 'agent-skill-harness-unavailable',
+            subject: context.harness,
+            message: 'The selected coding agent is not currently observable on this machine',
+            remediation: 'Install or fix the agent, then refresh the guided app',
+          }),
+        );
+      } else {
+        const skillPlan = await planAgentSkillInstall({
+          fs: context.adapters.fs,
+          home: context.home,
+          harness: context.harness,
+          version: versions.harnesses[context.harness] ?? null,
+        });
+        actions.push(...skillPlan.actions);
+        diagnostics.push(...skillPlan.diagnostics);
       }
     }
   }
