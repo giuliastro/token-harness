@@ -1,0 +1,53 @@
+name: tmp-mixed-workload-finalize
+
+on:
+  push:
+    branches:
+      - feature/mixed-workload-allocation
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/mixed-workload-allocation
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node .tmp-mixed-workload-finalize.mjs
+      - run: >-
+          pnpm exec prettier --write
+          packages/core/src/domain/mixed-workload.ts
+          packages/core/src/index.ts
+          packages/core/test/mixed-workload.test.ts
+          apps/cli/src/schedule-mixed-workload.ts
+          apps/cli/src/schedule-dispatch-main.ts
+          apps/cli/test/schedule-mixed-workload.test.ts
+          apps/cli/bin/token-harness.mjs
+          README.md
+          PLAN.md
+          docs/rfcs/0021-mixed-workload-allocation.md
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            packages/core/src/domain/mixed-workload.ts \
+            packages/core/src/index.ts \
+            packages/core/test/mixed-workload.test.ts \
+            apps/cli/src/schedule-mixed-workload.ts \
+            apps/cli/src/schedule-dispatch-main.ts \
+            apps/cli/test/schedule-mixed-workload.test.ts \
+            apps/cli/bin/token-harness.mjs \
+            README.md PLAN.md docs/rfcs/0021-mixed-workload-allocation.md
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: finalize mixed workload milestone"
+            git push origin HEAD:feature/mixed-workload-allocation
+          fi
