@@ -1,0 +1,147 @@
+name: workload-controller-patch-v2
+
+on:
+  push:
+    branches:
+      - feature/workload-aware-allowance
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/workload-aware-allowance
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply anchored workload patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one anchor in {path}, got {count}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          rep('apps/cli/src/commands/context.ts',
+              "  reservePercent?: number | null;\n  /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */",
+              "  reservePercent?: number | null;\n  /** Explicit accepted-task backlog for the current observed allowance; never inferred. */\n  tasksRemaining?: number | null;\n  /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */")
+
+          rep('apps/cli/src/argv.ts',
+              "  reservePercent: number | null;\n  /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */",
+              "  reservePercent: number | null;\n  /** Explicit accepted tasks remaining before the next allowance re-observation. */\n  tasksLeft: number | null;\n  /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */")
+          rep('apps/cli/src/argv.ts',
+              "  '--profile',\n  '--reserve',\n]);",
+              "  '--profile',\n  '--reserve',\n  '--tasks-left',\n]);")
+          rep('apps/cli/src/argv.ts',
+              "    reservePercent: null,\n    nativePolicy: false,",
+              "    reservePercent: null,\n    tasksLeft: null,\n    nativePolicy: false,")
+          rep('apps/cli/src/argv.ts',
+              "      case '--plan':\n",
+              "      case '--tasks-left': {\n        const parsed = Number(value);\n        if (!Number.isSafeInteger(parsed) || parsed < 1) {\n          diagnostics.push(\n            diagnostic({\n              severity: 'error',\n              code: 'invalid-tasks-left',\n              message: `Tasks left ${JSON.stringify(value)} must be a positive whole number`,\n              remediation: 'Use a value such as --tasks-left 5',\n            }),\n          );\n        } else {\n          options.tasksLeft = parsed;\n        }\n        break;\n      }\n      case '--plan':\n")
+
+          rep('apps/cli/src/run.ts',
+              "    reservePercent: invocation.options.reservePercent,\n    nativePolicy: invocation.options.nativePolicy,",
+              "    reservePercent: invocation.options.reservePercent,\n    tasksRemaining: invocation.options.tasksLeft,\n    nativePolicy: invocation.options.nativePolicy,")
+
+          rep('apps/cli/src/commands/optimize.ts',
+              "  assessBudgetDecision,\n  assessMcpServer,",
+              "  assessBudgetDecision,\n  assessWorkloadCoverage,\n  assessMcpServer,")
+          rep('apps/cli/src/commands/optimize.ts',
+              "  commandResult,\n  diagnostic,\n  estimateAcceptedTaskCapacityForPolicy,",
+              "  commandResult,\n  constrainBudgetForWorkload,\n  diagnostic,\n  estimateAcceptedTaskCapacityForPolicy,")
+          rep('apps/cli/src/commands/optimize.ts',
+              "  reservePercent: number;\n  localBurnTrend: LocalBurnTrend | null;",
+              "  reservePercent: number;\n  tasksRemaining: number | null;\n  localBurnTrend: LocalBurnTrend | null;")
+          rep('apps/cli/src/commands/optimize.ts',
+              "  const recommendations: OptimizationRecommendation[] = [];\n  const budgetDecision = assessBudgetDecision(budgetWindows, taskClass);\n  const paceEvidence = [...quotaEvidence(budgetWindows), ...budgetDecision.reasons];",
+              "  const recommendations: OptimizationRecommendation[] = [];\n  const capturedPolicy = benchmarkPolicySnapshot(context);\n  const workloadCapacity =\n    input.tasksRemaining === null || capturedPolicy === null || input.benchmarkReceipts === null\n      ? null\n      : estimateAcceptedTaskCapacityForPolicy({\n          report: budgetReport,\n          receipts: input.benchmarkReceipts,\n          harnessId: context.harnessId,\n          taskClass,\n          reservePercent,\n          policy: capturedPolicy,\n        });\n  const workloadCoverage = assessWorkloadCoverage({\n    tasksRemaining: input.tasksRemaining,\n    capacity: workloadCapacity,\n  });\n  const budgetDecision = constrainBudgetForWorkload(\n    assessBudgetDecision(budgetWindows, taskClass),\n    workloadCoverage,\n  );\n  const paceEvidence = [...quotaEvidence(budgetWindows), ...budgetDecision.reasons];")
+          rep('apps/cli/src/commands/optimize.ts',
+              "  if (budgetDecision.state === 'wait-for-reset') {",
+              "  if (workloadCoverage.state === 'shortfall' || workloadCoverage.state === 'exhausted') {\n    recommendations.push({\n      area: 'quota',\n      priority: 'first',\n      action:\n        workloadCoverage.state === 'exhausted'\n          ? 'Checkpoint or switch harness: the current exact policy has no conservative accepted-task capacity for the stated workload'\n          : 'Protect capacity or switch harness: the current exact policy does not cover the stated remaining tasks',\n      target: workloadCoverage.shortfallTasks === null ? null : String(workloadCoverage.shortfallTasks),\n      evidence: [...workloadCoverage.reasons, ...quotaEvidence(budgetWindows)],\n    });\n  } else if (budgetDecision.state === 'wait-for-reset') {")
+          rep('apps/cli/src/commands/optimize.ts',
+              "          pace: budgetWindows,\n          contextPressure: pressure.pressure,\n        });\n\n  const capturedPolicy = benchmarkPolicySnapshot(context);",
+              "          pace: budgetWindows,\n          contextPressure: pressure.pressure,\n          budgetDecision,\n        });")
+          rep('apps/cli/src/commands/optimize.ts',
+              "    budgetDecision,\n    recommendations,",
+              "    budgetDecision,\n    ...(input.tasksRemaining === null ? {} : { workloadCoverage }),\n    recommendations,")
+          rep('apps/cli/src/commands/optimize.ts',
+              "    reservePercent,\n    harnesses: [],",
+              "    reservePercent,\n    tasksRemaining: context.tasksRemaining ?? null,\n    harnesses: [],")
+          rep('apps/cli/src/commands/optimize.ts',
+              "        reservePercent,\n        localBurnTrend:",
+              "        reservePercent,\n        tasksRemaining: context.tasksRemaining ?? null,\n        localBurnTrend:")
+
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "export interface CrossHarnessSchedulerInput {\n  taskClass: TaskClass;\n  current:",
+              "export interface CrossHarnessSchedulerInput {\n  taskClass: TaskClass;\n  /** Explicit accepted tasks that should fit without assuming capacity after a future reset. */\n  tasksRemaining?: number | null;\n  current:")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "export interface CrossHarnessSchedulerDecision {\n  decision: CrossHarnessDecisionKind;\n  currentHarness:",
+              "export interface CrossHarnessSchedulerDecision {\n  decision: CrossHarnessDecisionKind;\n  tasksRemaining: number | null;\n  currentHarness:")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "function hasPressure(evidence: HarnessSchedulingEvidence): boolean {\n  return (\n    evidence.fiveHourPace === 'over-pace' ||\n    evidence.weeklyPace === 'over-pace' ||\n    evidence.acceptedTasksRemaining === 0\n  );\n}\n\nfunction hasSafeHeadroom(evidence: HarnessSchedulingEvidence): boolean {\n  const live = [evidence.fiveHourPace, evidence.weeklyPace];\n  return (\n    live.every((state) => state === 'under-pace' || state === 'on-pace') &&\n    evidence.acceptedTasksRemaining !== 0\n  );\n}",
+              "function hasPressure(\n  evidence: HarnessSchedulingEvidence,\n  tasksRemaining: number | null,\n): boolean {\n  return (\n    evidence.fiveHourPace === 'over-pace' ||\n    evidence.weeklyPace === 'over-pace' ||\n    evidence.acceptedTasksRemaining === 0 ||\n    (tasksRemaining !== null &&\n      evidence.acceptedTasksRemaining !== undefined &&\n      evidence.acceptedTasksRemaining !== null &&\n      evidence.acceptedTasksRemaining < tasksRemaining)\n  );\n}\n\nfunction hasSafeHeadroom(\n  evidence: HarnessSchedulingEvidence,\n  tasksRemaining: number | null,\n): boolean {\n  const live = [evidence.fiveHourPace, evidence.weeklyPace];\n  return (\n    live.every((state) => state === 'under-pace' || state === 'on-pace') &&\n    evidence.acceptedTasksRemaining !== 0 &&\n    (tasksRemaining === null ||\n      (evidence.acceptedTasksRemaining !== undefined &&\n        evidence.acceptedTasksRemaining !== null &&\n        evidence.acceptedTasksRemaining >= tasksRemaining))\n  );\n}")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  const base = {\n    currentHarness:",
+              "  const tasksRemaining = input.tasksRemaining ?? null;\n  const base = {\n    tasksRemaining,\n    currentHarness:")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  const currentCapacityProblem = validateCapacity(input.current, 'current');",
+              "  if (tasksRemaining !== null && (!Number.isSafeInteger(tasksRemaining) || tasksRemaining <= 0)) {\n    return {\n      ...base,\n      decision: 'insufficient-evidence',\n      reasons: [reason('invalid-workload-target', 'remaining workload must be a positive whole number of accepted tasks')],\n    };\n  }\n\n  const currentCapacityProblem = validateCapacity(input.current, 'current');")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  if (!hasPressure(input.current)) {\n    if (input.current.fiveHourPace === 'unknown' || input.current.weeklyPace === 'unknown') {",
+              "  if (!hasPressure(input.current, tasksRemaining)) {\n    if (tasksRemaining !== null && (input.current.acceptedTasksRemaining === undefined || input.current.acceptedTasksRemaining === null)) {\n      return { ...base, decision: 'insufficient-evidence', reasons: [reason('current-workload-capacity-unknown', 'current harness capacity for the stated remaining workload is unknown')] };\n    }\n    if (input.current.fiveHourPace === 'unknown' || input.current.weeklyPace === 'unknown') {")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  if (!hasSafeHeadroom(input.candidate)) {\n    if (input.candidate.acceptedTasksRemaining === 0) {",
+              "  if (!hasSafeHeadroom(input.candidate, tasksRemaining)) {\n    if (tasksRemaining !== null && (input.candidate.acceptedTasksRemaining === undefined || input.candidate.acceptedTasksRemaining === null)) {\n      return { ...base, decision: 'insufficient-evidence', reasons: [reason('candidate-workload-capacity-unknown', 'candidate capacity for the stated remaining workload is unknown')] };\n    }\n    if (tasksRemaining !== null && input.candidate.acceptedTasksRemaining !== undefined && input.candidate.acceptedTasksRemaining !== null && input.candidate.acceptedTasksRemaining < tasksRemaining) {\n      return { ...base, decision: 'stay', reasons: [reason('candidate-capacity-below-workload', `candidate has ${String(input.candidate.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`)] };\n    }\n    if (input.candidate.acceptedTasksRemaining === 0) {")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  const reasons = [\n    input.current.acceptedTasksRemaining === 0\n      ? reason(\n          'current-capacity-below-one',\n          'current safe allowance is below one empirical accepted-task equivalent',\n        )\n      : reason(",
+              "  const reasons = [\n    tasksRemaining !== null && input.current.acceptedTasksRemaining !== undefined && input.current.acceptedTasksRemaining !== null && input.current.acceptedTasksRemaining < tasksRemaining\n      ? reason('current-capacity-below-workload', `current harness has ${String(input.current.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`)\n      : input.current.acceptedTasksRemaining === 0\n        ? reason('current-capacity-below-one', 'current safe allowance is below one empirical accepted-task equivalent')\n        : reason(")
+          rep('packages/core/src/domain/cross-harness-scheduler.ts',
+              "  if (\n    input.candidate.acceptedTasksRemaining !== undefined &&\n    input.candidate.acceptedTasksRemaining !== null\n  ) {\n    reasons.push(\n      reason(\n        'candidate-capacity-sufficient',\n        `candidate has ${String(input.candidate.acceptedTasksRemaining)} conservative accepted-task equivalents remaining`,\n      ),\n    );\n  }",
+              "  if (input.candidate.acceptedTasksRemaining !== undefined && input.candidate.acceptedTasksRemaining !== null) {\n    reasons.push(\n      tasksRemaining !== null\n        ? reason('candidate-workload-covered', `candidate has ${String(input.candidate.acceptedTasksRemaining)} accepted-task equivalents for ${String(tasksRemaining)} stated task(s)`)\n        : reason('candidate-capacity-sufficient', `candidate has ${String(input.candidate.acceptedTasksRemaining)} conservative accepted-task equivalents remaining`),\n    );\n  }")
+
+          rep('apps/cli/src/schedule-main.ts',
+              "  --candidate-quality-samples <n>                               default: 0\n  --candidate-unavailable",
+              "  --candidate-quality-samples <n>                               default: 0\n  --tasks-left <n>                                                explicit remaining accepted tasks\n  --candidate-unavailable")
+          rep('apps/cli/src/schedule-main.ts', "  transferExplicit: boolean;\n  json:", "  transferExplicit: boolean;\n  tasksRemaining: number | null;\n  json:")
+          rep('apps/cli/src/schedule-main.ts', "    transferExplicit: false,\n    json: false,", "    transferExplicit: false,\n    tasksRemaining: null,\n    json: false,")
+          rep('apps/cli/src/schedule-main.ts', "      '--candidate-quality-samples',\n      '--handoff-file',", "      '--candidate-quality-samples',\n      '--tasks-left',\n      '--handoff-file',")
+          rep('apps/cli/src/schedule-main.ts', "      case '--handoff-file':", "      case '--tasks-left': {\n        const n = parseInteger(name, value, 1, diagnostics);\n        if (n !== null) args.tasksRemaining = n;\n        break;\n      }\n      case '--handoff-file':")
+          rep('apps/cli/src/schedule-main.ts', "    `Task class: ${report.taskClass}`,\n    `Budget evidence:", "    `Task class: ${report.taskClass}`,\n    `Tasks left: ${report.tasksRemaining === null ? 'unspecified' : String(report.tasksRemaining)}`,\n    `Budget evidence:")
+          rep('apps/cli/src/schedule-main.ts', "  const initialInput: CrossHarnessSchedulerInput = {\n    taskClass,\n    current:", "  const initialInput: CrossHarnessSchedulerInput = {\n    taskClass,\n    tasksRemaining: parsed.args.tasksRemaining,\n    current:")
+
+          rep('apps/cli/src/schedule-capacity-main.ts', "  taskClass: TaskClass;\n  reasons:", "  taskClass: TaskClass;\n  tasksRemaining: number | null;\n  reasons:")
+          rep('apps/cli/src/schedule-capacity-main.ts', "    `Task class: ${report.taskClass}`,\n    `Budget evidence:", "    `Task class: ${report.taskClass}`,\n    `Tasks left: ${report.tasksRemaining === null ? 'unspecified' : String(report.tasksRemaining)}`,\n    `Budget evidence:")
+          rep('apps/cli/src/schedule-capacity-main.ts', "  const schedulerInput: CrossHarnessSchedulerInput = {\n    taskClass: base.taskClass,\n    current:", "  const schedulerInput: CrossHarnessSchedulerInput = {\n    taskClass: base.taskClass,\n    tasksRemaining: base.tasksRemaining,\n    current:")
+
+          rep('apps/cli/src/render/optimize.ts', "        String(report.reservePercent) +\n        '%',", "        String(report.reservePercent) +\n        '%' +\n        (report.tasksRemaining == null ? '' : ' tasks-left=' + String(report.tasksRemaining)),")
+          rep('apps/cli/src/render/optimize.ts', "  lines.push('', 'LOCAL HISTORY');", "  if (report.tasksRemaining != null) {\n    lines.push('', 'WORKLOAD');\n    for (const harness of report.harnesses) {\n      const coverage = harness.workloadCoverage;\n      lines.push(truncate('  ' + harness.harnessId + ': ' + (coverage === undefined ? 'unknown' : coverage.state + '; capacity=' + (coverage.acceptedTasksRemaining === null ? '?' : String(coverage.acceptedTasksRemaining)) + '/' + String(report.tasksRemaining) + '; limiting=' + (coverage.limitingScope ?? '?')), 78));\n    }\n    lines.push('  current observed allowance only; no future reset capacity is assumed');\n  }\n\n  lines.push('', 'LOCAL HISTORY');")
+
+          rep('apps/cli/src/usage.ts', "                         [--task <class>] [--profile <name>] [--reserve <0-95>]", "                         [--task <class>] [--profile <name>] [--reserve <0-95>]\n                         [--tasks-left <n>]")
+          rep('apps/cli/src/usage.ts', "The custom profile currently requires\nan explicit --reserve and otherwise keeps the task quality-floor rules.`", "The custom profile currently requires\nan explicit --reserve and otherwise keeps the task quality-floor rules.\n\n--tasks-left states how many accepted tasks should fit in the currently observed\nincluded allowance without assuming capacity after a future reset. It is never\ninferred from ccusage or local tokens. When exact model/effort/verbosity benchmark\nevidence proves a shortfall, quota-derived effort escalation is suppressed and\nthe report identifies whether five-hour or weekly allowance is the bottleneck.`")
+          rep('apps/cli/src/usage.ts', "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\n                      [--provider <id>] [--project <dir>] [--native-policy]\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]", "  token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]\n                      [--provider <id>] [--project <dir>] [--native-policy]\n                      [--task <class>] [--profile <name>] [--reserve <0-95>]\n                      [--tasks-left <n>]")
+          rep('apps/cli/src/usage.ts', "  token-harness plan [--json] [--harness <id>] [--provider <id>] [--project <dir>]\n                     [--native-policy] [--task <class>] [--profile <name>]\n                     [--reserve <0-95>]", "  token-harness plan [--json] [--harness <id>] [--provider <id>] [--project <dir>]\n                     [--native-policy] [--task <class>] [--profile <name>]\n                     [--reserve <0-95>] [--tasks-left <n>]")
+          PY
+      - name: Format patched sources
+        run: pnpm exec prettier --write apps/cli/src/commands/context.ts apps/cli/src/argv.ts apps/cli/src/run.ts apps/cli/src/commands/optimize.ts packages/core/src/domain/cross-harness-scheduler.ts apps/cli/src/schedule-main.ts apps/cli/src/schedule-capacity-main.ts apps/cli/src/render/optimize.ts apps/cli/src/usage.ts
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/cli/src/commands/context.ts apps/cli/src/argv.ts apps/cli/src/run.ts apps/cli/src/commands/optimize.ts packages/core/src/domain/cross-harness-scheduler.ts apps/cli/src/schedule-main.ts apps/cli/src/schedule-capacity-main.ts apps/cli/src/render/optimize.ts apps/cli/src/usage.ts
+          git diff --cached --quiet && exit 1
+          git commit -m "feat: wire workload-aware allowance controller"
+          git push origin HEAD:feature/workload-aware-allowance
