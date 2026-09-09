@@ -70,9 +70,7 @@ it('keeps overview cache hot after read-only verification', async () => {
     authority: () => authority,
   });
   const server = createServer(handler);
-  await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   authority = `127.0.0.1:${address.port}`;
@@ -106,8 +104,6 @@ it('keeps overview cache hot after read-only verification', async () => {
     assert.ok(calls.length > afterVerify);
   } finally {
     server.closeAllConnections();
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
