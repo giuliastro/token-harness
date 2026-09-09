@@ -159,11 +159,12 @@ describe('real section progress', () => {
       result = f.service.overview('7d');
     assert.equal(
       f.service.status().loading!.stages.filter((step) => step.state === 'working').length,
-      5,
+      6,
     );
     f.finish('doctor', doctor);
     f.finish('savings', metrics);
     f.finish('status', { problemCount: 0 });
+    f.finish('benchmark-matrix', { entries: [] });
     await setImmediate();
     const snapshot = f.service.status();
     assert.equal(snapshot.loading!.savings!.rows[0]!.impact.percent, '65%');
@@ -179,6 +180,7 @@ describe('real section progress', () => {
     assert.equal(f.service.status().loading!.running, false);
     assert.deepEqual(complete.agents[0]!.pending, []);
     assert.deepEqual(f.calls.map((call) => call[0]).sort(), [
+      'benchmark-matrix',
       'budget',
       'context',
       'doctor',
@@ -193,6 +195,7 @@ describe('real section progress', () => {
     f.finish('savings', metrics);
     f.finish('status', { problemCount: 0 });
     f.finish('context', { harnesses: [] });
+    f.finish('benchmark-matrix', { entries: [] });
     f.pending.get('budget')!.reject(new Error('/private/token=secret'));
     const complete = await result;
     assert.equal(complete.savings.rows[0]!.saved, 780);
@@ -211,8 +214,9 @@ describe('real section progress', () => {
     f.finish('savings', metrics);
     f.finish('status', { problemCount: 0 });
     f.finish('context', { harnesses: [] });
+    f.finish('benchmark-matrix', { entries: [] });
     f.finish('budget', { harnesses: [] });
     assert.deepEqual(await first, await second);
-    assert.equal(f.calls.length, 5);
+    assert.equal(f.calls.length, 6);
   });
 });
