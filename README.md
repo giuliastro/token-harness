@@ -16,7 +16,7 @@ npm install --global token-harness@latest
 token-harness
 ```
 
-The browser is now the primary interface. **Set up automatically** checks both agents and
+The browser is now the primary interface. **Review setup** checks both agents and
 prepares the supported integration changes. It describes each change in plain language.
 Choose **Approve and apply** to apply the reviewed configuration with backups and verification.
 There are no plan IDs to copy and no daily command sequence to remember.
@@ -30,12 +30,16 @@ provider/version. Token Harness does not install Claude Code or Codex or log you
 
 Continue launching `claude` or `codex` as usual. Supported output integrations operate in the
 agent, not in the dashboard. You can close the page and its terminal without disabling those
-integrations. Open `token-harness` whenever you want to see results; the visible dashboard
-imports available provider records and refreshes its readings automatically.
+integrations. Open `token-harness` whenever you want to inspect the current state or results.
+
+The app **does not perform periodic full dashboard reloads**. A full read happens on initial open
+or when you choose **Refresh data**. Existing readings remain visible while a refresh runs, and
+period views reuse cached evidence where possible. Applying a reviewed setting marks the displayed
+configuration as previous state instead of immediately re-reading everything again.
 
 **Recorded savings** shows retained history across locally recorded projects, with date bounds,
 provider, measurement class, units, changed-output counts, and before/after values. It does not
-add incompatible provider figures together. Negative results remain visible. No telemetry is
+add incompatible provider figures together. Negative results remain visible. Missing telemetry is
 shown as **not measured**, never a reassuring zero or an invented subscription saving.
 Some provider records may predate Token Harness; locally stored records are not guaranteed
 complete lifetime history. RTK history is imported directly. HarnessTrim project-local records
@@ -53,11 +57,18 @@ project-scoped; opening the app from its installation folder does not change the
 
 ### Find what you need
 
-The app has three tabs: **Overview** for agents and recorded savings, **Rules & settings**
-for one agent's rules at a time, and **Activity** for checks and guarded undo. Theme follows
-your system; the header also offers light and dark modes.
+The app has three primary views:
 
-Each rule shows what was actually **observed**, separately from how it works. Actions sit
+- **Dashboard** — what is saving resources, what has actually been measured, current allowance,
+  quality evidence, and the single most useful next action;
+- **Policies** — what is active, what can be enabled, why it matters, and the trade-off before a
+  change;
+- **Evidence** — recorded reductions, allowance/quality evidence, integration checks and guarded
+  undo.
+
+Theme follows your system; the header also offers light and dark modes.
+
+Each policy shows what was actually **observed**, separately from how it works. Actions sit
 next to the relevant state: **Adjust reasoning** opens the supported review/apply flow;
 **Change in Claude/Codex** explains native steps when an automatic write is not available.
 Missing allowance data and measurement records have their own setup/help actions.
@@ -67,9 +78,9 @@ admit automatic writes on that version. **No saved preference** means the user f
 absent, not that reasoning is disabled. A failed read is a separate state with a cause.
 The displayed preference is not a live reading of an already-running session.
 
-### The rules are visible
+### The policies are visible
 
-**Rules & settings** explains each configured rule: what it does, why it is used,
+**Policies** explains each configured rule: what it does, why it is used,
 its mode, and the evidence available. Automatic integrations, persistent preferences,
 observations and features that are not enabled are explicitly distinguished.
 
@@ -84,7 +95,7 @@ applies only after approval. **This is a persistent preference for future sessio
 automatic per-task switch.** It does not switch models, billing, login, or hook trust. The
 baseline automatic setup never guesses a task or quietly lowers reasoning.
 
-**Check integrations** performs the existing integration checks from the UI.
+**Check integrations** performs the existing integration checks from the Evidence view.
 **Undo last change**, available after an application in that dashboard session, previews a
 whole-file backup restoration. It refuses to undo a newer unrelated transaction. It restores
 only the last successful agent transaction; manual edits to those same files after that
@@ -145,7 +156,7 @@ browser remains fully usable without any skill or second AI subscription. See
 
 ### Measure context savings
 
-Paired task benchmarks can now report context exposure separately from quality, local tokens, and
+Paired task benchmarks can report context exposure separately from quality, local tokens, and
 subscription allowance. Capture baseline and optimized variants with the existing benchmark workflow,
 then inspect one pair or the current-project matrix:
 
@@ -158,8 +169,17 @@ When both variants pass quality and each context surface stays stable from task 
 report can show evidence such as **Context: reduced — static MCP tools 62 → 5**. Truncated MCP
 inventory, unknown tool counts, missing observations, or mid-task context drift produce **unknown**
 instead of a saving claim. Context reduction is context-shape evidence only; it is never converted
-into Claude/Codex subscription quota. This evidence is the admission gate for experimental broad
-context owners such as Headroom or Context Mode.
+into Claude/Codex subscription quota.
+
+The Dashboard can additionally project authoritative paired benchmark evidence into understandable
+outcomes: a five-hour saving can be shown as both a percentage and its equivalent share of the
+300-minute window; weekly quota remains a percentage because it is not seven days of wall-clock
+compute. Positive allowance savings are not credited when paired quality evidence is missing or
+shows a regression. API money remains **not measured** until billed input/output tokens and a
+verified model-price basis exist.
+
+This evidence is also the admission gate for experimental context optimizers such as **mcptoon**
+and Headroom. Upstream benchmark numbers are never copied directly into a user's savings total.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
@@ -244,16 +264,30 @@ See [RFC 0013](docs/rfcs/0013-guided-local-experience.md) for the local browser 
 [RFC 0004](docs/rfcs/0004-safety-and-installation.md) for the execution model and
 [RFC 0006](docs/rfcs/0006-cli-contract.md) for CLI/JSON guarantees.
 
-## Supported optimizations
+## Optimization and evidence tools
 
-Token Harness can detect and measure several independent local tools:
+Integration priority is based on **marginal useful-work savings**, quality risk, attribution and
+reversibility — not on the biggest upstream marketing percentage.
 
-| Provider | Purpose | Management |
-| --- | --- | --- |
-| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Managed only for reviewed combinations |
-| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Managed only for reviewed combinations |
-| [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
-| [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
+| Priority | Tool / policy | Purpose | Current status |
+| --- | --- | --- | --- |
+| P0 | Native reasoning / verbosity policy | Avoid overspending reasoning on simple work while protecting difficult tasks | Supported |
+| P0 | [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Supported for reviewed combinations |
+| P0 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Supported for reviewed combinations |
+| **P1** | **[mcptoon](https://github.com/activeing123/mcptoon)** | **Remove the static MCP tool-schema context tax before work begins** | **Next integration candidate; detection/benchmark first, no silent `sync`** |
+| P2 | [Headroom](https://github.com/headroomlabs-ai/headroom) | Broad context ownership/compression | Detected as benchmark candidate; admission-gated |
+| P2 | mcptoon result encoding / per-tool policy | Reduce MCP call-result payload | Later experiment; must beat overlapping reducers on marginal quality-safe savings |
+| P0 evidence | [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
+| P0 evidence | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
+
+For MCP-heavy users, mcptoon is deliberately ahead of broad context owners because tool-schema
+exposure can be a large recurring cost and is a distinct optimization phase. Token Harness will
+first detect it read-only, measure the current MCP/context tax, benchmark compact discovery against
+the native surface and require paired quality evidence before recommending activation. Result-side
+TOON compression is separate because it can overlap with RTK, HarnessTrim or a broad context owner.
+
+See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the current integration order,
+capability-ownership rule and stable-release promotion gate.
 
 A provider you installed yourself remains yours. Token Harness can adopt observable
 configuration without claiming ownership of the executable.
@@ -363,7 +397,7 @@ changes and restores a prior Claude effort preference without undoing unrelated 
 
 ### Claude allowance is unavailable
 
-The dashboard now explains whether the optional companion is missing, lacks the safe CLI
+The dashboard explains whether the optional companion is missing, lacks the safe CLI
 flags, cannot find Python, has no usable Claude session, reports an expired session, or returns
 an unsupported source. It does not expose credentials, raw companion errors or private paths.
 
@@ -384,7 +418,7 @@ A missing observation is not zero remaining allowance. Never paste credentials t
 
 ### Codex is configured but its hook does not run
 
-`token-harness verify --harness codex --verbose` now reads native `hooks/list` where the
+`token-harness verify --harness codex --verbose` reads native `hooks/list` where the
 installed app-server exposes it. Disabled, untrusted and modified hooks are distinguished from
 an unavailable observation. Trust must still be granted explicitly in Codex. Enabled/trusted
 metadata does not prove interception, reduction, or task quality; the integration remains
@@ -470,8 +504,8 @@ pnpm package
 pnpm smoke:install
 ```
 
-Read [PLAN.md](PLAN.md) and the accepted [RFCs](docs/rfcs) before changing public
-behavior or architecture.
+Read [PLAN.md](PLAN.md), [docs/optimizer-priorities.md](docs/optimizer-priorities.md), and the
+accepted [RFCs](docs/rfcs) before changing public behavior or architecture.
 
 ## License
 
@@ -485,7 +519,7 @@ reduction records appear as they are ready; a slow allowance check does not hide
 Refreshing keeps previous readings visible until newer ones arrive. Errors and waiting are
 explicit, and reduced-motion preferences disable animation without removing status text.
 
-A result can now say **"65% less tool output"**, with its source, before/after values and count
+A result can say **"65% less tool output"**, with its source, before/after values and count
 of recorded changed outputs immediately beside it. An estimate says **"Estimated"**. This
 percentage describes only those recorded outputs, not your whole coding session, subscription
 allowance or money. Provider rows remain separate; negative results and errors remain visible.
