@@ -207,10 +207,16 @@ function nextAction(input: {
     };
   }
   if (input.detection.state === 'installed') {
-    return { kind: 'configure', reason: 'The component is installed but not configured for an agent.' };
+    return {
+      kind: 'configure',
+      reason: 'The component is installed but not configured for an agent.',
+    };
   }
   if (input.detection.state === 'configured' && input.verification === 'not-checked') {
-    return { kind: 'verify', reason: 'Configuration was found, but runtime verification has not been checked.' };
+    return {
+      kind: 'verify',
+      reason: 'Configuration was found, but runtime verification has not been checked.',
+    };
   }
   if (input.detection.state === 'configured' && input.verification === 'not-exercised') {
     return {
@@ -230,7 +236,8 @@ function nextAction(input: {
   if (input.health === 'healthy' && input.savings.length === 0) {
     return {
       kind: 'measure',
-      reason: 'The integration is healthy; keep using it normally so measured savings evidence can accumulate.',
+      reason:
+        'The integration is healthy; keep using it normally so measured savings evidence can accumulate.',
     };
   }
   return null;
@@ -258,7 +265,9 @@ function savingsForProvider(report: MetricsReport | null | undefined, providerId
  * canaries, network calls, or background refreshes. A caller that has not explicitly collected
  * one of those facts gets `not-checked`, not a reassuring guess.
  */
-export function buildOptimizationStack(input: BuildOptimizationStackInput): OptimizationStackSnapshot {
+export function buildOptimizationStack(
+  input: BuildOptimizationStackInput,
+): OptimizationStackSnapshot {
   const detections = new Map(input.detections.map((row) => [row.providerId, row]));
   const updates = new Map((input.updates ?? []).map((row) => [row.providerId, row]));
   const components: OptimizationStackComponent[] = [];
@@ -304,7 +313,8 @@ export function buildOptimizationStack(input: BuildOptimizationStackInput): Opti
   const state: OptimizationStackSnapshot['state'] =
     present.length === 0
       ? 'empty'
-      : present.some((component) => component.health === 'attention') || unattributedDrift.length > 0
+      : present.some((component) => component.health === 'attention') ||
+          unattributedDrift.length > 0
         ? 'attention'
         : present.every(
               (component) =>
