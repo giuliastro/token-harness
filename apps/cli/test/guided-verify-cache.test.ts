@@ -61,7 +61,11 @@ it('keeps overview cache hot after read-only verification', async () => {
     return envelope(command, null as T);
   };
 
-  const service = new GuideService(call, () => 0, () => 'ticket');
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'ticket',
+  );
   const token = 'a'.repeat(64);
   let authority = '';
   const handler = createGuideHandler({
