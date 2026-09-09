@@ -22,7 +22,7 @@ function detection(state: ProviderDetection['state'] = 'configured'): ProviderDe
     version: state === 'absent' ? null : '0.44.0',
     executable: state === 'absent' ? null : '/tools/rtk',
     installationChannel: state === 'absent' ? null : 'cargo',
-    versionVerdict: state === 'absent' ? null : 'supported',
+    versionVerdict: state === 'absent' ? null : 'in-range',
     configuredHarnesses: state === 'configured' ? [CLAUDE] : [],
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
@@ -101,7 +101,11 @@ function currentUpdate(verdict: ProviderUpdateRow['verdict'] = 'current'): Provi
   };
 }
 
-const descriptor = { providerId: RTK, displayName: 'RTK', category: 'command-output-reduction' as const };
+const descriptor = {
+  providerId: RTK,
+  displayName: 'RTK',
+  category: 'command-output-reduction' as const,
+};
 
 describe('optimization stack snapshot', () => {
   it('represents the healthy steady state with no runtime toggle action', () => {
