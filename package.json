@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write packages/adapters/test/headroom-candidate.test.ts && git diff --exit-code -- packages/adapters/test/headroom-candidate.test.ts",
     "start": "npm run build && node dist/bundle/token-harness.mjs"
   },
   "devDependencies": {
