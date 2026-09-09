@@ -71,6 +71,26 @@ describe('context-cost command', () => {
         },
         runner: {
           run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+            if (request.executable === 'headroom') {
+              return {
+                displayCommand: 'headroom ' + request.args.join(' '),
+                interpreter: 'direct',
+                executablePath: null,
+                exitCode: null,
+                signal: null,
+                stdout: '',
+                stderr: '',
+                stdoutTruncated: false,
+                stderrTruncated: false,
+                durationMs: 1,
+                timedOut: false,
+                failure: {
+                  reason: 'executable-not-found',
+                  message: 'headroom is not installed',
+                },
+              };
+            }
+
             const stdout =
               request.args[0] === '--version'
                 ? 'codex-cli 0.146.0'
@@ -183,6 +203,10 @@ describe('context-cost command', () => {
           truncated: true,
         },
       ],
+    );
+    assert.equal(
+      result.diagnostics.some((item) => item.code === 'context-owner-candidate-absent'),
+      true,
     );
 
     files.delete('/home/dev/project/sub/AGENTS.override.md');
