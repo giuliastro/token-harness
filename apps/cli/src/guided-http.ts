@@ -1,7 +1,7 @@
 /** Strict loopback-only browser control. No user-supplied commands or paths. */
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { GuideError, type GuideService, type GuidePeriod } from './guided.js';
+import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
 import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS } from './guided-assets.js';
 
 export const GUIDE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
@@ -100,7 +100,7 @@ export function createGuideHandler(input: {
             send(200, cached.body);
             return;
           }
-          const body = JSON.stringify(await input.service.overview(guidePeriod));
+          const body = JSON.stringify(await input.service.overview(guidePeriod, force));
           overviewCache.set(guidePeriod, { at: Date.now(), body });
           send(200, body);
           return;
@@ -126,17 +126,29 @@ export function createGuideHandler(input: {
         return;
       }
       if (url.pathname === '/api/verify') {
+        if (body === null || typeof body !== 'object' || Array.isArray(body))
+          throw new GuideError(400, 'No command parameters are accepted.');
+        const data = body as Record<string, unknown>;
         if (
-          body === null ||
-          typeof body !== 'object' ||
-          Array.isArray(body) ||
-          Object.keys(body).length !== 0
+          Object.keys(data).some((key) => key !== 'period') ||
+          (data['period'] !== undefined && !['all', '7d', '30d'].includes(String(data['period'])))
         )
           throw new GuideError(400, 'No command parameters are accepted.');
         const result = await input.service.verify();
-        // Verification is read-only. Keep the current overview cache so this action does not
-        // trigger doctor/budget/context/metrics/benchmark reads again. An explicit Refresh data
-        // request still bypasses the cache through ?refresh=1.
+        const period = data['period'] as GuidePeriod | undefined;
+        if (result.stack !== undefined && period !== undefined) {
+          const cached = overviewCache.get(period);
+          if (cached !== undefined) {
+            const overview = JSON.parse(cached.body) as GuideOverview;
+            overviewCache.set(period, {
+              ...cached,
+              body: JSON.stringify({ ...overview, stack: result.stack }),
+            });
+          }
+        }
+        // Verification is read-only. Keep the current overview cache hot and replace only the
+        // structured stack evidence for the active reporting period. Allowance, context, metrics
+        // and benchmark collection are not repeated. Explicit Refresh data still forces a full read.
         send(200, JSON.stringify(result));
         return;
       }
