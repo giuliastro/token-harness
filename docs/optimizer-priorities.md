@@ -46,16 +46,6 @@ Only one optimizer should own an overlapping phase unless a paired benchmark pro
 
 ## Stable-release gate
 
-Do not call a release ready for broad promotion merely because features exist. A promotion-ready stable release should have:
+A new experimental optimizer is **not** required for a promotion-ready stable release. mcptoon and Headroom can remain admission-gated candidates while the core product is promoted.
 
-- the outcome-first Dashboard / Policies / Evidence UX;
-- no periodic full dashboard reload and no full reload after every setting change;
-- clear current-policy state, next action and rollback path;
-- recorded reducer savings kept separate by measurement class;
-- paired allowance/quality evidence surfaced when available, with missing data shown as missing;
-- no invented 5h/7d, API-money or quality claims;
-- setup/apply/verify/undo flows green on Windows, macOS and Linux;
-- package/install smoke tests green from the published artifact;
-- README onboarding aligned with the actual UI and current supported integrations.
-
-A new experimental optimizer is **not** required for that stable-release gate. mcptoon and Headroom can remain admission-gated candidates while the core product is promoted.
+The authoritative promotion checklist is [release-readiness.md](release-readiness.md). In short, the core must have the outcome-first UI, no periodic full reload, evidence-backed value reporting, green cross-platform CI, a verified published package, and a clean fresh-user end-to-end install test before it is called ready for broad promotion.
