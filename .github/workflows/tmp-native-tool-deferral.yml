@@ -1,0 +1,49 @@
+name: tmp-native-tool-deferral
+
+on:
+  push:
+    branches:
+      - feature/savings-engine-18.6
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/savings-engine-18.6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node .tmp-native-tool-deferral.mjs
+      - name: Remove temporary finalizer inputs
+        run: rm .tmp-native-tool-deferral.mjs .github/workflows/tmp-native-tool-deferral.yml
+      - run: >-
+          pnpm exec prettier --write
+          packages/core/src/domain/context-cost.ts
+          packages/core/test/tool-deferral.test.ts
+          apps/cli/src/commands/context-cost.ts
+          apps/cli/src/commands/optimize.ts
+          apps/cli/test/context-cost.test.ts
+          docs/spikes/codex-native-tool-search-upstream-2026-09-09.md
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm package
+      - run: pnpm smoke:install
+      - name: Commit product diff
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: recognize native Codex MCP tool deferral"
+          git push origin HEAD:feature/savings-engine-18.6
