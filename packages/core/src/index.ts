@@ -28,6 +28,7 @@ export * from './domain/model-quality-per-allowance.js';
 export * from './domain/handoff.js';
 export * from './domain/history.js';
 export * from './domain/optimizer.js';
+export * from './domain/optimization-stack.js';
 export * from './domain/outcome-learning.js';
 export * from './domain/verbosity-learning.js';
 export * from './domain/model-learning.js';
