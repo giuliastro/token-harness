@@ -4,7 +4,7 @@
  * Read-only inventory of static instructions, effective harness configuration and MCP exposure.
  */
 
-import { listHarnessAdapters, observeHeadroomCandidate } from '@token-harness/adapters';
+import { listHarnessAdapters } from '@token-harness/adapters';
 import {
   EXIT_CODES,
   commandResult,
@@ -17,6 +17,7 @@ import {
   type ToolDeferralObservation,
 } from '@token-harness/core';
 
+import { contextOwnerCandidateDiagnostics } from './context-owner-candidates.js';
 import type { CommandContext } from './context.js';
 
 const CLAUDE = harnessId('claude');
@@ -55,72 +56,6 @@ function nativeToolDeferral(
     reason:
       'This Codex version is outside the reviewed native tool-deferral evidence; do not infer activation from the legacy tool_search config flag',
   };
-}
-
-async function contextOwnerCandidateDiagnostics(
-  context: CommandContext,
-): Promise<ReturnType<typeof diagnostic>[]> {
-  if (context.adapters === null) return [];
-
-  const observation = await observeHeadroomCandidate({
-    fs: context.adapters.fs,
-    runner: context.adapters.runner,
-    facts: context.platform,
-    paths: context.adapters.paths,
-    projectRoot: context.projectRoot,
-    harnessConfigs: [],
-    now: context.now,
-    localDatabase: context.adapters.localDatabase,
-    projectIdFor: context.adapters.projectIdFor,
-  });
-
-  const version = observation.version === null ? '' : ` ${observation.version}`;
-  if (observation.state === 'absent') {
-    return [
-      diagnostic({
-        severity: 'info',
-        code: 'context-owner-candidate-absent',
-        subject: 'headroom',
-        message: 'Headroom is not installed; the experimental context-owner candidate is inactive',
-        remediation: 'No action is required; Token Harness does not install context-owner candidates silently',
-      }),
-    ];
-  }
-
-  if (observation.state === 'unsupported-version') {
-    return [
-      diagnostic({
-        severity: 'warning',
-        code: 'context-owner-candidate-version',
-        subject: 'headroom',
-        message: `Headroom${version} is installed but predates the reviewed benchmark baseline ${observation.minimumBenchmarkVersion}`,
-        remediation: 'Do not benchmark or enable this candidate through Token Harness on this version',
-      }),
-    ];
-  }
-
-  if (observation.state === 'installed') {
-    return [
-      diagnostic({
-        severity: 'info',
-        code: 'context-owner-candidate-installed',
-        subject: 'headroom',
-        message: `Headroom${version} is installed but does not yet meet the local benchmark-readiness checks`,
-        remediation: observation.reasons[0] ?? 'Keep the candidate disabled until readiness is proven',
-      }),
-    ];
-  }
-
-  return [
-    diagnostic({
-      severity: 'info',
-      code: 'context-owner-candidate-ready',
-      subject: 'headroom',
-      message: `Headroom${version} is available for paired context-owner benchmarking; it remains disabled by Token Harness`,
-      remediation:
-        'Collect at least three recent quality-safe paired benchmarks before RFC 0026 admission; Token Harness will not enable it automatically',
-    }),
-  ];
 }
 
 function emptyObservation(
