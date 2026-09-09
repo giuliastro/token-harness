@@ -98,10 +98,7 @@ export function compareTaskBenchmarkReceiptContexts(
     };
   }
 
-  if (
-    baseline.outcome.qualityGate !== 'passed' ||
-    optimized.outcome.qualityGate !== 'passed'
-  ) {
+  if (baseline.outcome.qualityGate !== 'passed' || optimized.outcome.qualityGate !== 'passed') {
     return {
       verdict: 'unknown',
       baseline: baseline.contextAtStart ?? null,

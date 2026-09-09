@@ -84,7 +84,11 @@ test('decorating a benchmark report leaves the historical verdict unchanged', ()
   const baseline = receipt('baseline', context(62), context(62));
   const optimized = receipt('optimized', context(5), context(5));
   const historical = compareTaskBenchmarkReceipts(baseline, optimized);
-  const decorated = addContextToTaskBenchmarkCompareReport({ baseline, optimized, comparison: historical });
+  const decorated = addContextToTaskBenchmarkCompareReport({
+    baseline,
+    optimized,
+    comparison: historical,
+  });
 
   assert.deepEqual(decorated.comparison, historical);
   assert.equal(decorated.context.verdict, 'reduced');
