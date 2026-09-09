@@ -54,7 +54,7 @@ export function headroomVersionAtLeast(version: string, minimum: string): boolea
     const right = floor[index] ?? 0;
     if (left !== right) return left > right;
   }
-  return true;
+  return !(version.includes('-') && !minimum.includes('-'));
 }
 
 /**
@@ -71,14 +71,26 @@ export async function observeHeadroomCandidate(
     timeoutMs: 20_000,
   });
   if (versionOutcome.failure !== null) {
+    const absent = versionOutcome.failure.reason === 'executable-not-found';
     return {
-      state: 'absent',
+      state: absent ? 'absent' : 'installed',
       version: null,
-      executable: null,
+      executable: versionOutcome.executablePath,
       supportsClaudeWrap: false,
       supportsCodexWrap: false,
       minimumBenchmarkVersion: HEADROOM_MINIMUM_BENCHMARK_VERSION,
-      reasons: [`headroom is not runnable: ${versionOutcome.failure.reason}`],
+      reasons: [`headroom --version failed: ${versionOutcome.failure.reason}`],
+    };
+  }
+  if (versionOutcome.exitCode !== 0) {
+    return {
+      state: 'installed',
+      version: null,
+      executable: versionOutcome.executablePath,
+      supportsClaudeWrap: false,
+      supportsCodexWrap: false,
+      minimumBenchmarkVersion: HEADROOM_MINIMUM_BENCHMARK_VERSION,
+      reasons: [`headroom --version exited ${String(versionOutcome.exitCode)}`],
     };
   }
 
