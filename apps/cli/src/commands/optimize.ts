@@ -15,6 +15,7 @@ import {
   commandResult,
   constrainBudgetForWorkload,
   diagnostic,
+  effectiveMcpExposure,
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
   refineEffortWithOutcomes,
@@ -76,9 +77,8 @@ function contextEvidence(
   const discoveredBytes = context.instructions
     .filter((item) => item.harnessId === harness.harnessId)
     .reduce((total, item) => total + item.byteLength, 0);
-  const knownTools = harness.mcpServers
-    .filter((server) => server.toolCount !== null)
-    .reduce((total, server) => total + (server.toolCount ?? 0), 0);
+  const mcpExposure = effectiveMcpExposure(harness);
+  const knownTools = mcpExposure.rawKnownToolCount;
   const hasUnknownTools = harness.mcpServers.some((server) => server.toolCount === null);
 
   const evidence: RecommendationEvidence[] = [];
@@ -127,17 +127,29 @@ function contextEvidence(
     });
   }
 
-  if (knownTools >= 50 || harness.mcpServers.length >= 12) score = Math.max(score, 2);
-  else if (knownTools >= 20 || harness.mcpServers.length >= 6) score = Math.max(score, 1);
+  if (mcpExposure.knownToolCountForPressure >= 50 || mcpExposure.serverCountForPressure >= 12)
+    score = Math.max(score, 2);
+  else if (mcpExposure.knownToolCountForPressure >= 20 || mcpExposure.serverCountForPressure >= 6)
+    score = Math.max(score, 1);
   if (harness.mcpServers.length > 0) {
+    const deferral = harness.toolDeferral;
     evidence.push({
-      code: 'mcp-exposure',
+      code:
+        deferral?.state === 'active'
+          ? 'mcp-native-deferral-active'
+          : deferral?.state === 'available'
+            ? 'mcp-native-deferral-available'
+            : 'mcp-exposure',
       summary:
         String(harness.mcpServers.length) +
         ' MCP servers, ' +
         String(knownTools) +
         (hasUnknownTools ? '+?' : '') +
-        ' tools visible in inventory',
+        (deferral?.state === 'active'
+          ? ' tools inventoried; native tool deferral is runtime-proven active, so they are not counted as direct static MCP pressure'
+          : deferral?.state === 'available'
+            ? ' tools inventoried; native tool deferral exists in this reviewed harness build but its live model/provider gate is unverified'
+            : ' tools visible in inventory'),
     });
   }
 
@@ -286,7 +298,9 @@ function adviceForHarness(input: {
       area: 'mcp',
       priority: 'optional',
       action:
-        'Review this high-exposure MCP server before a long task; do not remove it without usage or task-relevance evidence',
+        context.toolDeferral?.state === 'available'
+          ? 'Verify native tool deferral before adding another MCP reduction layer; do not remove this server without usage or task-relevance evidence'
+          : 'Review this high-exposure MCP server before a long task; do not remove it without usage or task-relevance evidence',
       target: assessment.name,
       evidence: [
         {

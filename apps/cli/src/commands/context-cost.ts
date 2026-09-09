@@ -14,6 +14,7 @@ import {
   type ContextReport,
   type HarnessContextObservation,
   type InstructionFileObservation,
+  type ToolDeferralObservation,
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
@@ -21,6 +22,40 @@ import type { CommandContext } from './context.js';
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const CONTEXT_HARNESSES = new Set([CLAUDE, CODEX]);
+
+function nativeToolDeferral(
+  harness: typeof CLAUDE,
+  version: string | null,
+  verdict: string | null,
+): ToolDeferralObservation | null {
+  if (harness !== CODEX) return null;
+
+  // Upstream Codex 0.146.0 has removed the old tool_search compatibility toggles: MCP tools are
+  // deferred whenever tool_search is actually available, which in turn depends on model support
+  // plus provider namespace-tools support. app-server model/list does not expose both live gates,
+  // so this is capability evidence, not a claim that the current turn is actively deferred.
+  if (version === '0.146.0' && verdict === 'in-range') {
+    return {
+      harnessId: CODEX,
+      mechanism: 'native-tool-search',
+      state: 'available',
+      scope: 'mcp-tools',
+      evidenceSource: 'compatibility',
+      reason:
+        'Codex 0.146.0 contains native MCP tool-search deferral; the live model/provider gate is not exposed by the observed app-server catalog, so effective activation is unverified',
+    };
+  }
+
+  return {
+    harnessId: CODEX,
+    mechanism: 'native-tool-search',
+    state: 'unknown',
+    scope: 'mcp-tools',
+    evidenceSource: 'compatibility',
+    reason:
+      'This Codex version is outside the reviewed native tool-deferral evidence; do not infer activation from the legacy tool_search config flag',
+  };
+}
 
 function emptyObservation(
   id: typeof CLAUDE,
@@ -259,7 +294,14 @@ export async function runContext(context: CommandContext): Promise<CommandResult
       report.harnesses.push(observation);
       continue;
     }
-    report.harnesses.push(await adapter.observeContext(harnessContext, report.observedAt));
+    const observation = await adapter.observeContext(harnessContext, report.observedAt);
+    const deferral = nativeToolDeferral(
+      adapter.manifest.id,
+      detection.version,
+      detection.versionVerdict,
+    );
+    if (deferral !== null) observation.toolDeferral = deferral;
+    report.harnesses.push(observation);
   }
 
   const codex = report.harnesses.find((item) => item.harnessId === CODEX);
