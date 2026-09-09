@@ -143,6 +143,24 @@ overwritten or silently adopted, and matching bytes alone never create an owners
 browser remains fully usable without any skill or second AI subscription. See
 [RFC 0023](docs/rfcs/0023-guided-agent-skill-install.md) for the install and ownership boundary.
 
+### Measure context savings
+
+Paired task benchmarks can now report context exposure separately from quality, local tokens, and
+subscription allowance. Capture baseline and optimized variants with the existing benchmark workflow,
+then inspect one pair or the current-project matrix:
+
+```sh
+token-harness benchmark --baseline baseline.json --optimized optimized.json
+token-harness benchmark-matrix
+```
+
+When both variants pass quality and each context surface stays stable from task start to finish, the
+report can show evidence such as **Context: reduced — static MCP tools 62 → 5**. Truncated MCP
+inventory, unknown tool counts, missing observations, or mid-task context drift produce **unknown**
+instead of a saving claim. Context reduction is context-shape evidence only; it is never converted
+into Claude/Codex subscription quota. This evidence is the admission gate for experimental broad
+context owners such as Headroom or Context Mode.
+
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
 schema-1 report; `ui --read-only` opens the legacy read-only dashboard. `ui --no-open` starts

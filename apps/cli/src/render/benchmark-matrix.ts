@@ -2,10 +2,13 @@
  * Human rendering for the empirical paired benchmark matrix.
  *
  * The matrix counts deterministic pair verdicts and keeps evidence classes separate. It never
- * turns backend quota, local tokens, retries and quality into one synthetic score.
+ * turns backend quota, local tokens, context exposure, retries and quality into one synthetic score.
  */
 
 import type {
+  TaskBenchmarkContextMatrixEntry,
+  TaskBenchmarkContextMatrixReport,
+  TaskBenchmarkContextMatrixSummary,
   TaskBenchmarkMatrixEntry,
   TaskBenchmarkMatrixReport,
   TaskBenchmarkMatrixSummary,
@@ -33,6 +36,13 @@ function evidenceLine(summary: TaskBenchmarkMatrixSummary): string {
   );
 }
 
+function contextLine(summary: TaskBenchmarkContextMatrixSummary): string {
+  return (
+    `context — reduced ${String(summary.reduced)}, same ${String(summary.same)}, ` +
+    `increased ${String(summary.increased)}, unknown ${String(summary.unknown)}`
+  );
+}
+
 function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   if (
     summary.localComparablePairs === 0 ||
@@ -49,16 +59,28 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   );
 }
 
-function entryLine(entry: TaskBenchmarkMatrixEntry): string {
+function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixEntry): string {
   const local =
     entry.localTokenSavingPercent === null
       ? ''
       : `; local delta ${percent(entry.localTokenSavingPercent)}`;
-  return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
+  if (!('context' in entry)) {
+    return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
+  }
+  const contextCounts =
+    entry.context.baseline === null || entry.context.optimized === null
+      ? ''
+      : ` ${String(entry.context.baseline.effectiveStaticMcpToolCount)}→${String(
+          entry.context.optimized.effectiveStaticMcpToolCount,
+        )} static tools`;
+  return (
+    `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}; ` +
+    `context ${entry.context.verdict}${contextCounts}`
+  );
 }
 
 export function renderBenchmarkMatrixReport(
-  report: TaskBenchmarkMatrixReport,
+  report: TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport,
   _context: RenderContext,
 ): string {
   const lines: string[] = ['Benchmark matrix — current project', ''];
@@ -81,11 +103,17 @@ export function renderBenchmarkMatrixReport(
     return document(lines);
   }
 
+  const contextReport = 'context' in report ? report : null;
+
   lines.push('', 'By task class');
   for (const summary of report.byTaskClass) {
     lines.push(`  ${summary.taskClass ?? 'all'}`);
     lines.push(...wrap(summaryLine(summary), 4));
     lines.push(...wrap(evidenceLine(summary), 4));
+    const contextSummary = contextReport?.context.byTaskClass.find(
+      (item) => item.taskClass === summary.taskClass,
+    );
+    if (contextSummary !== undefined) lines.push(...wrap(contextLine(contextSummary), 4));
     const local = localLine(summary);
     if (local !== null) lines.push(...wrap(local, 4));
   }
@@ -93,6 +121,7 @@ export function renderBenchmarkMatrixReport(
   lines.push('', 'Overall');
   lines.push(...wrap(summaryLine(report.overall), 2));
   lines.push(...wrap(evidenceLine(report.overall), 2));
+  if (contextReport !== null) lines.push(...wrap(contextLine(contextReport.context.overall), 2));
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
 
@@ -106,6 +135,15 @@ export function renderBenchmarkMatrixReport(
       0,
     ),
   );
+
+  if (contextReport !== null) {
+    lines.push(
+      ...wrap(
+        'Context savings require quality-passed, start-to-finish stable evidence. Context exposure is context-shape evidence only and is not subscription quota.',
+        0,
+      ),
+    );
+  }
 
   return document(lines);
 }

@@ -3,18 +3,19 @@
  *
  * Read-only. This command does not run a harness, mutate configuration, or derive subscription
  * quota from local tokens. It only parses two receipt files and applies the deterministic RFC 0011
- * comparator.
+ * comparator plus the separate context-savings evidence layer.
  */
 
 import {
   EXIT_CODES,
+  addContextToTaskBenchmarkCompareReport,
   commandResult,
   compareTaskBenchmarkReceipts,
   diagnostic,
   parseTaskBenchmarkReceipt,
   type CommandResult,
   type Diagnostic,
-  type TaskBenchmarkCompareReport,
+  type TaskBenchmarkContextCompareReport,
   type TaskBenchmarkReceipt,
 } from '@token-harness/core';
 
@@ -134,7 +135,7 @@ async function readReceipt(
 
 export async function runBenchmark(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkCompareReport | null>> {
+): Promise<CommandResult<TaskBenchmarkContextCompareReport | null>> {
   const baselinePath = context.baselineReceipt ?? null;
   const optimizedPath = context.optimizedReceipt ?? null;
   if (baselinePath === null || optimizedPath === null) {
@@ -180,11 +181,11 @@ export async function runBenchmark(
     });
   }
 
-  const report: TaskBenchmarkCompareReport = {
+  const report = addContextToTaskBenchmarkCompareReport({
     baseline: baseline.receipt,
     optimized: optimized.receipt,
     comparison: compareTaskBenchmarkReceipts(baseline.receipt, optimized.receipt),
-  };
+  });
 
   return commandResult({
     command: 'benchmark',
