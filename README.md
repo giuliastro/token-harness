@@ -1,9 +1,13 @@
 # Token Harness
 
-**Make Claude Code and Codex easier to understand and use efficiently.**
+**Build, verify and measure the best optimization stack for Claude Code and Codex.**
 
-Token Harness checks your coding agents, shows subscription allowance when it can be
-observed reliably, reduces avoidable context overhead, and recommends useful actions.
+Token Harness checks your coding agents, discovers compatible optimization components, prepares
+reviewed setup changes, verifies that integrations are actually active, tracks attributable savings,
+and shows subscription allowance when it can be observed reliably. Specialized optimizers remain
+specialized projects; Token Harness manages the stack around them instead of reimplementing all of
+their algorithms.
+
 It runs locally and never presents local token estimates as subscription quota.
 
 ## Open it. Approve setup. Keep coding.
@@ -28,9 +32,15 @@ provider/version. Token Harness does not install Claude Code or Codex or log you
 
 ### Daily use
 
-Continue launching `claude` or `codex` as usual. Supported output integrations operate in the
-agent, not in the dashboard. You can close the page and its terminal without disabling those
-integrations. Open `token-harness` whenever you want to inspect the current state or results.
+Continue launching `claude` or `codex` as usual. Supported optimization components operate in the
+agent or their own integration layer, not in the dashboard. Once a deterministic component is
+installed, verified and still beneficial, the normal model is **leave it enabled and keep coding**.
+Token Harness does not need to stay open and does not need to decide before every command whether an
+optimizer should run.
+
+Open `token-harness` when you want to inspect the stack, savings, allowance, health, compatibility or
+updates. Re-evaluation is useful when a harness/component changes version, verification fails,
+measured value deteriorates, workload shape changes materially, or you explicitly ask for a review.
 
 The app **does not perform periodic full dashboard reloads**. A full read happens on initial open
 or when you choose **Refresh data**. Existing readings remain visible while a refresh runs, and
@@ -77,6 +87,33 @@ A saved Claude effort can be displayed even on an unreviewed CLI version. That d
 admit automatic writes on that version. **No saved preference** means the user field is
 absent, not that reasoning is disabled. A failed read is a separate state with a cause.
 The displayed preference is not a live reading of an already-running session.
+
+### The optimization stack is the product
+
+Token Harness is not trying to rebuild RTK, Caveman, Headroom or every other strong specialized
+optimizer inside one repository. A healthy external project should normally keep evolving with its
+own contributors; Token Harness provides a thin integration around discovery, compatibility,
+installation/configuration, verification, measurement, updates and rollback.
+
+The target lifecycle is:
+
+```text
+discover -> evaluate -> recommend -> install/configure -> verify -> measure
+         -> monitor -> update/re-evaluate -> rollback/uninstall
+```
+
+For deterministic low-risk optimizers, runtime orchestration is intentionally boring: install once,
+leave enabled, and re-evaluate only when evidence or the environment changes. Dynamic policy remains
+a smaller secondary layer for cases where the optimum really depends on task/allowance state, such
+as reasoning/model/verbosity or explicit cross-harness workload scheduling.
+
+The current UI still exposes these capabilities through **Dashboard / Policies / Evidence**. The
+product direction is to make **Your optimization stack** the primary object: component, version,
+health, verification state, measured value, quality confidence, update status and only the next
+action that is actually useful.
+
+See [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) for the architecture and
+[optimizer priorities](docs/optimizer-priorities.md) for candidate-selection rules.
 
 ### The policies are visible
 
@@ -127,17 +164,17 @@ The long CLI flag combinations are **not** the normal human interface. They are 
 used by the app, automation, and optionally by a coding harness. Humans can keep using the browser
 and the two entry points above.
 
-For in-session use, this repository now includes a portable Agent Skill at
+For in-session use, this repository includes a portable Agent Skill at
 [`skills/token-harness/SKILL.md`](skills/token-harness/SKILL.md). A compatible Claude Code or Codex
 skill mechanism can load it on demand, after which you can simply ask the harness to **use Token
 Harness for this task**. The skill classifies substantial work conservatively, calls the existing
 local `--json` optimizer at meaningful task boundaries, and can use explicit workload scheduling
 when you have actually supplied a backlog. It does not run Token Harness before every tool call.
 
-The skill is deliberately thin: Token Harness remains the deterministic policy engine. No MCP
-server, background model, persistent agent, or second quota formula is added just to make this work.
-Local tokens are still not subscription quota, and raw Claude/Codex percentages are still not a
-common currency.
+The skill is deliberately thin: Token Harness remains the deterministic stack/evidence controller.
+No MCP server, background model, persistent agent, or second quota formula is added just to make
+this work. Local tokens are still not subscription quota, and raw Claude/Codex percentages are still
+not a common currency.
 
 Agent use is read-only by default. If Token Harness recommends a persistent model, reasoning, or
 verbosity change, the harness must first build a reviewed plan, explain the exact proposed mutation,
@@ -178,9 +215,9 @@ compute. Positive allowance savings are not credited when paired quality evidenc
 shows a regression. API money remains **not measured** until billed input/output tokens and a
 verified model-price basis exist.
 
-This evidence is also the admission gate for experimental context optimizers such as mcptoon,
-Headroom and other candidates. Upstream benchmark numbers are never copied directly into a user's
-savings total.
+This evidence is also the admission gate for candidate optimization components. Upstream benchmark
+numbers are never copied directly into a user's savings total, and independently useful components
+are not assumed to compose safely until the combined stack is measured.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
@@ -267,39 +304,49 @@ See [RFC 0013](docs/rfcs/0013-guided-local-experience.md) for the local browser 
 
 ## Optimization and evidence tools
 
-Integration priority is based on **marginal useful-work savings**, quality risk, attribution,
-coverage and reversibility — not on the biggest upstream marketing percentage. The baseline is the
-current native Claude Code/Codex behavior plus the optimizers already active for that user.
+Token Harness should integrate the strongest useful optimization technologies rather than
+reimplement them. Priority is based on **marginal quality-safe value over the user's actual current
+stack**, not on the largest upstream marketing percentage or the order in which a project was
+suggested.
 
-| Priority | Tool / policy | Purpose | Current status |
+### Supported stack components
+
+| Component | Purpose | Management |
+| --- | --- | --- |
+| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Supported on reviewed combinations; normally install once and leave enabled |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Supported on reviewed combinations; first-party project |
+| [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only evidence; never installed automatically |
+| [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
+
+### Candidate categories
+
+| Research tier | Waste surface | Candidate examples | Decision |
 | --- | --- | --- | --- |
-| **P0** | **Native adaptive reasoning / verbosity policy** | Avoid overspending thinking/output on simple work while protecting difficult tasks | Supported foundation; next evidence-backed policy expansion |
-| P0 | [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Supported for reviewed combinations |
-| P0 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Supported for reviewed combinations |
-| **P1 research** | **Repository-exploration reduction** — [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp), [CodeGraph](https://github.com/colbymchenry/codegraph), native baseline | Reduce repeated grep/read/discovery work before it enters context | Highest-priority external mechanism class to compare; no winner selected |
-| **P1 conditional** | **MCP discovery/schema reduction** — native Tool Search/deferred tools, [mcptoon](https://github.com/activeing123/mcptoon), [mcp-compressor](https://github.com/atlassian-labs/mcp-compressor) | Reduce static MCP schema exposure | mcptoon detection is read-only; no external MCP optimizer selected until it beats the installed native baseline |
-| P2 research | [Headroom](https://github.com/headroomlabs-ai/headroom) / Context Mode-class owners | Broad context ownership, virtualization or compression | Admission-gated; high overlap/complexity |
-| P2 research | Result-side encoders/compressors | Reduce MCP/tool result payload | Must beat RTK/HarnessTrim on marginal quality-safe value; no default stacking |
-| P0 evidence | [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
-| P0 evidence | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
+| **P1** | **Third distinct stack mechanism** | best candidate from the categories below | No winner selected. Must prove material marginal value, quality safety and a real managed/adopted lifecycle. |
+| P1 | Repository exploration/retrieval | code graph/index/memory approaches vs native grep/read | Compare exact source correctness, tool calls/context and indexing/startup cost. |
+| P1 | MCP schema/discovery | native Tool Search/deferred loading, [mcptoon](https://github.com/activeing123/mcptoon), [mcp-compressor](https://github.com/atlassian-labs/mcp-compressor) class | mcptoon detection is read-only only; an external layer must beat the installed native baseline. |
+| P1 | Context/prompt/output minimization | Caveman-class and other maintained specialized projects | Compare changed surface, overlap with RTK/HarnessTrim, quality and marginal value. |
+| P2 | Broad context ownership | [Headroom](https://github.com/headroomlabs-ai/headroom) / Context Mode-class systems | Strong admission gate; high potential but higher overlap/complexity. |
+| P2 | Result-side encoding/compression | TOON/result encoders and similar tools | No compression cascade by default; must add value after current reducers. |
+| P2 | Native model/reasoning/verbosity | supported Claude/Codex controls | Secondary Token Harness policy layer; dynamic switching only where task/allowance evidence justifies it. |
 
-mcptoon is therefore **a candidate, not the chosen third integration**. Its read-only detection is
-useful, but modern harnesses can already defer/search MCP tools; Token Harness must measure the
-remaining tax in the actual harness/model/provider before an external MCP layer can be recommended.
-The same benchmark set should compare alternative implementations such as mcp-compressor rather
-than privileging whichever project was evaluated first.
+A candidate can be **detected** without being selected. Detection is cheap knowledge, not an
+integration commitment. The third mechanism required before broad promotion is intentionally unnamed
+until comparative Token Harness evidence selects it.
 
-Repository exploration is currently the more interesting external mechanism class because it
-attacks a distinct cost: repeated code discovery and file reads before output reducers can help.
-Graph/index approaches still have to prove exact source correctness, quality, startup/indexing cost,
-long-session residual context and provider-level savings under Token Harness-controlled paired tests.
+For an admitted deterministic component the default operating model is:
 
-The third mechanism required before broad promotion is intentionally **not named in advance**. It can
-be the native adaptive policy, a repository-exploration optimizer, an MCP optimizer, or a later
-candidate — whichever wins on measured marginal quality-safe value.
+```text
+install/configure -> verify -> measure -> keep enabled -> monitor -> re-evaluate on change
+```
 
-See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the evaluation criteria,
-capability-ownership rule and promotion gate.
+Token Harness should not continuously toggle an optimizer that is consistently safe and beneficial.
+The product value is assembling and maintaining the best stack, measuring what it actually does, and
+knowing when a change/update is worth making.
+
+See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the research queue and ranking
+rules, [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) for the product architecture, and
+[docs/release-readiness.md](docs/release-readiness.md) for the promotion gate.
 
 A provider you installed yourself remains yours. Token Harness can adopt observable
 configuration without claiming ownership of the executable.
@@ -516,8 +563,12 @@ pnpm package
 pnpm smoke:install
 ```
 
-Read [PLAN.md](PLAN.md), [docs/optimizer-priorities.md](docs/optimizer-priorities.md), and the
-accepted [RFCs](docs/rfcs) before changing public behavior or architecture.
+Read [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),
+[docs/optimizer-priorities.md](docs/optimizer-priorities.md),
+[docs/release-readiness.md](docs/release-readiness.md), [PLAN.md](PLAN.md), and the accepted
+[RFCs](docs/rfcs) before changing public behavior or architecture. `PLAN.md` records the greenfield
+implementation history; RFC 0027 is the current product-direction clarification when older
+"orchestration" language is broader than the intended operating model.
 
 ## License
 
