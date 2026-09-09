@@ -82,17 +82,14 @@ test('runtime-proven deferral reduces effective static exposure without erasing 
 test('a smaller external meta-tool surface is recorded as context reduction, not quota evidence', () => {
   const baseline = taskBenchmarkContextSnapshot(observation([mcp('inventory', 62)]));
   const optimized = taskBenchmarkContextSnapshot(
-    observation(
-      [mcp('context-owner', 5)],
-      {
-        harnessId: CODEX,
-        mechanism: 'external',
-        state: 'inactive',
-        scope: 'tool-catalog',
-        evidenceSource: 'native-rpc',
-        reason: 'fixture exposes five meta-tools eagerly',
-      },
-    ),
+    observation([mcp('context-owner', 5)], {
+      harnessId: CODEX,
+      mechanism: 'external',
+      state: 'inactive',
+      scope: 'tool-catalog',
+      evidenceSource: 'native-rpc',
+      reason: 'fixture exposes five meta-tools eagerly',
+    }),
   );
 
   const comparison = compareTaskBenchmarkContextSnapshots(baseline, optimized);
