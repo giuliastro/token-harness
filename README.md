@@ -178,8 +178,9 @@ compute. Positive allowance savings are not credited when paired quality evidenc
 shows a regression. API money remains **not measured** until billed input/output tokens and a
 verified model-price basis exist.
 
-This evidence is also the admission gate for experimental context optimizers such as **mcptoon**
-and Headroom. Upstream benchmark numbers are never copied directly into a user's savings total.
+This evidence is also the admission gate for experimental context optimizers such as mcptoon,
+Headroom and other candidates. Upstream benchmark numbers are never copied directly into a user's
+savings total.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
@@ -266,28 +267,39 @@ See [RFC 0013](docs/rfcs/0013-guided-local-experience.md) for the local browser 
 
 ## Optimization and evidence tools
 
-Integration priority is based on **marginal useful-work savings**, quality risk, attribution and
-reversibility — not on the biggest upstream marketing percentage.
+Integration priority is based on **marginal useful-work savings**, quality risk, attribution,
+coverage and reversibility — not on the biggest upstream marketing percentage. The baseline is the
+current native Claude Code/Codex behavior plus the optimizers already active for that user.
 
 | Priority | Tool / policy | Purpose | Current status |
 | --- | --- | --- | --- |
-| P0 | Native reasoning / verbosity policy | Avoid overspending reasoning on simple work while protecting difficult tasks | Supported |
+| **P0** | **Native adaptive reasoning / verbosity policy** | Avoid overspending thinking/output on simple work while protecting difficult tasks | Supported foundation; next evidence-backed policy expansion |
 | P0 | [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Supported for reviewed combinations |
 | P0 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Supported for reviewed combinations |
-| **P1** | **[mcptoon](https://github.com/activeing123/mcptoon)** | **Remove the static MCP tool-schema context tax before work begins** | **Next integration candidate; detection/benchmark first, no silent `sync`** |
-| P2 | [Headroom](https://github.com/headroomlabs-ai/headroom) | Broad context ownership/compression | Detected as benchmark candidate; admission-gated |
-| P2 | mcptoon result encoding / per-tool policy | Reduce MCP call-result payload | Later experiment; must beat overlapping reducers on marginal quality-safe savings |
+| **P1 research** | **Repository-exploration reduction** — [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp), [CodeGraph](https://github.com/colbymchenry/codegraph), native baseline | Reduce repeated grep/read/discovery work before it enters context | Highest-priority external mechanism class to compare; no winner selected |
+| **P1 conditional** | **MCP discovery/schema reduction** — native Tool Search/deferred tools, [mcptoon](https://github.com/activeing123/mcptoon), [mcp-compressor](https://github.com/atlassian-labs/mcp-compressor) | Reduce static MCP schema exposure | mcptoon detection is read-only; no external MCP optimizer selected until it beats the installed native baseline |
+| P2 research | [Headroom](https://github.com/headroomlabs-ai/headroom) / Context Mode-class owners | Broad context ownership, virtualization or compression | Admission-gated; high overlap/complexity |
+| P2 research | Result-side encoders/compressors | Reduce MCP/tool result payload | Must beat RTK/HarnessTrim on marginal quality-safe value; no default stacking |
 | P0 evidence | [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
 | P0 evidence | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
 
-For MCP-heavy users, mcptoon is deliberately ahead of broad context owners because tool-schema
-exposure can be a large recurring cost and is a distinct optimization phase. Token Harness will
-first detect it read-only, measure the current MCP/context tax, benchmark compact discovery against
-the native surface and require paired quality evidence before recommending activation. Result-side
-TOON compression is separate because it can overlap with RTK, HarnessTrim or a broad context owner.
+mcptoon is therefore **a candidate, not the chosen third integration**. Its read-only detection is
+useful, but modern harnesses can already defer/search MCP tools; Token Harness must measure the
+remaining tax in the actual harness/model/provider before an external MCP layer can be recommended.
+The same benchmark set should compare alternative implementations such as mcp-compressor rather
+than privileging whichever project was evaluated first.
 
-See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the current integration order,
-capability-ownership rule and stable-release promotion gate.
+Repository exploration is currently the more interesting external mechanism class because it
+attacks a distinct cost: repeated code discovery and file reads before output reducers can help.
+Graph/index approaches still have to prove exact source correctness, quality, startup/indexing cost,
+long-session residual context and provider-level savings under Token Harness-controlled paired tests.
+
+The third mechanism required before broad promotion is intentionally **not named in advance**. It can
+be the native adaptive policy, a repository-exploration optimizer, an MCP optimizer, or a later
+candidate — whichever wins on measured marginal quality-safe value.
+
+See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the evaluation criteria,
+capability-ownership rule and promotion gate.
 
 A provider you installed yourself remains yours. Token Harness can adopt observable
 configuration without claiming ownership of the executable.
