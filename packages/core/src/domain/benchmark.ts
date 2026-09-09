@@ -7,6 +7,10 @@
  */
 
 import type { UsageConfidence, UsageWindowSnapshot } from './budget.js';
+import {
+  parseTaskBenchmarkContextSnapshot,
+  type TaskBenchmarkContextSnapshot,
+} from './benchmark-context.js';
 import type { BenchmarkPolicySnapshot } from './context-cost.js';
 import type { SessionHistoryRow } from './history.js';
 import { isHarnessId, type HarnessId } from './ids.js';
@@ -77,6 +81,10 @@ export interface TaskBenchmarkReceipt {
   completedAt: string;
   usageBefore: UsageWindowSnapshot[];
   usageAfter: UsageWindowSnapshot[];
+  /** Additive schema-1 context witness. Inventory/exposure is not subscription quota. */
+  contextAtStart?: TaskBenchmarkContextSnapshot | null;
+  /** Additive schema-1 context witness captured at task completion. */
+  contextAtFinish?: TaskBenchmarkContextSnapshot | null;
   /** Local token volume is evidence about workload, not backend subscription quota. */
   localUsage: TaskLocalUsage | null;
   outcome: TaskBenchmarkOutcome;
@@ -97,6 +105,8 @@ export interface TaskBenchmarkCapture {
   verbosity: string | null;
   startedAt: string;
   usageBefore: UsageWindowSnapshot[];
+  /** Additive schema-1 context witness captured before the task starts. */
+  contextAtStart?: TaskBenchmarkContextSnapshot | null;
   /**
    * Cumulative ccusage session counters at start, or null when local history was unavailable.
    *
@@ -417,6 +427,10 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
   const usageBefore = parseUsageWindows(row['usageBefore']);
   const parsedLocalSessions = parseLocalSessionSnapshots(row['localSessionsBefore']);
   const localSessionsBefore = parsedLocalSessions === undefined ? null : parsedLocalSessions;
+  const hasContextAtStart = Object.hasOwn(row, 'contextAtStart');
+  const contextAtStart = hasContextAtStart
+    ? parseTaskBenchmarkContextSnapshot(row['contextAtStart'])
+    : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -434,7 +448,8 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
     verbosity === undefined ||
     !validInstant(startedAt) ||
     usageBefore === null ||
-    parsedLocalSessions === undefined
+    parsedLocalSessions === undefined ||
+    (hasContextAtStart && contextAtStart === undefined)
   ) {
     return {
       ok: false,
@@ -457,6 +472,7 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
       verbosity,
       startedAt,
       usageBefore,
+      ...(hasContextAtStart ? { contextAtStart: contextAtStart ?? null } : {}),
       localSessionsBefore,
     },
   };
@@ -491,6 +507,14 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   const outcome = parseOutcome(row['outcome']);
   const hasBoundaryPolicy = Object.hasOwn(row, 'policyAtFinish');
   const policyAtFinish = hasBoundaryPolicy ? parseBoundaryPolicy(row['policyAtFinish']) : undefined;
+  const hasContextAtStart = Object.hasOwn(row, 'contextAtStart');
+  const contextAtStart = hasContextAtStart
+    ? parseTaskBenchmarkContextSnapshot(row['contextAtStart'])
+    : undefined;
+  const hasContextAtFinish = Object.hasOwn(row, 'contextAtFinish');
+  const contextAtFinish = hasContextAtFinish
+    ? parseTaskBenchmarkContextSnapshot(row['contextAtFinish'])
+    : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -511,7 +535,9 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
     usageAfter === null ||
     localUsage === undefined ||
     outcome === null ||
-    (hasBoundaryPolicy && policyAtFinish === undefined)
+    (hasBoundaryPolicy && policyAtFinish === undefined) ||
+    (hasContextAtStart && contextAtStart === undefined) ||
+    (hasContextAtFinish && contextAtFinish === undefined)
   ) {
     return {
       ok: false,
@@ -537,6 +563,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
       usageAfter,
       localUsage,
       outcome,
+      ...(hasContextAtStart ? { contextAtStart: contextAtStart ?? null } : {}),
+      ...(hasContextAtFinish ? { contextAtFinish: contextAtFinish ?? null } : {}),
       ...(hasBoundaryPolicy ? { policyAtFinish: policyAtFinish ?? null } : {}),
     },
   };
@@ -550,6 +578,7 @@ export interface CompleteTaskBenchmarkCaptureInput {
   failedAttempts: number;
   errorCodes?: string[];
   localUsage?: TaskLocalUsage | null;
+  contextAtFinish?: TaskBenchmarkContextSnapshot | null;
   policyAtFinish?: BenchmarkPolicySnapshot | null;
 }
 
@@ -571,6 +600,8 @@ export function completeTaskBenchmarkCapture(
     usageBefore: capture.usageBefore,
     usageAfter: input.usageAfter,
     localUsage: input.localUsage ?? null,
+    ...(capture.contextAtStart !== undefined ? { contextAtStart: capture.contextAtStart } : {}),
+    ...(input.contextAtFinish !== undefined ? { contextAtFinish: input.contextAtFinish } : {}),
     ...(input.policyAtFinish !== undefined ? { policyAtFinish: input.policyAtFinish } : {}),
     outcome: {
       qualityGate: input.qualityGate,

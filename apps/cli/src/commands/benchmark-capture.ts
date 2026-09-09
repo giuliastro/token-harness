@@ -18,6 +18,7 @@ import {
   isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
   snapshotTaskLocalSessions,
+  taskBenchmarkContextSnapshot,
   type CommandResult,
   type HarnessId,
   type TaskBenchmarkCapture,
@@ -202,9 +203,11 @@ export async function runBenchmarkStart(
     runHistory({ ...observedContext, since: '1d', until: null }),
   ]);
   const budget = budgetResult.data?.harnesses.find((item) => item.harnessId === harness);
-  const policy = benchmarkPolicySnapshot(
-    contextResult.data?.harnesses.find((item) => item.harnessId === harness),
+  const contextObservation = contextResult.data?.harnesses.find(
+    (item) => item.harnessId === harness,
   );
+  const policy = benchmarkPolicySnapshot(contextObservation);
+  const contextAtStart = taskBenchmarkContextSnapshot(contextObservation);
   const localSessionsBefore =
     historyResult.data?.source.state === 'available'
       ? snapshotTaskLocalSessions(historyResult.data.sessions)
@@ -222,6 +225,7 @@ export async function runBenchmarkStart(
     verbosity: policy?.verbosity ?? null,
     startedAt,
     usageBefore: budget?.windows ?? [],
+    contextAtStart,
     localSessionsBefore,
   };
 
@@ -449,6 +453,9 @@ export async function runBenchmarkFinish(
         )
       : null;
 
+  const finishContextObservation = contextResult.data?.harnesses.find(
+    (item) => item.harnessId === parsed.capture.harnessId,
+  );
   const completed = completeTaskBenchmarkCapture(parsed.capture, {
     completedAt,
     usageAfter: budget?.windows ?? [],
@@ -456,9 +463,8 @@ export async function runBenchmarkFinish(
     attempts,
     failedAttempts,
     localUsage,
-    policyAtFinish: benchmarkPolicySnapshot(
-      contextResult.data?.harnesses.find((item) => item.harnessId === parsed.capture.harnessId),
-    ),
+    contextAtFinish: taskBenchmarkContextSnapshot(finishContextObservation),
+    policyAtFinish: benchmarkPolicySnapshot(finishContextObservation),
   });
   if (!completed.ok) {
     return commandResult({
