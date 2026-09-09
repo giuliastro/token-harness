@@ -101,7 +101,9 @@ test('a smaller external meta-tool surface is recorded as context reduction, not
 
 test('context comparison fails closed when either MCP inventory is incomplete', () => {
   const complete = taskBenchmarkContextSnapshot(observation([mcp('inventory', 62)]));
-  const unknown = taskBenchmarkContextSnapshot(observation([mcp('inventory', 5), mcp('unknown', null)]));
+  const unknown = taskBenchmarkContextSnapshot(
+    observation([mcp('inventory', 5), mcp('unknown', null)]),
+  );
   const truncated = taskBenchmarkContextSnapshot(observation([mcp('inventory', 5)], null, true));
 
   const unknownComparison = compareTaskBenchmarkContextSnapshots(complete, unknown);
