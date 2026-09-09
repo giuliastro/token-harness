@@ -1,18 +1,22 @@
 /** Guided product workflow. Only fixed commands reach the existing transaction engine. */
-import type {
-  ApplyReport,
-  BudgetReport,
-  CliEnvelope,
-  ContextReport,
-  HarnessContextObservation,
-  Diagnostic,
-  DoctorReport,
-  MetricsReport,
-  PlanReport,
-  PlannedAction,
-  StatusReport,
-  TaskBenchmarkContextMatrixReport,
-  VerifyReport,
+import {
+  buildOptimizationStack,
+  providerId,
+  type ApplyReport,
+  type BudgetReport,
+  type CliEnvelope,
+  type ContextReport,
+  type HarnessContextObservation,
+  type Diagnostic,
+  type DoctorReport,
+  type MetricsReport,
+  type OptimizationComponentDescriptor,
+  type OptimizationStackSnapshot,
+  type PlanReport,
+  type PlannedAction,
+  type StatusReport,
+  type TaskBenchmarkContextMatrixReport,
+  type VerifyReport,
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
@@ -116,6 +120,7 @@ export interface GuideSavings {
 export interface GuideOverview {
   generatedAt: string;
   agents: GuideAgent[];
+  stack: OptimizationStackSnapshot;
   savings: GuideSavings;
   value: GuideValueEvidence;
   rules: GuideRule[];
@@ -135,6 +140,7 @@ export interface GuideResult {
   title: string;
   messages: string[];
   appliedPlans: number;
+  stack?: OptimizationStackSnapshot;
 }
 export interface GuideActivity {
   at: string;
@@ -148,6 +154,16 @@ interface Approval {
   description: string;
   operation: 'apply' | 'rollback';
   network: boolean;
+}
+interface GuideStackBase {
+  detections: DoctorReport['providers'];
+  metrics: MetricsReport | null;
+  drift: StatusReport['drift'];
+  fingerprint: string;
+}
+interface GuideVerificationEvidence {
+  fingerprint: string;
+  report: VerifyReport;
 }
 export class GuideError extends Error {
   readonly status: number;
@@ -165,6 +181,18 @@ const NAMES: Readonly<Record<string, string>> = {
 const name = (id: string): string => NAMES[id] ?? id;
 const TASKS = new Set(['mechanical', 'standard', 'hard', 'critical']);
 const PERIODS = new Set(['all', '7d', '30d']);
+const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
+  {
+    providerId: providerId('rtk'),
+    displayName: 'RTK',
+    category: 'command-output-reduction',
+  },
+  {
+    providerId: providerId('harnesstrim'),
+    displayName: 'HarnessTrim',
+    category: 'command-output-reduction',
+  },
+];
 const ISSUE_COPY: Readonly<Record<string, string>> = {
   'cclimits-not-installed':
     'Claude allowance needs the optional cclimits companion. Output optimization does not depend on the allowance meter.',
@@ -210,6 +238,29 @@ export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: 
   if (diagnostics.some((entry) => /drift|mismatch|precondition|conflict/.test(entry.code)))
     return 'Something changed since the preview. No unsafe change was made. Review the current setup again.';
   return fallback;
+}
+
+function stackFingerprint(report: DoctorReport): string {
+  const harnesses = report.harnesses
+    .filter((item) => item.harnessId === 'claude' || item.harnessId === 'codex')
+    .map((item) => ({
+      id: item.harnessId,
+      state: item.state,
+      version: item.version,
+      versionVerdict: item.versionVerdict,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const providers = report.providers
+    .map((item) => ({
+      id: item.providerId,
+      state: item.state,
+      version: item.version,
+      versionVerdict: item.versionVerdict,
+      managedByTokenHarness: item.managedByTokenHarness,
+      configuredHarnesses: [...item.configuredHarnesses].sort(),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  return JSON.stringify({ harnesses, providers });
 }
 
 /** JSON is parsed before exit codes; a refused change is still a meaningful report. */
@@ -632,6 +683,8 @@ export class GuideService {
   private lastApplied: { plan: string; network: boolean } | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
+  private stackBase: GuideStackBase | null = null;
+  private verification: GuideVerificationEvidence | null = null;
   private readonly activity: GuideActivity[] = [];
   private readonly call: GuideCall;
   private readonly now: () => number;
@@ -667,15 +720,34 @@ export class GuideService {
     this.activity.unshift({ at: new Date(this.now()).toISOString(), message, state });
     this.activity.splice(30);
   }
-  async overview(period: GuidePeriod = 'all'): Promise<GuideOverview> {
+  private stackSnapshot(): OptimizationStackSnapshot {
+    const base = this.stackBase;
+    return buildOptimizationStack({
+      components: STACK_COMPONENTS,
+      detections: base?.detections ?? [],
+      verification:
+        base !== null && this.verification?.fingerprint === base.fingerprint
+          ? this.verification.report
+          : null,
+      metrics: base?.metrics ?? null,
+      unattributedDrift: base?.drift ?? [],
+    });
+  }
+  private invalidateObservedState(): void {
+    this.cached = null;
+    this.stackBase = null;
+    this.verification = null;
+  }
+  async overview(period: GuidePeriod = 'all', force = false): Promise<GuideOverview> {
     if (!PERIODS.has(period)) throw new GuideError(400, 'Choose all history, 7 days or 30 days.');
+    if (force) this.cached = null;
     if (this.busy && this.cached !== null) return this.cached.value;
     if (this.busy) throw new GuideError(409, 'A reviewed change is in progress.');
     if (this.cached?.period === period && this.now() - this.cached.at < 15_000)
       return this.cached.value;
     if (this.reading !== null) {
       await this.reading;
-      return this.overview(period);
+      return this.overview(period, force);
     }
     this.reading = this.collect(period);
     try {
@@ -808,9 +880,19 @@ export class GuideService {
       notices.push(
         'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
       );
+    this.stackBase =
+      doctor.data === null
+        ? null
+        : {
+            detections: [...doctor.data.providers],
+            metrics: metrics.data,
+            drift: [...(status.data?.drift ?? [])],
+            fingerprint: stackFingerprint(doctor.data),
+          };
     return {
       generatedAt: new Date(this.now()).toISOString(),
       agents,
+      stack: this.stackSnapshot(),
       savings: savingsView(metrics.data, period),
       value: guidedValueEvidence(benchmark.data),
       rules: [...SAFETY_RULES, ...TASK_RULES],
@@ -1081,7 +1163,7 @@ export class GuideService {
         try {
           result = await this.call<ApplyReport>([approval.operation, '--plan', plan, '--yes']);
         } catch {
-          this.cached = null;
+          this.invalidateObservedState();
           const message =
             'The operation stopped before its final result could be read. No automatic retry was made. Refresh and check the integration before making another change.';
           this.record(message, 'attention');
@@ -1109,7 +1191,7 @@ export class GuideService {
                     'The change was not applied. Review a fresh preview; your safety checks were not bypassed.',
                   );
           messages.push(message);
-          this.cached = null;
+          this.invalidateObservedState();
           this.record(message, 'attention');
           return {
             ok: false,
@@ -1125,7 +1207,7 @@ export class GuideService {
         this.lastApplied =
           approval.operation === 'rollback' ? null : { plan, network: approval.network };
       }
-      this.cached = null;
+      this.invalidateObservedState();
       messages.push(
         approval.operation === 'rollback'
           ? 'The reviewed backup was restored. Reopen the affected coding agent.'
@@ -1150,6 +1232,7 @@ export class GuideService {
     return this.exclusive(async () => {
       this.record('Checking the configured integrations without changing them.', 'working');
       const messages: string[] = [];
+      const results: VerifyReport['results'] = [];
       let ok = true;
       const inventory = await this.call<DoctorReport>(['doctor']);
       const present = (inventory.data?.harnesses ?? []).filter(
@@ -1170,6 +1253,7 @@ export class GuideService {
         const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
         const healthy = result.data?.healthyAtDeclaredTier === true;
         if (!healthy) ok = false;
+        if (result.data !== null) results.push(...result.data.results);
         messages.push(
           `${name(harness)}: ${
             healthy
@@ -1181,12 +1265,33 @@ export class GuideService {
           }`,
         );
       }
-      this.cached = null;
+      if (inventory.data !== null) {
+        const fingerprint = stackFingerprint(inventory.data);
+        this.verification = {
+          fingerprint,
+          report: {
+            receiptId: null,
+            appliedAt: null,
+            results,
+            healthyAtDeclaredTier: ok,
+          },
+        };
+        this.stackBase = {
+          detections: [...inventory.data.providers],
+          metrics: this.stackBase?.metrics ?? null,
+          drift: this.stackBase?.drift ?? [],
+          fingerprint,
+        };
+      } else {
+        this.verification = null;
+      }
+      const stack = this.stackSnapshot();
+      if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record(
         'Integration checks completed. No settings changed.',
         ok ? 'success' : 'attention',
       );
-      return { ok, title: 'Integration checks', messages, appliedPlans: 0 };
+      return { ok, title: 'Integration checks', messages, appliedPlans: 0, stack };
     });
   }
 }
