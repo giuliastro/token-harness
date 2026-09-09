@@ -84,11 +84,11 @@ function allowanceEvidence(
   });
   const rawMedian = median(deltas);
   const savedPercent = rawMedian === null ? null : roundOne(rawMedian);
-  const blocked =
-    savedPercent !== null && savedPercent > 0 && quality.state !== 'preserved';
+  const blocked = savedPercent !== null && savedPercent > 0 && quality.state !== 'preserved';
 
   return {
-    state: savedPercent === null ? 'not-measured' : blocked ? 'blocked-by-quality' : 'measured',
+    state:
+      savedPercent === null ? 'not-measured' : blocked ? 'blocked-by-quality' : 'measured',
     scope,
     savedPercent,
     equivalentMinutes:
