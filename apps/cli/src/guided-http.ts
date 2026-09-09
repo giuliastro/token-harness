@@ -13,6 +13,9 @@ export const GUIDE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'Cross-Origin-Resource-Policy': 'same-origin',
   'X-Frame-Options': 'DENY',
 };
+
+const OVERVIEW_CACHE_MS = 5 * 60_000;
+
 function equalToken(value: string | string[] | undefined, expected: string): boolean {
   if (typeof value !== 'string' || value.length !== expected.length) return false;
   const actual = Buffer.from(value);
@@ -38,11 +41,14 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
     throw new GuideError(400, 'Invalid request. Refresh the page and try again.');
   }
 }
+
 export function createGuideHandler(input: {
   service: GuideService;
   token: string;
   authority: () => string;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
+  const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
+
   return async (request, response) => {
     const send = (status: number, body: string, type = 'application/json; charset=utf-8'): void => {
       response.writeHead(status, { ...GUIDE_SECURITY_HEADERS, 'Content-Type': type });
@@ -87,7 +93,16 @@ export function createGuideHandler(input: {
           const period = url.searchParams.get('period') ?? 'all';
           if (!['all', '7d', '30d'].includes(period))
             throw new GuideError(400, 'Unknown reporting period.');
-          send(200, JSON.stringify(await input.service.overview(period as GuidePeriod)));
+          const guidePeriod = period as GuidePeriod;
+          const force = url.searchParams.get('refresh') === '1';
+          const cached = overviewCache.get(guidePeriod);
+          if (!force && cached !== undefined && Date.now() - cached.at < OVERVIEW_CACHE_MS) {
+            send(200, cached.body);
+            return;
+          }
+          const body = JSON.stringify(await input.service.overview(guidePeriod));
+          overviewCache.set(guidePeriod, { at: Date.now(), body });
+          send(200, body);
           return;
         }
         send(404, '{"error":"Not found"}');
@@ -105,7 +120,9 @@ export function createGuideHandler(input: {
         return;
       }
       if (url.pathname === '/api/apply') {
-        send(200, JSON.stringify(await input.service.apply(body)));
+        const result = await input.service.apply(body);
+        overviewCache.clear();
+        send(200, JSON.stringify(result));
         return;
       }
       if (url.pathname === '/api/verify') {
@@ -116,7 +133,9 @@ export function createGuideHandler(input: {
           Object.keys(body).length !== 0
         )
           throw new GuideError(400, 'No command parameters are accepted.');
-        send(200, JSON.stringify(await input.service.verify()));
+        const result = await input.service.verify();
+        overviewCache.clear();
+        send(200, JSON.stringify(result));
         return;
       }
       send(404, '{"error":"Not found"}');
