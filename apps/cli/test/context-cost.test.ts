@@ -145,6 +145,16 @@ describe('context-cost command', () => {
     assert.equal(result.data.instructionHierarchy[0]?.nestedProjectHierarchy, true);
     assert.equal(result.data.instructionHierarchy[0]?.monolithicProjectInstructions, false);
     assert.equal(result.data.instructionHierarchy[0]?.distinctProjectDirectories, 2);
+    assert.equal(result.data.harnesses[0]?.toolSearchEnabled, null);
+    assert.deepEqual(result.data.harnesses[0]?.toolDeferral, {
+      harnessId: 'codex',
+      mechanism: 'native-tool-search',
+      state: 'available',
+      scope: 'mcp-tools',
+      evidenceSource: 'compatibility',
+      reason:
+        'Codex 0.146.0 contains native MCP tool-search deferral; the live model/provider gate is not exposed by the observed app-server catalog, so effective activation is unverified',
+    });
     assert.deepEqual(result.data.harnesses[0]?.managedConfigTarget, {
       harnessId: 'codex',
       scope: 'user',

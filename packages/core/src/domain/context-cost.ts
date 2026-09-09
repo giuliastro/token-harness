@@ -13,6 +13,23 @@ import type { NativeConfigurationEnvironment } from './process.js';
 export type ContextObservationState = 'observed' | 'partial' | 'unavailable' | 'absent';
 export type ContextObservationSource = 'native-rpc' | 'native-cli' | 'filesystem';
 
+export type ToolDeferralState = 'active' | 'available' | 'inactive' | 'unknown';
+
+/**
+ * Read-only evidence about a mechanism that can keep tool schemas out of the model-visible
+ * surface until they are needed. `available` means the reviewed harness build contains the
+ * mechanism but Token Harness cannot prove the live model/provider gate; it is deliberately not
+ * a synonym for `active`.
+ */
+export interface ToolDeferralObservation {
+  harnessId: HarnessId;
+  mechanism: 'native-tool-search' | 'native-defer-loading' | 'external';
+  state: ToolDeferralState;
+  scope: 'mcp-tools' | 'tool-catalog';
+  evidenceSource: ContextObservationSource | 'compatibility';
+  reason: string;
+}
+
 export interface InstructionFileObservation {
   harnessId: HarnessId;
   path: string;
@@ -130,7 +147,10 @@ export interface HarnessContextObservation {
   verbosity: string | null;
   projectDocMaxBytes: number | null;
   toolOutputTokenLimit: number | null;
+  /** Legacy/raw harness feature value. Never treat it as effective deferral by itself. */
   toolSearchEnabled: boolean | null;
+  /** Additive evidence; omitted by legacy observations. */
+  toolDeferral?: ToolDeferralObservation | null;
   projectRootMarkers: string[] | null;
   projectDocFallbackFilenames: string[];
   /** Bytes of config-level instructions returned by the harness, content never emitted. */
@@ -178,6 +198,36 @@ export interface McpReport {
   projectRoot: string;
   observedAt: string;
   harnesses: McpHarnessReport[];
+}
+
+export interface EffectiveMcpExposure {
+  rawServerCount: number;
+  rawKnownToolCount: number;
+  serverCountForPressure: number;
+  knownToolCountForPressure: number;
+  deferralState: ToolDeferralState | null;
+}
+
+/**
+ * Counts only evidence that is actually model-visible for pressure scoring. A merely `available`
+ * mechanism cannot reduce the count: only runtime-proven `active` deferral does.
+ */
+export function effectiveMcpExposure(
+  observation: Pick<HarnessContextObservation, 'mcpServers' | 'toolDeferral'>,
+): EffectiveMcpExposure {
+  const rawServerCount = observation.mcpServers.length;
+  const rawKnownToolCount = observation.mcpServers.reduce(
+    (total, server) => total + (server.toolCount ?? 0),
+    0,
+  );
+  const deferralState = observation.toolDeferral?.state ?? null;
+  return {
+    rawServerCount,
+    rawKnownToolCount,
+    serverCountForPressure: deferralState === 'active' ? 0 : rawServerCount,
+    knownToolCountForPressure: deferralState === 'active' ? 0 : rawKnownToolCount,
+    deferralState,
+  };
 }
 
 export interface ContextReport {
