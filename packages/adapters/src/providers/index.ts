@@ -12,6 +12,15 @@ import { rtkAdapter } from './rtk.js';
 import type { ProviderAdapter } from './contract.js';
 
 export * from './contract.js';
+export {
+  HEADROOM_MINIMUM_BENCHMARK_VERSION,
+  headroomVersionAtLeast,
+  observeHeadroomCandidate,
+  parseHeadroomVersion,
+  parseHeadroomWrapTargets,
+  type HeadroomCandidateObservation,
+  type HeadroomCandidateState,
+} from './headroom-candidate.js';
 export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 export {
   compareCapabilities,

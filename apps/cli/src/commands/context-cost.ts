@@ -17,6 +17,7 @@ import {
   type ToolDeferralObservation,
 } from '@token-harness/core';
 
+import { contextOwnerCandidateDiagnostics } from './context-owner-candidates.js';
 import type { CommandContext } from './context.js';
 
 const CLAUDE = harnessId('claude');
@@ -381,10 +382,15 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     }
   }
 
+  const candidateDiagnostics = await contextOwnerCandidateDiagnostics(context);
   return commandResult({
     command: 'context',
     exitCode: EXIT_CODES.ok,
     data: report,
-    diagnostics: [...report.harnesses.flatMap((item) => item.diagnostics), ...hierarchyDiagnostics],
+    diagnostics: [
+      ...report.harnesses.flatMap((item) => item.diagnostics),
+      ...hierarchyDiagnostics,
+      ...candidateDiagnostics,
+    ],
   });
 }
