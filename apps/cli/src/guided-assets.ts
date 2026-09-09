@@ -28,6 +28,8 @@ export const GUIDE_HTML = `<!doctype html>
 <article class="metric-card"><span class="metric-label">API cost saved</span><strong class="metric-value">Reading…</strong><p class="metric-help">Shown only from billed-token evidence and a verified price basis.</p></article>
 <article class="metric-card"><span class="metric-label">Quality</span><strong class="metric-value">Reading…</strong><p class="metric-help">Guardrails and paired quality evidence are reported separately.</p></article>
 </div>
+<div class="section-title"><div><h2>Your optimization stack</h2><p>The components that actually make up your current efficiency stack. Installed, verified, measured and health state stay separate so a configured tool is never mistaken for a proven result.</p></div></div>
+<div id="stack" class="agent-grid" aria-busy="true"><div class="panel agent loading-card"><h2>Optimization stack</h2><p class="caption">Checking installed components, verification and attributable evidence…</p></div></div>
 <div class="section-title"><div><h2>Your coding agents</h2><p>Only the settings that affect efficiency and allowance are shown here. Open details when you need the technical explanation.</p></div></div>
 <div id="agents" class="agent-grid" aria-busy="true"><div class="panel agent loading-card"><h2>Claude Code</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div><div class="panel agent loading-card"><h2>Codex</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div></div>
 </section>
