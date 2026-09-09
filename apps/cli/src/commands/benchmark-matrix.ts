@@ -3,12 +3,13 @@
  *
  * Read-only. It scans only Token Harness's benchmark state, filters to the current project and
  * optional harness/task class, and delegates every pair verdict to the same deterministic comparator
- * used by `token-harness benchmark`.
+ * used by `token-harness benchmark`. Context savings are layered beside, never into, that verdict.
  */
 
 import {
   EXIT_CODES,
   UNATTRIBUTED_PROJECT_ID,
+  addContextToTaskBenchmarkMatrixReport,
   buildTaskBenchmarkMatrix,
   commandResult,
   diagnostic,
@@ -17,8 +18,8 @@ import {
   parseTaskBenchmarkReceipt,
   type CommandResult,
   type TaskBenchmarkCapture,
+  type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixPair,
-  type TaskBenchmarkMatrixReport,
   type TaskBenchmarkReceipt,
 } from '@token-harness/core';
 
@@ -68,7 +69,7 @@ function pairShapeIsConsistent(input: {
 
 export async function runBenchmarkMatrix(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkMatrixReport | null>> {
+): Promise<CommandResult<TaskBenchmarkContextMatrixReport | null>> {
   if (context.adapters === null || context.stateRoot === null) {
     return commandResult({
       command: 'benchmark-matrix',
@@ -105,10 +106,11 @@ export async function runBenchmarkMatrix(
   const root = context.adapters.fs.join(context.stateRoot, 'benchmarks');
   const rootStat = await context.adapters.fs.stat(root);
   if (rootStat === null || rootStat.kind !== 'directory') {
+    const empty = buildTaskBenchmarkMatrix([]);
     return commandResult({
       command: 'benchmark-matrix',
       exitCode: EXIT_CODES.ok,
-      data: buildTaskBenchmarkMatrix([]),
+      data: addContextToTaskBenchmarkMatrixReport(empty, []),
       diagnostics: [
         diagnostic({
           severity: 'info',
@@ -213,10 +215,11 @@ export async function runBenchmarkMatrix(
   }
 
   selection.completePairs = pairs.length;
+  const matrix = buildTaskBenchmarkMatrix(pairs, selection);
   return commandResult({
     command: 'benchmark-matrix',
     exitCode: EXIT_CODES.ok,
-    data: buildTaskBenchmarkMatrix(pairs, selection),
+    data: addContextToTaskBenchmarkMatrixReport(matrix, pairs),
     diagnostics:
       crossHarnessSkipped === 0
         ? []
