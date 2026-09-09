@@ -128,11 +128,18 @@ export function renderBenchmarkMatrixReport(
   lines.push('', 'Pairs');
   for (const entry of report.entries) lines.push(...wrap(entryLine(entry), 2));
 
+  lines.push(
+    '',
+    ...wrap(
+      'Local token deltas are local evidence only. Backend quota is counted as quota-backed only when the paired comparator found one trustworthy same-window delta.',
+      0,
+    ),
+  );
+
   if (contextReport !== null) {
     lines.push(
-      '',
       ...wrap(
-        'Context savings require quality-passed, start-to-finish stable evidence. Context and local-token deltas remain separate from backend subscription quota.',
+        'Context savings require quality-passed, start-to-finish stable evidence. Context exposure is context-shape evidence only and is not subscription quota.',
         0,
       ),
     );
