@@ -11,7 +11,7 @@ Token Harness prioritizes **useful work preserved per Claude Code/Codex allowanc
 | P0 | HarnessTrim | Deterministic output/context reduction | Supported | Reviewed compatibility + attributable telemetry |
 | P0 evidence | cclimits / native allowance readers | Make 5h/7d impact measurable | Read-only | Never treated as an optimizer |
 | P0 evidence | ccusage / local history | Local workload evidence | Read-only | Never promoted to subscription quota |
-| **P1** | **mcptoon discovery/schema decoupling** | **Static MCP tool-schema context tax** | **Next integration candidate** | Detect read-only, measure native-vs-index context, then paired quality benchmark before recommendation; no silent `sync` |
+| **P1** | **mcptoon discovery/schema decoupling** | **Static MCP tool-schema context tax** | **Read-only candidate detection; benchmark next** | Measure native-vs-index context, then paired quality benchmark before recommendation; no silent `sync` |
 | P2 | Headroom | Broad context ownership / compression | Benchmark-ready candidate detection | RFC 0026 context-owner admission; no silent wrap |
 | P2 | mcptoon result encoding (`--toon` / per-tool policy) | MCP call-result payload | Later experiment | Must beat RTK/HarnessTrim/Headroom on marginal savings without quality/retry regression; one owner per phase |
 | P3 | API billed-token cost attribution | API money saved | Evidence gap | Requires billed input/output tokens plus verified model pricing; local-token estimates are insufficient |
@@ -44,8 +44,16 @@ Token Harness should avoid compression stacks that make savings and quality impo
 
 Only one optimizer should own an overlapping phase unless a paired benchmark proves the composition adds quality-safe marginal value.
 
-## Stable-release gate
+## Stable versus promotion-ready
 
-A new experimental optimizer is **not** required for a promotion-ready stable release. mcptoon and Headroom can remain admission-gated candidates while the core product is promoted.
+The core can become technically stable before every experimental optimizer is admitted. **Broad promotion has a higher bar:** Token Harness should offer at least three distinct, genuinely useful, quality-gated savings mechanisms rather than promoting a large feature list with only two proven reducers.
 
-The authoritative promotion checklist is [release-readiness.md](release-readiness.md). In short, the core must have the outcome-first UI, no periodic full reload, evidence-backed value reporting, green cross-platform CI, a verified published package, and a clean fresh-user end-to-end install test before it is called ready for broad promotion.
+The intended promotion set is currently:
+
+1. RTK for shell/tool-output reduction;
+2. HarnessTrim for deterministic output/context reduction;
+3. mcptoon discovery/schema reduction, once local measurement, paired quality admission, reviewed activation and rollback are complete.
+
+If mcptoon does not pass that admission, choose another third mechanism on measured marginal value instead of lowering the gate. Headroom may qualify later, but broad context ownership should not be rushed merely to fill the third slot.
+
+The authoritative promotion checklist is [release-readiness.md](release-readiness.md). The promotion decision additionally requires green cross-platform CI, a verified published package, fresh-user end-to-end validation, and evidence-backed value reporting without invented allowance or API-cost conversions.
