@@ -134,7 +134,9 @@ export function createGuideHandler(input: {
         )
           throw new GuideError(400, 'No command parameters are accepted.');
         const result = await input.service.verify();
-        overviewCache.clear();
+        // Verification is read-only. Keep the current overview cache so this action does not
+        // trigger doctor/budget/context/metrics/benchmark reads again. An explicit Refresh data
+        // request still bypasses the cache through ?refresh=1.
         send(200, JSON.stringify(result));
         return;
       }
