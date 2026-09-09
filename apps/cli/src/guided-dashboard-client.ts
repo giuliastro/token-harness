@@ -109,7 +109,7 @@ function showDialog(title) {
   $('task-form').hidden = true;
   $('task-review').hidden = true;
   $('approve').hidden = true;
-  $('review').showModal();
+  if (!$('review').open) $('review').showModal();
 }
 function closeDialog() {
   if (working) return;
