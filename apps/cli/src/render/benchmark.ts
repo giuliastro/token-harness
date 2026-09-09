@@ -2,7 +2,10 @@
  * Human rendering for paired task benchmark comparison.
  */
 
-import type { TaskBenchmarkCompareReport, TaskBenchmarkReceipt } from '@token-harness/core';
+import type {
+  TaskBenchmarkContextCompareReport,
+  TaskBenchmarkReceipt,
+} from '@token-harness/core';
 
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
 
@@ -27,10 +30,10 @@ function policyLine(label: string, receipt: TaskBenchmarkReceipt): string {
 }
 
 export function renderBenchmarkReport(
-  report: TaskBenchmarkCompareReport,
+  report: TaskBenchmarkContextCompareReport,
   _context: RenderContext,
 ): string {
-  const { baseline, optimized, comparison } = report;
+  const { baseline, optimized, comparison, context } = report;
   const lines: string[] = [
     `Benchmark — ${comparison.benchmarkId}`,
     `${baseline.taskClass} on ${baseline.harnessId}`,
@@ -55,6 +58,15 @@ export function renderBenchmarkReport(
     );
   }
 
+  const contextCounts =
+    context.baseline === null || context.optimized === null
+      ? ''
+      : ` — static MCP tools ${String(context.baseline.effectiveStaticMcpToolCount)} → ${String(
+          context.optimized.effectiveStaticMcpToolCount,
+        )}`;
+  lines.push(...wrap(`Context: ${context.verdict}${contextCounts}`, 0));
+  lines.push(...wrap(`Context evidence: ${context.reason}`, 2));
+
   lines.push(
     ...wrap(
       `Verdict: ${comparison.verdict} — basis ${comparison.basis} — evidence ${comparison.evidenceLevel}`,
@@ -67,6 +79,14 @@ export function renderBenchmarkReport(
     lines.push('Why');
     for (const reason of comparison.reasons) lines.push(...wrap(reason, 2));
   }
+
+  lines.push(
+    '',
+    ...wrap(
+      'Context reduction is reported separately and is not converted into Claude/Codex subscription quota.',
+      0,
+    ),
+  );
 
   return document(lines);
 }
