@@ -121,7 +121,9 @@ export function assessContextOwnerAdmission(
         qualifyingPairs,
         consideredPairs,
         minimumPairs,
-        reasons: ['a recent candidate pair regressed retries, attempts, or runtime/provider errors'],
+        reasons: [
+          'a recent candidate pair regressed retries, attempts, or runtime/provider errors',
+        ],
       };
     }
 
