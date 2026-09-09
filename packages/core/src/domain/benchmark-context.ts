@@ -37,12 +37,7 @@ function nonNegativeInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
-const DEFERRAL_STATES = new Set<ToolDeferralState>([
-  'active',
-  'available',
-  'inactive',
-  'unknown',
-]);
+const DEFERRAL_STATES = new Set<ToolDeferralState>(['active', 'available', 'inactive', 'unknown']);
 const DEFERRAL_MECHANISMS = new Set<ToolDeferralObservation['mechanism']>([
   'native-tool-search',
   'native-defer-loading',
@@ -99,7 +94,8 @@ export function parseTaskBenchmarkContextSnapshot(
     effectiveStaticMcpToolCount === undefined ||
     !(
       toolDeferralState === null ||
-      (typeof toolDeferralState === 'string' && DEFERRAL_STATES.has(toolDeferralState as ToolDeferralState))
+      (typeof toolDeferralState === 'string' &&
+        DEFERRAL_STATES.has(toolDeferralState as ToolDeferralState))
     ) ||
     !(
       toolDeferralMechanism === null ||
@@ -143,7 +139,8 @@ export function compareTaskBenchmarkContextSnapshots(
       verdict: 'unknown',
       baseline: left,
       optimized: right,
-      reason: 'both benchmark variants need observed context evidence before exposure can be compared',
+      reason:
+        'both benchmark variants need observed context evidence before exposure can be compared',
     };
   }
 
