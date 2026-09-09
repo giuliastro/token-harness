@@ -20,6 +20,8 @@ export async function contextOwnerCandidateDiagnostics(
     projectIdFor: context.adapters.projectIdFor,
   });
   const version = observation.version === null ? '' : ` ${observation.version}`;
+  const baseline = observation.minimumBenchmarkVersion;
+  const reason = observation.reasons[0] ?? 'Keep the candidate disabled until it is proven safe';
 
   if (observation.state === 'absent') {
     return [
@@ -28,8 +30,7 @@ export async function contextOwnerCandidateDiagnostics(
         code: 'context-owner-candidate-absent',
         subject: 'headroom',
         message: 'Headroom is not installed; its context-owner candidate is inactive',
-        remediation:
-          'No action is required; Token Harness never installs this candidate silently',
+        remediation: 'No action is required; Token Harness never installs it silently',
       }),
     ];
   }
@@ -40,9 +41,7 @@ export async function contextOwnerCandidateDiagnostics(
         severity: 'warning',
         code: 'context-owner-candidate-version',
         subject: 'headroom',
-        message:
-          `Headroom${version} predates benchmark baseline ` +
-          observation.minimumBenchmarkVersion,
+        message: `Headroom${version} is below benchmark baseline ${baseline}`,
         remediation: 'Keep this candidate disabled on the installed version',
       }),
     ];
@@ -55,8 +54,7 @@ export async function contextOwnerCandidateDiagnostics(
         code: 'context-owner-candidate-installed',
         subject: 'headroom',
         message: `Headroom${version} is installed but is not benchmark-ready`,
-        remediation:
-          observation.reasons[0] ?? 'Keep the candidate disabled until readiness is proven',
+        remediation: reason,
       }),
     ];
   }
@@ -67,8 +65,7 @@ export async function contextOwnerCandidateDiagnostics(
       code: 'context-owner-candidate-ready',
       subject: 'headroom',
       message: `Headroom${version} is ready for paired benchmarking and remains disabled`,
-      remediation:
-        'Collect three recent quality-safe pairs before RFC 0026 experimental admission',
+      remediation: 'Collect three quality-safe pairs before experimental admission',
     }),
   ];
 }
