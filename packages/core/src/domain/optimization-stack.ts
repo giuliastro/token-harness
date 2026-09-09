@@ -15,7 +15,7 @@ import type { ProviderDetection } from './detection.js';
 import type { DriftFinding, ProviderUpdateRow } from './reports.js';
 import type { HarnessId, ProviderId } from './ids.js';
 import type { Diagnostic } from './diagnostics.js';
-import type { VerificationResult, VerifyReport } from './verification.js';
+import type { VerifyReport } from './verification.js';
 import type { MetricsReport, ProviderSavingsRow } from '../metrics/report.js';
 
 export const OPTIMIZATION_CATEGORIES = [
