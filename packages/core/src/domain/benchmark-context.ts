@@ -18,6 +18,7 @@ export interface TaskBenchmarkContextSnapshot {
   rawMcpServerCount: number;
   rawKnownMcpToolCount: number;
   unknownMcpToolServerCount: number;
+  mcpInventoryTruncated: boolean;
   effectiveStaticMcpServerCount: number;
   effectiveStaticMcpToolCount: number;
   toolDeferralState: ToolDeferralState | null;
@@ -62,6 +63,7 @@ export function taskBenchmarkContextSnapshot(
     rawKnownMcpToolCount: exposure.rawKnownToolCount,
     unknownMcpToolServerCount: observation.mcpServers.filter((server) => server.toolCount === null)
       .length,
+    mcpInventoryTruncated: observation.mcpInventoryTruncated,
     effectiveStaticMcpServerCount: exposure.serverCountForPressure,
     effectiveStaticMcpToolCount: exposure.knownToolCountForPressure,
     toolDeferralState: observation.toolDeferral?.state ?? null,
@@ -80,6 +82,7 @@ export function parseTaskBenchmarkContextSnapshot(
   const rawMcpServerCount = nonNegativeInteger(row['rawMcpServerCount']);
   const rawKnownMcpToolCount = nonNegativeInteger(row['rawKnownMcpToolCount']);
   const unknownMcpToolServerCount = nonNegativeInteger(row['unknownMcpToolServerCount']);
+  const mcpInventoryTruncated = row['mcpInventoryTruncated'];
   const effectiveStaticMcpServerCount = nonNegativeInteger(row['effectiveStaticMcpServerCount']);
   const effectiveStaticMcpToolCount = nonNegativeInteger(row['effectiveStaticMcpToolCount']);
   const toolDeferralState = row['toolDeferralState'];
@@ -90,6 +93,7 @@ export function parseTaskBenchmarkContextSnapshot(
     rawMcpServerCount === undefined ||
     rawKnownMcpToolCount === undefined ||
     unknownMcpToolServerCount === undefined ||
+    typeof mcpInventoryTruncated !== 'boolean' ||
     effectiveStaticMcpServerCount === undefined ||
     effectiveStaticMcpToolCount === undefined ||
     !(
@@ -102,9 +106,12 @@ export function parseTaskBenchmarkContextSnapshot(
       (typeof toolDeferralMechanism === 'string' &&
         DEFERRAL_MECHANISMS.has(toolDeferralMechanism as ToolDeferralObservation['mechanism']))
     ) ||
+    (toolDeferralState === null) !== (toolDeferralMechanism === null) ||
     unknownMcpToolServerCount > rawMcpServerCount ||
     effectiveStaticMcpServerCount > rawMcpServerCount ||
-    effectiveStaticMcpToolCount > rawKnownMcpToolCount
+    effectiveStaticMcpToolCount > rawKnownMcpToolCount ||
+    (toolDeferralState === 'active' &&
+      (effectiveStaticMcpServerCount !== 0 || effectiveStaticMcpToolCount !== 0))
   ) {
     return undefined;
   }
@@ -114,6 +121,7 @@ export function parseTaskBenchmarkContextSnapshot(
     rawMcpServerCount,
     rawKnownMcpToolCount,
     unknownMcpToolServerCount,
+    mcpInventoryTruncated,
     effectiveStaticMcpServerCount,
     effectiveStaticMcpToolCount,
     toolDeferralState: toolDeferralState as ToolDeferralState | null,
@@ -141,6 +149,21 @@ export function compareTaskBenchmarkContextSnapshots(
       optimized: right,
       reason:
         'both benchmark variants need observed context evidence before exposure can be compared',
+    };
+  }
+
+  if (
+    left.mcpInventoryTruncated ||
+    right.mcpInventoryTruncated ||
+    left.unknownMcpToolServerCount > 0 ||
+    right.unknownMcpToolServerCount > 0
+  ) {
+    return {
+      verdict: 'unknown',
+      baseline: left,
+      optimized: right,
+      reason:
+        'MCP inventory is truncated or contains unknown tool counts; context exposure comparison fails closed',
     };
   }
 
