@@ -11,6 +11,7 @@ export * from './domain/budget.js';
 export * from './domain/benchmark.js';
 export * from './domain/benchmark-context.js';
 export * from './domain/benchmark-context-report.js';
+export * from './domain/context-owner-admission.js';
 export * from './domain/context-cost.js';
 export * from './domain/cross-harness-evidence.js';
 export * from './domain/cross-harness-quality.js';
