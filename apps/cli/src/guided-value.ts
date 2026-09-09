@@ -4,7 +4,10 @@ export type GuideAllowanceEvidenceState =
   | 'not-measured'
   | 'measured'
   | 'blocked-by-quality';
-export type GuideQualityEvidenceState = 'not-measured' | 'preserved' | 'regressed';
+export type GuideQualityEvidenceState =
+  | 'not-measured'
+  | 'preserved'
+  | 'regressed';
 
 export interface GuideAllowanceEvidence {
   state: GuideAllowanceEvidenceState;
@@ -79,16 +82,26 @@ function allowanceEvidence(
 ): GuideAllowanceEvidence {
   const deltas = entries.flatMap((entry) => {
     const quota = entry.quota;
-    if (quota === null || quota.scope !== scope || quota.confidence !== 'authoritative') return [];
+    if (
+      quota === null ||
+      quota.scope !== scope ||
+      quota.confidence !== 'authoritative'
+    )
+      return [];
     return [quota.baselineDeltaUsedPercent - quota.optimizedDeltaUsedPercent];
   });
   const rawMedian = median(deltas);
   const savedPercent = rawMedian === null ? null : roundOne(rawMedian);
-  const blocked = savedPercent !== null && savedPercent > 0 && quality.state !== 'preserved';
+  const blocked =
+    savedPercent !== null && savedPercent > 0 && quality.state !== 'preserved';
 
   return {
     state:
-      savedPercent === null ? 'not-measured' : blocked ? 'blocked-by-quality' : 'measured',
+      savedPercent === null
+        ? 'not-measured'
+        : blocked
+          ? 'blocked-by-quality'
+          : 'measured',
     scope,
     savedPercent,
     equivalentMinutes:
