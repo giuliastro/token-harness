@@ -112,6 +112,7 @@ test('requires the current benchmark floor', () => {
   assert.equal(headroomVersionAtLeast('0.36.0', '0.36.0'), true);
   assert.equal(headroomVersionAtLeast('0.37.1', '0.36.0'), true);
   assert.equal(headroomVersionAtLeast('0.35.9', '0.36.0'), false);
+  assert.equal(headroomVersionAtLeast('0.36.0-beta.1', '0.36.0'), false);
 });
 
 test('recognizes advertised wrap targets', () => {
