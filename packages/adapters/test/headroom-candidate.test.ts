@@ -31,13 +31,19 @@ const NO_FILESYSTEM: FileSystemPort = {
   dirname: (path) => path,
   basename: (path) => path,
   isInside: () => false,
-  stat: () => Promise.reject(new Error('Headroom candidate observation must not read files')),
-  readFile: () => Promise.reject(new Error('Headroom candidate observation must not read files')),
-  writeFile: () => Promise.reject(new Error('Headroom candidate observation must not write files')),
-  appendFile: () => Promise.reject(new Error('Headroom candidate observation must not write files')),
-  createDirectory: () => Promise.reject(new Error('Headroom candidate observation must not write files')),
-  remove: () => Promise.reject(new Error('Headroom candidate observation must not write files')),
-  readDirectory: () => Promise.resolve([]),
+  stat: () =>
+    Promise.reject(new Error('Headroom candidate observation must not read files')),
+  readFile: () =>
+    Promise.reject(new Error('Headroom candidate observation must not read files')),
+  writeFile: () =>
+    Promise.reject(new Error('Headroom candidate observation must not write files')),
+  appendFile: () =>
+    Promise.reject(new Error('Headroom candidate observation must not write files')),
+  createDirectory: () =>
+    Promise.reject(new Error('Headroom candidate observation must not write files')),
+  remove: () =>
+    Promise.reject(new Error('Headroom candidate observation must not write files')),
+  readDirectory: async () => [],
 };
 
 interface RunnerOptions {
