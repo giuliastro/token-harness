@@ -62,7 +62,9 @@ it('read-only integration verification keeps the current overview cache hot', as
   const service = new GuideService(call, () => 0, () => 'ticket');
   const token = 'a'.repeat(64);
   let authority = '';
-  const server = createServer(createGuideHandler({ service, token, authority: () => authority }));
+  const server = createServer(
+    createGuideHandler({ service, token, authority: () => authority }),
+  );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
@@ -85,7 +87,10 @@ it('read-only integration verification keeps the current overview cache hot', as
     });
     assert.equal(verification.status, 200);
     const afterVerify = calls.length;
-    assert.ok(afterVerify > afterOverview, 'verification itself should still run its read-only checks');
+    assert.ok(
+      afterVerify > afterOverview,
+      'verification itself should still run its read-only checks',
+    );
 
     assert.equal((await fetch(`${origin}/api/overview`)).status, 200);
     assert.equal(
@@ -95,7 +100,10 @@ it('read-only integration verification keeps the current overview cache hot', as
     );
 
     assert.equal((await fetch(`${origin}/api/overview?refresh=1`)).status, 200);
-    assert.ok(calls.length > afterVerify, 'an explicit refresh must still collect fresh evidence');
+    assert.ok(
+      calls.length > afterVerify,
+      'an explicit refresh must still collect fresh evidence',
+    );
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
