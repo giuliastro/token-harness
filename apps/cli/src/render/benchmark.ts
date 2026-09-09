@@ -2,9 +2,10 @@
  * Human rendering for paired task benchmark comparison.
  */
 
-import type {
-  TaskBenchmarkContextCompareReport,
-  TaskBenchmarkReceipt,
+import {
+  addContextToTaskBenchmarkCompareReport,
+  type TaskBenchmarkCompareReport,
+  type TaskBenchmarkReceipt,
 } from '@token-harness/core';
 
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
@@ -30,10 +31,11 @@ function policyLine(label: string, receipt: TaskBenchmarkReceipt): string {
 }
 
 export function renderBenchmarkReport(
-  report: TaskBenchmarkContextCompareReport,
+  report: TaskBenchmarkCompareReport,
   _context: RenderContext,
 ): string {
-  const { baseline, optimized, comparison, context } = report;
+  const contextual = addContextToTaskBenchmarkCompareReport(report);
+  const { baseline, optimized, comparison, context } = contextual;
   const lines: string[] = [
     `Benchmark — ${comparison.benchmarkId}`,
     `${baseline.taskClass} on ${baseline.harnessId}`,
