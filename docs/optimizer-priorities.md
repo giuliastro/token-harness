@@ -1,59 +1,71 @@
-# Optimizer integration priorities
+# Optimizer evaluation priorities
 
-Token Harness prioritizes **useful work preserved per Claude Code/Codex allowance**, not the largest raw token percentage in isolation. A candidate moves up when it can remove a large recurring cost, applies to real user workloads, has a reversible integration path, and can be measured without weakening quality.
+Token Harness prioritizes **useful work preserved per Claude Code/Codex allowance**, not the largest raw token percentage in isolation. No external project becomes the next integration merely because it was suggested, popular, or publishes an impressive benchmark.
 
-## Current order
+The question is always: **what additional quality-safe value does this mechanism add on top of the current native harness and the optimizers Token Harness already owns?**
 
-| Priority | Tool / policy | Savings target | Status | Admission rule |
-| --- | --- | --- | --- | --- |
-| P0 | Native reasoning / verbosity policy | Avoid overspending reasoning on simple work while protecting hard tasks | Supported | Quality floors + reviewed native writes |
-| P0 | RTK | Shell/tool output noise | Supported | Reviewed compatibility + attributable telemetry |
-| P0 | HarnessTrim | Deterministic output/context reduction | Supported | Reviewed compatibility + attributable telemetry |
-| P0 evidence | cclimits / native allowance readers | Make 5h/7d impact measurable | Read-only | Never treated as an optimizer |
-| P0 evidence | ccusage / local history | Local workload evidence | Read-only | Never promoted to subscription quota |
-| **P1** | **mcptoon discovery/schema decoupling** | **Static MCP tool-schema context tax** | **Read-only candidate detection; benchmark next** | Measure native-vs-index context, then paired quality benchmark before recommendation; no silent `sync` |
-| P2 | Headroom | Broad context ownership / compression | Benchmark-ready candidate detection | RFC 0026 context-owner admission; no silent wrap |
-| P2 | mcptoon result encoding (`--toon` / per-tool policy) | MCP call-result payload | Later experiment | Must beat RTK/HarnessTrim/Headroom on marginal savings without quality/retry regression; one owner per phase |
-| P3 | API billed-token cost attribution | API money saved | Evidence gap | Requires billed input/output tokens plus verified model pricing; local-token estimates are insufficient |
+## Selection rule
 
-## Why mcptoon is P1
+Every candidate is scored on the same dimensions before it is promoted:
 
-For MCP-heavy agents, static tool schemas can consume a large context budget before the task starts. mcptoon attacks that cost at the discovery layer, which is different from RTK/HarnessTrim output reduction and therefore has unusually high potential **marginal** savings.
+1. **Marginal savings** — value added after current Claude/Codex native behavior, RTK and HarnessTrim, not versus an artificially unoptimized baseline.
+2. **Coverage** — how often the mechanism can help normal Claude Code and Codex workloads.
+3. **Allowance / API relevance** — preference for effects that can be tied to provider allowance or billed-token evidence, not only local byte/token estimates.
+4. **Quality safety** — paired task quality, retries, failures and exact-answer/source-verification checks override raw savings.
+5. **Distinctness** — overlapping compressors are penalized unless composition proves additional value.
+6. **Reversibility** — preview, explicit approval, verification and rollback must be possible before managed activation.
+7. **Operational cost** — latency, memory, indexing/startup cost and background work count against the saving.
+8. **Maturity and maintenance** — release activity, compatibility surface, license, failure history and integration maintenance all matter.
+9. **Attribution** — Token Harness must be able to say which mechanism produced the observed result.
 
-Token Harness will not copy mcptoon's upstream benchmark numbers into the user's savings total. The planned integration is evidence-first:
+Upstream benchmark numbers are useful for deciding what to test. They are never copied into a user's Token Harness savings total.
 
-1. detect the installed CLI and version without changing configuration;
-2. inspect the current MCP/tool surface;
-3. estimate or measure the current schema/context tax from local observations;
-4. benchmark the native tool surface against mcptoon's compact discovery path;
-5. run paired task evidence for tool selection, retries, runtime errors and explicit quality gates;
-6. recommend activation only after the evidence is quality-safe;
-7. preview any configuration mutation and require explicit approval, with rollback.
+## Current evaluation order
 
-`mcptoon sync`, agent configuration writes, and result compression are **not** part of detection. Result-side TOON compression is a separate capability because it can overlap with existing reducers.
+| Priority | Mechanism / candidate class | Savings target | Current decision |
+| --- | --- | --- | --- |
+| **P0** | **Token Harness native adaptive policy** | Reasoning effort, verbosity and task/allowance budgeting | **Develop and benchmark first.** Broad coverage, no extra runtime dependency; change only at reviewed task/session boundaries and keep quality floors. |
+| P0 | RTK | Shell/tool output noise | Supported on reviewed combinations; keep measuring marginal value rather than equating local output reduction with subscription saving. |
+| P0 | HarnessTrim | Deterministic output/context reduction | Supported on reviewed combinations; same evidence rule as RTK. |
+| P0 evidence | cclimits / native allowance readers | Make 5h/7d impact measurable | Read-only; never treated as an optimizer. |
+| P0 evidence | ccusage / local history | Local workload evidence | Read-only; never promoted to subscription quota. |
+| **P1 research** | **Repository-exploration reduction** — evaluate codebase-memory-mcp, CodeGraph and the native baseline | Avoid repeated grep/read/discovery work before it enters context | **Highest-priority external mechanism class to benchmark. No winner selected yet.** It is distinct from output compression, but must preserve exact source correctness and account for indexing/startup/residual-context cost. |
+| **P1 conditional** | **MCP discovery/schema reduction** — mcptoon vs Atlassian mcp-compressor vs native Tool Search/deferred tools | Static MCP schema exposure | mcptoon detection is supported read-only, but **mcptoon is not the selected third optimizer**. Benchmark only where the native harness still exposes a material schema tax or its discovery path is unavailable/ineffective. |
+| P2 research | Broad context owners — Headroom / Context Mode class | Long-session context ownership, virtualization and compaction | Admission-gated. Large theoretical surface, but substantial overlap, complexity and quality/attribution risk. |
+| P2 research | Result-side encoders/compressors — mcptoon TOON, MCP Compressor result paths, similar tools | MCP/tool result payload | Compete against RTK/HarnessTrim on marginal paired value; do not stack by default. |
+| P3 | API billed-token cost attribution | API money saved | Evidence gap; requires billed input/output tokens plus verified model pricing. |
+
+## Why the external ranking changed
+
+mcptoon remains worth observing, but the relevant baseline has changed. Modern Claude Code and Codex can defer/search MCP tools instead of necessarily serializing every MCP schema into every normal turn. Therefore a comparison of `all schemas loaded` versus `mcptoon compact index` can dramatically overstate the **marginal** saving a current Token Harness user would receive.
+
+Token Harness will benchmark MCP discovery candidates against the **actual native tool surface of the installed harness/model/provider**. If native deferral already removes most of the tax, mcptoon stays an optional compatibility/special-case candidate rather than becoming a default third integration. Atlassian mcp-compressor belongs in the same comparison set rather than being ignored because mcptoon was evaluated first.
+
+Repository exploration is currently the more interesting external mechanism class because it attacks another cost entirely: repeated code discovery and file reads before output reducers can help. Projects such as codebase-memory-mcp and CodeGraph make this testable, but neither is pre-selected. Their benchmark must include correctness/source verification, tool calls, provider allowance/cost when observable, indexing/startup overhead and residual context across longer sessions.
+
+## Native adaptive policy is a real savings mechanism
+
+The next development priority is not necessarily another installed tool. Token Harness already understands task class, allowance, model settings, reasoning effort and verbosity. Turning that into a conservative, evidence-backed policy at **task/session boundaries** can avoid overspending thinking/output on simple work without introducing a proxy or compressor.
+
+This mechanism counts toward the promotion target only when it is more than a settings screen: it must have paired task evidence, measurable value, a quality floor, reviewed changes, and a safe rollback path. Token Harness should avoid changing effort repeatedly inside one task when that could damage prompt-cache continuity or produce unstable behavior.
 
 ## Capability ownership rule
 
-Token Harness should avoid compression stacks that make savings and quality impossible to attribute. The intended ownership split is:
+Token Harness should avoid stacks that make savings and quality impossible to attribute:
 
-- MCP tool discovery/schema: mcptoon candidate;
-- shell/tool result reduction: RTK / HarnessTrim / mcptoon-result / broad context owner compete on measured marginal value;
-- broad context ownership: Headroom-class candidates;
-- model/reasoning policy: Token Harness native policy;
+- model/reasoning/verbosity policy: Token Harness native policy;
+- repository exploration / structural retrieval: at most one admitted graph/index owner by default;
+- MCP discovery/schema: native harness discovery first, then one external owner only if it proves material marginal value;
+- shell/tool result reduction: RTK / HarnessTrim / result-side candidates compete on measured marginal value;
+- broad context ownership: one Headroom/Context Mode-class owner only after admission;
 - allowance and billing evidence: read-only observers.
 
-Only one optimizer should own an overlapping phase unless a paired benchmark proves the composition adds quality-safe marginal value.
+Composition is allowed only when a paired benchmark proves additional quality-safe marginal value over each component alone.
 
 ## Stable versus promotion-ready
 
-The core can become technically stable before every experimental optimizer is admitted. **Broad promotion has a higher bar:** Token Harness should offer at least three distinct, genuinely useful, quality-gated savings mechanisms rather than promoting a large feature list with only two proven reducers.
+Technical stability and broad-promotion readiness are separate. Broad promotion should wait until Token Harness has at least **three distinct, genuinely useful, quality-gated savings mechanisms**, but the third mechanism is deliberately **not named in advance**.
 
-The intended promotion set is currently:
+RTK and HarnessTrim are current supported reducers. The third slot goes to whichever distinct mechanism wins controlled Token Harness evidence — potentially the native adaptive policy, repository-exploration reduction, an MCP discovery optimizer, or another candidate found later. A detection-only integration never counts.
 
-1. RTK for shell/tool-output reduction;
-2. HarnessTrim for deterministic output/context reduction;
-3. mcptoon discovery/schema reduction, once local measurement, paired quality admission, reviewed activation and rollback are complete.
-
-If mcptoon does not pass that admission, choose another third mechanism on measured marginal value instead of lowering the gate. Headroom may qualify later, but broad context ownership should not be rushed merely to fill the third slot.
-
-The authoritative promotion checklist is [release-readiness.md](release-readiness.md). The promotion decision additionally requires green cross-platform CI, a verified published package, fresh-user end-to-end validation, and evidence-backed value reporting without invented allowance or API-cost conversions.
+The authoritative promotion checklist is [release-readiness.md](release-readiness.md). Green cross-platform CI, a verified published package, fresh-user end-to-end validation, and evidence-backed value reporting are required regardless of which third mechanism wins.
