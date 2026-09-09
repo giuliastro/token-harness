@@ -21,10 +21,11 @@ const platform = {
 } as const;
 
 function envelope<T>(command: string, data: T): CliEnvelope<T> {
-  return toEnvelope(commandResult({ command, data, exitCode: 0 }), 'test');
+  const result = commandResult({ command, data, exitCode: 0 });
+  return toEnvelope(result, 'test');
 }
 
-it('read-only integration verification keeps the current overview cache hot', async () => {
+it('keeps overview cache hot after read-only verification', async () => {
   const calls: string[][] = [];
   const doctor: DoctorReport = {
     platform,
@@ -43,36 +44,43 @@ it('read-only integration verification keeps the current overview cache hot', as
       },
     ],
   };
+
   const call: GuideCall = async <T>(args: readonly string[]) => {
     calls.push([...args]);
     const command = args[0] ?? '';
-    const data =
-      command === 'doctor'
-        ? doctor
-        : command === 'verify'
-          ? {
-              receiptId: null,
-              appliedAt: null,
-              results: [],
-              healthyAtDeclaredTier: true,
-            }
-          : null;
-    return envelope(command, data as T);
+    if (command === 'doctor') return envelope(command, doctor as T);
+    if (command === 'verify') {
+      const report = {
+        receiptId: null,
+        appliedAt: null,
+        results: [],
+        healthyAtDeclaredTier: true,
+      };
+      return envelope(command, report as T);
+    }
+    return envelope(command, null as T);
   };
+
   const service = new GuideService(call, () => 0, () => 'ticket');
   const token = 'a'.repeat(64);
   let authority = '';
-  const server = createServer(
-    createGuideHandler({ service, token, authority: () => authority }),
-  );
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const handler = createGuideHandler({
+    service,
+    token,
+    authority: () => authority,
+  });
+  const server = createServer(handler);
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   authority = `127.0.0.1:${address.port}`;
   const origin = `http://${authority}`;
 
   try {
-    assert.equal((await fetch(`${origin}/api/overview`)).status, 200);
+    const first = await fetch(`${origin}/api/overview`);
+    assert.equal(first.status, 200);
     const afterOverview = calls.length;
     assert.ok(afterOverview > 0);
 
@@ -87,25 +95,19 @@ it('read-only integration verification keeps the current overview cache hot', as
     });
     assert.equal(verification.status, 200);
     const afterVerify = calls.length;
-    assert.ok(
-      afterVerify > afterOverview,
-      'verification itself should still run its read-only checks',
-    );
+    assert.ok(afterVerify > afterOverview);
 
-    assert.equal((await fetch(`${origin}/api/overview`)).status, 200);
-    assert.equal(
-      calls.length,
-      afterVerify,
-      'opening the overview after verification must not repeat the full collection',
-    );
+    const cached = await fetch(`${origin}/api/overview`);
+    assert.equal(cached.status, 200);
+    assert.equal(calls.length, afterVerify);
 
-    assert.equal((await fetch(`${origin}/api/overview?refresh=1`)).status, 200);
-    assert.ok(
-      calls.length > afterVerify,
-      'an explicit refresh must still collect fresh evidence',
-    );
+    const refreshed = await fetch(`${origin}/api/overview?refresh=1`);
+    assert.equal(refreshed.status, 200);
+    assert.ok(calls.length > afterVerify);
   } finally {
     server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
   }
 });
