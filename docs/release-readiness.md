@@ -11,18 +11,29 @@ Token Harness should be called ready for broad promotion only when the product i
 - [x] Recorded reducer savings keep providers and measurement classes separate.
 - [ ] Dashboard displays paired allowance and quality value when available and blocks unsupported claims.
 - [ ] At least **three distinct savings mechanisms** are usable through Token Harness with measured value, quality-safe admission where applicable, and a clear activation/rollback path.
-- [ ] RTK and HarnessTrim remain verified as the first two savings mechanisms on current reviewed combinations.
-- [ ] A third mechanism is admitted. Current preferred candidate: mcptoon discovery/schema reduction after local context-tax measurement, paired quality evidence, reviewed activation and rollback.
+- [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
+- [ ] A third **distinct** mechanism is admitted by comparative Token Harness evidence. No tool is reserved this slot in advance.
+- [ ] The winning third mechanism proves material marginal value over current native Claude/Codex behavior and already-enabled Token Harness optimizers.
 - [ ] Full CI green for the release candidate on Windows, macOS and Linux.
 - [ ] Published package/install smoke test green for the release candidate.
 - [ ] README onboarding verified against the exact published UI.
 - [ ] One clean end-to-end fresh-user install test: install → open → review setup → apply → use agent → inspect evidence → verify → undo.
 
-## Experimental candidates
+## Candidate-selection gate
 
-Read-only detection alone does not count as a third savings mechanism. Headroom or mcptoon may remain benchmark-only while the core matures, but broad promotion waits until a third mechanism has actually passed its admission and can deliver attributable value safely.
+Read-only detection alone does not count as a savings mechanism. A candidate also does not qualify because its upstream benchmark reports a large percentage.
 
-If mcptoon fails its quality or marginal-value benchmark, Token Harness should select another candidate rather than weakening this gate or stacking overlapping compressors just to reach a feature count.
+Before the third mechanism is admitted, Token Harness compares candidates on marginal savings, workload coverage, quality/retries, overlap with existing reducers and native harness features, operational cost, reversibility, maturity and attribution.
+
+The current research queue includes:
+
+- Token Harness native adaptive reasoning/verbosity/task policy;
+- repository-exploration reduction, comparing graph/index approaches against native grep/read behavior;
+- MCP discovery/schema optimizers such as mcptoon and mcp-compressor, but only against the actual native Tool Search/deferred-tool baseline;
+- broad context owners such as Headroom/Context Mode-class systems;
+- result-side compressors only where RTK/HarnessTrim leave meaningful uncovered cost.
+
+A candidate that fails quality, reliability or marginal-value evidence stays experimental regardless of popularity or headline token reduction.
 
 ## Release decision
 
