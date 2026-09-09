@@ -18,9 +18,27 @@ describe('outcome-first guided dashboard', () => {
   it('does not invent plan-time, API-cost or quality savings', () => {
     assert.match(GUIDE_JS, /5h \/ 7d allowance saved/);
     assert.match(GUIDE_JS, /Not measured yet/);
-    assert.match(GUIDE_JS, /paired allowance evidence/);
+    assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
     assert.match(GUIDE_JS, /billed-token evidence/);
-    assert.match(GUIDE_JS, /Actual quality impact still requires paired task evidence/);
+    assert.match(
+      GUIDE_JS,
+      /does not claim preserved quality until paired benchmark evidence exists/,
+    );
+  });
+
+  it('translates demonstrated 5h quota evidence into an explicit window equivalent only', () => {
+    assert.match(GUIDE_JS, /equivalent to about/);
+    assert.match(GUIDE_JS, /300-minute allowance window/);
+    assert.match(GUIDE_JS, /weekly percentage is not converted into wall-clock time/);
+    assert.match(GUIDE_JS, /Not credited/);
+    assert.match(GUIDE_JS, /quality is measured and preserved/);
+  });
+
+  it('makes a quality regression the next action instead of celebrating savings', () => {
+    assert.match(GUIDE_JS, /Regression detected/);
+    assert.match(GUIDE_JS, /Positive allowance savings are blocked/);
+    assert.match(GUIDE_JS, /Do not enable a more aggressive saving policy/);
+    assert.match(GUIDE_JS, /Review quality evidence/);
   });
 
   it('never schedules a full dashboard refresh in the background', () => {

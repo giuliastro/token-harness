@@ -212,6 +212,51 @@ function metricCard(title, value, description, state = '') {
   card.append(node('span', title, 'metric-label'), node('strong', value, 'metric-value'), node('p', description, 'metric-help'));
   return card;
 }
+function allowanceCard(value) {
+  const five = value?.allowance5h;
+  const weekly = value?.allowance7d;
+  const fiveMeasured = five?.state === 'measured' && five.savedPercent !== null;
+  const weeklyMeasured = weekly?.state === 'measured' && weekly.savedPercent !== null;
+  const blocked = five?.state === 'blocked-by-quality' || weekly?.state === 'blocked-by-quality';
+  if (blocked) {
+    const candidate = five?.state === 'blocked-by-quality' ? five : weekly;
+    const scope = candidate?.scope === 'five-hour' ? '5h' : '7d';
+    return metricCard(
+      '5h / 7d allowance saved',
+      'Not credited',
+      'A paired ' + scope + ' comparison suggests ' + count(Math.max(0, candidate?.savedPercent || 0)) + '% lower quota use, but Token Harness will not count it until quality is measured and preserved.',
+      'warn',
+    );
+  }
+  if (fiveMeasured || weeklyMeasured) {
+    const parts = [];
+    if (fiveMeasured) parts.push('5h ' + count(five.savedPercent) + '%');
+    if (weeklyMeasured) parts.push('7d ' + count(weekly.savedPercent) + '%');
+    const detail = [];
+    if (fiveMeasured && five.equivalentMinutes !== null) {
+      detail.push('The 5h median is equivalent to about ' + count(five.equivalentMinutes) + ' minutes of that 300-minute allowance window.');
+    }
+    if (fiveMeasured) detail.push(count(five.pairs) + ' authoritative 5h paired comparison(s).');
+    if (weeklyMeasured) detail.push(count(weekly.pairs) + ' authoritative weekly paired comparison(s); weekly percentage is not converted into wall-clock time.');
+    return metricCard(
+      '5h / 7d allowance saved',
+      parts.join(' · '),
+      detail.join(' '),
+      (five?.savedPercent || 0) > 0 || (weekly?.savedPercent || 0) > 0 ? 'positive' : '',
+    );
+  }
+  return metricCard('5h / 7d allowance saved', 'Not measured yet', 'Current allowance can be read, but Token Harness shows plan savings only when authoritative paired allowance evidence and paired quality evidence exist.');
+}
+function qualityCard(value) {
+  const quality = value?.quality;
+  if (quality?.state === 'regressed') {
+    return metricCard('Quality', 'Regression detected', count(quality.regressions) + ' paired benchmark(s) favored the baseline on the explicit quality gate. Positive allowance savings are blocked.', 'warn');
+  }
+  if (quality?.state === 'preserved') {
+    return metricCard('Quality', 'Preserved', count(quality.pairs) + ' quality-gated paired benchmark(s) support the current result; no quality regression is present in that evidence.', 'quality');
+  }
+  return metricCard('Quality', 'Not measured yet', 'Reasoning floors remain active, but Token Harness does not claim preserved quality until paired benchmark evidence exists.', 'quality');
+}
 function renderSummary(data) {
   const reduction = bestReduction(data.savings);
   const policies = policyCounts(data);
@@ -219,9 +264,9 @@ function renderSummary(data) {
   cards.push(reduction
     ? metricCard('Recorded output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement + '. Results from different optimizers are not silently added together.', reduction.measurement === 'Measured local output' ? 'positive' : '')
     : metricCard('Recorded output', 'No result yet', 'Use a configured agent normally. Missing telemetry is not zero savings.'));
-  cards.push(metricCard('5h / 7d allowance saved', 'Not measured yet', 'Current allowance can be read, but Token Harness will show minutes or plan credits saved only when paired allowance evidence proves the difference.'));
+  cards.push(allowanceCard(data.value));
   cards.push(metricCard('API cost saved', 'Not measured yet', 'Local reductions are not converted into €/$ without billed-token evidence and a verified price basis.'));
-  cards.push(metricCard('Quality', 'Guardrails active', 'Critical and difficult work keeps a minimum reasoning floor. Actual quality impact still requires paired task evidence.', 'quality'));
+  cards.push(qualityCard(data.value));
   $('impact-summary').replaceChildren(...cards);
   $('policy-count').textContent = policies.total ? policies.active + ' active · ' + policies.available + ' need attention or setup' : 'No policies observed yet';
 }
@@ -231,7 +276,13 @@ function nextAction(data) {
   const title = node('h2', 'What to do next');
   const body = node('p');
   const actions = node('div', undefined, 'inline-actions');
-  if (!data.agents.length) {
+  if (data.value?.quality?.state === 'regressed') {
+    body.textContent = 'A paired benchmark detected a quality regression. Do not enable a more aggressive saving policy until you review the evidence.';
+    const evidence = node('button', 'Review quality evidence', 'secondary');
+    evidence.type = 'button';
+    evidence.addEventListener('click', () => selectView('activity', true));
+    actions.append(evidence);
+  } else if (!data.agents.length) {
     body.textContent = 'Token Harness cannot optimize anything until Claude Code or Codex is available in the terminal that started this app.';
   } else {
     const unconfigured = data.agents.find(agent => !agent.configured);
@@ -241,6 +292,12 @@ function nextAction(data) {
     } else if (!data.savings.rows.length) {
       body.textContent = 'Your policies are configured. Keep using your coding agent normally; the next useful milestone is collecting enough evidence to show what actually changed.';
       actions.append(actionButton({ kind: 'help', label: 'How measurements work', topic: 'measurements' }, 'next-measure'));
+    } else if (data.value?.quality?.state === 'not-measured') {
+      body.textContent = 'Savings telemetry exists, but quality has not been proven with a paired task yet. Capture baseline and optimized benchmark evidence before making policies more aggressive.';
+      const evidence = node('button', 'Review evidence', 'secondary');
+      evidence.type = 'button';
+      evidence.addEventListener('click', () => selectView('activity', true));
+      actions.append(evidence);
     } else {
       const missingAllowance = data.agents.find(agent => !agent.allowance?.length);
       if (missingAllowance) {

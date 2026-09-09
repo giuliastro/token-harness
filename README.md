@@ -1,9 +1,13 @@
 # Token Harness
 
-**Make Claude Code and Codex easier to understand and use efficiently.**
+**Build, verify and measure the best optimization stack for Claude Code and Codex.**
 
-Token Harness checks your coding agents, shows subscription allowance when it can be
-observed reliably, reduces avoidable context overhead, and recommends useful actions.
+Token Harness checks your coding agents, discovers compatible optimization components, prepares
+reviewed setup changes, verifies that integrations are actually active, tracks attributable savings,
+and shows subscription allowance when it can be observed reliably. Specialized optimizers remain
+specialized projects; Token Harness manages the stack around them instead of reimplementing all of
+their algorithms.
+
 It runs locally and never presents local token estimates as subscription quota.
 
 ## Open it. Approve setup. Keep coding.
@@ -16,7 +20,7 @@ npm install --global token-harness@latest
 token-harness
 ```
 
-The browser is now the primary interface. **Set up automatically** checks both agents and
+The browser is now the primary interface. **Review setup** checks both agents and
 prepares the supported integration changes. It describes each change in plain language.
 Choose **Approve and apply** to apply the reviewed configuration with backups and verification.
 There are no plan IDs to copy and no daily command sequence to remember.
@@ -28,14 +32,24 @@ provider/version. Token Harness does not install Claude Code or Codex or log you
 
 ### Daily use
 
-Continue launching `claude` or `codex` as usual. Supported output integrations operate in the
-agent, not in the dashboard. You can close the page and its terminal without disabling those
-integrations. Open `token-harness` whenever you want to see results; the visible dashboard
-imports available provider records and refreshes its readings automatically.
+Continue launching `claude` or `codex` as usual. Supported optimization components operate in the
+agent or their own integration layer, not in the dashboard. Once a deterministic component is
+installed, verified and still beneficial, the normal model is **leave it enabled and keep coding**.
+Token Harness does not need to stay open and does not need to decide before every command whether an
+optimizer should run.
+
+Open `token-harness` when you want to inspect the stack, savings, allowance, health, compatibility or
+updates. Re-evaluation is useful when a harness/component changes version, verification fails,
+measured value deteriorates, workload shape changes materially, or you explicitly ask for a review.
+
+The app **does not perform periodic full dashboard reloads**. A full read happens on initial open
+or when you choose **Refresh data**. Existing readings remain visible while a refresh runs, and
+period views reuse cached evidence where possible. Applying a reviewed setting marks the displayed
+configuration as previous state instead of immediately re-reading everything again.
 
 **Recorded savings** shows retained history across locally recorded projects, with date bounds,
 provider, measurement class, units, changed-output counts, and before/after values. It does not
-add incompatible provider figures together. Negative results remain visible. No telemetry is
+add incompatible provider figures together. Negative results remain visible. Missing telemetry is
 shown as **not measured**, never a reassuring zero or an invented subscription saving.
 Some provider records may predate Token Harness; locally stored records are not guaranteed
 complete lifetime history. RTK history is imported directly. HarnessTrim project-local records
@@ -53,11 +67,18 @@ project-scoped; opening the app from its installation folder does not change the
 
 ### Find what you need
 
-The app has three tabs: **Overview** for agents and recorded savings, **Rules & settings**
-for one agent's rules at a time, and **Activity** for checks and guarded undo. Theme follows
-your system; the header also offers light and dark modes.
+The app has three primary views:
 
-Each rule shows what was actually **observed**, separately from how it works. Actions sit
+- **Dashboard** — what is saving resources, what has actually been measured, current allowance,
+  quality evidence, and the single most useful next action;
+- **Policies** — what is active, what can be enabled, why it matters, and the trade-off before a
+  change;
+- **Evidence** — recorded reductions, allowance/quality evidence, integration checks and guarded
+  undo.
+
+Theme follows your system; the header also offers light and dark modes.
+
+Each policy shows what was actually **observed**, separately from how it works. Actions sit
 next to the relevant state: **Adjust reasoning** opens the supported review/apply flow;
 **Change in Claude/Codex** explains native steps when an automatic write is not available.
 Missing allowance data and measurement records have their own setup/help actions.
@@ -67,9 +88,36 @@ admit automatic writes on that version. **No saved preference** means the user f
 absent, not that reasoning is disabled. A failed read is a separate state with a cause.
 The displayed preference is not a live reading of an already-running session.
 
-### The rules are visible
+### The optimization stack is the product
 
-**Rules & settings** explains each configured rule: what it does, why it is used,
+Token Harness is not trying to rebuild RTK, Caveman, Headroom or every other strong specialized
+optimizer inside one repository. A healthy external project should normally keep evolving with its
+own contributors; Token Harness provides a thin integration around discovery, compatibility,
+installation/configuration, verification, measurement, updates and rollback.
+
+The target lifecycle is:
+
+```text
+discover -> evaluate -> recommend -> install/configure -> verify -> measure
+         -> monitor -> update/re-evaluate -> rollback/uninstall
+```
+
+For deterministic low-risk optimizers, runtime orchestration is intentionally boring: install once,
+leave enabled, and re-evaluate only when evidence or the environment changes. Dynamic policy remains
+a smaller secondary layer for cases where the optimum really depends on task/allowance state, such
+as reasoning/model/verbosity or explicit cross-harness workload scheduling.
+
+The current UI still exposes these capabilities through **Dashboard / Policies / Evidence**. The
+product direction is to make **Your optimization stack** the primary object: component, version,
+health, verification state, measured value, quality confidence, update status and only the next
+action that is actually useful.
+
+See [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) for the architecture and
+[optimizer priorities](docs/optimizer-priorities.md) for candidate-selection rules.
+
+### The policies are visible
+
+**Policies** explains each configured rule: what it does, why it is used,
 its mode, and the evidence available. Automatic integrations, persistent preferences,
 observations and features that are not enabled are explicitly distinguished.
 
@@ -84,7 +132,7 @@ applies only after approval. **This is a persistent preference for future sessio
 automatic per-task switch.** It does not switch models, billing, login, or hook trust. The
 baseline automatic setup never guesses a task or quietly lowers reasoning.
 
-**Check integrations** performs the existing integration checks from the UI.
+**Check integrations** performs the existing integration checks from the Evidence view.
 **Undo last change**, available after an application in that dashboard session, previews a
 whole-file backup restoration. It refuses to undo a newer unrelated transaction. It restores
 only the last successful agent transaction; manual edits to those same files after that
@@ -116,17 +164,17 @@ The long CLI flag combinations are **not** the normal human interface. They are 
 used by the app, automation, and optionally by a coding harness. Humans can keep using the browser
 and the two entry points above.
 
-For in-session use, this repository now includes a portable Agent Skill at
+For in-session use, this repository includes a portable Agent Skill at
 [`skills/token-harness/SKILL.md`](skills/token-harness/SKILL.md). A compatible Claude Code or Codex
 skill mechanism can load it on demand, after which you can simply ask the harness to **use Token
 Harness for this task**. The skill classifies substantial work conservatively, calls the existing
 local `--json` optimizer at meaningful task boundaries, and can use explicit workload scheduling
 when you have actually supplied a backlog. It does not run Token Harness before every tool call.
 
-The skill is deliberately thin: Token Harness remains the deterministic policy engine. No MCP
-server, background model, persistent agent, or second quota formula is added just to make this work.
-Local tokens are still not subscription quota, and raw Claude/Codex percentages are still not a
-common currency.
+The skill is deliberately thin: Token Harness remains the deterministic stack/evidence controller.
+No MCP server, background model, persistent agent, or second quota formula is added just to make
+this work. Local tokens are still not subscription quota, and raw Claude/Codex percentages are still
+not a common currency.
 
 Agent use is read-only by default. If Token Harness recommends a persistent model, reasoning, or
 verbosity change, the harness must first build a reviewed plan, explain the exact proposed mutation,
@@ -145,7 +193,7 @@ browser remains fully usable without any skill or second AI subscription. See
 
 ### Measure context savings
 
-Paired task benchmarks can now report context exposure separately from quality, local tokens, and
+Paired task benchmarks can report context exposure separately from quality, local tokens, and
 subscription allowance. Capture baseline and optimized variants with the existing benchmark workflow,
 then inspect one pair or the current-project matrix:
 
@@ -158,8 +206,18 @@ When both variants pass quality and each context surface stays stable from task 
 report can show evidence such as **Context: reduced — static MCP tools 62 → 5**. Truncated MCP
 inventory, unknown tool counts, missing observations, or mid-task context drift produce **unknown**
 instead of a saving claim. Context reduction is context-shape evidence only; it is never converted
-into Claude/Codex subscription quota. This evidence is the admission gate for experimental broad
-context owners such as Headroom or Context Mode.
+into Claude/Codex subscription quota.
+
+The Dashboard can additionally project authoritative paired benchmark evidence into understandable
+outcomes: a five-hour saving can be shown as both a percentage and its equivalent share of the
+300-minute window; weekly quota remains a percentage because it is not seven days of wall-clock
+compute. Positive allowance savings are not credited when paired quality evidence is missing or
+shows a regression. API money remains **not measured** until billed input/output tokens and a
+verified model-price basis exist.
+
+This evidence is also the admission gate for candidate optimization components. Upstream benchmark
+numbers are never copied directly into a user's savings total, and independently useful components
+are not assumed to compose safely until the combined stack is measured.
 
 The older automation contracts remain available: `setup`, `optimize`, `plan`, `apply`,
 `verify`, `metrics`, `rollback`, and their JSON reports. `ui --json` preserves its existing
@@ -244,16 +302,51 @@ See [RFC 0013](docs/rfcs/0013-guided-local-experience.md) for the local browser 
 [RFC 0004](docs/rfcs/0004-safety-and-installation.md) for the execution model and
 [RFC 0006](docs/rfcs/0006-cli-contract.md) for CLI/JSON guarantees.
 
-## Supported optimizations
+## Optimization and evidence tools
 
-Token Harness can detect and measure several independent local tools:
+Token Harness should integrate the strongest useful optimization technologies rather than
+reimplement them. Priority is based on **marginal quality-safe value over the user's actual current
+stack**, not on the largest upstream marketing percentage or the order in which a project was
+suggested.
 
-| Provider | Purpose | Management |
+### Supported stack components
+
+| Component | Purpose | Management |
 | --- | --- | --- |
-| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Managed only for reviewed combinations |
-| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Managed only for reviewed combinations |
-| [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only; never installed automatically |
-| [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only; never installed automatically |
+| [RTK](https://github.com/rtk-ai/rtk) | Shell-command rewriting and output reduction | Supported on reviewed combinations; normally install once and leave enabled |
+| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic reducers and harness adapters | Supported on reviewed combinations; first-party project |
+| [cclimits](https://github.com/cruzanstx/cclimits) | Optional live/local quota companion | Read-only evidence; never installed automatically |
+| [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
+
+### Candidate categories
+
+| Research tier | Waste surface | Candidate examples | Decision |
+| --- | --- | --- | --- |
+| **P1** | **Third distinct stack mechanism** | best candidate from the categories below | No winner selected. Must prove material marginal value, quality safety and a real managed/adopted lifecycle. |
+| P1 | Repository exploration/retrieval | code graph/index/memory approaches vs native grep/read | Compare exact source correctness, tool calls/context and indexing/startup cost. |
+| P1 | MCP schema/discovery | native Tool Search/deferred loading, [mcptoon](https://github.com/activeing123/mcptoon), [mcp-compressor](https://github.com/atlassian-labs/mcp-compressor) class | mcptoon detection is read-only only; an external layer must beat the installed native baseline. |
+| P1 | Context/prompt/output minimization | Caveman-class and other maintained specialized projects | Compare changed surface, overlap with RTK/HarnessTrim, quality and marginal value. |
+| P2 | Broad context ownership | [Headroom](https://github.com/headroomlabs-ai/headroom) / Context Mode-class systems | Strong admission gate; high potential but higher overlap/complexity. |
+| P2 | Result-side encoding/compression | TOON/result encoders and similar tools | No compression cascade by default; must add value after current reducers. |
+| P2 | Native model/reasoning/verbosity | supported Claude/Codex controls | Secondary Token Harness policy layer; dynamic switching only where task/allowance evidence justifies it. |
+
+A candidate can be **detected** without being selected. Detection is cheap knowledge, not an
+integration commitment. The third mechanism required before broad promotion is intentionally unnamed
+until comparative Token Harness evidence selects it.
+
+For an admitted deterministic component the default operating model is:
+
+```text
+install/configure -> verify -> measure -> keep enabled -> monitor -> re-evaluate on change
+```
+
+Token Harness should not continuously toggle an optimizer that is consistently safe and beneficial.
+The product value is assembling and maintaining the best stack, measuring what it actually does, and
+knowing when a change/update is worth making.
+
+See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) for the research queue and ranking
+rules, [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) for the product architecture, and
+[docs/release-readiness.md](docs/release-readiness.md) for the promotion gate.
 
 A provider you installed yourself remains yours. Token Harness can adopt observable
 configuration without claiming ownership of the executable.
@@ -363,7 +456,7 @@ changes and restores a prior Claude effort preference without undoing unrelated 
 
 ### Claude allowance is unavailable
 
-The dashboard now explains whether the optional companion is missing, lacks the safe CLI
+The dashboard explains whether the optional companion is missing, lacks the safe CLI
 flags, cannot find Python, has no usable Claude session, reports an expired session, or returns
 an unsupported source. It does not expose credentials, raw companion errors or private paths.
 
@@ -384,7 +477,7 @@ A missing observation is not zero remaining allowance. Never paste credentials t
 
 ### Codex is configured but its hook does not run
 
-`token-harness verify --harness codex --verbose` now reads native `hooks/list` where the
+`token-harness verify --harness codex --verbose` reads native `hooks/list` where the
 installed app-server exposes it. Disabled, untrusted and modified hooks are distinguished from
 an unavailable observation. Trust must still be granted explicitly in Codex. Enabled/trusted
 metadata does not prove interception, reduction, or task quality; the integration remains
@@ -470,8 +563,12 @@ pnpm package
 pnpm smoke:install
 ```
 
-Read [PLAN.md](PLAN.md) and the accepted [RFCs](docs/rfcs) before changing public
-behavior or architecture.
+Read [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),
+[docs/optimizer-priorities.md](docs/optimizer-priorities.md),
+[docs/release-readiness.md](docs/release-readiness.md), [PLAN.md](PLAN.md), and the accepted
+[RFCs](docs/rfcs) before changing public behavior or architecture. `PLAN.md` records the greenfield
+implementation history; RFC 0027 is the current product-direction clarification when older
+"orchestration" language is broader than the intended operating model.
 
 ## License
 
@@ -485,7 +582,7 @@ reduction records appear as they are ready; a slow allowance check does not hide
 Refreshing keeps previous readings visible until newer ones arrive. Errors and waiting are
 explicit, and reduced-motion preferences disable animation without removing status text.
 
-A result can now say **"65% less tool output"**, with its source, before/after values and count
+A result can say **"65% less tool output"**, with its source, before/after values and count
 of recorded changed outputs immediately beside it. An estimate says **"Estimated"**. This
 percentage describes only those recorded outputs, not your whole coding session, subscription
 allowance or money. Provider rows remain separate; negative results and errors remain visible.

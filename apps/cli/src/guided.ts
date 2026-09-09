@@ -11,12 +11,14 @@ import type {
   PlanReport,
   PlannedAction,
   StatusReport,
+  TaskBenchmarkContextMatrixReport,
   VerifyReport,
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
+import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -115,6 +117,7 @@ export interface GuideOverview {
   generatedAt: string;
   agents: GuideAgent[];
   savings: GuideSavings;
+  value: GuideValueEvidence;
   rules: GuideRule[];
   notices: string[];
 }
@@ -602,7 +605,7 @@ function describeChange(action: PlannedAction, harness: string): GuidePreview['c
 }
 
 type GuideRead<T> = Pick<CliEnvelope<T>, 'data' | 'diagnostics' | 'exitCode'>;
-type GuideStageId = 'agents' | 'allowance' | 'rules' | 'savings' | 'checks';
+type GuideStageId = 'agents' | 'allowance' | 'rules' | 'savings' | 'checks' | 'value';
 export interface GuideLoading {
   run: number;
   period: GuidePeriod;
@@ -618,6 +621,7 @@ const READ_STAGES: Array<{ id: GuideStageId; label: string }> = [
   { id: 'rules', label: 'Reading saved preferences and connected tools' },
   { id: 'savings', label: 'Importing recorded reductions' },
   { id: 'checks', label: 'Checking integration configuration' },
+  { id: 'value', label: 'Reading paired allowance and quality evidence' },
 ];
 
 export class GuideService {
@@ -728,7 +732,7 @@ export class GuideService {
         guidance,
       );
     };
-    const [, , , metrics, status] = await Promise.all([
+    const [, , , metrics, status, benchmark] = await Promise.all([
       observe<DoctorReport>('agents', ['doctor']).then((result) => {
         doctor = result;
         updateAgents();
@@ -767,6 +771,7 @@ export class GuideService {
         return result;
       }),
       observe<StatusReport>('checks', ['status']),
+      observe<TaskBenchmarkContextMatrixReport>('value', ['benchmark-matrix']),
     ]);
     const agents = this.agentView(
       doctor,
@@ -807,6 +812,7 @@ export class GuideService {
       generatedAt: new Date(this.now()).toISOString(),
       agents,
       savings: savingsView(metrics.data, period),
+      value: guidedValueEvidence(benchmark.data),
       rules: [...SAFETY_RULES, ...TASK_RULES],
       notices,
     };
