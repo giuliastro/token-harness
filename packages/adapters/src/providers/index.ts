@@ -21,6 +21,15 @@ export {
   type HeadroomCandidateObservation,
   type HeadroomCandidateState,
 } from './headroom-candidate.js';
+export {
+  MCPTOON_MINIMUM_BENCHMARK_VERSION,
+  mcptoonVersionAtLeast,
+  observeMcptoonCandidate,
+  parseMcptoonManifestCapabilities,
+  parseMcptoonVersion,
+  type McptoonCandidateObservation,
+  type McptoonCandidateState,
+} from './mcptoon-candidate.js';
 export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 export {
   compareCapabilities,
