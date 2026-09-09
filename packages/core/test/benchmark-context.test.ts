@@ -31,6 +31,7 @@ function mcp(name: string, toolCount: number | null): McpServerObservation {
 function observation(
   servers: McpServerObservation[],
   deferral: HarnessContextObservation['toolDeferral'] = null,
+  mcpInventoryTruncated = false,
 ): HarnessContextObservation {
   return {
     harnessId: CODEX,
@@ -51,7 +52,7 @@ function observation(
     availableModels: [],
     modelCatalogTruncated: false,
     mcpServers: servers,
-    mcpInventoryTruncated: false,
+    mcpInventoryTruncated,
     diagnostics: [],
   };
 }
@@ -98,6 +99,20 @@ test('a smaller external meta-tool surface is recorded as context reduction, not
   assert.equal(comparison.optimized?.effectiveStaticMcpToolCount, 5);
 });
 
+test('context comparison fails closed when either MCP inventory is incomplete', () => {
+  const complete = taskBenchmarkContextSnapshot(observation([mcp('inventory', 62)]));
+  const unknown = taskBenchmarkContextSnapshot(observation([mcp('inventory', 5), mcp('unknown', null)]));
+  const truncated = taskBenchmarkContextSnapshot(observation([mcp('inventory', 5)], null, true));
+
+  const unknownComparison = compareTaskBenchmarkContextSnapshots(complete, unknown);
+  assert.equal(unknownComparison.verdict, 'unknown');
+  assert.match(unknownComparison.reason, /fails closed/);
+
+  const truncatedComparison = compareTaskBenchmarkContextSnapshots(complete, truncated);
+  assert.equal(truncatedComparison.verdict, 'unknown');
+  assert.match(truncatedComparison.reason, /fails closed/);
+});
+
 test('context snapshot parser rejects impossible effective exposure', () => {
   assert.equal(
     parseTaskBenchmarkContextSnapshot({
@@ -105,9 +120,27 @@ test('context snapshot parser rejects impossible effective exposure', () => {
       rawMcpServerCount: 1,
       rawKnownMcpToolCount: 2,
       unknownMcpToolServerCount: 0,
+      mcpInventoryTruncated: false,
       effectiveStaticMcpServerCount: 1,
       effectiveStaticMcpToolCount: 3,
       toolDeferralState: null,
+      toolDeferralMechanism: null,
+    }),
+    undefined,
+  );
+});
+
+test('context snapshot parser rejects mismatched deferral identity', () => {
+  assert.equal(
+    parseTaskBenchmarkContextSnapshot({
+      observationState: 'observed',
+      rawMcpServerCount: 1,
+      rawKnownMcpToolCount: 2,
+      unknownMcpToolServerCount: 0,
+      mcpInventoryTruncated: false,
+      effectiveStaticMcpServerCount: 1,
+      effectiveStaticMcpToolCount: 2,
+      toolDeferralState: 'available',
       toolDeferralMechanism: null,
     }),
     undefined,
@@ -170,4 +203,5 @@ test('completed receipts preserve start and finish context witnesses additively'
   if (!completed.ok) return;
   assert.equal(completed.receipt.contextAtStart?.rawKnownMcpToolCount, 62);
   assert.equal(completed.receipt.contextAtFinish?.rawKnownMcpToolCount, 5);
+  assert.equal(completed.receipt.contextAtFinish?.mcpInventoryTruncated, false);
 });
