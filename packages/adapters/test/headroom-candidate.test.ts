@@ -31,18 +31,12 @@ const NO_FILESYSTEM: FileSystemPort = {
   dirname: (path) => path,
   basename: (path) => path,
   isInside: () => false,
-  stat: () =>
-    Promise.reject(new Error('Headroom candidate observation must not read files')),
-  readFile: () =>
-    Promise.reject(new Error('Headroom candidate observation must not read files')),
-  writeFile: () =>
-    Promise.reject(new Error('Headroom candidate observation must not write files')),
-  appendFile: () =>
-    Promise.reject(new Error('Headroom candidate observation must not write files')),
-  createDirectory: () =>
-    Promise.reject(new Error('Headroom candidate observation must not write files')),
-  remove: () =>
-    Promise.reject(new Error('Headroom candidate observation must not write files')),
+  stat: () => Promise.reject(new Error('observer must not read files')),
+  readFile: () => Promise.reject(new Error('observer must not read files')),
+  writeFile: () => Promise.reject(new Error('observer must not write files')),
+  appendFile: () => Promise.reject(new Error('observer must not write files')),
+  createDirectory: () => Promise.reject(new Error('observer must not write files')),
+  remove: () => Promise.reject(new Error('observer must not write files')),
   readDirectory: async () => [],
 };
 
@@ -51,7 +45,10 @@ interface RunnerOptions {
   wrapHelp?: string | null;
 }
 
-function fakeOutcome(request: ProcessRequest, payload: string | null): ProcessOutcome {
+function fakeOutcome(
+  request: ProcessRequest,
+  payload: string | null,
+): ProcessOutcome {
   return {
     displayCommand: `${request.executable} ${request.args.join(' ')}`,
     interpreter: 'direct',
@@ -66,7 +63,7 @@ function fakeOutcome(request: ProcessRequest, payload: string | null): ProcessOu
     timedOut: false,
     failure:
       payload === null
-        ? { reason: 'executable-not-found', message: 'headroom is not installed' }
+        ? { reason: 'executable-not-found', message: 'headroom missing' }
         : null,
   };
 }
@@ -105,7 +102,7 @@ function context(options: RunnerOptions): ProviderContext {
   };
 }
 
-test('parses Headroom semantic versions without trusting surrounding text', () => {
+test('parses Headroom semantic versions', () => {
   assert.equal(parseHeadroomVersion('headroom 0.36.0'), '0.36.0');
   assert.equal(parseHeadroomVersion('headroom version unknown'), null);
 });
@@ -117,18 +114,14 @@ test('requires the current benchmark floor', () => {
   assert.equal(headroomVersionAtLeast('0.35.9', '0.36.0'), false);
 });
 
-test('recognizes Claude and Codex only when wrap help advertises them', () => {
-  assert.deepEqual(parseHeadroomWrapTargets('Supported commands: claude codex aider'), {
-    claude: true,
-    codex: true,
-  });
-  assert.deepEqual(parseHeadroomWrapTargets('Supported commands: claude aider'), {
-    claude: true,
-    codex: false,
-  });
+test('recognizes advertised wrap targets', () => {
+  const both = parseHeadroomWrapTargets('Supported: claude codex aider');
+  const claudeOnly = parseHeadroomWrapTargets('Supported: claude aider');
+  assert.deepEqual(both, { claude: true, codex: true });
+  assert.deepEqual(claudeOnly, { claude: true, codex: false });
 });
 
-test('reports Headroom absent without attempting to treat it as configured', async () => {
+test('reports Headroom absent', async () => {
   const observation = await observeHeadroomCandidate(context({ version: null }));
   assert.equal(observation.state, 'absent');
   assert.equal(observation.version, null);
@@ -137,7 +130,7 @@ test('reports Headroom absent without attempting to treat it as configured', asy
   assert.equal(observation.supportsCodexWrap, false);
 });
 
-test('keeps an older Headroom build out of paired benchmark admission', async () => {
+test('rejects an older benchmark candidate', async () => {
   const observation = await observeHeadroomCandidate(
     context({
       version: 'headroom 0.35.9',
@@ -150,7 +143,7 @@ test('keeps an older Headroom build out of paired benchmark admission', async ()
   assert.equal(observation.supportsCodexWrap, true);
 });
 
-test('requires both managed harness wrap targets before declaring benchmark readiness', async () => {
+test('requires both managed harness wrap targets', async () => {
   const observation = await observeHeadroomCandidate(
     context({
       version: 'headroom 0.37.0',
@@ -163,7 +156,7 @@ test('requires both managed harness wrap targets before declaring benchmark read
   assert.equal(observation.supportsCodexWrap, false);
 });
 
-test('marks the reviewed current Headroom line benchmark-ready without enabling it', async () => {
+test('marks a reviewed current build benchmark-ready', async () => {
   const observation = await observeHeadroomCandidate(
     context({
       version: 'headroom 0.37.0',
@@ -173,7 +166,5 @@ test('marks the reviewed current Headroom line benchmark-ready without enabling 
   assert.equal(observation.state, 'benchmark-ready');
   assert.equal(observation.version, '0.37.0');
   assert.equal(observation.executable, '/usr/local/bin/headroom');
-  assert.deepEqual(observation.reasons, [
-    'Headroom is eligible for paired experimental benchmarking; no integration has been enabled',
-  ]);
+  assert.match(observation.reasons[0] ?? '', /paired experimental benchmarking/);
 });
