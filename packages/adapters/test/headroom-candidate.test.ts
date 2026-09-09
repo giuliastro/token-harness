@@ -35,7 +35,8 @@ const NO_FILESYSTEM: FileSystemPort = {
   readFile: () => Promise.reject(new Error('observer must not read files')),
   writeFile: () => Promise.reject(new Error('observer must not write files')),
   appendFile: () => Promise.reject(new Error('observer must not write files')),
-  createDirectory: () => Promise.reject(new Error('observer must not write files')),
+  createDirectory: () =>
+    Promise.reject(new Error('observer must not write files')),
   remove: () => Promise.reject(new Error('observer must not write files')),
   readDirectory: () => Promise.resolve([]),
 };
@@ -126,7 +127,9 @@ test('recognizes advertised wrap targets', () => {
 });
 
 test('reports Headroom absent', async () => {
-  const observation = await observeHeadroomCandidate(context({ version: null }));
+  const observation = await observeHeadroomCandidate(
+    context({ version: null }),
+  );
   assert.equal(observation.state, 'absent');
   assert.equal(observation.version, null);
   assert.equal(observation.executable, null);
@@ -170,5 +173,8 @@ test('marks a reviewed current build benchmark-ready', async () => {
   assert.equal(observation.state, 'benchmark-ready');
   assert.equal(observation.version, '0.37.0');
   assert.equal(observation.executable, '/usr/local/bin/headroom');
-  assert.match(observation.reasons[0] ?? '', /paired experimental benchmarking/);
+  assert.match(
+    observation.reasons[0] ?? '',
+    /paired experimental benchmarking/,
+  );
 });
