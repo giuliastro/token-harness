@@ -2,12 +2,13 @@
  * Human rendering for the empirical paired benchmark matrix.
  *
  * The matrix counts deterministic pair verdicts and keeps evidence classes separate. It never
- * turns backend quota, local tokens, retries and quality into one synthetic score.
+ * turns backend quota, local tokens, context exposure, retries and quality into one synthetic score.
  */
 
 import type {
-  TaskBenchmarkMatrixEntry,
-  TaskBenchmarkMatrixReport,
+  TaskBenchmarkContextMatrixEntry,
+  TaskBenchmarkContextMatrixReport,
+  TaskBenchmarkContextMatrixSummary,
   TaskBenchmarkMatrixSummary,
 } from '@token-harness/core';
 
@@ -33,6 +34,13 @@ function evidenceLine(summary: TaskBenchmarkMatrixSummary): string {
   );
 }
 
+function contextLine(summary: TaskBenchmarkContextMatrixSummary): string {
+  return (
+    `context — reduced ${String(summary.reduced)}, same ${String(summary.same)}, ` +
+    `increased ${String(summary.increased)}, unknown ${String(summary.unknown)}`
+  );
+}
+
 function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   if (
     summary.localComparablePairs === 0 ||
@@ -49,16 +57,25 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   );
 }
 
-function entryLine(entry: TaskBenchmarkMatrixEntry): string {
+function entryLine(entry: TaskBenchmarkContextMatrixEntry): string {
   const local =
     entry.localTokenSavingPercent === null
       ? ''
       : `; local delta ${percent(entry.localTokenSavingPercent)}`;
-  return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
+  const contextCounts =
+    entry.context.baseline === null || entry.context.optimized === null
+      ? ''
+      : ` ${String(entry.context.baseline.effectiveStaticMcpToolCount)}→${String(
+          entry.context.optimized.effectiveStaticMcpToolCount,
+        )} static tools`;
+  return (
+    `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}; ` +
+    `context ${entry.context.verdict}${contextCounts}`
+  );
 }
 
 export function renderBenchmarkMatrixReport(
-  report: TaskBenchmarkMatrixReport,
+  report: TaskBenchmarkContextMatrixReport,
   _context: RenderContext,
 ): string {
   const lines: string[] = ['Benchmark matrix — current project', ''];
@@ -86,6 +103,10 @@ export function renderBenchmarkMatrixReport(
     lines.push(`  ${summary.taskClass ?? 'all'}`);
     lines.push(...wrap(summaryLine(summary), 4));
     lines.push(...wrap(evidenceLine(summary), 4));
+    const contextSummary = report.context.byTaskClass.find(
+      (item) => item.taskClass === summary.taskClass,
+    );
+    if (contextSummary !== undefined) lines.push(...wrap(contextLine(contextSummary), 4));
     const local = localLine(summary);
     if (local !== null) lines.push(...wrap(local, 4));
   }
@@ -93,6 +114,7 @@ export function renderBenchmarkMatrixReport(
   lines.push('', 'Overall');
   lines.push(...wrap(summaryLine(report.overall), 2));
   lines.push(...wrap(evidenceLine(report.overall), 2));
+  lines.push(...wrap(contextLine(report.context.overall), 2));
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
 
@@ -102,7 +124,7 @@ export function renderBenchmarkMatrixReport(
   lines.push(
     '',
     ...wrap(
-      'Local token deltas are local evidence only. Backend quota is counted as quota-backed only when the paired comparator found one trustworthy same-window delta.',
+      'Context savings require quality-passed, start-to-finish stable evidence. Context and local-token deltas remain separate from backend subscription quota.',
       0,
     ),
   );
