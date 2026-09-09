@@ -37,7 +37,7 @@ const NO_FILESYSTEM: FileSystemPort = {
   appendFile: () => Promise.reject(new Error('observer must not write files')),
   createDirectory: () => Promise.reject(new Error('observer must not write files')),
   remove: () => Promise.reject(new Error('observer must not write files')),
-  readDirectory: async () => [],
+  readDirectory: () => Promise.resolve([]),
 };
 
 interface RunnerOptions {
@@ -49,11 +49,12 @@ function fakeOutcome(
   request: ProcessRequest,
   payload: string | null,
 ): ProcessOutcome {
+  const missing = payload === null;
   return {
     displayCommand: `${request.executable} ${request.args.join(' ')}`,
     interpreter: 'direct',
-    executablePath: payload === null ? null : '/usr/local/bin/headroom',
-    exitCode: payload === null ? null : 0,
+    executablePath: missing ? null : '/usr/local/bin/headroom',
+    exitCode: missing ? null : 0,
     signal: null,
     stdout: payload ?? '',
     stderr: '',
@@ -61,22 +62,24 @@ function fakeOutcome(
     stderrTruncated: false,
     durationMs: 1,
     timedOut: false,
-    failure:
-      payload === null
-        ? { reason: 'executable-not-found', message: 'headroom missing' }
-        : null,
+    failure: missing
+      ? {
+          reason: 'executable-not-found',
+          message: 'headroom missing',
+        }
+      : null,
   };
 }
 
 function runner(options: RunnerOptions): ProcessRunner {
   return {
     run: (request: ProcessRequest): Promise<ProcessOutcome> => {
-      const payload =
-        request.args[0] === '--version'
-          ? (options.version ?? null)
-          : request.args[0] === 'wrap' && request.args[1] === '--help'
-            ? (options.wrapHelp ?? null)
-            : null;
+      let payload: string | null = null;
+      if (request.args[0] === '--version') {
+        payload = options.version ?? null;
+      } else if (request.args[0] === 'wrap' && request.args[1] === '--help') {
+        payload = options.wrapHelp ?? null;
+      }
       return Promise.resolve(fakeOutcome(request, payload));
     },
   };
