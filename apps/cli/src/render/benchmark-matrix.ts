@@ -9,6 +9,8 @@ import type {
   TaskBenchmarkContextMatrixEntry,
   TaskBenchmarkContextMatrixReport,
   TaskBenchmarkContextMatrixSummary,
+  TaskBenchmarkMatrixEntry,
+  TaskBenchmarkMatrixReport,
   TaskBenchmarkMatrixSummary,
 } from '@token-harness/core';
 
@@ -57,11 +59,14 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   );
 }
 
-function entryLine(entry: TaskBenchmarkContextMatrixEntry): string {
+function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixEntry): string {
   const local =
     entry.localTokenSavingPercent === null
       ? ''
       : `; local delta ${percent(entry.localTokenSavingPercent)}`;
+  if (!('context' in entry)) {
+    return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
+  }
   const contextCounts =
     entry.context.baseline === null || entry.context.optimized === null
       ? ''
@@ -75,7 +80,7 @@ function entryLine(entry: TaskBenchmarkContextMatrixEntry): string {
 }
 
 export function renderBenchmarkMatrixReport(
-  report: TaskBenchmarkContextMatrixReport,
+  report: TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport,
   _context: RenderContext,
 ): string {
   const lines: string[] = ['Benchmark matrix — current project', ''];
@@ -98,12 +103,14 @@ export function renderBenchmarkMatrixReport(
     return document(lines);
   }
 
+  const contextReport = 'context' in report ? report : null;
+
   lines.push('', 'By task class');
   for (const summary of report.byTaskClass) {
     lines.push(`  ${summary.taskClass ?? 'all'}`);
     lines.push(...wrap(summaryLine(summary), 4));
     lines.push(...wrap(evidenceLine(summary), 4));
-    const contextSummary = report.context.byTaskClass.find(
+    const contextSummary = contextReport?.context.byTaskClass.find(
       (item) => item.taskClass === summary.taskClass,
     );
     if (contextSummary !== undefined) lines.push(...wrap(contextLine(contextSummary), 4));
@@ -114,20 +121,22 @@ export function renderBenchmarkMatrixReport(
   lines.push('', 'Overall');
   lines.push(...wrap(summaryLine(report.overall), 2));
   lines.push(...wrap(evidenceLine(report.overall), 2));
-  lines.push(...wrap(contextLine(report.context.overall), 2));
+  if (contextReport !== null) lines.push(...wrap(contextLine(contextReport.context.overall), 2));
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
 
   lines.push('', 'Pairs');
   for (const entry of report.entries) lines.push(...wrap(entryLine(entry), 2));
 
-  lines.push(
-    '',
-    ...wrap(
-      'Context savings require quality-passed, start-to-finish stable evidence. Context and local-token deltas remain separate from backend subscription quota.',
-      0,
-    ),
-  );
+  if (contextReport !== null) {
+    lines.push(
+      '',
+      ...wrap(
+        'Context savings require quality-passed, start-to-finish stable evidence. Context and local-token deltas remain separate from backend subscription quota.',
+        0,
+      ),
+    );
+  }
 
   return document(lines);
 }
