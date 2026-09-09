@@ -20,7 +20,10 @@ describe('outcome-first guided dashboard', () => {
     assert.match(GUIDE_JS, /Not measured yet/);
     assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
     assert.match(GUIDE_JS, /billed-token evidence/);
-    assert.match(GUIDE_JS, /does not claim preserved quality until paired benchmark evidence exists/);
+    assert.match(
+      GUIDE_JS,
+      /does not claim preserved quality until paired benchmark evidence exists/,
+    );
   });
 
   it('translates demonstrated 5h quota evidence into an explicit window equivalent only', () => {
