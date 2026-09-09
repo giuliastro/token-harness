@@ -17,12 +17,12 @@ const periodCache = new Map();
 const VIEWS = {
   overview: ['Dashboard', 'What Token Harness is doing for you, what is measured, and what to do next.'],
   rules: ['Policies', 'What is active, what can be enabled, and the trade-offs before you change anything.'],
-  activity: ['Evidence', 'Measurements, quality limits, checks and the technical evidence behind the dashboard.'],
+  activity: [String('Evidence'), 'Measurements, quality limits, checks and the technical evidence behind the dashboard.'],
 };
 const HELP = {
-  'claude-effort': ['Change reasoning in Claude', 'Open Claude Code and use /effort. Review the current level before changing it. Token Harness will not lower difficult work below its quality floor.', '/effort'],
+  'claude-effort': ['Change reasoning in Claude', 'What you can do: Inside Claude Code, use /effort. Review the current level before changing it. Token Harness will not lower difficult work below its quality floor.', '/effort'],
   'codex-effort': ['Change reasoning in Codex', 'Open Codex and use /model to inspect the current model and reasoning controls. Project or profile settings can override a global preference.', '/model'],
-  'claude-tools': ['Review Claude tools', 'Open Claude Code and use /mcp. Disable a server only when you know the task does not need it; a high tool count alone is not evidence that removal is safe.', '/mcp'],
+  'claude-tools': ['Review Claude tools', 'Inside Claude Code, use /mcp. Disable a server only when you know the task does not need it; a high tool count alone is not evidence that removal is safe.', '/mcp'],
   'codex-tools': ['Review Codex tools', 'Open Codex and use /mcp. Fix authentication or disable only tools you know are unnecessary for your work.', '/mcp'],
   measurements: ['How savings are measured', 'Token Harness reports only evidence it can defend. Local output reduction is not automatically converted into subscription minutes, weekly credits, API cost or quality. Those appear only when paired allowance, billed-token or quality evidence exists.', null],
   cclimits: ['Set up the Claude allowance reader', 'The allowance meter is optional. Install the reviewed cclimits companion, keep Claude signed in, then manually refresh this dashboard.', 'npm install --global cclimits@1.7.0'],
