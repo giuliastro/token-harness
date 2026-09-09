@@ -58,9 +58,10 @@ function qualityEvidence(entries: readonly MatrixEntry[]): GuideQualityEvidence 
     (entry) => entry.basis === 'quality' && entry.verdict === 'optimized-better',
   ).length;
   const known = entries.filter((entry) => {
-    if (entry.verdict === 'incomparable') return false;
-    if (entry.basis !== 'quality') return true;
-    return entry.verdict === 'baseline-better' || entry.verdict === 'optimized-better';
+    if (entry.basis === 'quality') {
+      return entry.verdict === 'baseline-better' || entry.verdict === 'optimized-better';
+    }
+    return entry.evidenceLevel !== 'none';
   }).length;
 
   return {
@@ -83,7 +84,8 @@ function allowanceEvidence(
   });
   const rawMedian = median(deltas);
   const savedPercent = rawMedian === null ? null : roundOne(rawMedian);
-  const blocked = savedPercent !== null && savedPercent > 0 && quality.regressions > 0;
+  const blocked =
+    savedPercent !== null && savedPercent > 0 && quality.state !== 'preserved';
 
   return {
     state: savedPercent === null ? 'not-measured' : blocked ? 'blocked-by-quality' : 'measured',
@@ -99,9 +101,10 @@ function allowanceEvidence(
  * Project the existing paired benchmark matrix into user-facing value evidence.
  *
  * Backend quota is never summed across tasks, windows or resets. We expose the median percentage
- * delta only from authoritative paired quota evidence. A positive allowance result is blocked when
- * any paired benchmark shows a quality regression. API money remains unavailable until billed-token
- * evidence and a verified price basis exist elsewhere in the product.
+ * delta only from authoritative paired quota evidence. Positive allowance value is not promoted
+ * until paired quality evidence is also present and free of regressions. API money remains
+ * unavailable until billed-token evidence and a verified price basis exist elsewhere in the
+ * product.
  */
 export function guidedValueEvidence(
   report: TaskBenchmarkContextMatrixReport | null,
@@ -120,7 +123,7 @@ export function guidedValueEvidence(
     },
     basis:
       entries.length > 0
-        ? 'Median authoritative paired quota deltas; quality uses the same deterministic benchmark verdicts. Quota percentages are not added across windows or resets.'
+        ? 'Median authoritative paired quota deltas; positive savings require paired quality evidence with no regression. Quota percentages are not added across windows or resets.'
         : 'No complete paired benchmark matrix is available yet.',
   };
 }
