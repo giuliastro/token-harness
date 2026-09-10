@@ -31,6 +31,8 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 <div class="section-title"><div><h2>Your optimization stack</h2><p>The components that actually make up your current efficiency stack. Installed, verified, measured and health state stay separate so a configured tool is never mistaken for a proven result.</p></div></div>
 <div id="stack" class="agent-grid" aria-busy="true"><div class="panel agent"><h2>Optimization stack</h2><p class="caption">Checking installed components, verification and attributable evidence…</p></div></div>
+<div class="section-title"><div><h2>Potential improvements</h2><p>Candidate optimizers worth evaluating separately from your active stack. They are not presented as installed, recommended, or beneficial until benchmark evidence supports that conclusion.</p></div></div>
+<div id="candidates" class="agent-grid"><div class="panel agent"><h2>Candidate catalog</h2><p class="caption">Preparing read-only evaluation targets…</p></div></div>
 <div class="section-title"><div><h2>Your coding agents</h2><p>Only the settings that affect efficiency and allowance are shown here. Open details when you need the technical explanation.</p></div></div>
 <div id="agents" class="agent-grid" aria-busy="true"><div class="panel agent loading-card"><h2>Claude Code</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div><div class="panel agent loading-card"><h2>Codex</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div></div>
 </section>
