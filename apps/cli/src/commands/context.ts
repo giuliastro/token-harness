@@ -13,6 +13,7 @@ import type {
   HarnessId,
   LocalDatabasePort,
   MetricsStore,
+  OptimizationCandidateId,
   PlatformFacts,
   PlatformPaths,
   ProcessRunner,
@@ -41,6 +42,8 @@ export interface CommandContext {
   benchmarkQuality?: TaskQualityGate | null;
   benchmarkAttempts?: number | null;
   benchmarkFailedAttempts?: number | null;
+  /** Optional experiment target. It attributes a pair; it does not prove activation. */
+  optimizationCandidate?: OptimizationCandidateId | null;
   /** RFC 0011 optimizer policy inputs; optional for hand-built test contexts. */
   taskClass?: TaskClass | null;
   budgetProfile?: BudgetProfile | null;
