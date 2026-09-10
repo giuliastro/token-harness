@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { TaskBenchmarkMatrixEntry } from '@token-harness/core';
+import { harnessId, type TaskBenchmarkMatrixEntry } from '@token-harness/core';
 
 import { summarizeCandidateBenchmarkEntries } from '../src/commands/candidate-benchmark.js';
 
@@ -10,7 +10,7 @@ describe('candidate benchmark attribution semantics', () => {
     const ordinary: TaskBenchmarkMatrixEntry = {
       benchmarkId: 'ordinary-1',
       taskClass: 'standard',
-      harnessId: 'codex',
+      harnessId: harnessId('codex'),
       verdict: 'optimized-better',
       basis: 'local-usage',
       evidenceLevel: 'local-evidence',
