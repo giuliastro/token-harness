@@ -119,11 +119,14 @@ test('recognizes only the benchmark CLI surfaces', () => {
     context: true,
     statusJson: true,
   });
-  assert.deepEqual(parseGitNexusCliCapabilities(HELP.replace('context [name]', 'inspect [name]'), ''), {
-    query: true,
-    context: false,
-    statusJson: false,
-  });
+  assert.deepEqual(
+    parseGitNexusCliCapabilities(HELP.replace('context [name]', 'inspect [name]'), ''),
+    {
+      query: true,
+      context: false,
+      statusJson: false,
+    },
+  );
 });
 
 test('reports GitNexus absent without probing anything else', async () => {
