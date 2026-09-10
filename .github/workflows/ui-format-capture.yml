@@ -1,4 +1,4 @@
-name: UI Format Capture
+name: UI Cleanup
 
 on:
   push:
@@ -6,27 +6,92 @@ on:
       - ux/simple-monitor-actions
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  format:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ux/simple-monitor-actions
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Fix operation state machine
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          client = Path('apps/cli/src/guided-simple-client.ts')
+          text = client.read_text()
+
+          text, close_count = re.subn(
+              r"function closeDialog\(\) \{.*?\n\}\nfunction progress",
+              """function closeDialog() {
+            if (working && $('close').disabled) return;
+            if (working) setLocked(false, false);
+            dialogRun += 1;
+            ticket = null;
+            if ($('review').open) $('review').close();
+          }
+          function progress""",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if close_count != 1:
+              raise SystemExit('closeDialog replacement did not match exactly once')
+
+          replacement = """function renderResult(result) {
+            $('review-title').textContent = result.ok ? 'Done' : 'Needs attention';
+            $('review-content').replaceChildren();
+            $('review-error').hidden = true;
+            $('task-form').hidden = true;
+            $('task-review').hidden = true;
+            $('approve').hidden = true;
+            const state = node('div', result.ok ? 'Completed' : 'Needs attention', 'result-state ' + (result.ok ? 'good' : 'warn'));
+            $('review-content').append(state);
+            for (const message of result.messages || []) $('review-content').append(node('p', message));
+            $('close').disabled = false;
+            $('close').textContent = 'Done';
+          }
+          async function verify() {"""
+          text, result_count = re.subn(
+              r"function renderResult\(result\) \{.*?\n\}\nasync function verify\(\) \{",
+              replacement,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if result_count != 1:
+              raise SystemExit('renderResult replacement did not match exactly once')
+          client.write_text(text)
+
+          assets = Path('apps/cli/src/guided-assets.ts')
+          assets_text = assets.read_text().replace(
+              "./guided-simple-client-entry.js", "./guided-simple-client.js"
+          )
+          assets.write_text(assets_text)
+
+          entry = Path('apps/cli/src/guided-simple-client-entry.ts')
+          if entry.exists():
+              entry.unlink()
       - name: Format UI files
         run: pnpm exec prettier --write apps/cli/src/guided-assets.ts apps/cli/src/guided-simple-client.ts apps/cli/test/guided-dashboard-product.test.ts
-      - name: Print formatted files
+      - name: Commit cleanup
         shell: bash
         run: |
-          for file in apps/cli/src/guided-assets.ts apps/cli/src/guided-simple-client.ts apps/cli/test/guided-dashboard-product.test.ts; do
-            echo "FORMATTED_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMATTED_END:$file"
-          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/guided-assets.ts apps/cli/src/guided-simple-client.ts apps/cli/src/guided-simple-client-entry.ts apps/cli/test/guided-dashboard-product.test.ts
+          if git diff --cached --quiet; then
+            echo "No cleanup changes needed"
+          else
+            git commit -m "fix(ui): finalize clear operation states"
+            git push origin HEAD:ux/simple-monitor-actions
+          fi
