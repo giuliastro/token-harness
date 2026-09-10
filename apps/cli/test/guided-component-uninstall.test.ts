@@ -101,7 +101,8 @@ it('rejects arbitrary providers and keeps the removal control scoped to managed 
     service.preview({ action: 'remove', provider: 'headroom' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
-  assert.match(GUIDE_STACK_JS, /component\.managedByTokenHarness/);
+  assert.match(GUIDE_STACK_JS, /component\.managedByTokenHarness \|\| component\.configured/);
+  assert.match(GUIDE_STACK_JS, /provider installation is user-owned/);
   assert.match(GUIDE_STACK_JS, /token-harness:remove-provider/);
   assert.match(GUIDE_JS, /preview\(\{ action: 'remove', provider \}\)/);
 });

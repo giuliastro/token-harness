@@ -217,8 +217,14 @@ export const GUIDE_STACK_JS = String.raw`
       details.append(node('p', warning.message, 'caption'));
     if (component.nextAction)
       details.append(node('p', 'Next: ' + component.nextAction.reason, 'caption'));
-    if (component.managedByTokenHarness) {
-      const remove = node('button', 'Remove managed integration', 'secondary');
+    if (component.managedByTokenHarness || component.configured) {
+      const remove = node(
+        'button',
+        component.managedByTokenHarness
+          ? 'Remove managed integration'
+          : 'Check removable managed changes',
+        'secondary',
+      );
       remove.type = 'button';
       remove.dataset.operation = 'remove';
       remove.addEventListener('click', () =>
@@ -229,14 +235,14 @@ export const GUIDE_STACK_JS = String.raw`
         ),
       );
       details.append(remove);
-    } else if (component.configured) {
-      details.append(
-        node(
-          'p',
-          'This integration is not owned by Token Harness, so this dashboard will not remove it.',
-          'caption',
-        ),
-      );
+      if (!component.managedByTokenHarness)
+        details.append(
+          node(
+            'p',
+            'The provider installation is user-owned. This check can only remove configuration changes that Token Harness previously recorded as its own.',
+            'caption',
+          ),
+        );
     }
     card.append(details);
 
