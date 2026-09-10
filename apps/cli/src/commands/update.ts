@@ -154,7 +154,14 @@ function upgradeAction(input: {
   };
 }
 
-export async function runUpdate(context: CommandContext): Promise<CommandResult<UpdateReport>> {
+interface RunUpdateOptions {
+  preserveConfirmationReport?: boolean;
+}
+
+export async function runUpdate(
+  context: CommandContext,
+  options: RunUpdateOptions = {},
+): Promise<CommandResult<UpdateReport>> {
   const diagnostics: Diagnostic[] = [];
   const report: UpdateReport = { providers: [], network: [], execution: null };
 
@@ -162,7 +169,11 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     commandResult<UpdateReport>({
       command: 'update',
       exitCode,
-      data: statusForExitCode(exitCode) === 'error' ? null : data,
+      data:
+        statusForExitCode(exitCode) === 'error' &&
+        !(options.preserveConfirmationReport && exitCode === EXIT_CODES['confirmation-required'])
+          ? null
+          : data,
       diagnostics,
     });
 
@@ -499,4 +510,27 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
   };
 
   return finish(transaction.exitCode, report);
+}
+
+/**
+ * Dashboard-only observation path. It can never apply an update: confirmation is forced off even
+ * if a caller accidentally supplies a confirmed context. The ordinary CLI keeps exit 8 + null data
+ * for its public JSON contract; this internal adapter turns that already-computed dry-run into a
+ * successful read-only report for the local UI.
+ */
+export async function runUpdateCheck(
+  context: CommandContext,
+): Promise<CommandResult<UpdateReport>> {
+  const result = await runUpdate(
+    { ...context, confirmed: false },
+    { preserveConfirmationReport: true },
+  );
+  if (result.exitCode !== EXIT_CODES['confirmation-required'] || result.data === null)
+    return result;
+  return commandResult<UpdateReport>({
+    command: 'update',
+    exitCode: EXIT_CODES.ok,
+    data: result.data,
+    diagnostics: result.diagnostics.filter((entry) => entry.code !== 'confirmation-required'),
+  });
 }

@@ -145,6 +145,64 @@ function mergeVerifiedStack(
   return { components, unattributedDrift: [...cached.unattributedDrift], state };
 }
 
+function mergeUpdatedStack(
+  cached: GuideOverview['stack'],
+  observed: GuideOverview['stack'],
+): GuideOverview['stack'] {
+  const observedByProvider = new Map(
+    observed.components.map((component) => [component.providerId, component]),
+  );
+  const components = cached.components.map((component) => {
+    const current = observedByProvider.get(component.providerId);
+    if (current === undefined) return component;
+    const detectionChanged =
+      component.version !== current.version ||
+      component.detectedState !== current.detectedState ||
+      component.configured !== current.configured ||
+      component.configuredHarnesses.join('\0') !== current.configuredHarnesses.join('\0');
+    const verification = detectionChanged ? current.verification : component.verification;
+    const health: GuideOverview['stack']['components'][number]['health'] =
+      current.health === 'attention' ||
+      component.quality.state === 'regressed' ||
+      component.conflicts.length > 0
+        ? 'attention'
+        : current.detectedState === 'configured' && verification === 'verified'
+          ? 'healthy'
+          : 'unknown';
+    const merged: GuideOverview['stack']['components'][number] = {
+      ...component,
+      detectedState: current.detectedState,
+      version: current.version,
+      installed: current.installed,
+      configured: current.configured,
+      configuredHarnesses: [...current.configuredHarnesses],
+      managedByTokenHarness: current.managedByTokenHarness,
+      verification,
+      health,
+      update: current.update,
+      updateAvailableVersion: current.updateAvailableVersion,
+      warnings: [...current.warnings],
+    };
+    return { ...merged, nextAction: stackNextAction(merged) };
+  });
+  const present = components.filter((component) => component.detectedState !== 'absent');
+  const state: GuideOverview['stack']['state'] =
+    present.length === 0
+      ? 'empty'
+      : present.some((component) => component.health === 'attention') ||
+          cached.unattributedDrift.length > 0
+        ? 'attention'
+        : present.every(
+              (component) =>
+                component.health === 'healthy' &&
+                component.nextAction === null &&
+                (component.update === 'current' || component.update === 'pinned'),
+            )
+          ? 'healthy'
+          : 'incomplete';
+  return { components, unattributedDrift: [...cached.unattributedDrift], state };
+}
+
 export function createGuideHandler(input: {
   service: GuideService;
   token: string;
@@ -237,6 +295,35 @@ export function createGuideHandler(input: {
         const result = await input.service.apply(body);
         overviewCache.clear();
         send(200, JSON.stringify(result));
+        return;
+      }
+      if (url.pathname === '/api/update-check') {
+        if (body === null || typeof body !== 'object' || Array.isArray(body))
+          throw new GuideError(400, 'Only an optional reporting period is accepted.');
+        const data = body as Record<string, unknown>;
+        if (
+          Object.keys(data).some((key) => key !== 'period') ||
+          (data['period'] !== undefined && !['all', '7d', '30d'].includes(String(data['period'])))
+        )
+          throw new GuideError(400, 'Only an optional reporting period is accepted.');
+        const result = await input.service.checkUpdates();
+        const requested = data['period'] as GuidePeriod | undefined;
+        let responseResult = result;
+        if (result.stack !== undefined && requested !== undefined) {
+          const cached = overviewCache.get(requested);
+          if (cached !== undefined) {
+            const overview = JSON.parse(cached.body) as GuideOverview;
+            const stack = mergeUpdatedStack(overview.stack, result.stack);
+            overviewCache.set(requested, {
+              ...cached,
+              body: JSON.stringify({ ...overview, stack }),
+            });
+            responseResult = { ...result, stack };
+          }
+        }
+        // Update discovery is intentionally on-demand and read-only. Keep all other period-specific
+        // evidence hot; only the stack update/version fields are replaced.
+        send(200, JSON.stringify(responseResult));
         return;
       }
       if (url.pathname === '/api/verify') {

@@ -89,6 +89,7 @@ export const GUIDE_STACK_JS = String.raw`
     if (next.kind === 'verify') return proxyButton('verify', 'Check integrations');
     if (next.kind === 'measure') return proxyButton('measurement-help', 'Measurement help');
     if (next.kind === 'review-health') return proxyButton('tab-activity', 'Review health evidence');
+    if (next.kind === 'review-update') return proxyButton('update-check', 'Recheck updates');
     return null;
   }
 
@@ -536,7 +537,9 @@ export const GUIDE_STACK_JS = String.raw`
     let fetchArgs = args;
     const target = String(args[0]);
     const verifyRequest = target.includes('/api/verify');
-    if (verifyRequest && args[1] && typeof args[1] === 'object') {
+    const updateRequest = target.includes('/api/update-check');
+    const stackObservationRequest = verifyRequest || updateRequest;
+    if (stackObservationRequest && args[1] && typeof args[1] === 'object') {
       try {
         const options = { ...args[1] };
         if (typeof options.body === 'string') {
@@ -557,7 +560,7 @@ export const GUIDE_STACK_JS = String.raw`
     }
     const response = await originalFetch(...fetchArgs);
     try {
-      if (response.ok && (target.includes('/api/overview') || verifyRequest)) {
+      if (response.ok && (target.includes('/api/overview') || stackObservationRequest)) {
         const data = await response.clone().json();
         if (target.includes('/api/overview'))
           renderCandidates(
@@ -566,7 +569,7 @@ export const GUIDE_STACK_JS = String.raw`
             data?.agents ?? [],
           );
         if (data?.stack) {
-          const period = verifyRequest
+          const period = stackObservationRequest
             ? selectedPeriod()
             : (new URL(target, window.location.href).searchParams.get('period') ?? 'all');
           stackCache.set(period, data.stack);
