@@ -14,8 +14,8 @@ existing users and testing well before it is the version we actively promote.
 - [x] Existing readings remain visible during refresh and after approved changes.
 - [x] Preview → approval → apply → verify → undo safety flow.
 - [x] Recorded reducer savings keep providers and measurement classes separate.
-- [ ] Dashboard displays paired allowance and quality value when available and blocks unsupported claims.
-- [ ] The primary UI can present **Your optimization stack**: component, version, category, health,
+- [x] Dashboard displays paired allowance and quality value when available and blocks unsupported claims.
+- [x] The primary UI can present **Your optimization stack**: component, version, category, health,
       verification state, measured value, quality confidence and useful next action.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
 - [ ] At least **three distinct useful savings mechanisms** are available through Token Harness.
@@ -28,7 +28,7 @@ existing users and testing well before it is the version we actively promote.
       behavior and the already-enabled optimization stack.
 - [ ] The **combined recommended stack** is benchmarked; individually good components are not assumed
       to compose safely or additively.
-- [ ] The app can detect meaningful component/harness version drift and explain whether the current
+- [x] The app can detect meaningful component/harness version drift and explain whether the current
       stack is still reviewed, needs verification, or has a reviewed update available.
 - [ ] Normal steady-state use requires no continuous optimizer toggling or permanent Token Harness
       daemon; admitted deterministic components can remain enabled and work independently.

@@ -16,11 +16,13 @@ import {
   type PlannedAction,
   type StatusReport,
   type TaskBenchmarkContextMatrixReport,
+  type UpdateReport,
   type VerifyReport,
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
+import { runUpdateCheck } from './commands/update.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
 
@@ -165,6 +167,10 @@ interface GuideVerificationEvidence {
   fingerprint: string;
   report: VerifyReport;
 }
+interface GuideUpdateEvidence {
+  fingerprint: string;
+  report: UpdateReport;
+}
 export class GuideError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -267,21 +273,27 @@ function stackFingerprint(report: DoctorReport): string {
 export function createGuideCall(base: Omit<RunOptions, 'argv' | 'streams'>): GuideCall {
   return async <T>(args: readonly string[]): Promise<CliEnvelope<T>> => {
     const savings = args[0] === 'savings';
+    const updateCheck = args[0] === 'update';
     const translated = savings ? ['metrics', ...args.slice(1)] : [...args];
     let stdout = '';
     await run({
       ...base,
       argv: [...translated, '--json'],
-      ...(savings
+      ...(savings || updateCheck
         ? {
             commands: {
               ...DEFAULT_COMMANDS,
-              metrics: (context) =>
-                runMetrics({
-                  ...context,
-                  metricsAllProjects: true,
-                  since: context.since ?? '1970-01-01',
-                }),
+              ...(savings
+                ? {
+                    metrics: (context) =>
+                      runMetrics({
+                        ...context,
+                        metricsAllProjects: true,
+                        since: context.since ?? '1970-01-01',
+                      }),
+                  }
+                : {}),
+              ...(updateCheck ? { update: runUpdateCheck } : {}),
             },
           }
         : {}),
@@ -685,6 +697,7 @@ export class GuideService {
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
   private stackBase: GuideStackBase | null = null;
   private verification: GuideVerificationEvidence | null = null;
+  private updates: GuideUpdateEvidence | null = null;
   private readonly activity: GuideActivity[] = [];
   private readonly call: GuideCall;
   private readonly now: () => number;
@@ -730,6 +743,10 @@ export class GuideService {
           ? this.verification.report
           : null,
       metrics: base?.metrics ?? null,
+      updates:
+        base !== null && this.updates?.fingerprint === base.fingerprint
+          ? this.updates.report.providers
+          : null,
       unattributedDrift: base?.drift ?? [],
     });
   }
@@ -737,6 +754,7 @@ export class GuideService {
     this.cached = null;
     this.stackBase = null;
     this.verification = null;
+    this.updates = null;
   }
   async overview(period: GuidePeriod = 'all', force = false): Promise<GuideOverview> {
     if (!PERIODS.has(period)) throw new GuideError(400, 'Choose all history, 7 days or 30 days.');
@@ -1228,6 +1246,88 @@ export class GuideService {
       };
     });
   }
+  async checkUpdates(): Promise<GuideResult> {
+    return this.exclusive(async () => {
+      this.record('Checking provider update channels without changing software.', 'working');
+      const updateResult = await this.call<UpdateReport>(['update']);
+      const inventory = await this.call<DoctorReport>(['doctor']);
+
+      if (inventory.data === null) {
+        this.updates = null;
+        const message =
+          'The current optimizer versions could not be re-read, so update evidence was not attached to the stack. No software changed.';
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Update check needs attention',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+
+      const fingerprint = stackFingerprint(inventory.data);
+      this.stackBase = {
+        detections: [...inventory.data.providers],
+        metrics: this.stackBase?.metrics ?? null,
+        drift: this.stackBase?.drift ?? [],
+        fingerprint,
+      };
+
+      if (updateResult.exitCode !== 0 || updateResult.data === null) {
+        this.updates = null;
+        const message = explainGuideIssue(
+          updateResult.diagnostics,
+          'The update channels could not be checked safely. No software changed and no automatic retry was made.',
+        );
+        const stack = this.stackSnapshot();
+        if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Update check needs attention',
+          messages: [message],
+          appliedPlans: 0,
+          stack,
+        };
+      }
+
+      this.updates = { fingerprint, report: updateResult.data };
+      const available = updateResult.data.providers.filter((row) => row.verdict === 'upgradable');
+      const blocked = updateResult.data.providers.filter(
+        (row) => row.verdict === 'blocked-unreviewed',
+      );
+      const messages: string[] = [];
+      if (available.length > 0) {
+        messages.push(
+          ...available.map(
+            (row) =>
+              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is available. Run token-harness update to review the dry-run; applying still requires explicit approval.`,
+          ),
+        );
+      }
+      if (blocked.length > 0) {
+        messages.push(
+          ...blocked.map(
+            (row) =>
+              `${name(row.providerId)}: ${row.available ?? 'a newer version'} exists, but Token Harness is keeping ${row.installed ?? 'the installed version'} until that combination has reviewed compatibility evidence.`,
+          ),
+        );
+      }
+      if (available.length === 0 && blocked.length === 0)
+        messages.push(
+          'No reviewed provider update is currently available. Pins and unavailable channels remain visible in the stack.',
+        );
+      messages.push(
+        'This was a read-only channel check. No provider was installed, updated, downgraded or enabled.',
+      );
+
+      const stack = this.stackSnapshot();
+      if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
+      this.record('Provider update check completed. No software changed.', 'success');
+      return { ok: true, title: 'Optimizer update check', messages, appliedPlans: 0, stack };
+    });
+  }
+
   async verify(): Promise<GuideResult> {
     return this.exclusive(async () => {
       this.record('Checking the configured integrations without changing them.', 'working');

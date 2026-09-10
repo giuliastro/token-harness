@@ -29,7 +29,7 @@ export const GUIDE_HTML = `<!doctype html>
 <article class="metric-card"><span class="metric-label">API cost saved</span><strong class="metric-value">Reading…</strong><p class="metric-help">Shown only from billed-token evidence and a verified price basis.</p></article>
 <article class="metric-card"><span class="metric-label">Quality</span><strong class="metric-value">Reading…</strong><p class="metric-help">Guardrails and paired quality evidence are reported separately.</p></article>
 </div>
-<div class="section-title"><div><h2>Your optimization stack</h2><p>The components that actually make up your current efficiency stack. Installed, verified, measured and health state stay separate so a configured tool is never mistaken for a proven result.</p></div></div>
+<div class="section-title"><div><h2>Your optimization stack</h2><p>The components that actually make up your current efficiency stack. Installed, verified, measured and health state stay separate so a configured tool is never mistaken for a proven result.</p></div><div class="inline-actions"><button id="update-check" class="secondary" type="button" disabled>Check updates</button></div></div>
 <div id="stack" class="agent-grid" aria-busy="true"><div class="panel agent"><h2>Optimization stack</h2><p class="caption">Checking installed components, verification and attributable evidence…</p></div></div>
 <div class="section-title"><div><h2>Potential improvements</h2><p>Candidate optimizers worth evaluating separately from your active stack. They are not presented as installed, recommended, or beneficial until benchmark evidence supports that conclusion.</p></div></div>
 <div id="candidates" class="agent-grid"><div class="panel agent"><h2>Candidate catalog</h2><p class="caption">Preparing read-only evaluation targets…</p></div></div>
@@ -50,7 +50,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="truth-card"><strong>API cost</strong><span>Token reduction becomes money only when billed input/output tokens and a verified model price are known for the same traffic.</span></div>
 <div class="truth-card"><strong>Quality</strong><span>Reasoning floors protect difficult work, but “no quality loss” is claimed only from paired task outcomes, retries and errors.</span></div>
 </aside></div>
-<div class="section-title"><div><h2>Checks and changes</h2><p>This dashboard session only. Verification is read-only; changes always require a preview and approval.</p></div><div class="inline-actions"><button id="verify" class="secondary" type="button">Check integrations</button><button id="undo" class="secondary" type="button" hidden>Undo last change</button></div></div><div class="panel"><div id="activity"><p class="empty">No checks or changes in this dashboard session.</p></div></div>
+<div class="section-title"><div><h2>Checks and changes</h2><p>This dashboard session only. Verification and update checks are read-only; changes always require a preview and approval.</p></div><div class="inline-actions"><button id="verify" class="secondary" type="button">Check integrations</button><button id="undo" class="secondary" type="button" hidden>Undo last change</button></div></div><div class="panel"><div id="activity"><p class="empty">No checks or changes in this dashboard session.</p></div></div>
 </section>
 
 <footer><span>Local data. No account required.</span><span>Full data refresh happens only when you ask for it.</span></footer>

@@ -63,12 +63,16 @@ function clearStale() {
 }
 function setLocked(value) {
   working = value;
-  document.querySelectorAll('[data-operation],#setup,#verify,#undo,#refresh,#task-review').forEach(element => {
+  document.querySelectorAll('[data-operation],#setup,#verify,#update-check,#undo,#refresh,#task-review').forEach(element => {
     element.disabled = value;
   });
   $('approve').disabled = value;
   $('close').disabled = value;
   $('live-status').textContent = value ? 'Applying a reviewed operation…' : 'No changes run in the background';
+  if (!value && current)
+    $('update-check').disabled = !(current.stack?.components || []).some(
+      component => component.detectedState !== 'absent',
+    );
 }
 function selectView(view, focus = false) {
   if (!VIEWS[view]) return;
@@ -183,6 +187,23 @@ async function verify() {
   $('review-content').append(node('p', 'This is read-only. No agent setting will be changed.'));
   try {
     renderResult(await request('/api/verify', {}));
+  } catch (e) {
+    $('review-error').textContent = e.message;
+    $('review-error').hidden = false;
+  } finally {
+    setLocked(false);
+    activity();
+  }
+}
+async function checkUpdates() {
+  if (working || !csrf) return;
+  showDialog('Checking optimizer updates');
+  setLocked(true);
+  $('review-content').append(
+    node('p', 'This checks provider channels only. No provider will be installed or updated.'),
+  );
+  try {
+    renderResult(await request('/api/update-check', {}));
   } catch (e) {
     $('review-error').textContent = e.message;
     $('review-error').hidden = false;
@@ -442,6 +463,9 @@ function render(data) {
   renderRules(data);
   renderSavings(data.savings);
   renderNotices(data);
+  $('update-check').disabled = !(data.stack?.components || []).some(
+    component => component.detectedState !== 'absent',
+  );
   $('export').disabled = false;
   $('live-status').textContent = 'No automatic full refresh';
 }
@@ -545,6 +569,7 @@ $('approve').addEventListener('click', async () => {
 $('task-review').addEventListener('click', () => preview({ action: 'effort', harness: $('harness').value, task: $('task').value }));
 $('setup').addEventListener('click', () => preview({ action: 'setup' }));
 $('verify').addEventListener('click', verify);
+$('update-check').addEventListener('click', checkUpdates);
 $('undo').addEventListener('click', () => preview({ action: 'undo' }));
 $('refresh').addEventListener('click', () => refresh(true));
 $('period').addEventListener('change', changePeriod);
