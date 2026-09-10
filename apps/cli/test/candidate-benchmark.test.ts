@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { TaskBenchmarkMatrixEntry } from '@token-harness/core';
+import { harnessId, type TaskBenchmarkMatrixEntry } from '@token-harness/core';
 
 import { summarizeCandidateBenchmarkEntries } from '../src/commands/candidate-benchmark.js';
 import { parseArgv } from '../src/argv.js';
@@ -13,7 +13,7 @@ function entry(
   return {
     benchmarkId,
     taskClass: 'standard',
-    harnessId: 'codex',
+    harnessId: harnessId('codex'),
     verdict: 'inconclusive',
     basis: 'none',
     evidenceLevel: 'none',
