@@ -16,6 +16,30 @@ export type ContextObservationSource = 'native-rpc' | 'native-cli' | 'filesystem
 export type ToolDeferralState = 'active' | 'available' | 'inactive' | 'unknown';
 
 /**
+ * Read-only lifecycle state for an optimizer that is intentionally outside the active stack.
+ * `benchmark-ready` means the local candidate exposes the reviewed observation surfaces; it is
+ * not an activation recommendation and says nothing about measured savings or quality.
+ */
+export type OptimizationCandidateState =
+  | 'absent'
+  | 'installed'
+  | 'benchmark-ready'
+  | 'unsupported-version';
+
+export type OptimizationCandidateId = 'headroom' | 'mcptoon';
+export type OptimizationCandidateCategory = 'context-minimization' | 'mcp-discovery';
+
+/** Bounded candidate metadata safe to project into product UI. No executable path or raw reason. */
+export interface OptimizationCandidateObservation {
+  id: OptimizationCandidateId;
+  displayName: string;
+  category: OptimizationCandidateCategory;
+  state: OptimizationCandidateState;
+  version: string | null;
+  minimumBenchmarkVersion: string;
+}
+
+/**
  * Read-only evidence about a mechanism that can keep tool schemas out of the model-visible
  * surface until they are needed. `available` means the reviewed harness build contains the
  * mechanism but Token Harness cannot prove the live model/provider gate; it is deliberately not
@@ -240,6 +264,8 @@ export interface ContextReport {
   discoveredInstructionBytes: number;
   instructionHierarchy: InstructionHierarchyObservation[];
   harnesses: HarnessContextObservation[];
+  /** Additive read-only candidate state. Omitted by older producers and synthetic fixtures. */
+  optimizationCandidates?: OptimizationCandidateObservation[];
 }
 
 export function assessMcpServer(server: McpServerObservation): McpServerAssessment {
