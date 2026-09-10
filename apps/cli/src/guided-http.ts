@@ -102,7 +102,7 @@ function mergeVerifiedStack(
   const components = cached.components.map((component) => {
     const current = observedByProvider.get(component.providerId);
     if (current === undefined) return component;
-    const health =
+    const health: GuideOverview['stack']['components'][number]['health'] =
       current.health === 'attention' ||
       component.quality.state === 'regressed' ||
       component.conflicts.length > 0
@@ -110,7 +110,7 @@ function mergeVerifiedStack(
         : current.detectedState === 'configured' && current.verification === 'verified'
           ? 'healthy'
           : 'unknown';
-    const merged = {
+    const merged: GuideOverview['stack']['components'][number] = {
       ...component,
       detectedState: current.detectedState,
       version: current.version,
