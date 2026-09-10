@@ -42,6 +42,106 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
+function stackNextAction(
+  component: GuideOverview['stack']['components'][number],
+): GuideOverview['stack']['components'][number]['nextAction'] {
+  if (component.health === 'attention') {
+    return {
+      kind: 'review-health',
+      reason: 'The current evidence reports a broken, degraded, conflicting, or unsafe state.',
+    };
+  }
+  if (component.detectedState === 'absent' || component.detectedState === 'available') {
+    return {
+      kind: 'install-configure',
+      reason: 'This optimization component is not installed and configured yet.',
+    };
+  }
+  if (component.detectedState === 'installed') {
+    return {
+      kind: 'configure',
+      reason: 'The component is installed but not configured for an agent.',
+    };
+  }
+  if (component.detectedState === 'configured' && component.verification === 'not-checked') {
+    return {
+      kind: 'verify',
+      reason: 'Configuration was found, but runtime verification has not been checked.',
+    };
+  }
+  if (component.detectedState === 'configured' && component.verification === 'not-exercised') {
+    return {
+      kind: 'verify',
+      reason: 'The integration is configured but has not produced enough execution evidence yet.',
+    };
+  }
+  if (component.update === 'available' || component.update === 'blocked') {
+    return {
+      kind: 'review-update',
+      reason:
+        component.update === 'available'
+          ? 'A newer provider version is available for review.'
+          : 'A newer version exists but is outside the currently reviewed compatibility range.',
+    };
+  }
+  if (component.health === 'healthy' && component.savings.length === 0) {
+    return {
+      kind: 'measure',
+      reason:
+        'The integration is healthy; keep using it normally so measured savings evidence can accumulate.',
+    };
+  }
+  return null;
+}
+
+function mergeVerifiedStack(
+  cached: GuideOverview['stack'],
+  observed: GuideOverview['stack'],
+): GuideOverview['stack'] {
+  const observedByProvider = new Map(observed.components.map((component) => [component.providerId, component]));
+  const components = cached.components.map((component) => {
+    const current = observedByProvider.get(component.providerId);
+    if (current === undefined) return component;
+    const health =
+      current.health === 'attention' ||
+      component.quality.state === 'regressed' ||
+      component.conflicts.length > 0
+        ? 'attention'
+        : current.detectedState === 'configured' && current.verification === 'verified'
+          ? 'healthy'
+          : 'unknown';
+    const merged = {
+      ...component,
+      detectedState: current.detectedState,
+      version: current.version,
+      installed: current.installed,
+      configured: current.configured,
+      configuredHarnesses: [...current.configuredHarnesses],
+      managedByTokenHarness: current.managedByTokenHarness,
+      verification: current.verification,
+      health,
+      warnings: [...current.warnings],
+    };
+    return { ...merged, nextAction: stackNextAction(merged) };
+  });
+  const present = components.filter((component) => component.detectedState !== 'absent');
+  const state: GuideOverview['stack']['state'] =
+    present.length === 0
+      ? 'empty'
+      : present.some((component) => component.health === 'attention') ||
+          cached.unattributedDrift.length > 0
+        ? 'attention'
+        : present.every(
+              (component) =>
+                component.health === 'healthy' &&
+                component.nextAction === null &&
+                (component.update === 'current' || component.update === 'pinned'),
+            )
+          ? 'healthy'
+          : 'incomplete';
+  return { components, unattributedDrift: [...cached.unattributedDrift], state };
+}
+
 export function createGuideHandler(input: {
   service: GuideService;
   token: string;
@@ -139,23 +239,25 @@ export function createGuideHandler(input: {
         )
           throw new GuideError(400, 'Only an optional reporting period is accepted.');
         const result = await input.service.verify();
-        if (result.stack !== undefined) {
-          const requested = data['period'] as GuidePeriod | undefined;
-          const periods = requested === undefined ? [...overviewCache.keys()] : [requested];
-          for (const period of periods) {
-            const cached = overviewCache.get(period);
-            if (cached === undefined) continue;
+        const requested = data['period'] as GuidePeriod | undefined;
+        let responseResult = result;
+        if (result.stack !== undefined && requested !== undefined) {
+          const cached = overviewCache.get(requested);
+          if (cached !== undefined) {
             const overview = JSON.parse(cached.body) as GuideOverview;
-            overviewCache.set(period, {
+            const stack = mergeVerifiedStack(overview.stack, result.stack);
+            overviewCache.set(requested, {
               ...cached,
-              body: JSON.stringify({ ...overview, stack: result.stack }),
+              body: JSON.stringify({ ...overview, stack }),
             });
+            responseResult = { ...result, stack };
           }
         }
-        // Verification is read-only. Keep every already-loaded overview hot and replace only its
-        // structured stack evidence. Allowance, context, metrics and benchmark collection are not
+        // Verification is read-only. Keep the active period's already-loaded overview hot and
+        // replace only its verification-dependent stack fields. Period-specific savings stay with
+        // their original window; allowance, context, metrics and benchmark collection are not
         // repeated. Explicit Refresh data still forces a full read through both cache layers.
-        send(200, JSON.stringify(result));
+        send(200, JSON.stringify(responseResult));
         return;
       }
       send(404, '{"error":"Not found"}');
