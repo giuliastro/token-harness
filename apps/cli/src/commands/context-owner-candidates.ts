@@ -3,9 +3,18 @@ import {
   observeMcptoonCandidate,
   type ProviderContext,
 } from '@token-harness/adapters';
-import { diagnostic, type Diagnostic } from '@token-harness/core';
+import {
+  diagnostic,
+  type Diagnostic,
+  type OptimizationCandidateObservation,
+} from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
+
+export interface ContextOptimizationCandidateSnapshot {
+  candidates: OptimizationCandidateObservation[];
+  diagnostics: Diagnostic[];
+}
 
 function providerContext(context: CommandContext): ProviderContext | null {
   if (context.adapters === null) return null;
@@ -132,18 +141,42 @@ function mcptoonDiagnostics(
   ];
 }
 
-/**
- * Historical name retained for the command contract. The observer now includes broad context-owner
- * candidates plus specialized context optimizers such as mcptoon. All checks are read-only.
- */
-export async function contextOwnerCandidateDiagnostics(
+/** Run each read-only candidate observer once and expose a bounded typed product projection. */
+export async function observeContextOptimizationCandidates(
   context: CommandContext,
-): Promise<Diagnostic[]> {
+): Promise<ContextOptimizationCandidateSnapshot> {
   const provider = providerContext(context);
-  if (provider === null) return [];
+  if (provider === null) return { candidates: [], diagnostics: [] };
   const [headroom, mcptoon] = await Promise.all([
     observeHeadroomCandidate(provider),
     observeMcptoonCandidate(provider),
   ]);
-  return [...headroomDiagnostics(headroom), ...mcptoonDiagnostics(mcptoon)];
+  return {
+    candidates: [
+      {
+        id: 'headroom',
+        displayName: 'Headroom',
+        category: 'context-minimization',
+        state: headroom.state,
+        version: headroom.version,
+        minimumBenchmarkVersion: headroom.minimumBenchmarkVersion,
+      },
+      {
+        id: 'mcptoon',
+        displayName: 'mcptoon',
+        category: 'mcp-discovery',
+        state: mcptoon.state,
+        version: mcptoon.version,
+        minimumBenchmarkVersion: mcptoon.minimumBenchmarkVersion,
+      },
+    ],
+    diagnostics: [...headroomDiagnostics(headroom), ...mcptoonDiagnostics(mcptoon)],
+  };
+}
+
+/** Historical helper retained for callers that only need diagnostics. */
+export async function contextOwnerCandidateDiagnostics(
+  context: CommandContext,
+): Promise<Diagnostic[]> {
+  return (await observeContextOptimizationCandidates(context)).diagnostics;
 }
