@@ -136,7 +136,10 @@ test('reports GitNexus absent without probing anything else', async () => {
   assert.equal(observation.state, 'absent');
   assert.equal(observation.version, null);
   assert.equal(observation.executable, null);
-  assert.deepEqual(requests.map((request) => request.args), [['--version']]);
+  assert.deepEqual(
+    requests.map((request) => request.args),
+    [['--version']],
+  );
 });
 
 test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
@@ -145,7 +148,7 @@ test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
     context(
       {
         version: 'gitnexus 1.6.11',
-        help: HELP.replace('context [name]  Show symbol context\n', ''),
+        help: HELP.replace('context [name]', 'inspect [name]'),
         statusHelp: STATUS_HELP,
       },
       requests,
