@@ -5,8 +5,8 @@ import type { TaskBenchmarkMatrixEntry } from '@token-harness/core';
 
 import { summarizeCandidateBenchmarkEntries } from '../src/commands/candidate-benchmark.js';
 
-describe('candidate benchmark sidecar semantics', () => {
-  it('credits only matrix entries explicitly handed to a candidate summary', () => {
+describe('candidate benchmark attribution semantics', () => {
+  it('does not credit ordinary matrix entries unless they were explicitly attributed', () => {
     const ordinary: TaskBenchmarkMatrixEntry = {
       benchmarkId: 'ordinary-1',
       taskClass: 'standard',
