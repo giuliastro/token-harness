@@ -17,7 +17,7 @@ import {
   type ToolDeferralObservation,
 } from '@token-harness/core';
 
-import { contextOwnerCandidateDiagnostics } from './context-owner-candidates.js';
+import { observeContextOptimizationCandidates } from './context-owner-candidates.js';
 import type { CommandContext } from './context.js';
 
 const CLAUDE = harnessId('claude');
@@ -241,6 +241,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     discoveredInstructionBytes: 0,
     instructionHierarchy: [],
     harnesses: [],
+    optimizationCandidates: [],
   };
 
   if (context.adapters === null) {
@@ -382,7 +383,8 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     }
   }
 
-  const candidateDiagnostics = await contextOwnerCandidateDiagnostics(context);
+  const candidateSnapshot = await observeContextOptimizationCandidates(context);
+  report.optimizationCandidates = candidateSnapshot.candidates;
   return commandResult({
     command: 'context',
     exitCode: EXIT_CODES.ok,
@@ -390,7 +392,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     diagnostics: [
       ...report.harnesses.flatMap((item) => item.diagnostics),
       ...hierarchyDiagnostics,
-      ...candidateDiagnostics,
+      ...candidateSnapshot.diagnostics,
     ],
   });
 }

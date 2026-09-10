@@ -26,10 +26,12 @@ import {
   toEnvelope,
   type BudgetReport,
   type CliEnvelope,
+  type ContextReport,
   type DoctorReport,
   type OptimizeReport,
   type MetricsReport,
   type ExitCode,
+  type OptimizationCandidateObservation,
   type StatusReport,
 } from '@token-harness/core';
 import {
@@ -55,6 +57,7 @@ import {
   createGuideCall,
   GuideService,
   savingsView,
+  type GuideCall,
   type GuideHarness,
   type GuidePeriod,
 } from './guided.js';
@@ -425,8 +428,18 @@ async function runGuidedUi(
   options: UiOptions,
   base: Omit<RunOptions, 'argv' | 'streams'>,
 ): Promise<number> {
+  let optimizationCandidates: OptimizationCandidateObservation[] = [];
+  const baseGuideCall = createGuideCall(base);
+  const guideCall: GuideCall = async <T>(args: readonly string[]) => {
+    const result = await baseGuideCall<T>(args);
+    if (args[0] === 'context') {
+      const report = result.data as ContextReport | null;
+      optimizationCandidates = (report?.optimizationCandidates ?? []).map((item) => ({ ...item }));
+    }
+    return result;
+  };
   const service = new GuideService(
-    createGuideCall(base),
+    guideCall,
     () => Date.now(),
     () => randomBytes(32).toString('hex'),
     async (harness: GuideHarness) => {
@@ -448,7 +461,14 @@ async function runGuidedUi(
   );
   const token = randomBytes(32).toString('hex');
   let authority = '';
-  const server = createServer(createGuideHandler({ service, token, authority: () => authority }));
+  const server = createServer(
+    createGuideHandler({
+      service,
+      token,
+      authority: () => authority,
+      optimizationCandidates: () => optimizationCandidates,
+    }),
+  );
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
   try {

@@ -44,7 +44,7 @@ export const GUIDE_STACK_JS = String.raw`
     'estimated-local': 'Local estimate',
     'end-to-end-billed': 'Paired session measurement',
   };
-  const candidates = [
+  const candidateCatalog = [
     {
       id: 'headroom',
       displayName: 'Headroom',
@@ -66,6 +66,12 @@ export const GUIDE_STACK_JS = String.raw`
         'Compare native versus compact MCP context and verify tool correctness before any activation. No sync or compression policy is enabled automatically.',
     },
   ];
+  const candidateStates = new Set([
+    'absent',
+    'installed',
+    'benchmark-ready',
+    'unsupported-version',
+  ]);
 
   function proxyButton(sourceId, label, cls = 'secondary') {
     const button = node('button', label, cls);
@@ -250,7 +256,31 @@ export const GUIDE_STACK_JS = String.raw`
     }
   }
 
-  function renderCandidate(candidate) {
+  function candidateStatus(observation) {
+    if (!observation)
+      return { label: 'Checking state', lifecycle: 'Candidate state is still being read', cls: '' };
+    if (observation.state === 'absent')
+      return { label: 'Not installed', lifecycle: 'Not installed · outside your active stack', cls: '' };
+    if (observation.state === 'installed')
+      return {
+        label: 'Benchmark needed',
+        lifecycle: 'Installed locally · not admitted to the active stack',
+        cls: '',
+      };
+    if (observation.state === 'unsupported-version')
+      return {
+        label: 'Version not reviewed',
+        lifecycle: 'Installed locally · below the reviewed benchmark baseline',
+        cls: 'warn',
+      };
+    return {
+      label: 'Ready to benchmark',
+      lifecycle: 'Installed locally · eligible for read-only benchmarking',
+      cls: '',
+    };
+  }
+
+  function renderCandidate(candidate, observation) {
     const card = node('article', undefined, 'panel agent');
     const head = node('div', undefined, 'agent-head');
     const title = node('div');
@@ -258,12 +288,35 @@ export const GUIDE_STACK_JS = String.raw`
       node('h2', candidate.displayName),
       node('span', category[candidate.category] || candidate.category, 'caption'),
     );
-    head.append(title, node('span', 'Candidate only', 'pill'));
+    const status = candidateStatus(observation);
+    head.append(title, node('span', status.label, 'pill ' + status.cls));
     card.append(head);
 
     const lifecycle = node('div', undefined, 'agent-line');
-    lifecycle.append(node('span', 'Lifecycle', 'key'), node('strong', 'Not in your active stack'));
+    lifecycle.append(node('span', 'Lifecycle', 'key'), node('strong', status.lifecycle));
     card.append(lifecycle);
+
+    if (observation) {
+      const version = node('div', undefined, 'agent-line');
+      version.append(
+        node('span', 'Version', 'key'),
+        node(
+          'strong',
+          observation.state === 'absent'
+            ? 'Not installed'
+            : observation.version
+              ? 'v' + observation.version
+              : 'Unavailable',
+        ),
+      );
+      card.append(version);
+      const baseline = node('div', undefined, 'agent-line');
+      baseline.append(
+        node('span', 'Benchmark baseline', 'key'),
+        node('strong', 'v' + observation.minimumBenchmarkVersion),
+      );
+      card.append(baseline);
+    }
 
     const opportunity = node('div', undefined, 'allowance-strip');
     opportunity.append(
@@ -282,11 +335,29 @@ export const GUIDE_STACK_JS = String.raw`
     return card;
   }
 
-  function renderCandidates() {
+  function candidateMap(observations) {
+    const result = new Map();
+    if (!Array.isArray(observations)) return result;
+    for (const observation of observations) {
+      if (
+        !observation ||
+        typeof observation !== 'object' ||
+        !candidateStates.has(observation.state) ||
+        !candidateCatalog.some(candidate => candidate.id === observation.id)
+      )
+        continue;
+      result.set(observation.id, observation);
+    }
+    return result;
+  }
+
+  function renderCandidates(observations) {
     const root = $('candidates');
     if (!root) return;
+    const observed = candidateMap(observations);
     root.replaceChildren();
-    for (const candidate of candidates) root.append(renderCandidate(candidate));
+    for (const candidate of candidateCatalog)
+      root.append(renderCandidate(candidate, observed.get(candidate.id)));
   }
 
   function selectedPeriod() {
@@ -299,7 +370,7 @@ export const GUIDE_STACK_JS = String.raw`
     if (stack) renderStack(stack);
   });
 
-  renderCandidates();
+  renderCandidates(null);
 
   window.fetch = async (...args) => {
     let fetchArgs = args;
@@ -328,6 +399,7 @@ export const GUIDE_STACK_JS = String.raw`
     try {
       if (response.ok && (target.includes('/api/overview') || verifyRequest)) {
         const data = await response.clone().json();
+        if (target.includes('/api/overview')) renderCandidates(data?.optimizationCandidates ?? []);
         if (data?.stack) {
           const period = verifyRequest
             ? selectedPeriod()
@@ -337,7 +409,7 @@ export const GUIDE_STACK_JS = String.raw`
         }
       }
     } catch {
-      // Stack rendering is supplementary. Never interfere with the existing dashboard request.
+      // Stack and candidate rendering are supplementary. Never interfere with the existing request.
     }
     return response;
   };

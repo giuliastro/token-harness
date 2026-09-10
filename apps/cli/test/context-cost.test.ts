@@ -27,6 +27,7 @@ describe('context-cost command', () => {
       ['/home/dev/project/AGENTS.md', { kind: 'file', byteLength: 20, mode: null }],
       ['/home/dev/project/sub/AGENTS.override.md', { kind: 'file', byteLength: 30, mode: null }],
     ]);
+    let headroomVersionCalls = 0;
 
     const context: CommandContext = {
       platform: PLATFORM,
@@ -72,6 +73,7 @@ describe('context-cost command', () => {
         runner: {
           run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
             if (request.executable === 'headroom') {
+              if (request.args[0] === '--version') headroomVersionCalls += 1;
               return {
                 displayCommand: 'headroom ' + request.args.join(' '),
                 interpreter: 'direct',
@@ -204,6 +206,18 @@ describe('context-cost command', () => {
         },
       ],
     );
+    assert.deepEqual(
+      result.data.optimizationCandidates?.find((item) => item.id === 'headroom'),
+      {
+        id: 'headroom',
+        displayName: 'Headroom',
+        category: 'context-minimization',
+        state: 'absent',
+        version: null,
+        minimumBenchmarkVersion: '0.36.0',
+      },
+    );
+    assert.equal(headroomVersionCalls, 1, 'candidate observation must not be duplicated');
     assert.equal(
       result.diagnostics.some((item) => item.code === 'context-owner-candidate-absent'),
       true,
