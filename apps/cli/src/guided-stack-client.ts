@@ -11,6 +11,7 @@ export const GUIDE_STACK_JS = String.raw`
     return element;
   };
   const count = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+  const stackCache = new Map();
   const category = {
     'command-output-reduction': 'Shell / tool output',
     'context-minimization': 'Context minimization',
@@ -81,7 +82,8 @@ export const GUIDE_STACK_JS = String.raw`
       node(
         'span',
         healthLabel,
-        'pill ' + (component.health === 'healthy' ? 'good' : component.health === 'attention' ? 'warn' : ''),
+        'pill ' +
+          (component.health === 'healthy' ? 'good' : component.health === 'attention' ? 'warn' : ''),
       ),
     );
     card.append(head);
@@ -226,23 +228,32 @@ export const GUIDE_STACK_JS = String.raw`
     }
   }
 
+  function selectedPeriod() {
+    const value = $('period')?.value;
+    return ['all', '7d', '30d'].includes(value) ? value : 'all';
+  }
+
+  $('period')?.addEventListener('change', () => {
+    const stack = stackCache.get(selectedPeriod());
+    if (stack) renderStack(stack);
+  });
+
   window.fetch = async (...args) => {
     let fetchArgs = args;
     const target = String(args[0]);
-    if (target.includes('/api/verify') && args[1] && typeof args[1] === 'object') {
+    const verifyRequest = target.includes('/api/verify');
+    if (verifyRequest && args[1] && typeof args[1] === 'object') {
       try {
         const options = { ...args[1] };
         if (typeof options.body === 'string') {
           const body = JSON.parse(options.body);
-          const period = $('period')?.value;
           if (
             body &&
             typeof body === 'object' &&
             !Array.isArray(body) &&
-            body.period === undefined &&
-            ['all', '7d', '30d'].includes(period)
+            body.period === undefined
           ) {
-            options.body = JSON.stringify({ ...body, period });
+            options.body = JSON.stringify({ ...body, period: selectedPeriod() });
             fetchArgs = [args[0], options];
           }
         }
@@ -252,9 +263,15 @@ export const GUIDE_STACK_JS = String.raw`
     }
     const response = await originalFetch(...fetchArgs);
     try {
-      if (response.ok && (target.includes('/api/overview') || target.includes('/api/verify'))) {
+      if (response.ok && (target.includes('/api/overview') || verifyRequest)) {
         const data = await response.clone().json();
-        if (data?.stack) renderStack(data.stack);
+        if (data?.stack) {
+          const period = verifyRequest
+            ? selectedPeriod()
+            : (new URL(target, window.location.href).searchParams.get('period') ?? 'all');
+          stackCache.set(period, data.stack);
+          if (period === selectedPeriod()) renderStack(data.stack);
+        }
       }
     } catch {
       // Stack rendering is supplementary. Never interfere with the existing dashboard request.
