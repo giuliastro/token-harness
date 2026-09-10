@@ -369,10 +369,13 @@ Rollback restores exact file bytes; uninstall restores only the owned preference
   rollback: `token-harness rollback — restore the files a transaction changed
 
 Usage
-  token-harness rollback [--json] [--yes]
+  token-harness rollback [--json] [--yes] [--transaction <id>]
 
 Reverses the most recent committed transaction from the snapshots it recorded,
-then reads the files back to confirm the restoration actually took.
+then reads the files back to confirm the restoration actually took. --transaction
+is an exact safety guard for a transaction you already reviewed: if a newer
+transaction has committed since then, rollback refuses with drift instead of
+walking backwards past it. It never selects an older historical transaction.
 
 This is time travel for the whole file, not a removal of one entry: anything you
 changed in those files since the apply is inside the snapshot too and goes back

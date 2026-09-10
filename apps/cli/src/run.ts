@@ -424,6 +424,7 @@ export async function run(options: RunOptions): Promise<number> {
     since: invocation.options.since,
     until: invocation.options.until,
     planId: invocation.options.plan,
+    transactionId: invocation.options.transaction,
     confirmed: invocation.options.yes,
     metrics: options.metrics ?? null,
     compatibilityRows: options.compatibilityRows ?? null,

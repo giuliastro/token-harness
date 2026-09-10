@@ -146,10 +146,11 @@ function stores(context: CommandContext, transactionId: string) {
 /**
  * `rollback` — reverse a committed transaction.
  *
- * With no `--plan`, the most recent committed transaction. Chosen rather than asked for, because a
- * user who has just seen an apply go wrong should not have to find an identifier first; and
- * *committed* rather than latest, because a transaction that already rolled itself back is not
- * something to reverse again.
+ * By default, the most recent committed transaction. Chosen rather than asked for, because a user
+ * who has just seen an apply go wrong should not have to find an identifier first; and *committed*
+ * rather than latest, because a transaction that already rolled itself back is not something to
+ * reverse again. `--transaction` is intentionally only an exact tip guard: it can prove the target
+ * has not changed since preview, but can never select an older transaction underneath a newer one.
  */
 export async function runRollback(context: CommandContext): Promise<CommandResult<ApplyReport>> {
   const diagnostics: Diagnostic[] = [];
@@ -198,7 +199,21 @@ export async function runRollback(context: CommandContext): Promise<CommandResul
     return finish(EXIT_CODES.ok, 'rollback', empty('nothing-to-do'), diagnostics);
   }
 
-  // A guided undo names the reviewed plan; never undo a newer unrelated transaction.
+  // A transaction-targeted undo is a compare-and-swap guard on the history tip, not a historical
+  // selector. If anything committed after preview, refuse instead of walking backwards past it.
+  if ((context.transactionId ?? null) !== null && target.transactionId !== context.transactionId) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'rollback-transaction-drift',
+        message: `The latest committed transaction no longer matches the requested rollback target ${JSON.stringify(context.transactionId)}`,
+        remediation: 'Review the latest transaction before choosing what to restore',
+      }),
+    );
+    return finish(EXIT_CODES['precondition-drift'], 'rollback', empty('rejected'), diagnostics);
+  }
+
+  // A guided apply undo names the reviewed plan; never undo a newer unrelated transaction.
   if (context.planId !== null && target.planId !== context.planId) {
     diagnostics.push(
       diagnostic({
