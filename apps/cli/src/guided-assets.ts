@@ -1,5 +1,5 @@
 /** Embedded local product UI. No remote assets, inline scripts, or framework runtime. */
-export { GUIDE_JS } from './guided-simple-client-entry.js';
+export { GUIDE_JS } from './guided-simple-client.js';
 export { GUIDE_CSS } from './guided-dashboard-styles.js';
 export { GUIDE_STACK_JS } from './guided-stack-client.js';
 

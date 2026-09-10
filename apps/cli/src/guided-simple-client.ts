@@ -124,6 +124,7 @@ function showDialog(title) {
 }
 function closeDialog() {
   if (working && $('close').disabled) return;
+  if (working) setLocked(false, false);
   dialogRun += 1;
   ticket = null;
   if ($('review').open) $('review').close();
@@ -205,12 +206,17 @@ async function preview(body) {
   }
 }
 function renderResult(result) {
-  const run = showDialog(result.ok ? 'Done' : 'Needs attention');
+  $('review-title').textContent = result.ok ? 'Done' : 'Needs attention';
+  $('review-content').replaceChildren();
+  $('review-error').hidden = true;
+  $('task-form').hidden = true;
+  $('task-review').hidden = true;
+  $('approve').hidden = true;
   const state = node('div', result.ok ? 'Completed' : 'Needs attention', 'result-state ' + (result.ok ? 'good' : 'warn'));
   $('review-content').append(state);
   for (const message of result.messages || []) $('review-content').append(node('p', message));
+  $('close').disabled = false;
   $('close').textContent = 'Done';
-  return run;
 }
 async function verify() {
   if (working || !csrf) return;
