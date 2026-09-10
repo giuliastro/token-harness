@@ -98,7 +98,9 @@ function mergeVerifiedStack(
   cached: GuideOverview['stack'],
   observed: GuideOverview['stack'],
 ): GuideOverview['stack'] {
-  const observedByProvider = new Map(observed.components.map((component) => [component.providerId, component]));
+  const observedByProvider = new Map(
+    observed.components.map((component) => [component.providerId, component]),
+  );
   const components = cached.components.map((component) => {
     const current = observedByProvider.get(component.providerId);
     if (current === undefined) return component;
