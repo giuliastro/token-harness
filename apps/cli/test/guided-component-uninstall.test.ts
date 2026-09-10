@@ -16,10 +16,13 @@ import { GUIDE_JS, GUIDE_STACK_JS } from '../src/guided-assets.js';
 
 const RTK = providerId('rtk');
 
-function report(outcome: ApplyReport['outcome']): ApplyReport {
+function report(
+  outcome: ApplyReport['outcome'],
+  transactionId = outcome === 'committed' ? 'uninstall-test' : null,
+): ApplyReport {
   return {
     planId: null,
-    transactionId: outcome === 'committed' ? 'uninstall-test' : null,
+    transactionId,
     fromStoredPlan: false,
     outcome,
     results: [],
@@ -52,6 +55,8 @@ it('previews a provider-scoped uninstall without confirmation and applies only a
       ]);
     if (args[0] === 'uninstall' && args.includes('--yes'))
       return envelope('uninstall', report('committed') as T);
+    if (args[0] === 'rollback')
+      return envelope('rollback', report('rolled-back', 'uninstall-test') as T);
     return envelope(args[0] ?? '', null as T);
   };
   const service = new GuideService(
@@ -73,6 +78,18 @@ it('previews a provider-scoped uninstall without confirmation and applies only a
   assert.equal(applied.title, 'Integration removed');
   assert.equal(applied.appliedPlans, 1);
   assert.deepEqual(calls[1], ['uninstall', '--provider', 'rtk', '--yes']);
+  assert.equal(service.status().canUndo, true);
+
+  const undo = await service.preview({ action: 'undo' });
+  assert.equal(undo.ticket, 'remove-ticket');
+  assert.match(undo.title, /RTK/);
+  assert.match(undo.notices[0] ?? '', /exact .* removal transaction/i);
+  assert.equal(calls.length, 2, 'Undo preview must not execute rollback');
+
+  const restored = await service.apply({ ticket: 'remove-ticket' });
+  assert.equal(restored.ok, true);
+  assert.equal(restored.title, 'Backup restored');
+  assert.deepEqual(calls[2], ['rollback', '--transaction', 'uninstall-test', '--yes']);
   assert.equal(service.status().canUndo, false);
 });
 
@@ -99,6 +116,10 @@ it('rejects arbitrary providers and keeps the removal control scoped to managed 
   );
   await assert.rejects(
     service.preview({ action: 'remove', provider: 'headroom' }),
+    (error: unknown) => error instanceof GuideError && error.status === 400,
+  );
+  await assert.rejects(
+    service.preview({ action: 'undo', transaction: 'attacker-selected-id' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
   assert.match(GUIDE_STACK_JS, /component\.managedByTokenHarness \|\| component\.configured/);

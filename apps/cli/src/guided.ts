@@ -153,11 +153,20 @@ interface Approval {
   id: string;
   expires: number;
   plans: string[];
+  transactionId: string | null;
   provider: ReturnType<typeof providerId> | null;
   description: string;
   operation: 'apply' | 'rollback' | 'uninstall';
   network: boolean;
 }
+type GuideUndoTarget =
+  | { kind: 'plan'; plan: string; network: boolean }
+  | {
+      kind: 'transaction';
+      transactionId: string;
+      provider: ReturnType<typeof providerId>;
+      network: false;
+    };
 interface GuideStackBase {
   detections: DoctorReport['providers'];
   metrics: MetricsReport | null;
@@ -693,7 +702,7 @@ export class GuideService {
   private loading: GuideLoading | null = null;
   private readSequence = 0;
   private busy = false;
-  private lastApplied: { plan: string; network: boolean } | null = null;
+  private lastApplied: GuideUndoTarget | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
   private stackBase: GuideStackBase | null = null;
@@ -1023,33 +1032,46 @@ export class GuideService {
           throw new GuideError(400, 'Undo accepts no agent or task selection.');
         if (this.lastApplied === null)
           throw new GuideError(409, 'There is no change from this dashboard session to undo.');
+        const target = this.lastApplied;
+        const transactionUndo = target.kind === 'transaction';
         const ticket = this.random(),
           expires = this.now() + 10 * 60_000;
         this.approval = {
           id: ticket,
           expires,
-          plans: [this.lastApplied.plan],
+          plans: target.kind === 'plan' ? [target.plan] : [],
+          transactionId: target.kind === 'transaction' ? target.transactionId : null,
           provider: null,
-          description: 'Undo',
+          description:
+            target.kind === 'transaction' ? `${name(target.provider)} removal undo` : 'Undo',
           operation: 'rollback',
-          network: this.lastApplied.network,
+          network: target.network,
         };
         return {
           ticket,
-          title: 'Restore the last change?',
+          title: transactionUndo
+            ? `Restore the removed ${name(target.provider)} integration?`
+            : 'Restore the last change?',
           changes: [
             {
-              title: 'Restore the last successful transaction from this dashboard',
+              title: transactionUndo
+                ? `Restore the ${name(target.provider)} removal transaction`
+                : 'Restore the last successful transaction from this dashboard',
               files: 0,
-              description:
-                'Restores complete configuration files from their backups. Any manual edits made to those files after applying will also be undone. If another transaction occurred, this undo is refused.',
+              description: transactionUndo
+                ? 'Restores the complete configuration-file snapshots recorded by that uninstall transaction. Drift checks still apply; if another transaction committed afterward, this Undo is refused rather than rolling back history out of order.'
+                : 'Restores complete configuration files from their backups. Any manual edits made to those files after applying will also be undone. If another transaction occurred, this undo is refused.',
             },
           ],
-          notices: [
-            'For a multi-agent setup, this restores only the last successful agent transaction, not the whole group. Earlier transactions remain in place.',
-          ],
+          notices: transactionUndo
+            ? [
+                `This Undo is bound to the exact ${name(target.provider)} removal transaction created by this dashboard session. The browser cannot choose another transaction id.`,
+              ]
+            : [
+                'For a multi-agent setup, this restores only the last successful agent transaction, not the whole group. Earlier transactions remain in place.',
+              ],
           expiresAt: new Date(expires).toISOString(),
-          network: this.lastApplied.network,
+          network: target.network,
           restart: true,
         };
       }
@@ -1087,6 +1109,7 @@ export class GuideService {
           id: ticket,
           expires,
           plans: [],
+          transactionId: null,
           provider,
           description: `${name(provider)} removal`,
           operation: 'uninstall',
@@ -1192,6 +1215,7 @@ export class GuideService {
           id,
           expires,
           plans,
+          transactionId: null,
           provider: null,
           description:
             data['action'] === 'effort'
@@ -1270,10 +1294,17 @@ export class GuideService {
             appliedPlans: 0,
           };
         }
-        this.lastApplied = null;
+        const transactionId = result.data.transactionId;
+        this.lastApplied =
+          transactionId === null
+            ? null
+            : { kind: 'transaction', transactionId, provider, network: false };
         this.invalidateObservedState();
         const messages = [
           `${name(provider)} Token Harness-owned integration changes were removed transactionally. User-owned matching configuration was not targeted.`,
+          transactionId === null
+            ? 'The removal completed, but no transaction identifier was returned, so this dashboard will not offer an unsafe Undo. Inspect transaction history before restoring anything.'
+            : 'Undo is available for this exact removal transaction. If another transaction commits first, the restore will be refused.',
           'Reopen affected coding agents, then Refresh to confirm the current optimization stack.',
         ];
         this.record(`${name(provider)} managed integration removed.`, 'success');
@@ -1287,14 +1318,26 @@ export class GuideService {
       );
       const messages: string[] = [];
       let appliedPlans = 0;
-      for (const plan of approval.plans) {
+      const steps =
+        approval.operation === 'rollback' && approval.transactionId !== null
+          ? [
+              {
+                plan: null,
+                args: ['rollback', '--transaction', approval.transactionId, '--yes'],
+              },
+            ]
+          : approval.plans.map((plan) => ({
+              plan,
+              args: [approval.operation, '--plan', plan, '--yes'],
+            }));
+      for (const step of steps) {
         this.record(
-          `${approval.operation === 'rollback' ? 'Restoring' : 'Applying'} reviewed change ${appliedPlans + 1} of ${approval.plans.length}. The transaction runs its backup and safety checks.`,
+          `${approval.operation === 'rollback' ? 'Restoring' : 'Applying'} reviewed change ${appliedPlans + 1} of ${steps.length}. The transaction runs its backup and safety checks.`,
           'working',
         );
         let result: CliEnvelope<ApplyReport>;
         try {
-          result = await this.call<ApplyReport>([approval.operation, '--plan', plan, '--yes']);
+          result = await this.call<ApplyReport>(step.args);
         } catch {
           this.invalidateObservedState();
           const message =
@@ -1338,7 +1381,11 @@ export class GuideService {
         }
         appliedPlans += 1;
         this.lastApplied =
-          approval.operation === 'rollback' ? null : { plan, network: approval.network };
+          approval.operation === 'rollback'
+            ? null
+            : step.plan === null
+              ? null
+              : { kind: 'plan', plan: step.plan, network: approval.network };
       }
       this.invalidateObservedState();
       messages.push(
