@@ -13,6 +13,13 @@ import type { ProviderAdapter } from './contract.js';
 
 export * from './contract.js';
 export {
+  observeGitNexusCandidate,
+  parseGitNexusCliCapabilities,
+  parseGitNexusVersion,
+  type GitNexusCandidateObservation,
+  type GitNexusCandidateState,
+} from './gitnexus-candidate.js';
+export {
   HEADROOM_MINIMUM_BENCHMARK_VERSION,
   headroomVersionAtLeast,
   observeHeadroomCandidate,
