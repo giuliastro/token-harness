@@ -1,6 +1,7 @@
 /** Strict loopback-only browser control. No user-supplied commands or paths. */
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { OptimizationCandidateObservation } from '@token-harness/core';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
 import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
 
@@ -148,6 +149,7 @@ export function createGuideHandler(input: {
   service: GuideService;
   token: string;
   authority: () => string;
+  optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -206,7 +208,13 @@ export function createGuideHandler(input: {
             send(200, cached.body);
             return;
           }
-          const body = JSON.stringify(await input.service.overview(guidePeriod, force));
+          const overview = await input.service.overview(guidePeriod, force);
+          const body = JSON.stringify({
+            ...overview,
+            optimizationCandidates: (input.optimizationCandidates?.() ?? []).map((item) => ({
+              ...item,
+            })),
+          });
           overviewCache.set(guidePeriod, { at: Date.now(), body });
           send(200, body);
           return;
