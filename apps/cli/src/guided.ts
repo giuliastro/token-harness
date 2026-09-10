@@ -153,8 +153,9 @@ interface Approval {
   id: string;
   expires: number;
   plans: string[];
+  provider: ReturnType<typeof providerId> | null;
   description: string;
-  operation: 'apply' | 'rollback';
+  operation: 'apply' | 'rollback' | 'uninstall';
   network: boolean;
 }
 interface GuideStackBase {
@@ -999,13 +1000,20 @@ export class GuideService {
       throw new GuideError(400, 'Choose an available action.');
     const data = input as Record<string, unknown>;
     if (
-      Object.keys(data).some((key) => !['action', 'harness', 'task'].includes(key)) ||
-      !['setup', 'effort', 'skill', 'undo'].includes(String(data['action'])) ||
+      Object.keys(data).some((key) => !['action', 'harness', 'task', 'provider'].includes(key)) ||
+      !['setup', 'effort', 'skill', 'undo', 'remove'].includes(String(data['action'])) ||
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
+      (data['provider'] !== undefined &&
+        !['rtk', 'harnesstrim'].includes(String(data['provider']))) ||
       (data['action'] === 'effort' &&
         (data['harness'] === undefined || data['task'] === undefined)) ||
-      (data['action'] === 'skill' && data['harness'] === undefined)
+      (data['action'] === 'skill' && data['harness'] === undefined) ||
+      (data['action'] === 'remove' &&
+        (data['provider'] === undefined ||
+          data['harness'] !== undefined ||
+          data['task'] !== undefined)) ||
+      (data['action'] !== 'remove' && data['provider'] !== undefined)
     )
       throw new GuideError(400, 'Choose a supported agent and task.');
     return this.exclusive(async () => {
@@ -1021,6 +1029,7 @@ export class GuideService {
           id: ticket,
           expires,
           plans: [this.lastApplied.plan],
+          provider: null,
           description: 'Undo',
           operation: 'rollback',
           network: this.lastApplied.network,
@@ -1041,6 +1050,65 @@ export class GuideService {
           ],
           expiresAt: new Date(expires).toISOString(),
           network: this.lastApplied.network,
+          restart: true,
+        };
+      }
+      if (data['action'] === 'remove') {
+        const provider = providerId(String(data['provider']));
+        this.record(
+          `Reviewing Token Harness-owned ${name(provider)} changes. Nothing is being removed yet.`,
+          'working',
+        );
+        const result = await this.call<ApplyReport>(['uninstall', '--provider', provider]);
+        const removable = result.diagnostics.some(
+          (entry) => entry.code === 'confirmation-required',
+        );
+        if (!removable) {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            result.data?.outcome === 'nothing-to-do'
+              ? `${name(provider)} has no Token Harness-owned change to remove. User-owned configuration is left alone.`
+              : `No safe ${name(provider)} removal is available. Nothing was changed.`,
+          );
+          this.record(message, result.exitCode === 0 ? 'success' : 'attention');
+          return {
+            ticket: null,
+            title: 'No managed change to remove',
+            changes: [],
+            notices: [message],
+            expiresAt: null,
+            network: false,
+            restart: false,
+          };
+        }
+        const ticket = this.random();
+        const expires = this.now() + 10 * 60_000;
+        this.approval = {
+          id: ticket,
+          expires,
+          plans: [],
+          provider,
+          description: `${name(provider)} removal`,
+          operation: 'uninstall',
+          network: false,
+        };
+        this.record('Removal preview ready. Waiting for your approval.', 'success');
+        return {
+          ticket,
+          title: `Remove the managed ${name(provider)} integration?`,
+          changes: [
+            {
+              title: `${name(provider)}: remove Token Harness-owned integration`,
+              files: 0,
+              description:
+                'Runs the existing ownership-aware uninstall transaction. Only entries recorded as owned by Token Harness are eligible; user-owned matching configuration is not removed, and edits that invalidate ownership preconditions block the removal.',
+            },
+          ],
+          notices: [
+            'The approval will re-run ownership and drift checks before removing anything. No provider update, install, model, login or billing setting is changed.',
+          ],
+          expiresAt: new Date(expires).toISOString(),
+          network: false,
           restart: true,
         };
       }
@@ -1124,6 +1192,7 @@ export class GuideService {
           id,
           expires,
           plans,
+          provider: null,
           description:
             data['action'] === 'effort'
               ? 'Task preference'
@@ -1164,6 +1233,52 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
+      if (approval.operation === 'uninstall') {
+        if (approval.provider === null)
+          throw new GuideError(409, 'This removal preview is incomplete. Review it again.');
+        const provider = approval.provider;
+        this.record(
+          `Removing only Token Harness-owned ${name(provider)} integration changes.`,
+          'working',
+        );
+        let result: CliEnvelope<ApplyReport>;
+        try {
+          result = await this.call<ApplyReport>(['uninstall', '--provider', provider, '--yes']);
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The removal stopped before its final result could be read. No automatic retry was made. Refresh and inspect the current integration state.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Removal result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        if (result.exitCode !== 0 || result.data?.outcome !== 'committed') {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            'The managed integration was not removed. Ownership or configuration changed after the preview, so nothing was forced.',
+          );
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Integration was not removed',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        this.lastApplied = null;
+        this.invalidateObservedState();
+        const messages = [
+          `${name(provider)} Token Harness-owned integration changes were removed transactionally. User-owned matching configuration was not targeted.`,
+          'Reopen affected coding agents, then Refresh to confirm the current optimization stack.',
+        ];
+        this.record(`${name(provider)} managed integration removed.`, 'success');
+        return { ok: true, title: 'Integration removed', messages, appliedPlans: 1 };
+      }
       this.record(
         approval.operation === 'rollback'
           ? 'Restoring the reviewed configuration backup.'

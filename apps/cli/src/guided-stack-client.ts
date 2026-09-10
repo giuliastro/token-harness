@@ -217,6 +217,27 @@ export const GUIDE_STACK_JS = String.raw`
       details.append(node('p', warning.message, 'caption'));
     if (component.nextAction)
       details.append(node('p', 'Next: ' + component.nextAction.reason, 'caption'));
+    if (component.managedByTokenHarness) {
+      const remove = node('button', 'Remove managed integration', 'secondary');
+      remove.type = 'button';
+      remove.dataset.operation = 'remove';
+      remove.addEventListener('click', () =>
+        window.dispatchEvent(
+          new CustomEvent('token-harness:remove-provider', {
+            detail: { provider: component.providerId },
+          }),
+        ),
+      );
+      details.append(remove);
+    } else if (component.configured) {
+      details.append(
+        node(
+          'p',
+          'This integration is not owned by Token Harness, so this dashboard will not remove it.',
+          'caption',
+        ),
+      );
+    }
     card.append(details);
 
     const next = action(component);

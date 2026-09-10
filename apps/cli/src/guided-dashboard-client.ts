@@ -152,7 +152,7 @@ function showTask(harness) {
 async function preview(body) {
   if (working || !csrf) return;
   previewAction = body;
-  showDialog(body.action === 'setup' ? 'Review optimizer setup' : body.action === 'skill' ? 'Review in-session guidance' : body.action === 'undo' ? 'Review restore' : 'Review reasoning change');
+  showDialog(body.action === 'setup' ? 'Review optimizer setup' : body.action === 'skill' ? 'Review in-session guidance' : body.action === 'undo' ? 'Review restore' : body.action === 'remove' ? 'Review optimizer removal' : 'Review reasoning change');
   setLocked(true);
   $('review-content').append(node('p', 'Reading the current configuration. Nothing is being changed yet.'));
   try {
@@ -570,6 +570,10 @@ $('task-review').addEventListener('click', () => preview({ action: 'effort', har
 $('setup').addEventListener('click', () => preview({ action: 'setup' }));
 $('verify').addEventListener('click', verify);
 $('update-check').addEventListener('click', checkUpdates);
+window.addEventListener('token-harness:remove-provider', event => {
+  const provider = event?.detail?.provider;
+  if (provider === 'rtk' || provider === 'harnesstrim') preview({ action: 'remove', provider });
+});
 $('undo').addEventListener('click', () => preview({ action: 'undo' }));
 $('refresh').addEventListener('click', () => refresh(true));
 $('period').addEventListener('change', changePeriod);
