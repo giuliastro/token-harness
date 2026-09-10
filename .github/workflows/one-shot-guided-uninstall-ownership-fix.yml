@@ -21,83 +21,7 @@ jobs:
           node-version: '22.13.0'
           cache: pnpm
       - name: Refine ownership affordance
-        shell: bash
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-
-          path = Path('apps/cli/src/guided-stack-client.ts')
-          text = path.read_text()
-          old = """    if (component.managedByTokenHarness) {
-      const remove = node('button', 'Remove managed integration', 'secondary');
-      remove.type = 'button';
-      remove.dataset.operation = 'remove';
-      remove.addEventListener('click', () =>
-        window.dispatchEvent(
-          new CustomEvent('token-harness:remove-provider', {
-            detail: { provider: component.providerId },
-          }),
-        ),
-      );
-      details.append(remove);
-    } else if (component.configured) {
-      details.append(
-        node(
-          'p',
-          'This integration is not owned by Token Harness, so this dashboard will not remove it.',
-          'caption',
-        ),
-      );
-    }
-"""
-          new = """    if (component.managedByTokenHarness || component.configured) {
-      const remove = node(
-        'button',
-        component.managedByTokenHarness
-          ? 'Remove managed integration'
-          : 'Check removable managed changes',
-        'secondary',
-      );
-      remove.type = 'button';
-      remove.dataset.operation = 'remove';
-      remove.addEventListener('click', () =>
-        window.dispatchEvent(
-          new CustomEvent('token-harness:remove-provider', {
-            detail: { provider: component.providerId },
-          }),
-        ),
-      );
-      details.append(remove);
-      if (!component.managedByTokenHarness)
-        details.append(
-          node(
-            'p',
-            'The provider installation is user-owned. This check can only remove configuration changes that Token Harness previously recorded as its own.',
-            'caption',
-          ),
-        );
-    }
-"""
-          if text.count(old) != 1:
-              raise SystemExit('guided-stack-client ownership block did not match exactly once')
-          path.write_text(text.replace(old, new))
-
-          test = Path('apps/cli/test/guided-component-uninstall.test.ts')
-          text = test.read_text()
-          old = """  assert.match(GUIDE_STACK_JS, /component\\.managedByTokenHarness/);
-  assert.match(GUIDE_STACK_JS, /token-harness:remove-provider/);
-"""
-          new = """  assert.match(
-    GUIDE_STACK_JS,
-    /component\\.managedByTokenHarness \\|\\| component\\.configured/,
-  );
-  assert.match(GUIDE_STACK_JS, /provider installation is user-owned/);
-  assert.match(GUIDE_STACK_JS, /token-harness:remove-provider/);
-"""
-          if text.count(old) != 1:
-              raise SystemExit('guided uninstall static assertion block did not match exactly once')
-          test.write_text(text.replace(old, new))
-          PY
+        run: python3 scripts/one-shot-guided-uninstall-ownership-fix.py
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Format
@@ -108,10 +32,10 @@ jobs:
         run: pnpm lint
       - name: Test
         run: pnpm test
-      - name: Commit validated refinement and remove workflow
+      - name: Commit validated refinement and remove staging files
         shell: bash
         run: |
-          rm .github/workflows/one-shot-guided-uninstall-ownership-fix.yml
+          rm .github/workflows/one-shot-guided-uninstall-ownership-fix.yml scripts/one-shot-guided-uninstall-ownership-fix.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
