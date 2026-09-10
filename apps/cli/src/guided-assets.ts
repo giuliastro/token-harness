@@ -38,7 +38,7 @@ export const GUIDE_HTML = `<!doctype html>
 <details class="disclosure"><summary>Technical details</summary>
 <div class="section-title"><div><h2>Optimization stack</h2><p>Installed components and their health.</p></div></div>
 <div id="stack" class="agent-grid" aria-busy="true"><div class="panel agent"><h2>Optimization stack</h2><p class="caption">Checking…</p></div></div>
-<div class="section-title"><div><h2>Other optimizers</h2><p>Optional candidates that are not active yet.</p></div></div>
+<div class="section-title"><div><h2>Potential improvements</h2><p>Optional candidates. They are not presented as installed, recommended, or beneficial until benchmark evidence supports that conclusion.</p></div></div>
 <div id="candidates" class="agent-grid"><div class="panel agent"><h2>Candidate catalog</h2><p class="caption">Checking…</p></div></div>
 </details>
 </section>
@@ -49,7 +49,7 @@ export const GUIDE_HTML = `<!doctype html>
 <article class="panel agent"><div class="agent-head"><div><h2>Optimize reasoning</h2><span class="caption">Claude Code or Codex</span></div></div><p>Choose the type of work and review the recommended setting.</p><div class="inline-actions"><button id="optimize-action" type="button" disabled>Optimize</button></div></article>
 <article class="panel agent"><div class="agent-head"><div><h2>Set up optimizers</h2><span class="caption">Optimization stack</span></div></div><p>Add or fix supported optimization components.</p><div class="inline-actions"><button id="setup" type="button" disabled>Set up</button></div></article>
 <article class="panel agent"><div class="agent-head"><div><h2>Check integrations</h2><span class="caption">Read-only</span></div></div><p>Verify that connected components work correctly.</p><div class="inline-actions"><button id="verify" class="secondary" type="button">Check</button></div></article>
-<article class="panel agent"><div class="agent-head"><div><h2>Check updates</h2><span class="caption">Read-only</span></div></div><p>See whether installed optimizers have an update available.</p><div class="inline-actions"><button id="update-check" class="secondary" type="button" disabled>Check</button><button id="undo" class="secondary" type="button" hidden>Undo last change</button></div></article>
+<article class="panel agent"><div class="agent-head"><div><h2>Check updates</h2><span class="caption">Read-only</span></div></div><p>See whether installed optimizers have an update available.</p><div class="inline-actions"><button id="update-check" class="secondary" type="button" disabled>Check updates</button><button id="undo" class="secondary" type="button" hidden>Undo last change</button></div></article>
 </div>
 <div class="section-title"><div><h2>More options</h2><p>Fine-tune individual policies only when you need to.</p></div></div>
 <div id="rule-filters" class="subtabs" role="tablist" aria-label="Policies by agent"></div><div id="rules" class="rule-list" role="tabpanel" tabindex="0"></div>
