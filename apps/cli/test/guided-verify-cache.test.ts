@@ -5,11 +5,13 @@ import { it } from 'node:test';
 import {
   commandResult,
   harnessId,
+  providerId,
   toEnvelope,
   type CliEnvelope,
   type DoctorReport,
+  type VerifyReport,
 } from '@token-harness/core';
-import { GuideService, type GuideCall } from '../src/guided.js';
+import { GuideService, type GuideCall, type GuideOverview } from '../src/guided.js';
 import { createGuideHandler } from '../src/guided-http.js';
 
 const platform = {
@@ -19,21 +21,40 @@ const platform = {
   nodeVersion: '22.13.0',
   isWsl: false,
 } as const;
+const CLAUDE = harnessId('claude');
+const RTK = providerId('rtk');
 
 function envelope<T>(command: string, data: T): CliEnvelope<T> {
   const result = commandResult({ command, data, exitCode: 0 });
   return toEnvelope(result, 'test');
 }
 
-it('keeps overview cache hot after read-only verification', async () => {
+it('updates verified stack evidence only for the requested reporting period', async () => {
   const calls: string[][] = [];
-  const doctor: DoctorReport = {
+  let providerVersion = '0.44.0';
+  const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
-    providers: [],
+    providers: [
+      {
+        providerId: RTK,
+        state: 'configured',
+        version: providerVersion,
+        executable: '/tools/rtk',
+        installationChannel: 'cargo',
+        versionVerdict: 'in-range',
+        configuredHarnesses: [CLAUDE],
+        unmanagedHarnessesConfigured: [],
+        supportsUnmanagedHarnesses: false,
+        managedByTokenHarness: false,
+        assignableHarnesses: [CLAUDE],
+        evidence: [],
+        warnings: [],
+      },
+    ],
     harnesses: [
       {
-        harnessId: harnessId('claude'),
+        harnessId: CLAUDE,
         state: 'configured',
         version: '2.1.261',
         versionVerdict: 'in-range',
@@ -43,21 +64,28 @@ it('keeps overview cache hot after read-only verification', async () => {
         warnings: [],
       },
     ],
-  };
+  });
 
+  const verified: VerifyReport = {
+    receiptId: null,
+    appliedAt: null,
+    healthyAtDeclaredTier: true,
+    results: [
+      {
+        providerId: RTK,
+        harnessId: CLAUDE,
+        status: 'healthy',
+        declaredTier: 'config-only',
+        managedByTokenHarness: false,
+        checks: [],
+      },
+    ],
+  };
   const call: GuideCall = async <T>(args: readonly string[]) => {
     calls.push([...args]);
     const command = args[0] ?? '';
-    if (command === 'doctor') return envelope(command, doctor as T);
-    if (command === 'verify') {
-      const report = {
-        receiptId: null,
-        appliedAt: null,
-        results: [],
-        healthyAtDeclaredTier: true,
-      };
-      return envelope(command, report as T);
-    }
+    if (command === 'doctor') return envelope(command, doctor() as T);
+    if (command === 'verify') return envelope(command, verified as T);
     return envelope(command, null as T);
   };
 
@@ -81,10 +109,17 @@ it('keeps overview cache hot after read-only verification', async () => {
   const origin = `http://${authority}`;
 
   try {
-    const first = await fetch(`${origin}/api/overview`);
-    assert.equal(first.status, 200);
-    const afterOverview = calls.length;
-    assert.ok(afterOverview > 0);
+    const allResponse = await fetch(`${origin}/api/overview?period=all`);
+    assert.equal(allResponse.status, 200);
+    const allInitial = (await allResponse.json()) as GuideOverview;
+    assert.equal(allInitial.stack.components[0]?.verification, 'not-checked');
+
+    const sevenResponse = await fetch(`${origin}/api/overview?period=7d`);
+    assert.equal(sevenResponse.status, 200);
+    const sevenInitial = (await sevenResponse.json()) as GuideOverview;
+    assert.equal(sevenInitial.stack.components[0]?.verification, 'not-checked');
+    const afterOverviews = calls.length;
+    assert.ok(afterOverviews > 0);
 
     const verification = await fetch(`${origin}/api/verify`, {
       method: 'POST',
@@ -93,19 +128,45 @@ it('keeps overview cache hot after read-only verification', async () => {
         Origin: origin,
         'X-Token-Harness-CSRF': token,
       },
-      body: '{}',
+      body: JSON.stringify({ period: 'all' }),
     });
     assert.equal(verification.status, 200);
+    const verificationBody = (await verification.json()) as { stack?: GuideOverview['stack'] };
+    assert.equal(verificationBody.stack?.components[0]?.verification, 'verified');
     const afterVerify = calls.length;
-    assert.ok(afterVerify > afterOverview);
+    assert.ok(afterVerify > afterOverviews);
 
-    const cached = await fetch(`${origin}/api/overview`);
-    assert.equal(cached.status, 200);
-    assert.equal(calls.length, afterVerify);
+    const cachedAll = await fetch(`${origin}/api/overview?period=all`);
+    assert.equal(cachedAll.status, 200);
+    const allVerified = (await cachedAll.json()) as GuideOverview;
+    assert.equal(allVerified.stack.components[0]?.verification, 'verified');
+    assert.equal(
+      calls.length,
+      afterVerify,
+      'verification must update stack evidence without repeating allowance/context/metrics reads',
+    );
 
-    const refreshed = await fetch(`${origin}/api/overview?refresh=1`);
+    const cachedSeven = await fetch(`${origin}/api/overview?period=7d`);
+    assert.equal(cachedSeven.status, 200);
+    const sevenUnchanged = (await cachedSeven.json()) as GuideOverview;
+    assert.equal(
+      sevenUnchanged.stack.components[0]?.verification,
+      'not-checked',
+      'verification for all history must not overwrite another period cache',
+    );
+    assert.equal(calls.length, afterVerify, 'reading the other cached period must stay read-only');
+
+    providerVersion = '0.45.0';
+    const refreshed = await fetch(`${origin}/api/overview?period=all&refresh=1`);
     assert.equal(refreshed.status, 200);
-    assert.ok(calls.length > afterVerify);
+    const refreshedOverview = (await refreshed.json()) as GuideOverview;
+    assert.ok(calls.length > afterVerify, 'explicit refresh must collect fresh evidence');
+    assert.equal(refreshedOverview.stack.components[0]?.version, '0.45.0');
+    assert.equal(
+      refreshedOverview.stack.components[0]?.verification,
+      'not-checked',
+      'verification from the previous provider version must not be reused after drift',
+    );
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

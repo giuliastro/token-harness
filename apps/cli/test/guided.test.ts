@@ -53,6 +53,14 @@ function inventory(ids = ['claude', 'codex']): DoctorReport {
     })),
   };
 }
+function verification() {
+  return {
+    receiptId: null,
+    appliedAt: null,
+    healthyAtDeclaredTier: true,
+    results: [],
+  };
+}
 function plan(id: string): PlanReport {
   const action: PlannedAction = {
     kind: 'merge-json',
@@ -107,7 +115,7 @@ function fixture(input: { failSecond?: boolean; ids?: string[] } = {}) {
       if (input.failSecond && writes === 2) return envelope(command, null, 5) as CliEnvelope<T>;
       data = { outcome: command === 'rollback' ? 'rolled-back' : 'committed' };
     }
-    if (command === 'verify') data = { healthyAtDeclaredTier: true };
+    if (command === 'verify') data = verification();
     return envelope(command, data as T);
   };
   const service = new GuideService(
@@ -269,8 +277,9 @@ describe('guided workflow', () => {
       release = resolve;
     });
     const service = new GuideService(
-      async <T>() => {
+      async <T>(args: readonly string[]) => {
         await gate;
+        if (args[0] === 'verify') return envelope('verify', verification() as T);
         return envelope('doctor', inventory() as T);
       },
       () => 0,

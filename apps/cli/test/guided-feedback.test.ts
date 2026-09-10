@@ -149,7 +149,23 @@ const doctor = {
       configPath: '/private/settings.json',
     },
   ],
-  providers: [{ providerId: 'rtk', state: 'configured', configuredHarnesses: ['claude'] }],
+  providers: [
+    {
+      providerId: 'rtk',
+      state: 'configured',
+      version: '0.44.0',
+      executable: '/tools/rtk',
+      installationChannel: 'cargo',
+      versionVerdict: 'in-range',
+      configuredHarnesses: ['claude'],
+      unmanagedHarnessesConfigured: [],
+      supportsUnmanagedHarnesses: false,
+      managedByTokenHarness: true,
+      assignableHarnesses: ['claude'],
+      evidence: [],
+      warnings: [],
+    },
+  ],
 };
 const metrics = { providers: [row], windowStart: window.start, windowEnd: window.end };
 

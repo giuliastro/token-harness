@@ -1,6 +1,7 @@
 /** Embedded local product UI. No remote assets, inline scripts, or framework runtime. */
 export { GUIDE_JS } from './guided-dashboard-client.js';
 export { GUIDE_CSS } from './guided-dashboard-styles.js';
+export { GUIDE_STACK_JS } from './guided-stack-client.js';
 
 export const GUIDE_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -28,6 +29,8 @@ export const GUIDE_HTML = `<!doctype html>
 <article class="metric-card"><span class="metric-label">API cost saved</span><strong class="metric-value">Reading…</strong><p class="metric-help">Shown only from billed-token evidence and a verified price basis.</p></article>
 <article class="metric-card"><span class="metric-label">Quality</span><strong class="metric-value">Reading…</strong><p class="metric-help">Guardrails and paired quality evidence are reported separately.</p></article>
 </div>
+<div class="section-title"><div><h2>Your optimization stack</h2><p>The components that actually make up your current efficiency stack. Installed, verified, measured and health state stay separate so a configured tool is never mistaken for a proven result.</p></div></div>
+<div id="stack" class="agent-grid" aria-busy="true"><div class="panel agent"><h2>Optimization stack</h2><p class="caption">Checking installed components, verification and attributable evidence…</p></div></div>
 <div class="section-title"><div><h2>Your coding agents</h2><p>Only the settings that affect efficiency and allowance are shown here. Open details when you need the technical explanation.</p></div></div>
 <div id="agents" class="agent-grid" aria-busy="true"><div class="panel agent loading-card"><h2>Claude Code</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div><div class="panel agent loading-card"><h2>Codex</h2><p class="caption">Checking optimizer, reasoning and allowance…</p></div></div>
 </section>
@@ -53,4 +56,4 @@ export const GUIDE_HTML = `<!doctype html>
 <dialog id="review" aria-labelledby="review-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="review-title">Review changes</h2></div><div id="review-content"></div>
 <div id="task-form" hidden><label for="harness">Coding agent</label><select id="harness"><option value="claude">Claude Code</option><option value="codex">Codex</option></select><label for="task">Type of work</label><select id="task"><option value="standard">Everyday coding</option><option value="mechanical">Simple edits and formatting</option><option value="hard">Complex debugging or implementation</option><option value="critical">Critical architecture or review</option></select><p class="caption">The exact saved reasoning preference is previewed before approval. Difficult work keeps its minimum quality floor.</p></div>
 <div id="review-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button id="close" class="secondary" type="button">Close</button><button id="task-review" type="button" hidden>Preview change</button><button id="approve" type="button" hidden>Approve and apply</button></div></div></dialog>
-<script src="/guide.js" defer></script></body></html>`;
+<script src="/stack.js" defer></script><script src="/guide.js" defer></script></body></html>`;
