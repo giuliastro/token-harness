@@ -227,7 +227,7 @@ export async function runCandidateBenchmarkMatrix(
   context: CommandContext,
 ): Promise<CommandResult<CandidateAwareBenchmarkMatrixReport | null>> {
   const result = await runBenchmarkMatrix(context);
-  if (result.data === null) return result;
+  if (result.data === null) return { ...result, data: null };
 
   const entries = new Map<OptimizationCandidateId, TaskBenchmarkMatrixEntry[]>(
     CANDIDATES.map((candidate) => [candidate, []]),
