@@ -132,10 +132,39 @@ export interface RunOptions {
   commands?: CommandTable;
 }
 
+/**
+ * The key column of a diagnostic block. Every value aligns to it, wrapped text included.
+ *
+ * The old shape was `severity  code: message`, then the path and `Fix:` each indented seven spaces
+ * — a number related to nothing, so continuations looked scattered. A screenshot of one real run
+ * showed ten such blocks in a row, several wrapping mid-word. It was unreadable, and no test
+ * measured a line width anywhere.
+ */
 /** The subject column of a diagnostic line. */
 const SUBJECT_WIDTH = 12;
 
+/**
+ * One line per diagnostic, and no more.
+ *
+ * Chosen by the user over two alternatives, after three attempts at a block layout. Every earlier
+ * shape put the message, the path and a `fix` on separate lines — the path and fix indented seven
+ * spaces, a number related to nothing — and long values wrapped, so one warning occupied four lines
+ * whose left edges did not line up. One real run printed ten of those.
+ *
+ * The message is truncated rather than wrapped, and the path and remediation are dropped entirely.
+ * Nothing is lost: `--json` carries all three fields untruncated, which is where a caller that needs
+ * them should be looking.
+ */
 function diagnosticLine(entry: Diagnostic): string {
+  /**
+   * The subject, or the code when there is no subject.
+   *
+   * Dropping the code entirely was the first attempt, and it cost something real: RFC 0006 rule 4
+   * makes codes "stable identifiers, not translated strings", and a usage error whose stderr no
+   * longer contains `unknown-command` cannot be matched by a script or quoted in a bug report. A
+   * subject is better where one exists — it says which harness a warning is about — and the code is
+   * the honest fallback where none does.
+   */
   const label = entry.subject ?? entry.code;
   return truncate(
     `  ${row([
@@ -146,6 +175,14 @@ function diagnosticLine(entry: Diagnostic): string {
   );
 }
 
+/**
+ * `info` never reaches a human.
+ *
+ * One ordinary run emitted ten of them — "no event stream, so only a provider can witness
+ * interception", "no plugin entry is registered" — none actionable, and indistinguishable from the
+ * two lines that were. They stay in `--json`, where a machine can read them and nobody is being
+ * asked to.
+ */
 function formatDiagnostics(diagnostics: readonly Diagnostic[]): string {
   const errors = diagnostics.filter((entry) => entry.severity === 'error');
   const warnings = diagnostics.filter((entry) => entry.severity === 'warning');
@@ -197,9 +234,12 @@ function emit(
   const toolVersion = options.toolVersion ?? TOOL_VERSION;
 
   if (json) {
+    // RFC 0006 §Streams rule 1: one JSON document on stdout and nothing else.
     try {
       options.streams.out(serializeEnvelope(toEnvelope(result, toolVersion)));
     } catch (error) {
+      // The one case the RFC allows on stderr in `--json` mode: a failure that
+      // prevented serialization.
       options.streams.err(
         `internal-error  envelope-serialization-failed: ${error instanceof Error ? error.message : String(error)}\n`,
       );
@@ -258,6 +298,8 @@ function emitHelpOrVersion(invocation: Invocation, options: RunOptions): ExitCod
 export async function run(options: RunOptions): Promise<number> {
   const toolVersion = options.toolVersion ?? TOOL_VERSION;
   const env = options.env ?? {};
+  // Pre-scan, so the runtime-floor failure below is also reported as an
+  // envelope when the caller asked for one.
   const json = detectJsonMode(options.argv);
 
   const renderContext: RenderContext = {
@@ -271,6 +313,9 @@ export async function run(options: RunOptions): Promise<number> {
     }),
   };
 
+  // An unsupported operating system is checked before anything else, for the same
+  // reason as the runtime floor below: there is no version of this program that
+  // runs correctly here, so printing a usage page would imply otherwise.
   if (options.platform === null) {
     return emit(
       commandResult({
@@ -294,6 +339,9 @@ export async function run(options: RunOptions): Promise<number> {
     );
   }
 
+  // The runtime floor is checked before anything else, including `--help`. A
+  // process that cannot be trusted to run correctly should say so rather than
+  // print a usage page that implies it can.
   const runtimeProblem = checkRuntimeFloor(options.platform.nodeVersion);
   if (runtimeProblem !== null) {
     return emit(
@@ -329,6 +377,13 @@ export async function run(options: RunOptions): Promise<number> {
 
   renderContext.verbose = invocation.options.verbose;
 
+  // Checked here rather than beside the runtime floor: an unresolvable state
+  // directory does not make `--help` or `--version` untrustworthy, and it does not
+  // make a mistyped command line correct either. What it does block is every
+  // command, because RFC 0004 §State directory permissions requires failing with
+  // the unsupported-environment code instead of continuing into a location whose
+  // protection has not been verified. There is deliberately no fallback to a
+  // writable directory.
   const environmentDiagnostics = options.environmentDiagnostics ?? [];
   if (environmentDiagnostics.some((entry) => entry.severity === 'error')) {
     return emit(
@@ -379,6 +434,7 @@ export async function run(options: RunOptions): Promise<number> {
   try {
     result = await table[invocation.command](context);
   } catch (error) {
+    // RFC 0006 §Exit codes 1: "Unexpected failure; a bug in Token Harness".
     result = commandResult({
       command: invocation.command,
       exitCode: EXIT_CODES['internal-error'],
