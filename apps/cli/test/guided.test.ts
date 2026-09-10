@@ -107,7 +107,13 @@ function fixture(input: { failSecond?: boolean; ids?: string[] } = {}) {
       if (input.failSecond && writes === 2) return envelope(command, null, 5) as CliEnvelope<T>;
       data = { outcome: command === 'rollback' ? 'rolled-back' : 'committed' };
     }
-    if (command === 'verify') data = { healthyAtDeclaredTier: true };
+    if (command === 'verify')
+      data = {
+        receiptId: null,
+        appliedAt: null,
+        healthyAtDeclaredTier: true,
+        results: [],
+      };
     return envelope(command, data as T);
   };
   const service = new GuideService(
@@ -269,9 +275,19 @@ describe('guided workflow', () => {
       release = resolve;
     });
     const service = new GuideService(
-      async <T>() => {
+      async <T>(args: readonly string[]) => {
         await gate;
-        return envelope('doctor', inventory() as T);
+        return args[0] === 'verify'
+          ? envelope(
+              'verify',
+              {
+                receiptId: null,
+                appliedAt: null,
+                healthyAtDeclaredTier: true,
+                results: [],
+              } as T,
+            )
+          : envelope('doctor', inventory() as T);
       },
       () => 0,
       () => 'a',
