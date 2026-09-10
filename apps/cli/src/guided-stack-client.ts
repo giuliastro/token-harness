@@ -227,9 +227,31 @@ export const GUIDE_STACK_JS = String.raw`
   }
 
   window.fetch = async (...args) => {
-    const response = await originalFetch(...args);
+    let fetchArgs = args;
+    const target = String(args[0]);
+    if (target.includes('/api/verify') && args[1] && typeof args[1] === 'object') {
+      try {
+        const options = { ...args[1] };
+        if (typeof options.body === 'string') {
+          const body = JSON.parse(options.body);
+          const period = $('period')?.value;
+          if (
+            body &&
+            typeof body === 'object' &&
+            !Array.isArray(body) &&
+            body.period === undefined &&
+            ['all', '7d', '30d'].includes(period)
+          ) {
+            options.body = JSON.stringify({ ...body, period });
+            fetchArgs = [args[0], options];
+          }
+        }
+      } catch {
+        // Keep the original request unchanged if it is not the guided JSON shape.
+      }
+    }
+    const response = await originalFetch(...fetchArgs);
     try {
-      const target = String(args[0]);
       if (response.ok && (target.includes('/api/overview') || target.includes('/api/verify'))) {
         const data = await response.clone().json();
         if (data?.stack) renderStack(data.stack);
