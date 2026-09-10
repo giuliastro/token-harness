@@ -1,0 +1,32 @@
+name: UI Format Capture
+
+on:
+  push:
+    branches:
+      - ux/simple-monitor-actions
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format UI files
+        run: pnpm exec prettier --write apps/cli/src/guided-assets.ts apps/cli/src/guided-simple-client.ts apps/cli/test/guided-dashboard-product.test.ts
+      - name: Print formatted files
+        shell: bash
+        run: |
+          for file in apps/cli/src/guided-assets.ts apps/cli/src/guided-simple-client.ts apps/cli/test/guided-dashboard-product.test.ts; do
+            echo "FORMATTED_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FORMATTED_END:$file"
+          done
