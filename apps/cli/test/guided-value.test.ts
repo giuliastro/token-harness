@@ -35,6 +35,7 @@ describe('guided value evidence', () => {
     assert.equal(value.allowance5h.state, 'not-measured');
     assert.equal(value.allowance7d.state, 'not-measured');
     assert.equal(value.quality.state, 'not-measured');
+    assert.deepEqual(value.candidates, []);
     assert.equal(value.apiCost.state, 'not-measured');
   });
 
@@ -100,5 +101,37 @@ describe('guided value evidence', () => {
     assert.equal(value.allowance7d.state, 'measured');
     assert.equal(value.allowance7d.savedPercent, 1.5);
     assert.equal(value.allowance7d.equivalentMinutes, null);
+  });
+
+  it('passes candidate-attributed benchmark summaries through without changing global value math', () => {
+    const report = matrix([
+      quotaEntry({ baseline: 8, optimized: 4 }),
+    ]) as TaskBenchmarkContextMatrixReport & {
+      candidateEvidence: Array<Record<string, unknown>>;
+    };
+    report.candidateEvidence = [
+      {
+        candidateId: 'headroom',
+        pairs: 2,
+        optimizedBetter: 2,
+        baselineBetter: 0,
+        equivalent: 0,
+        inconclusive: 0,
+        incomparable: 0,
+        quotaBacked: 1,
+        localEvidence: 1,
+        qualityOnly: 0,
+        localComparablePairs: 1,
+        baselineLocalTokens: 1000,
+        optimizedLocalTokens: 700,
+        localTokenSavingPercent: 30,
+      },
+    ];
+
+    const value = guidedValueEvidence(report as never);
+    assert.equal(value.allowance5h.savedPercent, 4);
+    assert.equal(value.candidates.length, 1);
+    assert.equal(value.candidates[0]?.candidateId, 'headroom');
+    assert.equal(value.candidates[0]?.localTokenSavingPercent, 30);
   });
 });

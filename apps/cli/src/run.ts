@@ -26,8 +26,11 @@ import {
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runApply } from './commands/apply.js';
 import { runBenchmark } from './commands/benchmark.js';
-import { runBenchmarkFinish, runBenchmarkStart } from './commands/benchmark-capture.js';
-import { runBenchmarkMatrix } from './commands/benchmark-matrix.js';
+import { runBenchmarkFinish } from './commands/benchmark-capture.js';
+import {
+  runCandidateBenchmarkMatrix,
+  runCandidateBenchmarkStart,
+} from './commands/candidate-benchmark.js';
 import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
@@ -65,9 +68,9 @@ export type CommandTable = Readonly<
 export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
   benchmark: runBenchmark,
-  'benchmark-matrix': runBenchmarkMatrix,
+  'benchmark-matrix': runCandidateBenchmarkMatrix,
   'benchmark-finish': runBenchmarkFinish,
-  'benchmark-start': runBenchmarkStart,
+  'benchmark-start': runCandidateBenchmarkStart,
   budget: runBudget,
   context: runContext,
   doctor: runDoctor,
@@ -411,6 +414,7 @@ export async function run(options: RunOptions): Promise<number> {
     benchmarkQuality: invocation.options.benchmarkQuality,
     benchmarkAttempts: invocation.options.benchmarkAttempts,
     benchmarkFailedAttempts: invocation.options.benchmarkFailedAttempts,
+    optimizationCandidate: invocation.options.optimizationCandidate,
     taskClass: invocation.options.task,
     budgetProfile: invocation.options.profile,
     reservePercent: invocation.options.reservePercent,

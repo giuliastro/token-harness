@@ -1,4 +1,7 @@
-import type { TaskBenchmarkContextMatrixReport } from '@token-harness/core';
+import type {
+  OptimizationCandidateId,
+  TaskBenchmarkContextMatrixReport,
+} from '@token-harness/core';
 
 export type GuideAllowanceEvidenceState = 'not-measured' | 'measured' | 'blocked-by-quality';
 export type GuideQualityEvidenceState = 'not-measured' | 'preserved' | 'regressed';
@@ -18,11 +21,29 @@ export interface GuideQualityEvidence {
   improvements: number;
 }
 
+export interface GuideCandidateBenchmarkEvidence {
+  candidateId: OptimizationCandidateId;
+  pairs: number;
+  optimizedBetter: number;
+  baselineBetter: number;
+  equivalent: number;
+  inconclusive: number;
+  incomparable: number;
+  quotaBacked: number;
+  localEvidence: number;
+  qualityOnly: number;
+  localComparablePairs: number;
+  baselineLocalTokens: number | null;
+  optimizedLocalTokens: number | null;
+  localTokenSavingPercent: number | null;
+}
+
 export interface GuideValueEvidence {
   source: 'benchmark-matrix' | 'unavailable';
   allowance5h: GuideAllowanceEvidence;
   allowance7d: GuideAllowanceEvidence;
   quality: GuideQualityEvidence;
+  candidates: GuideCandidateBenchmarkEvidence[];
   apiCost: {
     state: 'not-measured';
     estimatedUsd: null;
@@ -32,6 +53,9 @@ export interface GuideValueEvidence {
 }
 
 type MatrixEntry = TaskBenchmarkContextMatrixReport['entries'][number];
+type CandidateAwareMatrix = TaskBenchmarkContextMatrixReport & {
+  candidateEvidence?: GuideCandidateBenchmarkEvidence[];
+};
 
 function roundOne(value: number): number {
   return Math.round(value * 10) / 10;
@@ -98,13 +122,11 @@ function allowanceEvidence(
  *
  * Backend quota is never summed across tasks, windows or resets. We expose the median percentage
  * delta only from authoritative paired quota evidence. Positive allowance value is not promoted
- * until paired quality evidence is also present and free of regressions. API money remains
- * unavailable until billed-token evidence and a verified price basis exist elsewhere in the
- * product.
+ * until paired quality evidence is also present and free of regressions. Candidate-attributed
+ * summaries remain separate from the overall value result and never imply candidate activation.
+ * API money remains unavailable until billed-token evidence and a verified price basis exist.
  */
-export function guidedValueEvidence(
-  report: TaskBenchmarkContextMatrixReport | null,
-): GuideValueEvidence {
+export function guidedValueEvidence(report: CandidateAwareMatrix | null): GuideValueEvidence {
   const entries = report?.entries ?? [];
   const quality = qualityEvidence(entries);
   return {
@@ -112,6 +134,7 @@ export function guidedValueEvidence(
     allowance5h: allowanceEvidence(entries, 'five-hour', quality),
     allowance7d: allowanceEvidence(entries, 'weekly', quality),
     quality,
+    candidates: (report?.candidateEvidence ?? []).map((item) => ({ ...item })),
     apiCost: {
       state: 'not-measured',
       estimatedUsd: null,

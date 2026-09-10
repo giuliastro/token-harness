@@ -12,6 +12,7 @@ export const GUIDE_STACK_JS = String.raw`
   };
   const count = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
   const stackCache = new Map();
+  const candidateRunIds = new Map();
   const category = {
     'command-output-reduction': 'Shell / tool output',
     'context-minimization': 'Context minimization',
@@ -280,7 +281,143 @@ export const GUIDE_STACK_JS = String.raw`
     };
   }
 
-  function renderCandidate(candidate, observation) {
+  function commandRow(command) {
+    const row = node('div', undefined, 'agent-line');
+    const code = node('code', command);
+    const copy = node('button', 'Copy', 'secondary');
+    copy.type = 'button';
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(command);
+        copy.textContent = 'Copied';
+        setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
+      } catch {
+        copy.textContent = 'Select command';
+      }
+    });
+    row.append(code, copy);
+    return row;
+  }
+
+  function candidateRunId(candidateId) {
+    if (!candidateRunIds.has(candidateId))
+      candidateRunIds.set(candidateId, candidateId + '-' + Date.now().toString(36));
+    return candidateRunIds.get(candidateId);
+  }
+
+  function renderBenchmarkWorkflow(candidate, agents) {
+    const details = node('details', undefined, 'agent-details');
+    details.append(node('summary', 'Run a paired benchmark'));
+    details.append(
+      node(
+        'p',
+        'Run the same representative task twice: baseline without the candidate, then optimized with the candidate enabled through its own reviewed setup. Token Harness records boundaries and evidence; it does not install, enable, sync or configure the candidate.',
+        'caption',
+      ),
+    );
+
+    const harnesses = Array.isArray(agents)
+      ? agents.map(agent => agent?.id).filter(id => id === 'claude' || id === 'codex')
+      : [];
+    const controls = node('div', undefined, 'agent-line');
+    const harnessLabel = node('label', 'Agent', 'key');
+    const harness = document.createElement('select');
+    for (const id of (harnesses.length ? harnesses : ['codex'])) {
+      const option = node('option', id === 'claude' ? 'Claude Code' : 'Codex');
+      option.value = id;
+      harness.append(option);
+    }
+    const taskLabel = node('label', 'Task class', 'key');
+    const task = document.createElement('select');
+    for (const id of ['mechanical', 'standard', 'hard', 'critical']) {
+      const option = node('option', id[0].toUpperCase() + id.slice(1));
+      option.value = id;
+      option.selected = id === 'standard';
+      task.append(option);
+    }
+    controls.append(harnessLabel, harness, taskLabel, task);
+    details.append(controls);
+
+    const commands = node('div');
+    const renderCommands = () => {
+      const id = candidateRunId(candidate.id);
+      const common = ' --benchmark-id ' + id + ' --candidate ' + candidate.id;
+      const run = ' --task ' + task.value + ' --harness ' + harness.value;
+      commands.replaceChildren(
+        node('p', '1. Start baseline, run the task with the candidate disabled, then finish with the actual outcome.', 'caption'),
+        commandRow('token-harness benchmark-start' + common + ' --variant baseline' + run),
+        commandRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant baseline --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        node('p', '2. Reproduce the same task with the candidate enabled through its own reviewed setup, then record the real outcome.', 'caption'),
+        commandRow('token-harness benchmark-start' + common + ' --variant optimized' + run),
+        commandRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant optimized --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        node('p', '3. Refresh this dashboard. The existing benchmark matrix will attribute the completed pair to this candidate.', 'caption'),
+      );
+    };
+    harness.addEventListener('change', renderCommands);
+    task.addEventListener('change', renderCommands);
+    renderCommands();
+    details.append(commands);
+    details.append(
+      node(
+        'p',
+        'Replace the finish placeholders with what actually happened. Candidate attribution identifies the experiment target only; it is not proof that the optimized run really used the candidate, and it never causes automatic admission to the active stack.',
+        'caption',
+      ),
+    );
+    return details;
+  }
+
+  function renderCandidateEvidence(card, evidence) {
+    const line = node('div', undefined, 'agent-line');
+    line.append(
+      node('span', 'Paired evidence', 'key'),
+      node(
+        'strong',
+        !evidence || evidence.pairs === 0
+          ? 'No candidate-attributed pairs yet'
+          : count(evidence.pairs) + ' pairs · ' + count(evidence.optimizedBetter) + ' optimized better · ' + count(evidence.baselineBetter) + ' baseline better',
+      ),
+    );
+    card.append(line);
+    if (!evidence || evidence.pairs === 0) return;
+
+    const strength = node('div', undefined, 'agent-line');
+    strength.append(
+      node('span', 'Evidence strength', 'key'),
+      node(
+        'strong',
+        count(evidence.quotaBacked) + ' quota-backed · ' +
+          count(evidence.localEvidence) + ' local · ' +
+          count(evidence.qualityOnly) + ' quality-only',
+      ),
+    );
+    card.append(strength);
+
+    if (evidence.localTokenSavingPercent !== null) {
+      const local = node('div', undefined, 'allowance-strip');
+      const delta = evidence.localTokenSavingPercent;
+      local.append(
+        node('span', 'Paired local token delta', 'key'),
+        node(
+          'strong',
+          delta >= 0 ? count(delta) + '% lower in optimized runs' : count(Math.abs(delta)) + '% higher in optimized runs',
+        ),
+        node('span', 'Quality-passed locally attributable pairs only; not subscription quota.', 'caption'),
+      );
+      card.append(local);
+    }
+
+    if (evidence.baselineBetter > 0) {
+      const warning = node('div', undefined, 'allowance-strip');
+      warning.append(
+        node('span', 'Caution', 'key'),
+        node('strong', 'At least one paired result favored the baseline'),
+      );
+      card.append(warning);
+    }
+  }
+
+  function renderCandidate(candidate, observation, evidence, agents) {
     const card = node('article', undefined, 'panel agent');
     const head = node('div', undefined, 'agent-head');
     const title = node('div');
@@ -318,6 +455,8 @@ export const GUIDE_STACK_JS = String.raw`
       card.append(baseline);
     }
 
+    renderCandidateEvidence(card, evidence);
+
     const opportunity = node('div', undefined, 'allowance-strip');
     opportunity.append(
       node('span', 'What it could improve', 'key'),
@@ -325,13 +464,14 @@ export const GUIDE_STACK_JS = String.raw`
     );
     card.append(opportunity);
 
-    const evidence = node('details', undefined, 'agent-details');
-    evidence.append(
+    const evidenceDetails = node('details', undefined, 'agent-details');
+    evidenceDetails.append(
       node('summary', 'Evidence required before adding'),
       node('p', candidate.evidence, 'caption'),
       node('p', candidate.beforeAdding, 'caption'),
     );
-    card.append(evidence);
+    card.append(evidenceDetails);
+    if (observation?.state === 'benchmark-ready') card.append(renderBenchmarkWorkflow(candidate, agents));
     return card;
   }
 
@@ -351,13 +491,33 @@ export const GUIDE_STACK_JS = String.raw`
     return result;
   }
 
-  function renderCandidates(observations) {
+  function candidateEvidenceMap(evidence) {
+    const result = new Map();
+    if (!Array.isArray(evidence)) return result;
+    for (const item of evidence) {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        !candidateCatalog.some(candidate => candidate.id === item.candidateId) ||
+        !Number.isFinite(item.pairs) ||
+        item.pairs < 0
+      )
+        continue;
+      result.set(item.candidateId, item);
+    }
+    return result;
+  }
+
+  function renderCandidates(observations, evidence, agents) {
     const root = $('candidates');
     if (!root) return;
     const observed = candidateMap(observations);
+    const measured = candidateEvidenceMap(evidence);
     root.replaceChildren();
     for (const candidate of candidateCatalog)
-      root.append(renderCandidate(candidate, observed.get(candidate.id)));
+      root.append(
+        renderCandidate(candidate, observed.get(candidate.id), measured.get(candidate.id), agents),
+      );
   }
 
   function selectedPeriod() {
@@ -370,7 +530,7 @@ export const GUIDE_STACK_JS = String.raw`
     if (stack) renderStack(stack);
   });
 
-  renderCandidates(null);
+  renderCandidates(null, null, null);
 
   window.fetch = async (...args) => {
     let fetchArgs = args;
@@ -399,7 +559,12 @@ export const GUIDE_STACK_JS = String.raw`
     try {
       if (response.ok && (target.includes('/api/overview') || verifyRequest)) {
         const data = await response.clone().json();
-        if (target.includes('/api/overview')) renderCandidates(data?.optimizationCandidates ?? []);
+        if (target.includes('/api/overview'))
+          renderCandidates(
+            data?.optimizationCandidates ?? [],
+            data?.value?.candidates ?? [],
+            data?.agents ?? [],
+          );
         if (data?.stack) {
           const period = verifyRequest
             ? selectedPeriod()

@@ -29,9 +29,25 @@ describe('guided optimization candidates', () => {
     assert.doesNotMatch(GUIDE_STACK_JS, /mcptoon[^\n]*saved/i);
   });
 
-  it('consumes only the bounded overview projection and adds no candidate network or install action', () => {
+  it('shows attributed paired evidence and an explicit benchmark workflow only for ready candidates', () => {
+    assert.match(GUIDE_STACK_JS, /Paired evidence/);
+    assert.match(GUIDE_STACK_JS, /Evidence strength/);
+    assert.match(GUIDE_STACK_JS, /Paired local token delta/);
+    assert.match(GUIDE_STACK_JS, /Run a paired benchmark/);
+    assert.match(GUIDE_STACK_JS, /observation\?\.state === 'benchmark-ready'/);
+    assert.match(GUIDE_STACK_JS, /benchmark-start/);
+    assert.match(GUIDE_STACK_JS, /--candidate /);
+    assert.match(GUIDE_STACK_JS, /--variant baseline/);
+    assert.match(GUIDE_STACK_JS, /--variant optimized/);
+    assert.match(GUIDE_STACK_JS, /--quality <passed\|failed>/);
+    assert.match(GUIDE_STACK_JS, /not proof that the optimized run really used the candidate/);
+  });
+
+  it('consumes existing overview data and adds no candidate network, install or activation action', () => {
     assert.match(GUIDE_STACK_JS, /data\?\.optimizationCandidates/);
+    assert.match(GUIDE_STACK_JS, /data\?\.value\?\.candidates/);
     assert.match(GUIDE_STACK_JS, /never performed silently/);
+    assert.match(GUIDE_STACK_JS, /does not install, enable, sync or configure the candidate/);
     assert.match(GUIDE_STACK_JS, /No sync or compression policy is enabled automatically/);
     assert.doesNotMatch(GUIDE_STACK_JS, /fetch\([^\n]*(headroom|mcptoon)/i);
     assert.doesNotMatch(GUIDE_STACK_JS, /proxyButton\([^\n]*(headroom|mcptoon)/i);
