@@ -29,7 +29,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
   return toEnvelope(result, 'test');
 }
 
-it('updates verified stack evidence without reloading the full overview', async () => {
+it('updates verified stack evidence only for the requested reporting period', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
   const doctor = (): DoctorReport => ({
@@ -109,12 +109,17 @@ it('updates verified stack evidence without reloading the full overview', async 
   const origin = `http://${authority}`;
 
   try {
-    const first = await fetch(`${origin}/api/overview?period=all`);
-    assert.equal(first.status, 200);
-    const initial = (await first.json()) as GuideOverview;
-    assert.equal(initial.stack.components[0]?.verification, 'not-checked');
-    const afterOverview = calls.length;
-    assert.ok(afterOverview > 0);
+    const allResponse = await fetch(`${origin}/api/overview?period=all`);
+    assert.equal(allResponse.status, 200);
+    const allInitial = (await allResponse.json()) as GuideOverview;
+    assert.equal(allInitial.stack.components[0]?.verification, 'not-checked');
+
+    const sevenResponse = await fetch(`${origin}/api/overview?period=7d`);
+    assert.equal(sevenResponse.status, 200);
+    const sevenInitial = (await sevenResponse.json()) as GuideOverview;
+    assert.equal(sevenInitial.stack.components[0]?.verification, 'not-checked');
+    const afterOverviews = calls.length;
+    assert.ok(afterOverviews > 0);
 
     const verification = await fetch(`${origin}/api/verify`, {
       method: 'POST',
@@ -123,23 +128,33 @@ it('updates verified stack evidence without reloading the full overview', async 
         Origin: origin,
         'X-Token-Harness-CSRF': token,
       },
-      body: '{}',
+      body: JSON.stringify({ period: 'all' }),
     });
     assert.equal(verification.status, 200);
     const verificationBody = (await verification.json()) as { stack?: GuideOverview['stack'] };
     assert.equal(verificationBody.stack?.components[0]?.verification, 'verified');
     const afterVerify = calls.length;
-    assert.ok(afterVerify > afterOverview);
+    assert.ok(afterVerify > afterOverviews);
 
-    const cached = await fetch(`${origin}/api/overview?period=all`);
-    assert.equal(cached.status, 200);
-    const cachedOverview = (await cached.json()) as GuideOverview;
-    assert.equal(cachedOverview.stack.components[0]?.verification, 'verified');
+    const cachedAll = await fetch(`${origin}/api/overview?period=all`);
+    assert.equal(cachedAll.status, 200);
+    const allVerified = (await cachedAll.json()) as GuideOverview;
+    assert.equal(allVerified.stack.components[0]?.verification, 'verified');
     assert.equal(
       calls.length,
       afterVerify,
       'verification must update stack evidence without repeating allowance/context/metrics reads',
     );
+
+    const cachedSeven = await fetch(`${origin}/api/overview?period=7d`);
+    assert.equal(cachedSeven.status, 200);
+    const sevenUnchanged = (await cachedSeven.json()) as GuideOverview;
+    assert.equal(
+      sevenUnchanged.stack.components[0]?.verification,
+      'not-checked',
+      'verification for all history must not overwrite another period cache',
+    );
+    assert.equal(calls.length, afterVerify, 'reading the other cached period must stay read-only');
 
     providerVersion = '0.45.0';
     const refreshed = await fetch(`${origin}/api/overview?period=all&refresh=1`);
