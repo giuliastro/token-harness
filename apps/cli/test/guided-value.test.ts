@@ -104,7 +104,9 @@ describe('guided value evidence', () => {
   });
 
   it('passes candidate-attributed benchmark summaries through without changing global value math', () => {
-    const report = matrix([quotaEntry({ baseline: 8, optimized: 4 })]) as TaskBenchmarkContextMatrixReport & {
+    const report = matrix([
+      quotaEntry({ baseline: 8, optimized: 4 }),
+    ]) as TaskBenchmarkContextMatrixReport & {
       candidateEvidence: Array<Record<string, unknown>>;
     };
     report.candidateEvidence = [

@@ -126,9 +126,7 @@ function allowanceEvidence(
  * summaries remain separate from the overall value result and never imply candidate activation.
  * API money remains unavailable until billed-token evidence and a verified price basis exist.
  */
-export function guidedValueEvidence(
-  report: CandidateAwareMatrix | null,
-): GuideValueEvidence {
+export function guidedValueEvidence(report: CandidateAwareMatrix | null): GuideValueEvidence {
   const entries = report?.entries ?? [];
   const quality = qualityEvidence(entries);
   return {

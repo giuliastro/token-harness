@@ -93,12 +93,7 @@ export function summarizeCandidateBenchmarkEntries(
 
 function attributionPath(context: CommandContext, benchmarkId: string): string | null {
   if (context.adapters === null || context.stateRoot === null) return null;
-  return context.adapters.fs.join(
-    context.stateRoot,
-    'benchmarks',
-    benchmarkId,
-    'candidate.json',
-  );
+  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, 'candidate.json');
 }
 
 function parseAttribution(value: unknown): CandidateBenchmarkAttribution | null {
@@ -131,7 +126,9 @@ async function readAttribution(
   if (stat === null) return 'absent';
   if (stat.kind !== 'file') return 'invalid';
   try {
-    const raw = JSON.parse(new TextDecoder().decode(await context.adapters.fs.readFile(path))) as unknown;
+    const raw = JSON.parse(
+      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+    ) as unknown;
     return parseAttribution(raw) ?? 'invalid';
   } catch {
     return 'invalid';
@@ -249,7 +246,8 @@ export async function runCandidateBenchmarkMatrix(
           code: 'candidate-benchmark-attribution-invalid',
           subject: entry.benchmarkId,
           message: 'Candidate attribution was ignored because it is invalid or belongs elsewhere',
-          remediation: 'Keep the benchmark pair as ordinary evidence; use a new id for a clean candidate run',
+          remediation:
+            'Keep the benchmark pair as ordinary evidence; use a new id for a clean candidate run',
         }),
       );
       continue;
