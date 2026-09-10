@@ -395,6 +395,46 @@ describe('rollback', () => {
     assert.equal(second.data?.outcome, 'nothing-to-do');
   });
 
+  it('rolls back the exact latest transaction when a transaction guard matches', async () => {
+    const place = world();
+    await invoke(['apply', '--yes'], place);
+    const removed = await invoke<ApplyReport>(['uninstall', '--yes'], place);
+    const transactionId = removed.data?.transactionId;
+    assert.ok(transactionId);
+    assert.deepEqual(matchers(place), ['Edit']);
+
+    const result = await invoke<ApplyReport>(
+      ['rollback', '--transaction', transactionId, '--yes'],
+      place,
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.data?.transactionId, transactionId);
+    assert.deepEqual(matchers(place), ['Edit', ...MANAGED_MATCHERS]);
+  });
+
+  it('refuses a stale transaction guard instead of reversing a newer transaction', async () => {
+    const place = world();
+    const applied = await invoke<ApplyReport>(['apply', '--yes'], place);
+    const applyTransactionId = applied.data?.transactionId;
+    assert.ok(applyTransactionId);
+    await invoke(['uninstall', '--yes'], place);
+    assert.deepEqual(matchers(place), ['Edit']);
+
+    const result = await invoke<ApplyReport>(
+      ['rollback', '--transaction', applyTransactionId, '--yes'],
+      place,
+    );
+
+    assert.equal(result.exitCode, 5);
+    assert.equal(result.data?.outcome, 'rejected');
+    assert.equal(result.data?.transactionId, null);
+    assert.deepEqual(matchers(place), ['Edit']);
+    assert.ok(
+      result.envelope.diagnostics.some((entry) => entry.code === 'rollback-transaction-drift'),
+    );
+  });
+
   it('walks back through history when there is more than one transaction', async () => {
     const place = world();
     await invoke(['apply', '--yes'], place);

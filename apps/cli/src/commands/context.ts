@@ -64,6 +64,11 @@ export interface CommandContext {
    */
   planId: string | null;
   /**
+   * Optional exact transaction expected at the rollback tip. This is a drift guard, not permission
+   * to reverse an arbitrary historical journal. Optional for hand-built test contexts.
+   */
+  transactionId?: string | null;
+  /**
    * Whether the user granted the confirmation RFC 0006 requires of a mutating command.
    *
    * Named for the decision rather than the flag, because the flag is only one way to reach it:

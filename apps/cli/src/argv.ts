@@ -84,6 +84,8 @@ export interface CommandOptions {
   until: string | null;
   /** `--plan <id>`; validated for shape here and for existence by the command. */
   plan: string | null;
+  /** `--transaction <id>`; an exact rollback target guard, never a historical selector. */
+  transaction: string | null;
   /** Paired task benchmark comparison/capture inputs. */
   baselineReceipt: string | null;
   optimizedReceipt: string | null;
@@ -123,6 +125,7 @@ const VALUE_FLAGS = new Set([
   '--since',
   '--until',
   '--plan',
+  '--transaction',
   '--baseline',
   '--optimized',
   '--benchmark-id',
@@ -202,6 +205,7 @@ export function parseArgv(
     since: null,
     until: null,
     plan: null,
+    transaction: null,
     baselineReceipt: null,
     optimizedReceipt: null,
     benchmarkId: null,
@@ -498,6 +502,11 @@ export function parseArgv(
         }
         break;
       }
+      case '--transaction':
+        // Kept deliberately opaque here. The rollback command compares it only with a journal id
+        // that was already loaded from the local store; the raw value is never used as a path.
+        options.transaction = value;
+        break;
       case '--plan':
         if (!isPlanId(value)) {
           // Checked here rather than on the filesystem: a value that cannot be a plan id is a

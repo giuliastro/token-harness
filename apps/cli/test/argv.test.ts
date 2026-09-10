@@ -89,6 +89,13 @@ describe('argv', () => {
     assert.equal(parsed.options.plan, 'deadbeef');
   });
 
+  it('parses an opaque rollback transaction guard', () => {
+    const parsed = parseArgv(['rollback', '--transaction', 'txn-2026-09-10T16:35:57Z']);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.options.transaction, 'txn-2026-09-10T16:35:57Z');
+  });
+
   it('rejects a --plan value that cannot be a plan id', () => {
     const parsed = parseArgv(['apply', '--plan', 'not-an-id']);
     assert.equal(parsed.kind, 'usage-error');
