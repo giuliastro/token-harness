@@ -198,7 +198,8 @@ replace(
     );
 
     assert.equal(result.exitCode, 5);
-    assert.equal(result.data, null);
+    assert.equal(result.data?.outcome, 'rejected');
+    assert.equal(result.data?.transactionId, null);
     assert.deepEqual(matchers(place), ['Edit']);
     assert.ok(
       result.envelope.diagnostics.some((entry) => entry.code === 'rollback-transaction-drift'),
