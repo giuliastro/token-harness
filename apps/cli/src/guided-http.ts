@@ -2,6 +2,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OptimizationCandidateObservation } from '@token-harness/core';
+import type { CandidateBenchmarkEvidence } from './commands/candidate-benchmark.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
 import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
 
@@ -150,6 +151,7 @@ export function createGuideHandler(input: {
   token: string;
   authority: () => string;
   optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
+  candidateBenchmarkEvidence?: () => readonly CandidateBenchmarkEvidence[];
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -212,6 +214,9 @@ export function createGuideHandler(input: {
           const body = JSON.stringify({
             ...overview,
             optimizationCandidates: (input.optimizationCandidates?.() ?? []).map((item) => ({
+              ...item,
+            })),
+            candidateBenchmarkEvidence: (input.candidateBenchmarkEvidence?.() ?? []).map((item) => ({
               ...item,
             })),
           });
