@@ -26,6 +26,7 @@ import {
   type BudgetProfile,
   type Diagnostic,
   type HarnessId,
+  type OptimizationCandidateId,
   type ProviderId,
   type TaskBenchmarkVariant,
   type TaskClass,
@@ -91,6 +92,7 @@ export interface CommandOptions {
   benchmarkQuality: TaskQualityGate | null;
   benchmarkAttempts: number | null;
   benchmarkFailedAttempts: number | null;
+  optimizationCandidate: OptimizationCandidateId | null;
   /** RFC 0011 advisory optimizer inputs. */
   task: TaskClass | null;
   profile: BudgetProfile | null;
@@ -124,6 +126,7 @@ const VALUE_FLAGS = new Set([
   '--baseline',
   '--optimized',
   '--benchmark-id',
+  '--candidate',
   '--variant',
   '--quality',
   '--attempts',
@@ -206,6 +209,7 @@ export function parseArgv(
     benchmarkQuality: null,
     benchmarkAttempts: null,
     benchmarkFailedAttempts: null,
+    optimizationCandidate: null,
     task: null,
     profile: null,
     reservePercent: null,
@@ -358,6 +362,20 @@ export function parseArgv(
           );
         } else {
           options.benchmarkId = value;
+        }
+        break;
+      case '--candidate':
+        if (value !== 'headroom' && value !== 'mcptoon') {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-optimization-candidate',
+              message: `Optimization candidate ${JSON.stringify(value)} is not supported`,
+              remediation: 'Use headroom or mcptoon',
+            }),
+          );
+        } else {
+          options.optimizationCandidate = value;
         }
         break;
       case '--variant':
