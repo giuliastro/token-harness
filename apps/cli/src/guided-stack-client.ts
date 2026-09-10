@@ -44,6 +44,28 @@ export const GUIDE_STACK_JS = String.raw`
     'estimated-local': 'Local estimate',
     'end-to-end-billed': 'Paired session measurement',
   };
+  const candidates = [
+    {
+      id: 'headroom',
+      displayName: 'Headroom',
+      category: 'context-minimization',
+      opportunity: 'Could reduce context overhead around agent-owned tool and file interactions.',
+      evidence:
+        'Token Harness can inspect Headroom as a read-only candidate, but it is not admitted to the active stack without paired quality-safe benchmark evidence.',
+      beforeAdding:
+        'Benchmark representative Claude Code and Codex tasks first. Installation or activation is never performed silently.',
+    },
+    {
+      id: 'mcptoon',
+      displayName: 'mcptoon',
+      category: 'mcp-discovery',
+      opportunity: 'Could reduce MCP discovery and schema payload before that context reaches the model.',
+      evidence:
+        'Token Harness can inspect mcptoon as a read-only candidate, but no MCP savings or quality benefit is assumed until native and compact paths are compared.',
+      beforeAdding:
+        'Compare native versus compact MCP context and verify tool correctness before any activation. No sync or compression policy is enabled automatically.',
+    },
+  ];
 
   function proxyButton(sourceId, label, cls = 'secondary') {
     const button = node('button', label, cls);
@@ -228,6 +250,45 @@ export const GUIDE_STACK_JS = String.raw`
     }
   }
 
+  function renderCandidate(candidate) {
+    const card = node('article', undefined, 'panel agent');
+    const head = node('div', undefined, 'agent-head');
+    const title = node('div');
+    title.append(
+      node('h2', candidate.displayName),
+      node('span', category[candidate.category] || candidate.category, 'caption'),
+    );
+    head.append(title, node('span', 'Candidate only', 'pill'));
+    card.append(head);
+
+    const lifecycle = node('div', undefined, 'agent-line');
+    lifecycle.append(node('span', 'Lifecycle', 'key'), node('strong', 'Not in your active stack'));
+    card.append(lifecycle);
+
+    const opportunity = node('div', undefined, 'allowance-strip');
+    opportunity.append(
+      node('span', 'What it could improve', 'key'),
+      node('strong', candidate.opportunity),
+    );
+    card.append(opportunity);
+
+    const evidence = node('details', undefined, 'agent-details');
+    evidence.append(
+      node('summary', 'Evidence required before adding'),
+      node('p', candidate.evidence, 'caption'),
+      node('p', candidate.beforeAdding, 'caption'),
+    );
+    card.append(evidence);
+    return card;
+  }
+
+  function renderCandidates() {
+    const root = $('candidates');
+    if (!root) return;
+    root.replaceChildren();
+    for (const candidate of candidates) root.append(renderCandidate(candidate));
+  }
+
   function selectedPeriod() {
     const value = $('period')?.value;
     return ['all', '7d', '30d'].includes(value) ? value : 'all';
@@ -237,6 +298,8 @@ export const GUIDE_STACK_JS = String.raw`
     const stack = stackCache.get(selectedPeriod());
     if (stack) renderStack(stack);
   });
+
+  renderCandidates();
 
   window.fetch = async (...args) => {
     let fetchArgs = args;
