@@ -83,7 +83,10 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.passedGateCount, 3);
     assert.equal(result.requiredGateCount, 8);
     assert.equal(result.nextGate, 'activation-verification');
-    assert.deepEqual(result.blockedGateIds, ['activation-verification', 'managed-lifecycle']);
+    assert.deepEqual(result.blockedGateIds, [
+      'activation-verification',
+      'managed-lifecycle',
+    ]);
     assert.ok(result.unreviewedGateIds.includes('project-maturity'));
   });
 
