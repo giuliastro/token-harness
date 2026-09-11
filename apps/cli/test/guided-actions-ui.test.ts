@@ -43,7 +43,9 @@ describe('guided setup UX', () => {
       GUIDE_JS.indexOf('\n  function ', start + 1),
       GUIDE_JS.indexOf('\n  async function ', start + 1),
     ].filter(index => index > start);
-    const end = laterFunctionStarts.length ? Math.min(...laterFunctionStarts) : GUIDE_JS.length;
+    const end = laterFunctionStarts.length
+      ? Math.min(...laterFunctionStarts)
+      : GUIDE_JS.length;
     const applyTicketSource = GUIDE_JS.slice(start, end);
     assert.doesNotMatch(applyTicketSource, /refresh\(true\)/);
   });
