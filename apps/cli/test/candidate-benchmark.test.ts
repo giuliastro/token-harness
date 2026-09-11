@@ -26,7 +26,7 @@ function entry(
 }
 
 describe('candidate benchmark evidence', () => {
-  it('parses only supported explicit candidate attribution', () => {
+  it('parses supported explicit candidate attribution, including GitNexus', () => {
     const parsed = parseArgv([
       'benchmark-start',
       '--benchmark-id',
@@ -43,6 +43,24 @@ describe('candidate benchmark evidence', () => {
     assert.equal(parsed.kind, 'command');
     if (parsed.kind !== 'command') return;
     assert.equal(parsed.options.optimizationCandidate, 'headroom');
+
+    const gitnexus = parseArgv([
+      'benchmark-start',
+      '--benchmark-id',
+      'gitnexus-standard-1',
+      '--candidate',
+      'gitnexus',
+      '--variant',
+      'baseline',
+      '--task',
+      'standard',
+      '--harness',
+      'codex',
+    ]);
+    assert.equal(gitnexus.kind, 'command');
+    if (gitnexus.kind === 'command') {
+      assert.equal(gitnexus.options.optimizationCandidate, 'gitnexus');
+    }
 
     const invalid = parseArgv(['benchmark-start', '--candidate', 'unknown']);
     assert.equal(invalid.kind, 'usage-error');
@@ -91,5 +109,12 @@ describe('candidate benchmark evidence', () => {
       optimizedLocalTokens: 1300,
       localTokenSavingPercent: 13.3,
     });
+  });
+
+  it('accepts GitNexus in the shared evidence summarizer', () => {
+    const summary = summarizeCandidateBenchmarkEntries('gitnexus', []);
+    assert.equal(summary.candidateId, 'gitnexus');
+    assert.equal(summary.pairs, 0);
+    assert.equal(summary.localTokenSavingPercent, null);
   });
 });
