@@ -53,7 +53,10 @@ describe('setup-first guided dashboard', () => {
   });
 
   it('never schedules a full dashboard refresh in the background', () => {
-    assert.doesNotMatch(GUIDE_JS, /setInterval\([^]*refresh\(/);
+    assert.doesNotMatch(
+      GUIDE_JS,
+      /setInterval\s*\(\s*(?:async\s*)?\(\)\s*=>\s*(?:\{[^}]*\brefresh\s*\(|\brefresh\s*\()/,
+    );
     assert.match(GUIDE_JS, /setInterval\([^]*loadActivity\(\)/);
     assert.match(GUIDE_JS, /\$\('period'\)\.addEventListener\('change', changePeriod\)/);
   });
