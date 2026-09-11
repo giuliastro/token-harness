@@ -17,7 +17,11 @@ export type CandidatePromotionGateId =
   | 'combined-stack-validation'
   | 'context-owner-admission';
 
-export type CandidatePromotionGateState = 'passed' | 'blocked' | 'unreviewed' | 'not-applicable';
+export type CandidatePromotionGateState =
+  | 'passed'
+  | 'blocked'
+  | 'unreviewed'
+  | 'not-applicable';
 export type CandidatePromotionReadinessState = 'eligible' | 'blocked' | 'unreviewed';
 
 export interface CandidatePromotionGate {
@@ -129,7 +133,9 @@ function observedCategoryFit(
   };
 }
 
-function selectionEvidence(assessment: CandidateEvidenceAssessment | null): CandidatePromotionGate {
+function selectionEvidence(
+  assessment: CandidateEvidenceAssessment | null,
+): CandidatePromotionGate {
   if (assessment === null) {
     return {
       id: 'selection-evidence',
