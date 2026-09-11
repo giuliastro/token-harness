@@ -369,13 +369,13 @@ export function parseArgv(
         }
         break;
       case '--candidate':
-        if (value !== 'headroom' && value !== 'mcptoon') {
+        if (value !== 'headroom' && value !== 'mcptoon' && value !== 'gitnexus') {
           diagnostics.push(
             diagnostic({
               severity: 'error',
               code: 'invalid-optimization-candidate',
               message: `Optimization candidate ${JSON.stringify(value)} is not supported`,
-              remediation: 'Use headroom or mcptoon',
+              remediation: 'Use headroom, mcptoon, or gitnexus',
             }),
           );
         } else {
