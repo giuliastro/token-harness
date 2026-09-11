@@ -254,12 +254,7 @@ function renderCampaign(
     ),
   );
   for (const reason of assessment.reasons) lines.push(...wrap(`Reason: ${reason}.`, 4));
-  lines.push(
-    ...wrap(
-      `Promotion: blocked. ${assessment.promotionBlockers.join('; ')}.`,
-      4,
-    ),
-  );
+  lines.push(...wrap(`Promotion: blocked. ${assessment.promotionBlockers.join('; ')}.`, 4));
 
   lines.push(
     ...wrap(

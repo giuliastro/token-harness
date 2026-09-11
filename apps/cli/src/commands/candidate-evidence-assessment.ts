@@ -4,11 +4,7 @@ import type {
   TaskClass,
 } from '@token-harness/core';
 
-export type CandidateEvidenceSignal =
-  | 'insufficient-evidence'
-  | 'promising'
-  | 'mixed'
-  | 'negative';
+export type CandidateEvidenceSignal = 'insufficient-evidence' | 'promising' | 'mixed' | 'negative';
 
 export interface CandidateAssessmentSlot {
   benchmarkId: string;
@@ -101,7 +97,9 @@ function basePromotionBlockers(
   ];
   if (completedPairs < totalPairs) blockers.push('the standard benchmark campaign is not complete');
   if (candidateId === 'headroom') {
-    blockers.push('a broad context owner must also pass the dedicated context-owner admission gate');
+    blockers.push(
+      'a broad context owner must also pass the dedicated context-owner admission gate',
+    );
   }
   return blockers;
 }
@@ -149,8 +147,7 @@ export function assessCandidateEvidence(
   const entries = completedCampaignEntries(input.slots, input.entries);
   const covered = coveredTaskClasses(entries);
   const hardRegressions = entries.filter(
-    (entry) =>
-      entry.verdict === 'baseline-better' && HARD_REGRESSION_BASES.has(entry.basis),
+    (entry) => entry.verdict === 'baseline-better' && HARD_REGRESSION_BASES.has(entry.basis),
   );
 
   if (hardRegressions.length > 0) {

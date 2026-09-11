@@ -81,10 +81,7 @@ const sixClasses: readonly [string, TaskClass][] = [
 describe('candidate evidence assessment', () => {
   it('keeps small or narrow samples explicitly insufficient', () => {
     const result = assessCandidateEvidence(
-      campaign([
-        entry('eval-m-1', 'mechanical'),
-        entry('eval-m-2', 'mechanical', 'equivalent'),
-      ]),
+      campaign([entry('eval-m-1', 'mechanical'), entry('eval-m-2', 'mechanical', 'equivalent')]),
     );
 
     assert.equal(result.signal, 'insufficient-evidence');
@@ -144,7 +141,9 @@ describe('candidate evidence assessment', () => {
     assert.equal(result.hardRegressionPairs, 0);
     assert.deepEqual(result.coveredTaskClasses, ['mechanical', 'standard', 'hard']);
     assert.ok(result.promotionBlockers.some((blocker) => blocker.includes('verify activation')));
-    assert.ok(result.promotionBlockers.some((blocker) => blocker.includes('campaign is not complete')));
+    assert.ok(
+      result.promotionBlockers.some((blocker) => blocker.includes('campaign is not complete')),
+    );
   });
 
   it('keeps the broad-context-owner admission gate visible for Headroom', () => {
