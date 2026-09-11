@@ -120,10 +120,7 @@ describe('candidate benchmark attribution sidecar', () => {
     });
     assert.equal(written, true);
 
-    const read = await readCandidateBenchmarkAttribution(
-      fixture.context,
-      'headroom-standard-1',
-    );
+    const read = await readCandidateBenchmarkAttribution(fixture.context, 'headroom-standard-1');
     if (typeof read === 'string') {
       assert.fail(`expected persisted candidate attribution, got ${read}`);
     }
