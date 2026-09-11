@@ -49,6 +49,52 @@ describe('benchmark capture rendering', () => {
     }
   });
 
+  it('guides a candidate baseline into the exact optimized start', () => {
+    const rendered = renderBenchmarkStartReport(
+      {
+        capture,
+        capturePath:
+          '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/baseline.capture.json',
+        candidateId: 'headroom',
+      },
+      {
+        toolVersion: 'test',
+        home: '/home/dev',
+        decorate: false,
+      },
+    );
+
+    assert.match(rendered, /Candidate target: headroom/);
+    assert.match(rendered, /does not enable, disable, or prove/);
+    assert.match(rendered, /--candidate headroom --variant optimized/);
+    assert.match(rendered, /--task mechanical --harness codex/);
+    for (const line of rendered.trimEnd().split('\n')) {
+      assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
+    }
+  });
+
+  it('points an optimized candidate run to the experimental scorecard', () => {
+    const rendered = renderBenchmarkStartReport(
+      {
+        capture: { ...capture, variant: 'optimized' },
+        capturePath:
+          '/home/dev/.local/state/token-harness/benchmarks/mechanical-real-1/optimized.capture.json',
+        candidateId: 'gitnexus',
+      },
+      {
+        toolVersion: 'test',
+        home: '/home/dev',
+        decorate: false,
+      },
+    );
+
+    assert.match(rendered, /Candidate target: gitnexus/);
+    assert.match(rendered, /benchmark-matrix --harness codex --task mechanical/);
+    for (const line of rendered.trimEnd().split('\n')) {
+      assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
+    }
+  });
+
   it('makes local-usage absence explicit after finish', () => {
     const report: TaskBenchmarkCaptureFinishReport = {
       capturePath:
@@ -84,6 +130,7 @@ describe('benchmark capture rendering', () => {
       decorate: false,
     });
     assert.match(rendered, /Local usage: unavailable or ambiguous/);
+    assert.match(rendered, /token-harness benchmark-matrix --harness codex --task mechanical/);
     assert.match(rendered, /token-harness benchmark --baseline/);
     for (const line of rendered.trimEnd().split('\n')) {
       assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
