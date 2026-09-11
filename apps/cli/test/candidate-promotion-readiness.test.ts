@@ -38,10 +38,15 @@ function observation(
   candidateId: OptimizationCandidateId,
   input: Partial<OptimizationCandidateObservation> = {},
 ): OptimizationCandidateObservation {
+  const displayName =
+    candidateId === 'gitnexus'
+      ? 'GitNexus'
+      : candidateId === 'headroom'
+        ? 'Headroom'
+        : 'mcptoon';
   return {
     id: candidateId,
-    displayName:
-      candidateId === 'gitnexus' ? 'GitNexus' : candidateId === 'headroom' ? 'Headroom' : 'mcptoon',
+    displayName,
     category: OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID[candidateId],
     state: 'benchmark-ready',
     version: '1.2.3',
@@ -73,6 +78,19 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.nextGate, 'activation-verification');
     assert.deepEqual(result.blockedGateIds, ['activation-verification', 'managed-lifecycle']);
     assert.ok(result.unreviewedGateIds.includes('project-maturity'));
+  });
+
+  it('keeps benchmark evidence unreviewed on capability-only surfaces', () => {
+    const result = assessCandidatePromotionReadiness({
+      candidateId: 'gitnexus',
+      assessment: null,
+      observation: observation('gitnexus'),
+    });
+
+    assert.equal(result.passedGateCount, 2);
+    assert.equal(result.nextGate, 'selection-evidence');
+    assert.ok(result.unreviewedGateIds.includes('selection-evidence'));
+    assert.equal(result.promotionEligible, false);
   });
 
   it('does not infer project maturity from a local semantic version', () => {
