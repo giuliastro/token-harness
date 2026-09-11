@@ -208,6 +208,7 @@ export function createGuideHandler(input: {
   token: string;
   authority: () => string;
   optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
+  readSavings?: (period: GuidePeriod) => Promise<GuideOverview['savings']>;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -253,6 +254,16 @@ export function createGuideHandler(input: {
         }
         if (url.pathname === '/api/activity') {
           send(200, JSON.stringify(input.service.status()));
+          return;
+        }
+        if (url.pathname === '/api/savings') {
+          const period = url.searchParams.get('period') ?? 'all';
+          if (!['all', '7d', '30d'].includes(period))
+            throw new GuideError(400, 'Unknown reporting period.');
+          if (input.readSavings === undefined)
+            throw new GuideError(503, 'Results are temporarily unavailable.');
+          const savings = await input.readSavings(period as GuidePeriod);
+          send(200, JSON.stringify({ savings }));
           return;
         }
         if (url.pathname === '/api/overview') {
