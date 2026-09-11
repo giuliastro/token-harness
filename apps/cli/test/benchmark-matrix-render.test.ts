@@ -160,7 +160,7 @@ describe('benchmark matrix rendering', () => {
     assert.match(rendered, /gitnexus/);
     assert.match(rendered, /evidence 1\/2 \(\+50%\)/);
     assert.match(rendered, /wall clock 20m→15m/);
-    assert.match(rendered, /does not prove the candidate was active/);
+    assert.match(rendered, /does not prove the\s+candidate was active/);
     assert.match(rendered, /not an activation or promotion recommendation/);
     assert.doesNotMatch(rendered, /recommended candidate/i);
     assert.doesNotMatch(rendered, /winner/i);
