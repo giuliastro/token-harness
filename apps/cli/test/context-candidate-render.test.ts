@@ -43,10 +43,8 @@ describe('context candidate rendering', () => {
     assert.match(output, /CANDIDATES — experimental/);
     assert.match(output, /GitNexus: benchmark-ready; repository-exploration; version 1\.2\.3/);
     assert.match(output, /promotion gates 2\/8; next selection-evidence; blocked/);
-    assert.match(
-      output,
-      /benchmark-ready means reviewed benchmark surfaces only; it is not activation or/,
-    );
+    assert.match(output, /benchmark-ready means reviewed benchmark surfaces only/);
+    assert.match(output, /it does not prove activation or promotion/);
     assert.doesNotMatch(output, /promotion gates 8\/8/);
   });
 });
