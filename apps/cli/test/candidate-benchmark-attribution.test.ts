@@ -124,13 +124,16 @@ describe('candidate benchmark attribution sidecar', () => {
       fixture.context,
       'headroom-standard-1',
     );
+    if (typeof read === 'string') {
+      assert.fail(`expected persisted candidate attribution, got ${read}`);
+    }
+    assert.equal('active' in read, false);
     assert.deepEqual(read, {
       schemaVersion: 1,
       benchmarkId: 'headroom-standard-1',
       candidateId: 'headroom',
       projectId: 'p_test',
     });
-    assert.equal(read === 'absent' || read === 'invalid' ? false : 'active' in read, false);
   });
 
   it('keeps malformed sidecars invalid instead of guessing attribution', async () => {
