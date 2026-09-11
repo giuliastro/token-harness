@@ -12,7 +12,7 @@ import {
   type ExitCode,
 } from '@token-harness/core';
 import { GuideError, GuideService, type GuideCall } from '../src/guided.js';
-import { GUIDE_JS, GUIDE_STACK_JS } from '../src/guided-assets.js';
+import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 const RTK = providerId('rtk');
 
@@ -108,7 +108,7 @@ it('does not offer an approval when the provider has no Token Harness-owned chan
   assert.match(preview.notices[0] ?? '', /no Token Harness-owned change/i);
 });
 
-it('rejects arbitrary providers and keeps the removal control scoped to managed stack components', async () => {
+it('rejects arbitrary providers and keeps removal inside a reviewed managed-only setup flow', async () => {
   const service = new GuideService(
     async <T>(args: readonly string[]) => envelope(args[0] ?? '', null as T),
     () => 0,
@@ -122,8 +122,11 @@ it('rejects arbitrary providers and keeps the removal control scoped to managed 
     service.preview({ action: 'undo', transaction: 'attacker-selected-id' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
-  assert.match(GUIDE_STACK_JS, /component\.managedByTokenHarness \|\| component\.configured/);
-  assert.match(GUIDE_STACK_JS, /provider installation is user-owned/);
-  assert.match(GUIDE_STACK_JS, /token-harness:remove-provider/);
-  assert.match(GUIDE_JS, /preview\(\{ action: 'remove', provider \}\)/);
+  assert.match(GUIDE_HTML, /<summary>Remove managed changes<\/summary>/);
+  assert.match(GUIDE_JS, /component\.managedByTokenHarness \|\| component\.configured/);
+  assert.match(GUIDE_JS, /provider installation remains user-owned/i);
+  assert.match(GUIDE_JS, /\{ action: 'remove', provider: component\.providerId \}/);
+  assert.match(GUIDE_JS, /Remove reviewed integration/);
+  assert.match(GUIDE_JS, /request\('\/api\/preview', body\)/);
+  assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
 });
