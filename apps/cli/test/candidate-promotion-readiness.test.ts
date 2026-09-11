@@ -64,10 +64,10 @@ const PASS: CandidatePromotionReview = {
 };
 
 const PASS_WITHOUT_MATURITY: CandidatePromotionReview = {
-  activationVerification: PASS.activationVerification,
-  managedLifecycle: PASS.managedLifecycle,
-  compatibilityReversibility: PASS.compatibilityReversibility,
-  combinedStackValidation: PASS.combinedStackValidation,
+  activationVerification: { state: 'passed', reason: 'activation verified' },
+  managedLifecycle: { state: 'passed', reason: 'managed lifecycle reviewed' },
+  compatibilityReversibility: { state: 'passed', reason: 'compatibility reviewed' },
+  combinedStackValidation: { state: 'passed', reason: 'combined stack validated' },
 };
 
 describe('candidate promotion readiness', () => {
