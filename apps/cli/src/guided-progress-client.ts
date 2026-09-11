@@ -3,6 +3,8 @@ export const GUIDE_PROGRESS_JS = String.raw`
 (() => {
   const PROGRESS_POLL_MS = 500;
   const originalFetch = window.fetch.bind(window);
+  const spinner = document.getElementById('reading-spinner');
+  let progressTimer = null;
 
   function lowerFirst(value) {
     return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
@@ -26,17 +28,36 @@ export const GUIDE_PROGRESS_JS = String.raw`
       response.clone().json().then(data => {
         const message = loadingMessage(data?.loading);
         const status = document.getElementById('updated');
-        const spinner = document.getElementById('reading-spinner');
         if (message && status && spinner && !spinner.hidden) status.textContent = message;
       }).catch(() => undefined);
     }
     return response;
   };
 
-  setInterval(() => {
-    if (document.hidden) return;
-    const spinner = document.getElementById('reading-spinner');
-    if (spinner && !spinner.hidden && typeof activity === 'function') activity();
-  }, PROGRESS_POLL_MS);
+  function pollProgress() {
+    if (!document.hidden && typeof activity === 'function') activity();
+  }
+
+  function syncProgressPolling() {
+    const shouldPoll = Boolean(spinner && !spinner.hidden && !document.hidden);
+    if (shouldPoll && progressTimer === null) {
+      pollProgress();
+      progressTimer = setInterval(pollProgress, PROGRESS_POLL_MS);
+      return;
+    }
+    if (!shouldPoll && progressTimer !== null) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+  }
+
+  if (spinner) {
+    new MutationObserver(syncProgressPolling).observe(spinner, {
+      attributes: true,
+      attributeFilter: ['hidden'],
+    });
+  }
+  document.addEventListener('visibilitychange', syncProgressPolling);
+  syncProgressPolling();
 })();
 `;
