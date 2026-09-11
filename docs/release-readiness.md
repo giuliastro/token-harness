@@ -9,14 +9,15 @@ existing users and testing well before it is the version we actively promote.
 
 ## Required before promotion
 
-- [x] Outcome-first Dashboard / Policies / Evidence information architecture.
-- [x] No periodic full dashboard reload.
+- [x] Outcome-first **Monitor / Actions / Results** information architecture.
+- [x] No periodic full app reload.
 - [x] Existing readings remain visible during refresh and after approved changes.
 - [x] Preview → approval → apply → verify → undo safety flow.
 - [x] Recorded reducer savings keep providers and measurement classes separate.
-- [x] Dashboard displays paired allowance and quality value when available and blocks unsupported claims.
+- [x] Results display paired allowance and quality value when available and block unsupported claims.
 - [x] The primary UI can present **Your optimization stack**: component, version, category, health,
-      verification state, measured value, quality confidence and useful next action.
+      verification state, measured value, quality confidence and useful next action, while keeping
+      technical stack detail secondary to user outcomes.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
 - [ ] At least **three distinct useful savings mechanisms** are available through Token Harness.
 - [ ] Every counted mechanism has a real activation/configuration path, verification evidence and a
