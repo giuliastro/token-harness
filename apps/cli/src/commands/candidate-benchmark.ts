@@ -325,8 +325,13 @@ async function readCampaignSlotState(
       readReceiptArtifact(context, slot.benchmarkId, 'optimized'),
     ]);
 
-  const artifacts = [baselineCapture, baselineReceipt, optimizedCapture, optimizedReceipt];
-  if (artifacts.some((artifact) => artifact === 'invalid') || attribution === 'invalid') {
+  if (
+    baselineCapture === 'invalid' ||
+    baselineReceipt === 'invalid' ||
+    optimizedCapture === 'invalid' ||
+    optimizedReceipt === 'invalid' ||
+    attribution === 'invalid'
+  ) {
     return 'invalid';
   }
 
