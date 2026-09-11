@@ -22,11 +22,21 @@ configuration as part of candidate discovery.
 is installed correctly for an agent, that a repository is indexed, or that GitNexus has been
 selected for the managed stack.
 
+GitNexus now participates in the same bounded candidate projection returned by `token-harness
+context` as Headroom and mcptoon. Its `minimumBenchmarkVersion` is reported as `capability-gated`:
+readiness is based on the reviewed CLI surfaces above rather than on an invented semantic-version
+floor. The projection never includes the executable path or raw command output.
+
 ## Admission benchmark
 
 GitNexus may be promoted only after a paired, reproducible benchmark against the actual baseline:
 
 `native Claude Code/Codex + active RTK + active HarnessTrim`
+
+Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This
+only labels benchmark evidence; it does not activate GitNexus and does not prove that GitNexus was
+used in either side of a pair. Activation evidence must be established separately by the benchmark
+procedure.
 
 The evaluation must include both Claude Code and Codex where supported and measure at least:
 

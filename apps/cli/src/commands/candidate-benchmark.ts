@@ -15,7 +15,7 @@ import { runBenchmarkMatrix } from './benchmark-matrix.js';
 import type { CommandContext } from './context.js';
 
 const ATTRIBUTION_SCHEMA_VERSION = 1;
-const CANDIDATES: readonly OptimizationCandidateId[] = ['headroom', 'mcptoon'];
+const CANDIDATES: readonly OptimizationCandidateId[] = ['headroom', 'mcptoon', 'gitnexus'];
 const CANDIDATE_SET = new Set<string>(CANDIDATES);
 
 interface CandidateBenchmarkAttribution {
