@@ -107,23 +107,20 @@ function context(): CommandContext {
   };
 }
 
-test(
-  'projects all read-only optimization candidates into the shared context snapshot',
-  async () => {
-    const snapshot = await observeContextOptimizationCandidates(context());
+test('projects all read-only optimization candidates into the shared context snapshot', async () => {
+  const snapshot = await observeContextOptimizationCandidates(context());
 
-    assert.deepEqual(
-      snapshot.candidates.map((candidate) => candidate.id),
-      ['headroom', 'mcptoon', 'gitnexus'],
-    );
-    const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
-    assert.equal(gitnexus?.state, 'absent');
-    assert.equal(gitnexus?.category, 'context-minimization');
-    assert.equal(gitnexus?.minimumBenchmarkVersion, 'capability-gated');
-    assert.ok(
-      snapshot.diagnostics.some(
-        (item) => item.subject === 'gitnexus' && item.code === 'context-optimizer-gitnexus-absent',
-      ),
-    );
-  },
-);
+  assert.deepEqual(
+    snapshot.candidates.map((candidate) => candidate.id),
+    ['headroom', 'mcptoon', 'gitnexus'],
+  );
+  const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
+  assert.equal(gitnexus?.state, 'absent');
+  assert.equal(gitnexus?.category, 'context-minimization');
+  assert.equal(gitnexus?.minimumBenchmarkVersion, 'capability-gated');
+  assert.ok(
+    snapshot.diagnostics.some(
+      (item) => item.subject === 'gitnexus' && item.code === 'context-optimizer-gitnexus-absent',
+    ),
+  );
+});
