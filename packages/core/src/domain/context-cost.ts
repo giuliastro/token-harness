@@ -26,7 +26,7 @@ export type OptimizationCandidateState =
   | 'benchmark-ready'
   | 'unsupported-version';
 
-export type OptimizationCandidateId = 'headroom' | 'mcptoon';
+export type OptimizationCandidateId = 'headroom' | 'mcptoon' | 'gitnexus';
 export type OptimizationCandidateCategory = 'context-minimization' | 'mcp-discovery';
 
 /** Bounded candidate metadata safe to project into product UI. No executable path or raw reason. */
