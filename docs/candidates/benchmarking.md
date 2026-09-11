@@ -8,6 +8,34 @@ The benchmark sidecar records which candidate the experiment targets. That label
 the candidate was active. The person or automation running the experiment must establish candidate
 activation separately and keep the task conditions comparable.
 
+## Guided campaign
+
+For a repeatable evaluation across task classes, use `benchmark-matrix` in campaign mode by supplying
+a campaign prefix through `--benchmark-id` together with an explicit candidate and harness:
+
+```text
+token-harness benchmark-matrix --benchmark-id gitnexus-eval --candidate gitnexus --harness codex
+```
+
+The standard campaign contains two paired runs for each task class: mechanical, standard, hard and
+critical. That is eight baseline/optimized pairs in total. Add `--task <class>` to focus on the two
+pairs for one class while keeping the same deterministic naming scheme.
+
+Campaign mode writes **no separate campaign manifest**. Planned benchmark ids are derived from the
+campaign prefix (`gitnexus-eval-m-1`, `gitnexus-eval-m-2`, `gitnexus-eval-s-1`, and so on), and
+progress is reconstructed from the normal immutable benchmark captures, receipts and candidate
+attribution sidecars. Rerun the same `benchmark-matrix` command at any time to resume.
+
+The report gives one next action. For an untouched slot it prints the exact baseline `benchmark-start`
+command. After the baseline is complete it tells the evaluator to enable the candidate through the
+candidate project's own documented workflow before starting the optimized side. It never claims that
+activation was proved. A partially running capture is resumed with the matching `benchmark-finish`
+command. If a slot contains wrong-project, wrong-harness, wrong-task, wrong-candidate or malformed
+state, the campaign stops instead of overwriting or guessing.
+
+Campaign evidence is aggregated only from completed planned pairs and remains separate by evidence
+class. Completion itself is not a promotion recommendation and no synthetic winner score is created.
+
 ## One paired experiment
 
 Choose one stable benchmark id, task class and harness. Run both variants from the same project.
