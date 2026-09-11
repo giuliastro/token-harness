@@ -80,9 +80,15 @@ Claude Code or Codex and never spends model quota during setup.`,
   'benchmark-start': `token-harness benchmark-start — snapshot one task before it runs
 
 Usage
-  token-harness benchmark-start --benchmark-id <id> --variant <baseline|optimized>
+  token-harness benchmark-start --benchmark-id <id> [--candidate <id>]
+                                --variant <baseline|optimized>
                                 --task <class> --harness <claude|codex>
                                 [--project <dir>] [--json]
+
+--candidate accepts headroom, mcptoon, or gitnexus and labels the intended
+experiment target. It does not install, enable, disable, or prove that candidate
+is active. A later start for the same benchmark inherits valid stored candidate
+attribution so the baseline and optimized sides stay grouped.
 
 This command does not execute the task or change harness configuration. It records
 the current discovered model/effort/verbosity and current usage windows into Token

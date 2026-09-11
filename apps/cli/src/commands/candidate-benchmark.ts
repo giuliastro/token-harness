@@ -14,18 +14,17 @@ import {
 
 import { runBenchmarkStart } from './benchmark-capture.js';
 import { runBenchmarkMatrix } from './benchmark-matrix.js';
+import {
+  OPTIMIZATION_CANDIDATES,
+  readCandidateBenchmarkAttribution,
+  writeCandidateBenchmarkAttribution,
+} from './candidate-benchmark-attribution.js';
 import type { CommandContext } from './context.js';
 
-const ATTRIBUTION_SCHEMA_VERSION = 1;
-const CANDIDATES: readonly OptimizationCandidateId[] = ['headroom', 'mcptoon', 'gitnexus'];
-const CANDIDATE_SET = new Set<string>(CANDIDATES);
-
-interface CandidateBenchmarkAttribution {
-  schemaVersion: typeof ATTRIBUTION_SCHEMA_VERSION;
-  benchmarkId: string;
-  candidateId: OptimizationCandidateId;
-  projectId: string;
-}
+export type CandidateAwareTaskBenchmarkCaptureStartReport = TaskBenchmarkCaptureStartReport & {
+  /** Experiment target only. This is not proof that the candidate was active. */
+  candidateId?: OptimizationCandidateId;
+};
 
 export interface CandidateBenchmarkTimingEvidence {
   baselineWallClockMs: number | null;
@@ -138,14 +137,9 @@ export function summarizeCandidateBenchmarkEntries(
 export function buildCandidateBenchmarkEvidence(
   entries: ReadonlyMap<OptimizationCandidateId, readonly CandidateBenchmarkEvidenceEntry[]>,
 ): CandidateBenchmarkEvidence[] {
-  return CANDIDATES.map((candidate) =>
+  return OPTIMIZATION_CANDIDATES.map((candidate) =>
     summarizeCandidateBenchmarkEntries(candidate, entries.get(candidate) ?? []),
   );
-}
-
-function attributionPath(context: CommandContext, benchmarkId: string): string | null {
-  if (context.adapters === null || context.stateRoot === null) return null;
-  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, 'candidate.json');
 }
 
 function receiptPath(
@@ -155,45 +149,6 @@ function receiptPath(
 ): string | null {
   if (context.adapters === null || context.stateRoot === null) return null;
   return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, `${variant}.json`);
-}
-
-function parseAttribution(value: unknown): CandidateBenchmarkAttribution | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  if (
-    row['schemaVersion'] !== ATTRIBUTION_SCHEMA_VERSION ||
-    typeof row['benchmarkId'] !== 'string' ||
-    typeof row['candidateId'] !== 'string' ||
-    !CANDIDATE_SET.has(row['candidateId']) ||
-    typeof row['projectId'] !== 'string' ||
-    row['projectId'] === ''
-  )
-    return null;
-  return {
-    schemaVersion: ATTRIBUTION_SCHEMA_VERSION,
-    benchmarkId: row['benchmarkId'],
-    candidateId: row['candidateId'] as OptimizationCandidateId,
-    projectId: row['projectId'],
-  };
-}
-
-async function readAttribution(
-  context: CommandContext,
-  benchmarkId: string,
-): Promise<'absent' | 'invalid' | CandidateBenchmarkAttribution> {
-  const path = attributionPath(context, benchmarkId);
-  if (path === null || context.adapters === null) return 'absent';
-  const stat = await context.adapters.fs.stat(path);
-  if (stat === null) return 'absent';
-  if (stat.kind !== 'file') return 'invalid';
-  try {
-    const raw = JSON.parse(
-      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
-    ) as unknown;
-    return parseAttribution(raw) ?? 'invalid';
-  } catch {
-    return 'invalid';
-  }
 }
 
 async function readTimingEvidence(
@@ -257,23 +212,6 @@ async function readTimingEvidence(
   };
 }
 
-async function writeAttribution(
-  context: CommandContext,
-  value: CandidateBenchmarkAttribution,
-): Promise<boolean> {
-  const path = attributionPath(context, value.benchmarkId);
-  if (path === null || context.adapters === null) return false;
-  try {
-    await context.adapters.fs.writeFile(
-      path,
-      new TextEncoder().encode(JSON.stringify(value, null, 2) + '\n'),
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Start the normal benchmark capture, then persist only candidate identity beside it.
  * The receipt schema and comparator remain unchanged. Candidate identity means experiment target,
@@ -281,18 +219,18 @@ async function writeAttribution(
  */
 export async function runCandidateBenchmarkStart(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkCaptureStartReport | null>> {
-  const candidateId = context.optimizationCandidate ?? null;
-  if (candidateId === null) return runBenchmarkStart(context);
-
+): Promise<CommandResult<CandidateAwareTaskBenchmarkCaptureStartReport | null>> {
+  const requestedCandidate = context.optimizationCandidate ?? null;
   const benchmarkId = context.benchmarkId ?? null;
   const projectId = context.adapters?.projectIdFor(context.projectRoot) ?? null;
-  if (benchmarkId !== null) {
-    const existing = await readAttribution(context, benchmarkId);
+  const existing =
+    benchmarkId === null ? 'absent' : await readCandidateBenchmarkAttribution(context, benchmarkId);
+
+  if (requestedCandidate !== null && benchmarkId !== null) {
     if (
       existing === 'invalid' ||
       (existing !== 'absent' &&
-        (existing.candidateId !== candidateId ||
+        (existing.candidateId !== requestedCandidate ||
           (projectId !== null && existing.projectId !== projectId)))
     ) {
       return {
@@ -314,16 +252,32 @@ export async function runCandidateBenchmarkStart(
   const result = await runBenchmarkStart(context);
   if (result.data === null || result.exitCode !== EXIT_CODES.ok) return result;
 
-  const existing = await readAttribution(context, result.data.capture.benchmarkId);
-  if (existing !== 'absent') return result;
+  if (
+    existing !== 'absent' &&
+    existing !== 'invalid' &&
+    existing.benchmarkId === result.data.capture.benchmarkId &&
+    existing.projectId === result.data.capture.projectId
+  ) {
+    return {
+      ...result,
+      data: { ...result.data, candidateId: existing.candidateId },
+    };
+  }
 
-  const written = await writeAttribution(context, {
-    schemaVersion: ATTRIBUTION_SCHEMA_VERSION,
+  if (requestedCandidate === null) return result;
+
+  const written = await writeCandidateBenchmarkAttribution(context, {
+    schemaVersion: 1,
     benchmarkId: result.data.capture.benchmarkId,
-    candidateId,
+    candidateId: requestedCandidate,
     projectId: result.data.capture.projectId,
   });
-  if (written) return result;
+  if (written) {
+    return {
+      ...result,
+      data: { ...result.data, candidateId: requestedCandidate },
+    };
+  }
 
   return {
     ...result,
@@ -349,13 +303,13 @@ export async function runCandidateBenchmarkMatrix(
   if (result.data === null) return { ...result, data: null };
 
   const entries = new Map<OptimizationCandidateId, CandidateBenchmarkEvidenceEntry[]>(
-    CANDIDATES.map((candidate) => [candidate, []]),
+    OPTIMIZATION_CANDIDATES.map((candidate) => [candidate, []]),
   );
   const diagnostics: Diagnostic[] = [...result.diagnostics];
   const projectId = context.adapters?.projectIdFor(context.projectRoot) ?? null;
 
   for (const entry of result.data.entries) {
-    const attribution = await readAttribution(context, entry.benchmarkId);
+    const attribution = await readCandidateBenchmarkAttribution(context, entry.benchmarkId);
     if (attribution === 'absent') continue;
     if (
       attribution === 'invalid' ||
