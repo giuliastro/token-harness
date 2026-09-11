@@ -29,6 +29,12 @@ describe('guided setup UX', () => {
     assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 
+  it('keeps the shared review dialog open while an approved mutation is applying', () => {
+    assert.match(GUIDE_JS, /querySelectorAll\('button:disabled'\)/);
+    assert.match(GUIDE_JS, /event\.preventDefault\(\)/);
+    assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
+  });
+
   it('never automatically refreshes the whole dashboard after apply', () => {
     assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
     assert.doesNotMatch(GUIDE_JS, /applyTicket[\s\S]*?refresh\(true\)/);
