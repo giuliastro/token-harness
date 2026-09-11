@@ -1,5 +1,6 @@
 import type { ContextReport } from '@token-harness/core';
 
+import { assessCandidatePromotionReadiness } from '../commands/candidate-promotion-readiness.js';
 import {
   displayPath,
   document,
@@ -169,6 +170,39 @@ export function renderContextReport(report: ContextReport, context: RenderContex
         ),
       );
     }
+  }
+
+  const candidates = report.optimizationCandidates ?? [];
+  if (candidates.length > 0) {
+    lines.push('', 'CANDIDATES — experimental');
+    for (const candidate of candidates) {
+      const readiness = assessCandidatePromotionReadiness({
+        candidateId: candidate.id,
+        assessment: null,
+        observation: candidate,
+      });
+      const version = candidate.version === null ? '-' : candidate.version;
+      lines.push(
+        truncate(
+          `  ${candidate.displayName}: ${candidate.state}; ${candidate.category}; version ${version}`,
+          78,
+        ),
+      );
+      lines.push(
+        truncate(
+          `    promotion gates ${String(readiness.passedGateCount)}/${String(
+            readiness.requiredGateCount,
+          )}; next ${readiness.nextGate ?? 'none'}; ${readiness.state}`,
+          78,
+        ),
+      );
+    }
+    lines.push(
+      truncate(
+        '  benchmark-ready means reviewed benchmark surfaces only; it is not activation or promotion.',
+        78,
+      ),
+    );
   }
 
   return document(lines);
