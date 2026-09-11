@@ -116,7 +116,7 @@ test('projects all read-only optimization candidates into the shared context sna
   );
   const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
   assert.equal(gitnexus?.state, 'absent');
-  assert.equal(gitnexus?.category, 'context-minimization');
+  assert.equal(gitnexus?.category, 'repository-exploration');
   assert.equal(gitnexus?.minimumBenchmarkVersion, 'capability-gated');
   assert.ok(
     snapshot.diagnostics.some(
