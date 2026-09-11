@@ -45,7 +45,10 @@ describe('guided optimization candidates', () => {
     assert.match(GUIDE_STACK_JS, /--variant baseline/);
     assert.match(GUIDE_STACK_JS, /--variant optimized/);
     assert.match(GUIDE_STACK_JS, /--quality <passed\|failed>/);
-    assert.match(GUIDE_STACK_JS, /not proof that the optimized run really used the candidate/);
+    assert.match(
+      GUIDE_STACK_JS,
+      /not proof that the optimized run really used the candidate/,
+    );
     assert.match(GUIDE_JS, /--candidate gitnexus/);
   });
 
@@ -55,7 +58,10 @@ describe('guided optimization candidates', () => {
     assert.match(GUIDE_STACK_JS, /never performed silently/);
     assert.match(GUIDE_STACK_JS, /does not install, enable, sync or configure the candidate/);
     assert.match(GUIDE_STACK_JS, /No sync or compression policy is enabled automatically/);
-    assert.match(GUIDE_JS, /does not install, index repositories, register MCP, or enable it automatically/);
+    assert.match(
+      GUIDE_JS,
+      /does not install, index repositories, register MCP, or enable it automatically/,
+    );
     assert.doesNotMatch(GUIDE_STACK_JS, /fetch\([^\n]*(headroom|mcptoon)/i);
     assert.doesNotMatch(GUIDE_STACK_JS, /proxyButton\([^\n]*(headroom|mcptoon)/i);
     assert.doesNotThrow(() => new Script(GUIDE_STACK_JS));
