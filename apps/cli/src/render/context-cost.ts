@@ -198,10 +198,8 @@ export function renderContextReport(report: ContextReport, context: RenderContex
       );
     }
     lines.push(
-      truncate(
-        '  benchmark-ready means reviewed benchmark surfaces only; it is not activation or promotion.',
-        78,
-      ),
+      '  benchmark-ready means reviewed benchmark surfaces only;',
+      '  it does not prove activation or promotion.',
     );
   }
 
