@@ -63,6 +63,7 @@ import {
 } from './guided.js';
 import { observeAgentSkill } from './agent-skill.js';
 import { createGuideHandler } from './guided-http.js';
+import { createGuideSavingsReader } from './guided-savings-reader.js';
 
 /**
  * The internal reader mode.
@@ -467,6 +468,7 @@ async function runGuidedUi(
       token,
       authority: () => authority,
       optimizationCandidates: () => optimizationCandidates,
+      readSavings: createGuideSavingsReader(guideCall),
     }),
   );
   server.requestTimeout = 15_000;
