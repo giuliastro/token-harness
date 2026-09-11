@@ -27,7 +27,19 @@ export type OptimizationCandidateState =
   | 'unsupported-version';
 
 export type OptimizationCandidateId = 'headroom' | 'mcptoon' | 'gitnexus';
-export type OptimizationCandidateCategory = 'context-minimization' | 'mcp-discovery';
+export type OptimizationCandidateCategory =
+  | 'context-minimization'
+  | 'mcp-discovery'
+  | 'repository-exploration';
+
+/** Product taxonomy used by discovery, benchmarking and promotion-readiness checks. */
+export const OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID: Readonly<
+  Record<OptimizationCandidateId, OptimizationCandidateCategory>
+> = {
+  headroom: 'context-minimization',
+  mcptoon: 'mcp-discovery',
+  gitnexus: 'repository-exploration',
+};
 
 /** Bounded candidate metadata safe to project into product UI. No executable path or raw reason. */
 export interface OptimizationCandidateObservation {
