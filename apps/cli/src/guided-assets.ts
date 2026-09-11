@@ -1,7 +1,11 @@
 /** Embedded local product UI. No remote assets, inline scripts, or framework runtime. */
-export { GUIDE_JS } from './guided-simple-client.js';
-export { GUIDE_CSS } from './guided-dashboard-styles.js';
-export { GUIDE_STACK_JS } from './guided-stack-client.js';
+import { GUIDE_CSS } from './guided-dashboard-styles.js';
+import { GUIDE_PROGRESS_JS } from './guided-progress-client.js';
+import { GUIDE_JS as GUIDE_SIMPLE_JS } from './guided-simple-client.js';
+import { GUIDE_STACK_JS } from './guided-stack-client.js';
+
+export { GUIDE_CSS, GUIDE_STACK_JS };
+export const GUIDE_JS = `${GUIDE_SIMPLE_JS}\n${GUIDE_PROGRESS_JS}`;
 
 export const GUIDE_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
