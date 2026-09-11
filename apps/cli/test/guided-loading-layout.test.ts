@@ -18,6 +18,9 @@ describe('guided loading layout', () => {
       /setInterval\(\(\) => \{ if \(!document\.hidden\) loadActivity\(\); \}, 700\)/,
     );
     assert.match(GUIDE_JS, /loadActivity\(\)/);
-    assert.doesNotMatch(GUIDE_JS, /setInterval\([^]*refresh\(/);
+    assert.doesNotMatch(
+      GUIDE_JS,
+      /setInterval\s*\(\s*(?:async\s*)?\(\)\s*=>\s*(?:\{[^}]*\brefresh\s*\(|\brefresh\s*\()/,
+    );
   });
 });
