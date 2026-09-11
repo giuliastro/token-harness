@@ -63,6 +63,13 @@ const PASS: CandidatePromotionReview = {
   combinedStackValidation: { state: 'passed', reason: 'combined stack validated' },
 };
 
+const PASS_WITHOUT_MATURITY: CandidatePromotionReview = {
+  activationVerification: PASS.activationVerification,
+  managedLifecycle: PASS.managedLifecycle,
+  compatibilityReversibility: PASS.compatibilityReversibility,
+  combinedStackValidation: PASS.combinedStackValidation,
+};
+
 describe('candidate promotion readiness', () => {
   it('separates promising benchmark evidence from missing managed integration gates', () => {
     const result = assessCandidatePromotionReadiness({
@@ -98,10 +105,7 @@ describe('candidate promotion readiness', () => {
       candidateId: 'mcptoon',
       assessment: evidence('mcptoon'),
       observation: observation('mcptoon', { version: '99.0.0' }),
-      review: {
-        ...PASS,
-        projectMaturity: undefined,
-      },
+      review: PASS_WITHOUT_MATURITY,
     });
 
     const maturity = result.gates.find((gate) => gate.id === 'project-maturity');
