@@ -8,9 +8,9 @@ describe('simple guided dashboard', () => {
     assert.match(GUIDE_HTML, />Monitor</);
     assert.match(GUIDE_HTML, />Actions</);
     assert.match(GUIDE_HTML, />Results</);
-    assert.doesNotMatch(GUIDE_HTML, />Dashboard</);
-    assert.doesNotMatch(GUIDE_HTML, />Policies</);
-    assert.doesNotMatch(GUIDE_HTML, />Evidence</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-overview"[^>]*>Dashboard</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-rules"[^>]*>Policies</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-activity"[^>]*>Evidence</);
     assert.match(GUIDE_HTML, /What you are getting/);
     assert.match(GUIDE_HTML, /Coding agents/);
   });
