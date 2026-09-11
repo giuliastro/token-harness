@@ -13,7 +13,10 @@ describe('guided loading layout', () => {
 
   it('surfaces progressive read feedback without triggering another full refresh', () => {
     assert.match(GUIDE_JS, /checks finished/);
-    assert.match(GUIDE_JS, /setInterval\(\(\) => \{ if \(!document\.hidden\) loadActivity\(\); \}, 700\)/);
+    assert.match(
+      GUIDE_JS,
+      /setInterval\(\(\) => \{ if \(!document\.hidden\) loadActivity\(\); \}, 700\)/,
+    );
     assert.match(GUIDE_JS, /loadActivity\(\)/);
     assert.doesNotMatch(GUIDE_JS, /setInterval\([^]*refresh\(/);
   });
