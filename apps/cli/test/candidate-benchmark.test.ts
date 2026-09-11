@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { harnessId, type OptimizationCandidateId, type TaskBenchmarkMatrixEntry } from '@token-harness/core';
+import { harnessId, type OptimizationCandidateId } from '@token-harness/core';
 
 import {
   buildCandidateBenchmarkEvidence,
