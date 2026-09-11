@@ -2,10 +2,12 @@
  * Human rendering for the empirical paired benchmark matrix.
  *
  * The matrix counts deterministic pair verdicts and keeps evidence classes separate. It never
- * turns backend quota, local tokens, context exposure, retries and quality into one synthetic score.
+ * turns backend quota, local tokens, context exposure, retries, quality or timing into one
+ * synthetic score.
  */
 
 import type {
+  OptimizationCandidateId,
   TaskBenchmarkContextMatrixEntry,
   TaskBenchmarkContextMatrixReport,
   TaskBenchmarkContextMatrixSummary,
@@ -16,9 +18,40 @@ import type {
 
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
 
+interface CandidateEvidenceSummary {
+  candidateId: OptimizationCandidateId;
+  pairs: number;
+  optimizedBetter: number;
+  baselineBetter: number;
+  equivalent: number;
+  inconclusive: number;
+  incomparable: number;
+  evidencePairs: number;
+  evidenceCoveragePercent: number | null;
+  localComparablePairs: number;
+  baselineLocalTokens: number | null;
+  optimizedLocalTokens: number | null;
+  localTokenSavingPercent: number | null;
+  wallClockComparablePairs: number;
+  baselineWallClockMs: number | null;
+  optimizedWallClockMs: number | null;
+  wallClockSavingPercent: number | null;
+}
+
+type CandidateAwareReport = (TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport) & {
+  candidateEvidence?: readonly CandidateEvidenceSummary[];
+};
+
 function percent(value: number | null): string {
   if (value === null) return 'unknown';
   return `${value > 0 ? '+' : ''}${String(value)}%`;
+}
+
+function duration(value: number): string {
+  const minutes = value / 60_000;
+  if (minutes < 1) return `${String(Math.round((value / 1000) * 10) / 10)}s`;
+  if (minutes < 60) return `${String(Math.round(minutes * 10) / 10)}m`;
+  return `${String(Math.round((minutes / 60) * 10) / 10)}h`;
 }
 
 function summaryLine(summary: TaskBenchmarkMatrixSummary): string {
@@ -59,6 +92,49 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   );
 }
 
+function candidateSummaryLine(summary: CandidateEvidenceSummary): string {
+  return (
+    `${String(summary.pairs)} pairs; evidence ${String(summary.evidencePairs)}/${String(
+      summary.pairs,
+    )} (${percent(summary.evidenceCoveragePercent)}); optimized ${String(
+      summary.optimizedBetter,
+    )}, baseline ${String(summary.baselineBetter)}, equal ${String(summary.equivalent)}, ` +
+    `inconclusive ${String(summary.inconclusive)}, incomparable ${String(summary.incomparable)}`
+  );
+}
+
+function candidateLocalLine(summary: CandidateEvidenceSummary): string | null {
+  if (
+    summary.localComparablePairs === 0 ||
+    summary.baselineLocalTokens === null ||
+    summary.optimizedLocalTokens === null
+  ) {
+    return null;
+  }
+  return (
+    `local tokens ${formatCount(summary.baselineLocalTokens)}→${formatCount(
+      summary.optimizedLocalTokens,
+    )} across ${String(summary.localComparablePairs)} quality-passed pairs; ` +
+    `delta ${percent(summary.localTokenSavingPercent)}`
+  );
+}
+
+function candidateTimingLine(summary: CandidateEvidenceSummary): string | null {
+  if (
+    summary.wallClockComparablePairs === 0 ||
+    summary.baselineWallClockMs === null ||
+    summary.optimizedWallClockMs === null
+  ) {
+    return null;
+  }
+  return (
+    `wall clock ${duration(summary.baselineWallClockMs)}→${duration(
+      summary.optimizedWallClockMs,
+    )} across ${String(summary.wallClockComparablePairs)} quality-passed pairs; ` +
+    `delta ${percent(summary.wallClockSavingPercent)}`
+  );
+}
+
 function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixEntry): string {
   const local =
     entry.localTokenSavingPercent === null
@@ -80,7 +156,7 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
 }
 
 export function renderBenchmarkMatrixReport(
-  report: TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport,
+  report: CandidateAwareReport,
   _context: RenderContext,
 ): string {
   const lines: string[] = ['Benchmark matrix — current project', ''];
@@ -125,6 +201,24 @@ export function renderBenchmarkMatrixReport(
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
 
+  if (report.candidateEvidence !== undefined) {
+    lines.push('', 'Candidate evidence — experimental');
+    for (const candidate of report.candidateEvidence) {
+      lines.push(`  ${candidate.candidateId}`);
+      lines.push(...wrap(candidateSummaryLine(candidate), 4));
+      const local = candidateLocalLine(candidate);
+      if (local !== null) lines.push(...wrap(local, 4));
+      const timing = candidateTimingLine(candidate);
+      if (timing !== null) lines.push(...wrap(timing, 4));
+    }
+    lines.push(
+      ...wrap(
+        'Candidate attribution names the experiment target; it does not prove the candidate was active and it is not an activation or promotion recommendation.',
+        0,
+      ),
+    );
+  }
+
   lines.push('', 'Pairs');
   for (const entry of report.entries) lines.push(...wrap(entryLine(entry), 2));
 
@@ -140,6 +234,15 @@ export function renderBenchmarkMatrixReport(
     lines.push(
       ...wrap(
         'Context savings require quality-passed, start-to-finish stable evidence. Context exposure is context-shape evidence only and is not subscription quota.',
+        0,
+      ),
+    );
+  }
+
+  if (report.candidateEvidence !== undefined) {
+    lines.push(
+      ...wrap(
+        'Wall-clock deltas are shown only for quality-passed pairs and remain timing evidence, not a comparator verdict or provider-allowance claim.',
         0,
       ),
     );
