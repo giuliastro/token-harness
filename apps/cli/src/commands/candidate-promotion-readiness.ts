@@ -17,11 +17,7 @@ export type CandidatePromotionGateId =
   | 'combined-stack-validation'
   | 'context-owner-admission';
 
-export type CandidatePromotionGateState =
-  | 'passed'
-  | 'blocked'
-  | 'unreviewed'
-  | 'not-applicable';
+export type CandidatePromotionGateState = 'passed' | 'blocked' | 'unreviewed' | 'not-applicable';
 export type CandidatePromotionReadinessState = 'eligible' | 'blocked' | 'unreviewed';
 
 export interface CandidatePromotionGate {
@@ -133,9 +129,7 @@ function observedCategoryFit(
   };
 }
 
-function selectionEvidence(
-  assessment: CandidateEvidenceAssessment | null,
-): CandidatePromotionGate {
+function selectionEvidence(assessment: CandidateEvidenceAssessment | null): CandidatePromotionGate {
   if (assessment === null) {
     return {
       id: 'selection-evidence',
@@ -224,9 +218,7 @@ export function assessCandidatePromotionReadiness(
   ];
 
   const required = gates.filter((gate) => gate.state !== 'not-applicable');
-  const blockedGateIds = required
-    .filter((gate) => gate.state === 'blocked')
-    .map((gate) => gate.id);
+  const blockedGateIds = required.filter((gate) => gate.state === 'blocked').map((gate) => gate.id);
   const unreviewedGateIds = required
     .filter((gate) => gate.state === 'unreviewed')
     .map((gate) => gate.id);
