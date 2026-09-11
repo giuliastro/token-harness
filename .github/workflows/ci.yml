@@ -48,6 +48,13 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Show candidate formatting diff
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          pnpm exec prettier --write apps/cli/test/context-owner-candidates.test.ts
+          git diff -- apps/cli/test/context-owner-candidates.test.ts
+
       - name: Format check
         run: pnpm format:check
 
