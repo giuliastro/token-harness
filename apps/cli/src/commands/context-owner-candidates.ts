@@ -1,4 +1,5 @@
 import {
+  observeGitNexusCandidate,
   observeHeadroomCandidate,
   observeMcptoonCandidate,
   type ProviderContext,
@@ -141,15 +142,60 @@ function mcptoonDiagnostics(
   ];
 }
 
+function gitNexusDiagnostics(
+  observation: Awaited<ReturnType<typeof observeGitNexusCandidate>>,
+): Diagnostic[] {
+  const version = observation.version === null ? '' : ` ${observation.version}`;
+  const reason =
+    observation.reasons[0] ??
+    'Keep GitNexus disabled until paired repository-exploration evidence is available';
+
+  if (observation.state === 'absent') {
+    return [
+      diagnostic({
+        severity: 'info',
+        code: 'context-optimizer-gitnexus-absent',
+        subject: 'gitnexus',
+        message: 'GitNexus is not installed; repository-context optimization is not being evaluated',
+        remediation: 'No action is required; Token Harness never installs GitNexus silently',
+      }),
+    ];
+  }
+
+  if (observation.state === 'installed') {
+    return [
+      diagnostic({
+        severity: 'info',
+        code: 'context-optimizer-gitnexus-installed',
+        subject: 'gitnexus',
+        message: `GitNexus${version} is installed but is not benchmark-ready`,
+        remediation: reason,
+      }),
+    ];
+  }
+
+  return [
+    diagnostic({
+      severity: 'info',
+      code: 'context-optimizer-gitnexus-ready',
+      subject: 'gitnexus',
+      message: `GitNexus${version} can be benchmarked for repository-context savings and remains disabled`,
+      remediation:
+        'Collect paired repository-exploration evidence before considering experimental admission',
+    }),
+  ];
+}
+
 /** Run each read-only candidate observer once and expose a bounded typed product projection. */
 export async function observeContextOptimizationCandidates(
   context: CommandContext,
 ): Promise<ContextOptimizationCandidateSnapshot> {
   const provider = providerContext(context);
   if (provider === null) return { candidates: [], diagnostics: [] };
-  const [headroom, mcptoon] = await Promise.all([
+  const [headroom, mcptoon, gitnexus] = await Promise.all([
     observeHeadroomCandidate(provider),
     observeMcptoonCandidate(provider),
+    observeGitNexusCandidate(provider),
   ]);
   return {
     candidates: [
@@ -169,8 +215,20 @@ export async function observeContextOptimizationCandidates(
         version: mcptoon.version,
         minimumBenchmarkVersion: mcptoon.minimumBenchmarkVersion,
       },
+      {
+        id: 'gitnexus',
+        displayName: 'GitNexus',
+        category: 'context-minimization',
+        state: gitnexus.state,
+        version: gitnexus.version,
+        minimumBenchmarkVersion: 'capability-gated',
+      },
     ],
-    diagnostics: [...headroomDiagnostics(headroom), ...mcptoonDiagnostics(mcptoon)],
+    diagnostics: [
+      ...headroomDiagnostics(headroom),
+      ...mcptoonDiagnostics(mcptoon),
+      ...gitNexusDiagnostics(gitnexus),
+    ],
   };
 }
 
