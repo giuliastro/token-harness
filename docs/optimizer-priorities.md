@@ -53,7 +53,34 @@ Token Harness savings total.
 | **HarnessTrim** | deterministic output/context reduction | Supported first-party integration. Keep separate or embed later based on product simplicity, not ideology. |
 | **cclimits / native allowance readers** | 5h/7d evidence | Read-only evidence. Not an optimizer. |
 | **ccusage / local history** | usage evidence | Read-only evidence. Not subscription quota. |
-| **mcptoon detection** | MCP discovery candidate observation | Read-only candidate detection only. It is not selected as the next managed optimizer. |
+| **Headroom observation** | broad context ownership candidate | Read-only candidate observation and explicitly attributed benchmark evidence only. Not a managed optimizer. |
+| **mcptoon observation** | MCP discovery candidate | Read-only candidate observation and explicitly attributed benchmark evidence only. Not a managed optimizer. |
+| **GitNexus observation** | repository exploration / retrieval candidate | Read-only candidate observation and explicitly attributed benchmark evidence only. Not a managed optimizer. |
+
+## Candidate benchmark evidence
+
+Headroom, mcptoon and GitNexus use the same paired benchmark path. A benchmark started with an
+explicit `--candidate` stores candidate identity in a sidecar beside the ordinary benchmark state;
+the receipt schema and deterministic pair comparator stay unchanged. Candidate identity names the
+**experiment target**. It does not prove that the candidate was installed, enabled or responsible
+for an observed change.
+
+`token-harness benchmark-matrix` groups only complete, valid, same-project benchmark pairs that also
+have valid candidate attribution. The candidate evidence view reports, separately for each
+candidate:
+
+- pair verdict counts from the existing comparator;
+- evidence-bearing pair count and coverage percentage;
+- evidence classes, keeping backend quota, local evidence and quality-only evidence distinct;
+- aggregate local-token deltas only where both sides have attributable local usage and passed
+  quality;
+- aggregate wall-clock deltas only where both baseline and optimized runs passed the quality gate.
+
+Wall-clock time is useful operational evidence, but it is not provider allowance and does not alter
+the benchmark verdict. Missing or incomplete evidence remains unknown rather than being estimated.
+The candidate evidence view deliberately emits **no composite score, winner, activation decision or
+promotion recommendation**. Promotion remains a separate product decision that also requires
+compatibility, distinctness, operational cost, verification and reversibility evidence.
 
 ## Candidate research queue
 
