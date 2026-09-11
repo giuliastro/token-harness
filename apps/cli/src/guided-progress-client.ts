@@ -1,10 +1,20 @@
-/** Progressive feedback for the guided UI while a full overview read is in flight. */
+/** Progressive feedback and read-only request shaping for the guided UI. */
 export const GUIDE_PROGRESS_JS = String.raw`
 (() => {
   const PROGRESS_POLL_MS = 500;
   const originalFetch = window.fetch.bind(window);
+  const originalRequest = request;
   const spinner = document.getElementById('reading-spinner');
   let progressTimer = null;
+
+  request = (path, body) => {
+    const periodOnly =
+      body === undefined &&
+      periodReading &&
+      path.startsWith('/api/overview?period=') &&
+      !path.includes('refresh=1');
+    return originalRequest(periodOnly ? path.replace('/api/overview?', '/api/savings?') : path, body);
+  };
 
   function lowerFirst(value) {
     return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
