@@ -58,15 +58,40 @@ without waiting for the full sample. Once evidence is sufficient:
 - a promising signal requires at least three candidate wins, no baseline wins, adequate coverage,
   and no material timing regression.
 
-Even a promising signal remains **promotion-blocked**. Benchmark attribution does not independently
-verify that the candidate was actually active, and benchmark evidence cannot prove reviewed
-compatibility, managed install/configuration, verification, rollback, maturity/distinctness, or
-combined-stack safety. Headroom additionally remains subject to the dedicated broad-context-owner
-admission gate.
+## Promotion readiness
 
-The current human report renders this assessment from campaign evidence. JSON continues to expose the
-underlying campaign state and evidence rather than inventing a synthetic promotion field; those raw
-facts remain the automation contract.
+A promising selection signal is now only one explicit gate in a separate **promotion-readiness**
+model. Token Harness does not infer one safety property from another. In particular,
+`benchmark-ready` is not activation verification, an installed semantic version is not project
+maturity, and candidate attribution is not proof that the optimized run actually exercised the
+candidate.
+
+The structured gates are:
+
+- local benchmark capability;
+- product category fit;
+- decision-ready promising selection evidence;
+- activation verification;
+- reviewed managed lifecycle (plan/apply/verify/rollback);
+- compatibility, ownership overlap, failure isolation and reversibility;
+- project maturity, release activity, license and maintenance review;
+- combined recommended-stack validation;
+- for Headroom only, the dedicated broad-context-owner admission gate.
+
+A gate is `passed`, `blocked`, `unreviewed`, or `not-applicable`. Missing evidence stays
+`unreviewed`; known missing safety mechanisms stay `blocked`. Promotion is eligible only when every
+required gate is explicitly passed. This makes the model suitable for future managed integrations
+without weakening today's candidate-only safety boundary.
+
+The human `context` report can already show the local part of this model for discovered candidates.
+For example, a locally installed GitNexus build can pass benchmark capability and category fit while
+selection evidence, activation verification, lifecycle and the other promotion gates remain open.
+That output is progress information, not a recommendation to install or enable anything.
+
+Candidate taxonomy follows RFC 0027's waste surfaces: Headroom is `context-minimization`, mcptoon is
+`mcp-discovery`, and GitNexus is `repository-exploration`. Keeping repository exploration separate is
+important because distinctness and overlap cannot be assessed correctly when unrelated mechanisms
+are grouped into one generic context bucket.
 
 ## One paired experiment
 
