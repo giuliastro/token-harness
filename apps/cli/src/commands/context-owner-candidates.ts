@@ -5,6 +5,7 @@ import {
   type ProviderContext,
 } from '@token-harness/adapters';
 import {
+  OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID,
   diagnostic,
   type Diagnostic,
   type OptimizationCandidateObservation,
@@ -203,7 +204,7 @@ export async function observeContextOptimizationCandidates(
       {
         id: 'headroom',
         displayName: 'Headroom',
-        category: 'context-minimization',
+        category: OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID.headroom,
         state: headroom.state,
         version: headroom.version,
         minimumBenchmarkVersion: headroom.minimumBenchmarkVersion,
@@ -211,7 +212,7 @@ export async function observeContextOptimizationCandidates(
       {
         id: 'mcptoon',
         displayName: 'mcptoon',
-        category: 'mcp-discovery',
+        category: OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID.mcptoon,
         state: mcptoon.state,
         version: mcptoon.version,
         minimumBenchmarkVersion: mcptoon.minimumBenchmarkVersion,
@@ -219,7 +220,7 @@ export async function observeContextOptimizationCandidates(
       {
         id: 'gitnexus',
         displayName: 'GitNexus',
-        category: 'context-minimization',
+        category: OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID.gitnexus,
         state: gitnexus.state,
         version: gitnexus.version,
         minimumBenchmarkVersion: 'capability-gated',
