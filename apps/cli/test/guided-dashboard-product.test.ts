@@ -3,16 +3,45 @@ import { describe, it } from 'node:test';
 
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
-describe('outcome-first guided dashboard', () => {
-  it('puts user outcomes ahead of implementation detail', () => {
-    assert.match(GUIDE_HTML, />Dashboard</);
-    assert.match(GUIDE_HTML, />Policies</);
-    assert.match(GUIDE_HTML, />Evidence</);
-    assert.match(GUIDE_HTML, /5h \/ 7d allowance saved/);
-    assert.match(GUIDE_HTML, /API cost saved/);
-    assert.match(GUIDE_HTML, /Quality/);
-    assert.match(GUIDE_HTML, /What to do next/);
-    assert.match(GUIDE_HTML, /Save coding allowance without guessing/);
+describe('simple guided dashboard', () => {
+  it('uses three novice-facing destinations', () => {
+    assert.match(GUIDE_HTML, />Monitor</);
+    assert.match(GUIDE_HTML, />Actions</);
+    assert.match(GUIDE_HTML, />Results</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-overview"[^>]*>Dashboard</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-rules"[^>]*>Policies</);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-activity"[^>]*>Evidence</);
+    assert.match(GUIDE_HTML, /What you are getting/);
+    assert.match(GUIDE_HTML, /Coding agents/);
+  });
+
+  it('puts obvious actions in a dedicated section', () => {
+    assert.match(GUIDE_HTML, /Optimize reasoning/);
+    assert.match(GUIDE_HTML, /Set up optimizers/);
+    assert.match(GUIDE_HTML, /Check integrations/);
+    assert.match(GUIDE_HTML, /Check updates/);
+    assert.match(GUIDE_HTML, /You will always review a change before it is applied/);
+    assert.match(GUIDE_HTML, /Normal coding/);
+    assert.match(GUIDE_HTML, /Simple edits/);
+    assert.match(GUIDE_HTML, /Complex work/);
+    assert.match(GUIDE_HTML, /Critical work/);
+    assert.doesNotMatch(GUIDE_HTML, /Everyday coding/);
+  });
+
+  it('keeps advanced stack and candidate detail out of the primary flow', () => {
+    assert.match(GUIDE_HTML, /<details class="disclosure"><summary>Technical details<\/summary>/);
+    assert.match(GUIDE_HTML, /id="stack"/);
+    assert.match(GUIDE_HTML, /id="candidates"/);
+  });
+
+  it('makes read, review and apply phases explicit', () => {
+    assert.match(GUIDE_JS, /Checking current settings/);
+    assert.match(GUIDE_JS, /Read-only\. No change is being made/);
+    assert.match(GUIDE_JS, /Nothing changes until you review and approve the recommendation/);
+    assert.match(GUIDE_JS, /Apply change/);
+    assert.match(GUIDE_JS, /Applying approved change/);
+    assert.match(GUIDE_JS, /Keep this window open until it finishes/);
+    assert.match(GUIDE_JS, /\$\('close'\)\.disabled = value && mutating/);
   });
 
   it('does not invent plan-time, API-cost or quality savings', () => {
@@ -37,7 +66,7 @@ describe('outcome-first guided dashboard', () => {
   it('makes a quality regression the next action instead of celebrating savings', () => {
     assert.match(GUIDE_JS, /Regression detected/);
     assert.match(GUIDE_JS, /Positive allowance savings are blocked/);
-    assert.match(GUIDE_JS, /Do not enable a more aggressive saving policy/);
+    assert.match(GUIDE_JS, /Review the quality result before increasing savings/);
     assert.match(GUIDE_JS, /Review quality evidence/);
   });
 

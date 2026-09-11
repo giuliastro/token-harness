@@ -382,7 +382,9 @@ describe('guided browser security and assets', () => {
     );
     assert.ok(!GUIDE_JS.includes('innerHTML'));
     assert.ok(GUIDE_HTML.includes('<dialog'));
-    assert.ok(GUIDE_HTML.includes('Approve and apply'));
+    assert.ok(GUIDE_HTML.includes('id="approve"'));
+    assert.ok(GUIDE_HTML.includes('Apply change'));
+    assert.ok(GUIDE_HTML.includes('You will always review a change before it is applied.'));
     assert.ok(!GUIDE_HTML.includes('onclick='));
   });
 });
@@ -458,7 +460,7 @@ describe('reasoning explanations and contextual actions', () => {
     assert.ok(!GUIDE_CSS.includes('radial-gradient'));
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
-    assert.ok(GUIDE_JS.includes('What you can do'));
+    assert.ok(GUIDE_HTML.includes('<h2>Actions</h2>'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));
