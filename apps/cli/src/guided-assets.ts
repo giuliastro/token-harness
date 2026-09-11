@@ -1,4 +1,5 @@
 /** Embedded local product UI. No remote assets, inline scripts, or framework runtime. */
+import { GUIDE_CAPABILITIES_JS } from './guided-capabilities-client.js';
 import { GUIDE_CSS as GUIDE_BASE_CSS } from './guided-dashboard-styles.js';
 import { GUIDE_PRODUCT_JS } from './guided-product-client.js';
 import { GUIDE_PRODUCT_CSS } from './guided-product-styles.js';
@@ -6,7 +7,7 @@ import { GUIDE_STACK_JS } from './guided-stack-client.js';
 
 export const GUIDE_CSS = `${GUIDE_BASE_CSS}\n${GUIDE_PRODUCT_CSS}`;
 export { GUIDE_STACK_JS };
-export const GUIDE_JS = GUIDE_PRODUCT_JS;
+export const GUIDE_JS = `${GUIDE_CAPABILITIES_JS}\n${GUIDE_PRODUCT_JS}`;
 
 export const GUIDE_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -44,9 +45,9 @@ export const GUIDE_HTML = `<!doctype html>
 <section id="view-setup" role="tabpanel" aria-labelledby="tab-setup" tabindex="0" hidden>
 <div class="setup-intro"><div><h2>Set up Token Harness in order</h2><p>Start with your coding agent and the two managed optimizers. Experimental tools are optional and stay outside the active stack until they earn promotion.</p></div><span class="pill good">Safe previews before changes</span></div>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">1</span><div><h2>Coding agents</h2><p>Token Harness currently supports guided setup for Claude Code and Codex. The app must be started from an environment where the agent is detectable.</p></div></div><div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div></section>
+<section class="setup-step"><div class="step-heading"><span class="step-number">1</span><div><h2>Coding agents</h2><p>Token Harness currently supports guided setup for Claude Code and Codex. The app must be started from an environment where the agent is detectable.</p></div></div><div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div><div class="subsection-heading"><h3>Agent details</h3><p class="caption">In-session guidance, plan allowance and useful connected-tool checks.</p></div><div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div></section>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">2</span><div><h2>Managed optimizers</h2><p>These are the optimizers Token Harness can configure transactionally today: RTK and HarnessTrim. Setup is reviewed before anything is written.</p></div></div><div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>RTK</h3><p>Checking…</p></article><article class="tool-card"><h3>HarnessTrim</h3><p>Checking…</p></article></div><div id="managed-setup-actions" class="managed-action-box"><p>Checking available agents…</p></div></section>
+<section class="setup-step"><div class="step-heading"><span class="step-number">2</span><div><h2>Managed optimizers</h2><p>These are the optimizers Token Harness can configure transactionally today: RTK and HarnessTrim. Setup is reviewed before anything is written.</p></div></div><div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>RTK</h3><p>Checking…</p></article><article class="tool-card"><h3>HarnessTrim</h3><p>Checking…</p></article></div><div id="managed-setup-actions" class="managed-action-box"><p>Checking available agents…</p></div><details class="disclosure"><summary>Remove managed changes</summary><p class="caption">Removal is reviewed first. Token Harness removes only changes it owns; provider installations remain user-owned.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details></section>
 
 <section class="setup-step"><div class="step-heading"><span class="step-number">3</span><div><h2>Experimental tools</h2><p>Headroom, mcptoon and GitNexus are being evaluated. Token Harness can detect and benchmark them, but does not silently install or activate them.</p></div></div><div id="experimental-tools" class="tool-grid"><article class="tool-card experimental"><h3>Checking experimental tools…</h3></article></div></section>
 
