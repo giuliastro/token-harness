@@ -14,6 +14,7 @@ import type {
   TaskBenchmarkMatrixEntry,
   TaskBenchmarkMatrixReport,
   TaskBenchmarkMatrixSummary,
+  TaskClass,
 } from '@token-harness/core';
 
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
@@ -38,8 +39,36 @@ interface CandidateEvidenceSummary {
   wallClockSavingPercent: number | null;
 }
 
+interface CandidateCampaignSlotSummary {
+  benchmarkId: string;
+  taskClass: TaskClass;
+  run: number;
+  state:
+    | 'baseline-not-started'
+    | 'baseline-running'
+    | 'optimized-not-started'
+    | 'optimized-running'
+    | 'complete'
+    | 'invalid';
+}
+
+interface CandidateCampaignSummary {
+  campaignId: string;
+  candidateId: OptimizationCandidateId;
+  harnessId: string;
+  runsPerTask: number;
+  totalPairs: number;
+  completedPairs: number;
+  invalidPairs: number;
+  slots: readonly CandidateCampaignSlotSummary[];
+  nextCommand: string | null;
+  nextInstruction: string;
+  evidence: CandidateEvidenceSummary;
+}
+
 type CandidateAwareReport = (TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport) & {
   candidateEvidence?: readonly CandidateEvidenceSummary[];
+  campaign?: CandidateCampaignSummary;
 };
 
 function percent(value: number | null): string {
@@ -155,6 +184,59 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
   );
 }
 
+function renderCampaign(lines: string[], campaign: CandidateCampaignSummary): void {
+  lines.push('', 'Candidate campaign — experimental');
+  lines.push(
+    ...wrap(
+      `${campaign.campaignId}: ${campaign.candidateId} on ${campaign.harnessId}; ` +
+        `${String(campaign.completedPairs)}/${String(campaign.totalPairs)} pairs complete; ` +
+        `${String(campaign.invalidPairs)} invalid`,
+      2,
+    ),
+  );
+  lines.push(
+    ...wrap(
+      `Protocol: ${String(campaign.runsPerTask)} paired runs per selected task class. ` +
+        'The campaign is reconstructed from normal benchmark captures and receipts; no separate campaign state is written.',
+      2,
+    ),
+  );
+
+  lines.push('', '  Progress');
+  const taskClasses: TaskClass[] = ['mechanical', 'standard', 'hard', 'critical'];
+  for (const taskClass of taskClasses) {
+    const slots = campaign.slots.filter((slot) => slot.taskClass === taskClass);
+    if (slots.length === 0) continue;
+    const complete = slots.filter((slot) => slot.state === 'complete').length;
+    const invalid = slots.filter((slot) => slot.state === 'invalid').length;
+    const active = slots.find((slot) => slot.state !== 'complete')?.state ?? 'complete';
+    lines.push(
+      ...wrap(
+        `${taskClass}: ${String(complete)}/${String(slots.length)} complete; ` +
+          `next state ${active}${invalid === 0 ? '' : `; invalid ${String(invalid)}`}`,
+        4,
+      ),
+    );
+  }
+
+  lines.push('', '  Next');
+  lines.push(...wrap(campaign.nextInstruction, 4));
+  if (campaign.nextCommand !== null) lines.push(...wrap(campaign.nextCommand, 4));
+
+  lines.push('', '  Campaign evidence');
+  lines.push(...wrap(candidateSummaryLine(campaign.evidence), 4));
+  const local = candidateLocalLine(campaign.evidence);
+  if (local !== null) lines.push(...wrap(local, 4));
+  const timing = candidateTimingLine(campaign.evidence);
+  if (timing !== null) lines.push(...wrap(timing, 4));
+  lines.push(
+    ...wrap(
+      'Campaign evidence stays separate by evidence class. Completion does not itself prove that the candidate was active or that it should be promoted.',
+      2,
+    ),
+  );
+}
+
 export function renderBenchmarkMatrixReport(
   report: CandidateAwareReport,
   _context: RenderContext,
@@ -174,8 +256,15 @@ export function renderBenchmarkMatrixReport(
     ),
   );
 
+  if (report.campaign !== undefined) renderCampaign(lines, report.campaign);
+
   if (report.entries.length === 0) {
-    lines.push('', 'No complete benchmark pairs match this project/filter.');
+    lines.push(
+      '',
+      report.campaign === undefined
+        ? 'No complete benchmark pairs match this project/filter.'
+        : 'No complete campaign pairs are available yet.',
+    );
     return document(lines);
   }
 
@@ -201,7 +290,7 @@ export function renderBenchmarkMatrixReport(
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
 
-  if (report.candidateEvidence !== undefined) {
+  if (report.candidateEvidence !== undefined && report.campaign === undefined) {
     lines.push('', 'Candidate evidence — experimental');
     for (const candidate of report.candidateEvidence) {
       lines.push(`  ${candidate.candidateId}`);
@@ -239,7 +328,7 @@ export function renderBenchmarkMatrixReport(
     );
   }
 
-  if (report.candidateEvidence !== undefined) {
+  if (report.candidateEvidence !== undefined || report.campaign !== undefined) {
     lines.push(
       ...wrap(
         'Wall-clock deltas are shown only for quality-passed pairs and remain timing evidence, not a comparator verdict or provider-allowance claim.',
