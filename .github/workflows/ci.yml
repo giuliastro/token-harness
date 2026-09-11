@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -47,19 +47,6 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-
-      - name: Apply exact candidate formatting
-        if: runner.os == 'Linux' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        run: |
-          pnpm exec prettier --write apps/cli/test/context-owner-candidates.test.ts
-          if ! git diff --quiet -- apps/cli/test/context-owner-candidates.test.ts; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add apps/cli/test/context-owner-candidates.test.ts
-            git commit -m "style: apply Prettier to candidate projection test"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
 
       - name: Format check
         run: pnpm format:check
