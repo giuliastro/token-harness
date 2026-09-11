@@ -2,12 +2,14 @@
 import {
   EXIT_CODES,
   diagnostic,
+  parseTaskBenchmarkReceipt,
   type CommandResult,
   type Diagnostic,
   type OptimizationCandidateId,
   type TaskBenchmarkCaptureStartReport,
   type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixEntry,
+  type TaskBenchmarkVariant,
 } from '@token-harness/core';
 
 import { runBenchmarkStart } from './benchmark-capture.js';
@@ -25,6 +27,15 @@ interface CandidateBenchmarkAttribution {
   projectId: string;
 }
 
+export interface CandidateBenchmarkTimingEvidence {
+  baselineWallClockMs: number | null;
+  optimizedWallClockMs: number | null;
+  wallClockSavingPercent: number | null;
+}
+
+export type CandidateBenchmarkEvidenceEntry = TaskBenchmarkMatrixEntry &
+  Partial<CandidateBenchmarkTimingEvidence>;
+
 export interface CandidateBenchmarkEvidence {
   candidateId: OptimizationCandidateId;
   pairs: number;
@@ -36,10 +47,16 @@ export interface CandidateBenchmarkEvidence {
   quotaBacked: number;
   localEvidence: number;
   qualityOnly: number;
+  evidencePairs: number;
+  evidenceCoveragePercent: number | null;
   localComparablePairs: number;
   baselineLocalTokens: number | null;
   optimizedLocalTokens: number | null;
   localTokenSavingPercent: number | null;
+  wallClockComparablePairs: number;
+  baselineWallClockMs: number | null;
+  optimizedWallClockMs: number | null;
+  wallClockSavingPercent: number | null;
 }
 
 export type CandidateAwareBenchmarkMatrixReport = TaskBenchmarkContextMatrixReport & {
@@ -53,7 +70,7 @@ function roundedPercent(numerator: number, denominator: number): number | null {
 
 export function summarizeCandidateBenchmarkEntries(
   candidateId: OptimizationCandidateId,
-  entries: readonly TaskBenchmarkMatrixEntry[],
+  entries: readonly CandidateBenchmarkEvidenceEntry[],
 ): CandidateBenchmarkEvidence {
   const local = entries.filter(
     (entry) =>
@@ -69,6 +86,24 @@ export function summarizeCandidateBenchmarkEntries(
     local.length === 0
       ? null
       : local.reduce((total, entry) => total + (entry.optimizedLocalTokens ?? 0), 0);
+  const timing = entries.filter(
+    (entry) =>
+      entry.baselineWallClockMs !== undefined &&
+      entry.baselineWallClockMs !== null &&
+      entry.optimizedWallClockMs !== undefined &&
+      entry.optimizedWallClockMs !== null &&
+      entry.wallClockSavingPercent !== undefined &&
+      entry.wallClockSavingPercent !== null,
+  );
+  const baselineWallClockMs =
+    timing.length === 0
+      ? null
+      : timing.reduce((total, entry) => total + (entry.baselineWallClockMs ?? 0), 0);
+  const optimizedWallClockMs =
+    timing.length === 0
+      ? null
+      : timing.reduce((total, entry) => total + (entry.optimizedWallClockMs ?? 0), 0);
+  const evidencePairs = entries.filter((entry) => entry.evidenceLevel !== 'none').length;
 
   return {
     candidateId,
@@ -81,6 +116,8 @@ export function summarizeCandidateBenchmarkEntries(
     quotaBacked: entries.filter((entry) => entry.evidenceLevel === 'quota-backed').length,
     localEvidence: entries.filter((entry) => entry.evidenceLevel === 'local-evidence').length,
     qualityOnly: entries.filter((entry) => entry.evidenceLevel === 'quality-only').length,
+    evidencePairs,
+    evidenceCoveragePercent: roundedPercent(evidencePairs, entries.length),
     localComparablePairs: local.length,
     baselineLocalTokens,
     optimizedLocalTokens,
@@ -88,12 +125,36 @@ export function summarizeCandidateBenchmarkEntries(
       baselineLocalTokens === null || optimizedLocalTokens === null
         ? null
         : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
+    wallClockComparablePairs: timing.length,
+    baselineWallClockMs,
+    optimizedWallClockMs,
+    wallClockSavingPercent:
+      baselineWallClockMs === null || optimizedWallClockMs === null
+        ? null
+        : roundedPercent(baselineWallClockMs - optimizedWallClockMs, baselineWallClockMs),
   };
+}
+
+export function buildCandidateBenchmarkEvidence(
+  entries: ReadonlyMap<OptimizationCandidateId, readonly CandidateBenchmarkEvidenceEntry[]>,
+): CandidateBenchmarkEvidence[] {
+  return CANDIDATES.map((candidate) =>
+    summarizeCandidateBenchmarkEntries(candidate, entries.get(candidate) ?? []),
+  );
 }
 
 function attributionPath(context: CommandContext, benchmarkId: string): string | null {
   if (context.adapters === null || context.stateRoot === null) return null;
   return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, 'candidate.json');
+}
+
+function receiptPath(
+  context: CommandContext,
+  benchmarkId: string,
+  variant: TaskBenchmarkVariant,
+): string | null {
+  if (context.adapters === null || context.stateRoot === null) return null;
+  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, `${variant}.json`);
 }
 
 function parseAttribution(value: unknown): CandidateBenchmarkAttribution | null {
@@ -133,6 +194,67 @@ async function readAttribution(
   } catch {
     return 'invalid';
   }
+}
+
+async function readTimingEvidence(
+  context: CommandContext,
+  benchmarkId: string,
+): Promise<CandidateBenchmarkTimingEvidence> {
+  const empty: CandidateBenchmarkTimingEvidence = {
+    baselineWallClockMs: null,
+    optimizedWallClockMs: null,
+    wallClockSavingPercent: null,
+  };
+  if (context.adapters === null) return empty;
+
+  const readReceipt = async (variant: TaskBenchmarkVariant) => {
+    const path = receiptPath(context, benchmarkId, variant);
+    if (path === null) return null;
+    const stat = await context.adapters?.fs.stat(path);
+    if (stat === null || stat === undefined || stat.kind !== 'file') return null;
+    try {
+      const raw = JSON.parse(
+        new TextDecoder().decode(await context.adapters?.fs.readFile(path)),
+      ) as unknown;
+      const parsed = parseTaskBenchmarkReceipt(raw);
+      return parsed.ok ? parsed.receipt : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const baseline = await readReceipt('baseline');
+  const optimized = await readReceipt('optimized');
+  if (
+    baseline === null ||
+    optimized === null ||
+    baseline.benchmarkId !== benchmarkId ||
+    optimized.benchmarkId !== benchmarkId ||
+    baseline.outcome.qualityGate !== 'passed' ||
+    optimized.outcome.qualityGate !== 'passed'
+  ) {
+    return empty;
+  }
+
+  const baselineWallClockMs = Date.parse(baseline.completedAt) - Date.parse(baseline.startedAt);
+  const optimizedWallClockMs = Date.parse(optimized.completedAt) - Date.parse(optimized.startedAt);
+  if (
+    !Number.isFinite(baselineWallClockMs) ||
+    !Number.isFinite(optimizedWallClockMs) ||
+    baselineWallClockMs < 0 ||
+    optimizedWallClockMs < 0
+  ) {
+    return empty;
+  }
+
+  return {
+    baselineWallClockMs,
+    optimizedWallClockMs,
+    wallClockSavingPercent: roundedPercent(
+      baselineWallClockMs - optimizedWallClockMs,
+      baselineWallClockMs,
+    ),
+  };
 }
 
 async function writeAttribution(
@@ -226,7 +348,7 @@ export async function runCandidateBenchmarkMatrix(
   const result = await runBenchmarkMatrix(context);
   if (result.data === null) return { ...result, data: null };
 
-  const entries = new Map<OptimizationCandidateId, TaskBenchmarkMatrixEntry[]>(
+  const entries = new Map<OptimizationCandidateId, CandidateBenchmarkEvidenceEntry[]>(
     CANDIDATES.map((candidate) => [candidate, []]),
   );
   const diagnostics: Diagnostic[] = [...result.diagnostics];
@@ -252,16 +374,15 @@ export async function runCandidateBenchmarkMatrix(
       );
       continue;
     }
-    entries.get(attribution.candidateId)?.push(entry);
+    const timing = await readTimingEvidence(context, entry.benchmarkId);
+    entries.get(attribution.candidateId)?.push({ ...entry, ...timing });
   }
 
   return {
     ...result,
     data: {
       ...result.data,
-      candidateEvidence: CANDIDATES.map((candidate) =>
-        summarizeCandidateBenchmarkEntries(candidate, entries.get(candidate) ?? []),
-      ),
+      candidateEvidence: buildCandidateBenchmarkEvidence(entries),
     },
     diagnostics,
   };
