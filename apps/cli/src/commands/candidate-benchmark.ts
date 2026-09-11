@@ -2,14 +2,20 @@
 import {
   EXIT_CODES,
   diagnostic,
+  isTaskBenchmarkId,
+  parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
   type CommandResult,
   type Diagnostic,
+  type HarnessId,
   type OptimizationCandidateId,
+  type TaskBenchmarkCapture,
   type TaskBenchmarkCaptureStartReport,
   type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixEntry,
+  type TaskBenchmarkReceipt,
   type TaskBenchmarkVariant,
+  type TaskClass,
 } from '@token-harness/core';
 
 import { runBenchmarkStart } from './benchmark-capture.js';
@@ -58,9 +64,57 @@ export interface CandidateBenchmarkEvidence {
   wallClockSavingPercent: number | null;
 }
 
+export type CandidateBenchmarkCampaignSlotState =
+  | 'baseline-not-started'
+  | 'baseline-running'
+  | 'optimized-not-started'
+  | 'optimized-running'
+  | 'complete'
+  | 'invalid';
+
+export interface CandidateBenchmarkCampaignSlot {
+  benchmarkId: string;
+  taskClass: TaskClass;
+  run: number;
+  state: CandidateBenchmarkCampaignSlotState;
+}
+
+export interface CandidateBenchmarkCampaignReport {
+  campaignId: string;
+  candidateId: OptimizationCandidateId;
+  harnessId: HarnessId;
+  runsPerTask: number;
+  totalPairs: number;
+  completedPairs: number;
+  invalidPairs: number;
+  slots: CandidateBenchmarkCampaignSlot[];
+  nextCommand: string | null;
+  nextInstruction: string;
+  evidence: CandidateBenchmarkEvidence;
+}
+
 export type CandidateAwareBenchmarkMatrixReport = TaskBenchmarkContextMatrixReport & {
   candidateEvidence: CandidateBenchmarkEvidence[];
+  campaign?: CandidateBenchmarkCampaignReport;
 };
+
+const CAMPAIGN_RUNS_PER_TASK = 2;
+const CAMPAIGN_TASKS: readonly TaskClass[] = ['mechanical', 'standard', 'hard', 'critical'];
+const CAMPAIGN_TASK_SUFFIX: Readonly<Record<TaskClass, string>> = {
+  mechanical: 'm',
+  standard: 's',
+  hard: 'h',
+  critical: 'c',
+};
+
+type CampaignArtifact<T> = 'absent' | 'invalid' | T;
+
+interface CampaignDefinition {
+  campaignId: string;
+  candidateId: OptimizationCandidateId;
+  harnessId: HarnessId;
+  slots: CandidateBenchmarkCampaignSlot[];
+}
 
 function roundedPercent(numerator: number, denominator: number): number | null {
   if (denominator <= 0) return null;
@@ -142,13 +196,336 @@ export function buildCandidateBenchmarkEvidence(
   );
 }
 
+export function candidateBenchmarkCampaignBenchmarkId(
+  campaignId: string,
+  taskClass: TaskClass,
+  run: number,
+): string | null {
+  const id = `${campaignId}-${CAMPAIGN_TASK_SUFFIX[taskClass]}-${String(run)}`;
+  return isTaskBenchmarkId(id) ? id : null;
+}
+
+export function planCandidateBenchmarkCampaign(
+  campaignId: string,
+  taskClass: TaskClass | null = null,
+): CandidateBenchmarkCampaignSlot[] | null {
+  const tasks = taskClass === null ? CAMPAIGN_TASKS : [taskClass];
+  const slots: CandidateBenchmarkCampaignSlot[] = [];
+  for (const task of tasks) {
+    for (let run = 1; run <= CAMPAIGN_RUNS_PER_TASK; run += 1) {
+      const benchmarkId = candidateBenchmarkCampaignBenchmarkId(campaignId, task, run);
+      if (benchmarkId === null) return null;
+      slots.push({ benchmarkId, taskClass: task, run, state: 'baseline-not-started' });
+    }
+  }
+  return slots;
+}
+
+function benchmarkArtifactPath(
+  context: CommandContext,
+  benchmarkId: string,
+  filename: string,
+): string | null {
+  if (context.adapters === null || context.stateRoot === null) return null;
+  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, filename);
+}
+
 function receiptPath(
   context: CommandContext,
   benchmarkId: string,
   variant: TaskBenchmarkVariant,
 ): string | null {
-  if (context.adapters === null || context.stateRoot === null) return null;
-  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, `${variant}.json`);
+  return benchmarkArtifactPath(context, benchmarkId, `${variant}.json`);
+}
+
+async function readCaptureArtifact(
+  context: CommandContext,
+  benchmarkId: string,
+  variant: TaskBenchmarkVariant,
+): Promise<CampaignArtifact<TaskBenchmarkCapture>> {
+  const path = benchmarkArtifactPath(context, benchmarkId, `${variant}.capture.json`);
+  if (path === null || context.adapters === null) return 'absent';
+  const stat = await context.adapters.fs.stat(path);
+  if (stat === null) return 'absent';
+  if (stat.kind !== 'file') return 'invalid';
+  try {
+    const raw = JSON.parse(
+      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+    ) as unknown;
+    const parsed = parseTaskBenchmarkCapture(raw);
+    return parsed.ok ? parsed.capture : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
+async function readReceiptArtifact(
+  context: CommandContext,
+  benchmarkId: string,
+  variant: TaskBenchmarkVariant,
+): Promise<CampaignArtifact<TaskBenchmarkReceipt>> {
+  const path = receiptPath(context, benchmarkId, variant);
+  if (path === null || context.adapters === null) return 'absent';
+  const stat = await context.adapters.fs.stat(path);
+  if (stat === null) return 'absent';
+  if (stat.kind !== 'file') return 'invalid';
+  try {
+    const raw = JSON.parse(
+      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+    ) as unknown;
+    const parsed = parseTaskBenchmarkReceipt(raw);
+    return parsed.ok ? parsed.receipt : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
+function captureMatchesCampaign(
+  capture: TaskBenchmarkCapture,
+  slot: CandidateBenchmarkCampaignSlot,
+  variant: TaskBenchmarkVariant,
+  harnessId: HarnessId,
+  projectId: string,
+): boolean {
+  return (
+    capture.benchmarkId === slot.benchmarkId &&
+    capture.variant === variant &&
+    capture.taskClass === slot.taskClass &&
+    capture.harnessId === harnessId &&
+    capture.projectId === projectId
+  );
+}
+
+function receiptMatchesCampaign(
+  receipt: TaskBenchmarkReceipt,
+  slot: CandidateBenchmarkCampaignSlot,
+  variant: TaskBenchmarkVariant,
+  harnessId: HarnessId,
+): boolean {
+  return (
+    receipt.benchmarkId === slot.benchmarkId &&
+    receipt.variant === variant &&
+    receipt.taskClass === slot.taskClass &&
+    receipt.harnessId === harnessId
+  );
+}
+
+async function readCampaignSlotState(
+  context: CommandContext,
+  definition: CampaignDefinition,
+  slot: CandidateBenchmarkCampaignSlot,
+  projectId: string,
+): Promise<CandidateBenchmarkCampaignSlotState> {
+  const [attribution, baselineCapture, baselineReceipt, optimizedCapture, optimizedReceipt] =
+    await Promise.all([
+      readCandidateBenchmarkAttribution(context, slot.benchmarkId),
+      readCaptureArtifact(context, slot.benchmarkId, 'baseline'),
+      readReceiptArtifact(context, slot.benchmarkId, 'baseline'),
+      readCaptureArtifact(context, slot.benchmarkId, 'optimized'),
+      readReceiptArtifact(context, slot.benchmarkId, 'optimized'),
+    ]);
+
+  if (
+    baselineCapture === 'invalid' ||
+    baselineReceipt === 'invalid' ||
+    optimizedCapture === 'invalid' ||
+    optimizedReceipt === 'invalid' ||
+    attribution === 'invalid'
+  ) {
+    return 'invalid';
+  }
+
+  const baselineCapturePresent = baselineCapture !== 'absent';
+  const baselineReceiptPresent = baselineReceipt !== 'absent';
+  const optimizedCapturePresent = optimizedCapture !== 'absent';
+  const optimizedReceiptPresent = optimizedReceipt !== 'absent';
+  const untouched =
+    !baselineCapturePresent &&
+    !baselineReceiptPresent &&
+    !optimizedCapturePresent &&
+    !optimizedReceiptPresent &&
+    attribution === 'absent';
+  if (untouched) return 'baseline-not-started';
+
+  if (
+    attribution === 'absent' ||
+    attribution.benchmarkId !== slot.benchmarkId ||
+    attribution.candidateId !== definition.candidateId ||
+    attribution.projectId !== projectId
+  ) {
+    return 'invalid';
+  }
+
+  if (
+    baselineCapture === 'absent' ||
+    !captureMatchesCampaign(baselineCapture, slot, 'baseline', definition.harnessId, projectId)
+  ) {
+    return 'invalid';
+  }
+
+  if (baselineReceipt === 'absent') {
+    return optimizedCapturePresent || optimizedReceiptPresent ? 'invalid' : 'baseline-running';
+  }
+  if (!receiptMatchesCampaign(baselineReceipt, slot, 'baseline', definition.harnessId)) {
+    return 'invalid';
+  }
+
+  if (optimizedCapture === 'absent') {
+    return optimizedReceiptPresent ? 'invalid' : 'optimized-not-started';
+  }
+  if (
+    !captureMatchesCampaign(optimizedCapture, slot, 'optimized', definition.harnessId, projectId)
+  ) {
+    return 'invalid';
+  }
+
+  if (optimizedReceipt === 'absent') return 'optimized-running';
+  return receiptMatchesCampaign(optimizedReceipt, slot, 'optimized', definition.harnessId)
+    ? 'complete'
+    : 'invalid';
+}
+
+function campaignNextStep(
+  definition: CampaignDefinition,
+  slots: readonly CandidateBenchmarkCampaignSlot[],
+): { command: string | null; instruction: string } {
+  const next = slots.find((slot) => slot.state !== 'complete');
+  if (next === undefined) {
+    return {
+      command: null,
+      instruction:
+        'Campaign complete. Review the campaign evidence below before deciding whether the candidate deserves a broader rollout.',
+    };
+  }
+
+  if (next.state === 'invalid') {
+    return {
+      command: null,
+      instruction: `Campaign paused because ${next.benchmarkId} contains ambiguous or incompatible benchmark state. Use a new campaign id rather than overwriting evidence.`,
+    };
+  }
+
+  if (next.state === 'baseline-not-started') {
+    return {
+      command:
+        `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
+        `--candidate ${definition.candidateId} --variant baseline --task ${next.taskClass} ` +
+        `--harness ${definition.harnessId}`,
+      instruction: `Start baseline ${String(next.run)} for ${next.taskClass} with the current production stack unchanged.`,
+    };
+  }
+
+  if (next.state === 'baseline-running') {
+    return {
+      command:
+        `token-harness benchmark-finish --benchmark-id ${next.benchmarkId} --variant baseline ` +
+        '--quality passed --attempts 1 --failed-attempts 0',
+      instruction:
+        'Finish the baseline after the task. Change quality/attempt counts if the observed outcome differs from the default command.',
+    };
+  }
+
+  if (next.state === 'optimized-not-started') {
+    return {
+      command:
+        `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
+        `--candidate ${definition.candidateId} --variant optimized --task ${next.taskClass} ` +
+        `--harness ${definition.harnessId}`,
+      instruction: `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
+    };
+  }
+
+  return {
+    command:
+      `token-harness benchmark-finish --benchmark-id ${next.benchmarkId} --variant optimized ` +
+      '--quality passed --attempts 1 --failed-attempts 0',
+    instruction:
+      'Finish the optimized task. Change quality/attempt counts if the observed outcome differs from the default command.',
+  };
+}
+
+async function buildCampaignReport(
+  context: CommandContext,
+  definition: CampaignDefinition,
+  matrix: TaskBenchmarkContextMatrixReport,
+  projectId: string,
+): Promise<CandidateBenchmarkCampaignReport> {
+  const slots: CandidateBenchmarkCampaignSlot[] = [];
+  for (const slot of definition.slots) {
+    slots.push({
+      ...slot,
+      state: await readCampaignSlotState(context, definition, slot, projectId),
+    });
+  }
+
+  const completeIds = new Set(
+    slots.filter((slot) => slot.state === 'complete').map((slot) => slot.benchmarkId),
+  );
+  const evidenceEntries: CandidateBenchmarkEvidenceEntry[] = [];
+  for (const entry of matrix.entries) {
+    if (!completeIds.has(entry.benchmarkId)) continue;
+    const timing = await readTimingEvidence(context, entry.benchmarkId);
+    evidenceEntries.push({ ...entry, ...timing });
+  }
+
+  const next = campaignNextStep(definition, slots);
+  return {
+    campaignId: definition.campaignId,
+    candidateId: definition.candidateId,
+    harnessId: definition.harnessId,
+    runsPerTask: CAMPAIGN_RUNS_PER_TASK,
+    totalPairs: slots.length,
+    completedPairs: slots.filter((slot) => slot.state === 'complete').length,
+    invalidPairs: slots.filter((slot) => slot.state === 'invalid').length,
+    slots,
+    nextCommand: next.command,
+    nextInstruction: next.instruction,
+    evidence: summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries),
+  };
+}
+
+function resolveCampaignDefinition(context: CommandContext): {
+  definition: CampaignDefinition | null;
+  diagnostic: Diagnostic | null;
+} {
+  const campaignId = context.benchmarkId ?? null;
+  const candidateId = context.optimizationCandidate ?? null;
+  if (campaignId === null || candidateId === null) return { definition: null, diagnostic: null };
+
+  if (context.harness === null) {
+    return {
+      definition: null,
+      diagnostic: diagnostic({
+        severity: 'error',
+        code: 'candidate-benchmark-campaign-harness-required',
+        message: 'A candidate benchmark campaign needs an explicit harness',
+        remediation: 'Add --harness claude or --harness codex',
+      }),
+    };
+  }
+
+  const slots = planCandidateBenchmarkCampaign(campaignId, context.taskClass ?? null);
+  if (slots === null) {
+    return {
+      definition: null,
+      diagnostic: diagnostic({
+        severity: 'error',
+        code: 'candidate-benchmark-campaign-id-too-long',
+        message: `Campaign id ${JSON.stringify(campaignId)} cannot produce safe benchmark ids`,
+        remediation: 'Use a shorter campaign id, normally 60 characters or fewer',
+      }),
+    };
+  }
+
+  return {
+    definition: {
+      campaignId,
+      candidateId,
+      harnessId: context.harness,
+      slots,
+    },
+    diagnostic: null,
+  };
 }
 
 async function readTimingEvidence(
@@ -299,6 +676,16 @@ export async function runCandidateBenchmarkStart(
 export async function runCandidateBenchmarkMatrix(
   context: CommandContext,
 ): Promise<CommandResult<CandidateAwareBenchmarkMatrixReport | null>> {
+  const campaignResolution = resolveCampaignDefinition(context);
+  if (campaignResolution.diagnostic !== null) {
+    return {
+      command: 'benchmark-matrix',
+      exitCode: EXIT_CODES['usage-error'],
+      data: null,
+      diagnostics: [campaignResolution.diagnostic],
+    };
+  }
+
   const result = await runBenchmarkMatrix(context);
   if (result.data === null) return { ...result, data: null };
 
@@ -332,11 +719,28 @@ export async function runCandidateBenchmarkMatrix(
     entries.get(attribution.candidateId)?.push({ ...entry, ...timing });
   }
 
+  const campaign =
+    campaignResolution.definition === null || projectId === null
+      ? undefined
+      : await buildCampaignReport(context, campaignResolution.definition, result.data, projectId);
+
+  if (campaign !== undefined && campaign.invalidPairs > 0) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'candidate-benchmark-campaign-state-invalid',
+        message: `${String(campaign.invalidPairs)} campaign slot(s) contain ambiguous or incompatible state`,
+        remediation: 'Use a new campaign id instead of overwriting or reusing ambiguous evidence',
+      }),
+    );
+  }
+
   return {
     ...result,
     data: {
       ...result.data,
       candidateEvidence: buildCandidateBenchmarkEvidence(entries),
+      ...(campaign === undefined ? {} : { campaign }),
     },
     diagnostics,
   };

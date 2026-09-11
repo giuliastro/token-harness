@@ -141,18 +141,24 @@ unsupported schema or wrong baseline/optimized role is rejected rather than gues
 Usage
   token-harness benchmark-matrix [--json] [--project <dir>]
                                  [--harness <claude|codex>] [--task <class>]
+                                 [--benchmark-id <campaign>] [--candidate <id>]
 
 Read-only. Scans completed benchmark pairs in Token Harness local state, requires
 their captures to bind both variants to the current project, and applies the same
 deterministic comparator used by token-harness benchmark.
 
+Pass --benchmark-id, --candidate and --harness together to enter guided candidate
+campaign mode. It plans two baseline/optimized pairs per selected task class from
+deterministic benchmark ids, reconstructs progress from normal benchmark evidence,
+and prints one exact next action. No campaign manifest or harness/provider
+configuration is written. --task limits the campaign to one class.
+
 The report groups mechanical, standard, hard and critical tasks; counts optimized
 wins, baseline wins, equal and inconclusive results; and keeps quota-backed,
 local-evidence and quality-only outcomes separate. Local token totals are summed
 only across quality-passed pairs where both variants have attributable local
-usage. Backend
-quota percentages from different windows are never summed and no composite score
-is invented.`,
+usage. Backend quota percentages from different windows are never summed and no
+composite score is invented.`,
 
   history: `token-harness history — read local Claude/Codex usage history
 
