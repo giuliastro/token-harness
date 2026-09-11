@@ -358,13 +358,7 @@ async function readCampaignSlotState(
 
   if (
     baselineCapture === 'absent' ||
-    !captureMatchesCampaign(
-      baselineCapture,
-      slot,
-      'baseline',
-      definition.harnessId,
-      projectId,
-    )
+    !captureMatchesCampaign(baselineCapture, slot, 'baseline', definition.harnessId, projectId)
   ) {
     return 'invalid';
   }
@@ -380,13 +374,7 @@ async function readCampaignSlotState(
     return optimizedReceiptPresent ? 'invalid' : 'optimized-not-started';
   }
   if (
-    !captureMatchesCampaign(
-      optimizedCapture,
-      slot,
-      'optimized',
-      definition.harnessId,
-      projectId,
-    )
+    !captureMatchesCampaign(optimizedCapture, slot, 'optimized', definition.harnessId, projectId)
   ) {
     return 'invalid';
   }
@@ -496,9 +484,10 @@ async function buildCampaignReport(
   };
 }
 
-function resolveCampaignDefinition(
-  context: CommandContext,
-): { definition: CampaignDefinition | null; diagnostic: Diagnostic | null } {
+function resolveCampaignDefinition(context: CommandContext): {
+  definition: CampaignDefinition | null;
+  diagnostic: Diagnostic | null;
+} {
   const campaignId = context.benchmarkId ?? null;
   const candidateId = context.optimizationCandidate ?? null;
   if (campaignId === null || candidateId === null) return { definition: null, diagnostic: null };
@@ -733,12 +722,7 @@ export async function runCandidateBenchmarkMatrix(
   const campaign =
     campaignResolution.definition === null || projectId === null
       ? undefined
-      : await buildCampaignReport(
-          context,
-          campaignResolution.definition,
-          result.data,
-          projectId,
-        );
+      : await buildCampaignReport(context, campaignResolution.definition, result.data, projectId);
 
   if (campaign !== undefined && campaign.invalidPairs > 0) {
     diagnostics.push(

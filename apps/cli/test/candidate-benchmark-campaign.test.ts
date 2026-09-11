@@ -66,8 +66,7 @@ function receipt(
     reasoningEffort: 'medium',
     verbosity: 'low',
     startedAt: variant === 'baseline' ? '2026-09-11T10:00:00.000Z' : '2026-09-11T11:00:00.000Z',
-    completedAt:
-      variant === 'baseline' ? '2026-09-11T10:20:00.000Z' : '2026-09-11T11:15:00.000Z',
+    completedAt: variant === 'baseline' ? '2026-09-11T10:20:00.000Z' : '2026-09-11T11:15:00.000Z',
     usageBefore: [],
     usageAfter: [],
     localUsage: {
@@ -111,7 +110,10 @@ function fixture() {
 
   function addBaseline(benchmarkId: string, taskClass: TaskClass, candidateId = 'gitnexus'): void {
     const dir = ensureBenchmark(benchmarkId);
-    files.set(`${dir}/baseline.capture.json`, JSON.stringify(capture(benchmarkId, 'baseline', taskClass)));
+    files.set(
+      `${dir}/baseline.capture.json`,
+      JSON.stringify(capture(benchmarkId, 'baseline', taskClass)),
+    );
     files.set(`${dir}/baseline.json`, JSON.stringify(receipt(benchmarkId, 'baseline', taskClass)));
     attribute(benchmarkId, candidateId);
   }
@@ -122,7 +124,10 @@ function fixture() {
       `${dir}/optimized.capture.json`,
       JSON.stringify(capture(benchmarkId, 'optimized', taskClass)),
     );
-    files.set(`${dir}/optimized.json`, JSON.stringify(receipt(benchmarkId, 'optimized', taskClass)));
+    files.set(
+      `${dir}/optimized.json`,
+      JSON.stringify(receipt(benchmarkId, 'optimized', taskClass)),
+    );
   }
 
   const context = (): CommandContext => ({
@@ -288,7 +293,9 @@ describe('candidate benchmark campaign', () => {
     assert.equal(result.data.campaign.slots[0]?.state, 'invalid');
     assert.equal(result.data.campaign.nextCommand, null);
     assert.equal(
-      result.diagnostics.some((entry) => entry.code === 'candidate-benchmark-campaign-state-invalid'),
+      result.diagnostics.some(
+        (entry) => entry.code === 'candidate-benchmark-campaign-state-invalid',
+      ),
       true,
     );
   });
