@@ -39,11 +39,7 @@ function observation(
   input: Partial<OptimizationCandidateObservation> = {},
 ): OptimizationCandidateObservation {
   const displayName =
-    candidateId === 'gitnexus'
-      ? 'GitNexus'
-      : candidateId === 'headroom'
-        ? 'Headroom'
-        : 'mcptoon';
+    candidateId === 'gitnexus' ? 'GitNexus' : candidateId === 'headroom' ? 'Headroom' : 'mcptoon';
   return {
     id: candidateId,
     displayName,
@@ -83,10 +79,7 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.passedGateCount, 3);
     assert.equal(result.requiredGateCount, 8);
     assert.equal(result.nextGate, 'activation-verification');
-    assert.deepEqual(result.blockedGateIds, [
-      'activation-verification',
-      'managed-lifecycle',
-    ]);
+    assert.deepEqual(result.blockedGateIds, ['activation-verification', 'managed-lifecycle']);
     assert.ok(result.unreviewedGateIds.includes('project-maturity'));
   });
 
@@ -127,9 +120,9 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.state, 'blocked');
     assert.ok(result.blockedGateIds.includes('category-fit'));
     assert.equal(
-      result.gates.find((gate) => gate.id === 'category-fit')?.reason.includes(
-        'repository-exploration',
-      ),
+      result.gates
+        .find((gate) => gate.id === 'category-fit')
+        ?.reason.includes('repository-exploration'),
       true,
     );
   });
