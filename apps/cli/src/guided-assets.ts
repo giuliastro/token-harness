@@ -22,7 +22,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
 
 <section id="view-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
-<div class="hero"><section class="hero-main"><div class="agent-head"><div><h2 id="health-title">Checking…</h2><p id="health-detail">Reading coding agents, optimizers and available evidence.</p></div><span id="monitor-badge" class="pill">Checking</span></div><div class="policy-summary"><strong>Policies</strong><span id="policy-count">Checking…</span></div></section><aside id="next-action" class="next-action"><h2>Recommended</h2><p>Checking your setup…</p></aside></div>
+<div class="hero"><section class="hero-main"><div class="agent-head"><div><h2 id="health-title">Checking…</h2><p id="health-detail">Reading coding agents, optimizers and available evidence.</p></div><span id="monitor-badge" class="pill">Checking</span></div><div class="policy-summary"><strong>Optimizations</strong><span id="policy-count">Checking…</span></div></section><aside id="next-action" class="next-action"><h2>Recommended</h2><p>Checking your setup…</p></aside></div>
 
 <div class="section-title"><div><h2>What you are getting</h2><p>Only measured or clearly marked results.</p></div></div>
 <div id="impact-summary" class="impact-grid" aria-label="Efficiency summary">
@@ -51,8 +51,8 @@ export const GUIDE_HTML = `<!doctype html>
 <article class="panel agent"><div class="agent-head"><div><h2>Check integrations</h2><span class="caption">Read-only</span></div></div><p>Verify that connected components work correctly.</p><div class="inline-actions"><button id="verify" class="secondary" type="button">Check</button></div></article>
 <article class="panel agent"><div class="agent-head"><div><h2>Check updates</h2><span class="caption">Read-only</span></div></div><p>See whether installed optimizers have an update available.</p><div class="inline-actions"><button id="update-check" class="secondary" type="button" disabled>Check updates</button><button id="undo" class="secondary" type="button" hidden>Undo last change</button></div></article>
 </div>
-<div class="section-title"><div><h2>More options</h2><p>Fine-tune individual policies only when you need to.</p></div></div>
-<div id="rule-filters" class="subtabs" role="tablist" aria-label="Policies by agent"></div><div id="rules" class="rule-list" role="tabpanel" tabindex="0"></div>
+<div class="section-title"><div><h2>More options</h2><p>Fine-tune agent-specific settings only when you need to.</p></div></div>
+<div id="rule-filters" class="subtabs" role="tablist" aria-label="Options by agent"></div><div id="rules" class="rule-list" role="tabpanel" tabindex="0"></div>
 </section>
 
 <section id="view-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
@@ -63,7 +63,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="truth-card"><strong>API cost</strong><span>Money appears only when billed tokens and verified pricing are known.</span></div>
 <div class="truth-card"><strong>Quality</strong><span>Quality is reported separately and can block a savings claim.</span></div>
 </aside></div>
-<div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this dashboard session.</p></div></div><div class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></div>
+<div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this app session.</p></div></div><div class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></div>
 </section>
 
 <footer><span>Local data. No account required.</span><span>Full refresh runs only when you choose Refresh.</span></footer>
