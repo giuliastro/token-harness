@@ -382,9 +382,10 @@ describe('guided browser security and assets', () => {
     );
     assert.ok(!GUIDE_JS.includes('innerHTML'));
     assert.ok(GUIDE_HTML.includes('<dialog'));
-    assert.ok(GUIDE_HTML.includes('id="approve"'));
-    assert.ok(GUIDE_HTML.includes('Apply change'));
-    assert.ok(GUIDE_HTML.includes('You will always review a change before it is applied.'));
+    assert.ok(GUIDE_HTML.includes('id="modal-actions"'));
+    assert.ok(GUIDE_HTML.includes('Nothing changes without your approval'));
+    assert.ok(GUIDE_JS.includes('Apply reviewed setup'));
+    assert.ok(GUIDE_JS.includes("request('/api/apply', { ticket })"));
     assert.ok(!GUIDE_HTML.includes('onclick='));
   });
 });
@@ -454,13 +455,15 @@ describe('reasoning explanations and contextual actions', () => {
   });
   it('keeps the UI grouped, keyboard-navigable, neutral and explicitly approved', () => {
     assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 3);
-    assert.ok(GUIDE_HTML.includes('aria-controls="view-rules"'));
+    assert.ok(GUIDE_HTML.includes('aria-controls="view-dashboard"'));
+    assert.ok(GUIDE_HTML.includes('aria-controls="view-setup"'));
+    assert.ok(GUIDE_HTML.includes('aria-controls="view-results"'));
     assert.ok(GUIDE_HTML.includes('aria-label="Appearance"'));
     assert.ok(!GUIDE_HTML.includes('Less setup. More useful work.'));
     assert.ok(!GUIDE_CSS.includes('radial-gradient'));
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
-    assert.ok(GUIDE_HTML.includes('<h2>Actions</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Set up Token Harness in order</h2>'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));
