@@ -156,7 +156,8 @@ function gitNexusDiagnostics(
         severity: 'info',
         code: 'context-optimizer-gitnexus-absent',
         subject: 'gitnexus',
-        message: 'GitNexus is not installed; repository-context optimization is not being evaluated',
+        message:
+          'GitNexus is not installed; repository-context optimization is not being evaluated',
         remediation: 'No action is required; Token Harness never installs GitNexus silently',
       }),
     ];
