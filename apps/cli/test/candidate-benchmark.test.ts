@@ -1,15 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { harnessId, type TaskBenchmarkMatrixEntry } from '@token-harness/core';
+import { harnessId, type OptimizationCandidateId, type TaskBenchmarkMatrixEntry } from '@token-harness/core';
 
-import { summarizeCandidateBenchmarkEntries } from '../src/commands/candidate-benchmark.js';
+import {
+  buildCandidateBenchmarkEvidence,
+  summarizeCandidateBenchmarkEntries,
+  type CandidateBenchmarkEvidenceEntry,
+} from '../src/commands/candidate-benchmark.js';
 import { parseArgv } from '../src/argv.js';
 
 function entry(
   benchmarkId: string,
-  input: Partial<TaskBenchmarkMatrixEntry>,
-): TaskBenchmarkMatrixEntry {
+  input: Partial<CandidateBenchmarkEvidenceEntry>,
+): CandidateBenchmarkEvidenceEntry {
   return {
     benchmarkId,
     taskClass: 'standard',
@@ -68,7 +72,7 @@ describe('candidate benchmark evidence', () => {
       assert.equal(invalid.diagnostics[0]?.code, 'invalid-optimization-candidate');
   });
 
-  it('summarizes attributed pairs without inventing a composite verdict', () => {
+  it('summarizes evidence coverage, local tokens and quality-passed wall clock separately', () => {
     const summary = summarizeCandidateBenchmarkEntries('headroom', [
       entry('h-1', {
         verdict: 'optimized-better',
@@ -77,6 +81,9 @@ describe('candidate benchmark evidence', () => {
         baselineLocalTokens: 1000,
         optimizedLocalTokens: 700,
         localTokenSavingPercent: 30,
+        baselineWallClockMs: 600_000,
+        optimizedWallClockMs: 480_000,
+        wallClockSavingPercent: 20,
       }),
       entry('h-2', {
         verdict: 'baseline-better',
@@ -85,6 +92,9 @@ describe('candidate benchmark evidence', () => {
         baselineLocalTokens: 500,
         optimizedLocalTokens: 600,
         localTokenSavingPercent: -20,
+        baselineWallClockMs: 1_200_000,
+        optimizedWallClockMs: 1_500_000,
+        wallClockSavingPercent: -25,
       }),
       entry('h-3', {
         verdict: 'inconclusive',
@@ -104,17 +114,93 @@ describe('candidate benchmark evidence', () => {
       quotaBacked: 1,
       localEvidence: 1,
       qualityOnly: 0,
+      evidencePairs: 2,
+      evidenceCoveragePercent: 66.7,
       localComparablePairs: 2,
       baselineLocalTokens: 1500,
       optimizedLocalTokens: 1300,
       localTokenSavingPercent: 13.3,
+      wallClockComparablePairs: 2,
+      baselineWallClockMs: 1_800_000,
+      optimizedWallClockMs: 1_980_000,
+      wallClockSavingPercent: -10,
     });
+    assert.equal('recommendation' in summary, false);
+    assert.equal('score' in summary, false);
   });
 
-  it('accepts GitNexus in the shared evidence summarizer', () => {
+  it('keeps Headroom, mcptoon and GitNexus evidence isolated', () => {
+    const byCandidate = new Map<OptimizationCandidateId, CandidateBenchmarkEvidenceEntry[]>([
+      [
+        'headroom',
+        [
+          entry('headroom-1', {
+            verdict: 'optimized-better',
+            evidenceLevel: 'local-evidence',
+          }),
+        ],
+      ],
+      [
+        'mcptoon',
+        [
+          entry('mcptoon-1', {
+            verdict: 'baseline-better',
+            evidenceLevel: 'quality-only',
+          }),
+        ],
+      ],
+      [
+        'gitnexus',
+        [
+          entry('gitnexus-1', {
+            verdict: 'equivalent',
+            evidenceLevel: 'quota-backed',
+          }),
+        ],
+      ],
+    ]);
+
+    const evidence = buildCandidateBenchmarkEvidence(byCandidate);
+    assert.deepEqual(
+      evidence.map((row) => row.candidateId),
+      ['headroom', 'mcptoon', 'gitnexus'],
+    );
+    assert.deepEqual(
+      evidence.map((row) => [row.optimizedBetter, row.baselineBetter, row.equivalent]),
+      [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ],
+    );
+    assert.deepEqual(
+      evidence.map((row) => row.evidenceCoveragePercent),
+      [100, 100, 100],
+    );
+  });
+
+  it('keeps absent timing evidence unknown instead of guessing duration savings', () => {
+    const summary = summarizeCandidateBenchmarkEntries('gitnexus', [
+      entry('gitnexus-no-timing', {
+        verdict: 'optimized-better',
+        evidenceLevel: 'local-evidence',
+      }),
+    ]);
+    assert.equal(summary.candidateId, 'gitnexus');
+    assert.equal(summary.pairs, 1);
+    assert.equal(summary.wallClockComparablePairs, 0);
+    assert.equal(summary.baselineWallClockMs, null);
+    assert.equal(summary.optimizedWallClockMs, null);
+    assert.equal(summary.wallClockSavingPercent, null);
+  });
+
+  it('keeps an empty candidate explicit with unknown coverage', () => {
     const summary = summarizeCandidateBenchmarkEntries('gitnexus', []);
     assert.equal(summary.candidateId, 'gitnexus');
     assert.equal(summary.pairs, 0);
+    assert.equal(summary.evidencePairs, 0);
+    assert.equal(summary.evidenceCoveragePercent, null);
     assert.equal(summary.localTokenSavingPercent, null);
+    assert.equal(summary.wallClockSavingPercent, null);
   });
 });
