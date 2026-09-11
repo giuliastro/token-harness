@@ -12,7 +12,7 @@ import {
   type UpdateReport,
 } from '@token-harness/core';
 import { GuideService, type GuideCall, type GuideOverview } from '../src/guided.js';
-import { GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from '../src/guided-assets.js';
+import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 import { createGuideHandler } from '../src/guided-http.js';
 
 const platform = {
@@ -177,9 +177,11 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
   }
 });
 
-it('exposes one explicit update control and routes it through the read-only endpoint', () => {
-  assert.match(GUIDE_HTML, /id="update-check"[^>]*>Check updates<\/button>/);
-  assert.match(GUIDE_JS, /request\('\/api\/update-check', \{\}\)/);
-  assert.match(GUIDE_STACK_JS, /stackObservationRequest = verifyRequest \|\| updateRequest/);
+it('exposes one explicit read-only update check in maintenance', () => {
+  assert.match(GUIDE_HTML, /Checks and maintenance/);
+  assert.match(GUIDE_JS, /Check optimizer updates/);
+  assert.match(GUIDE_JS, /Check updates/);
+  assert.match(GUIDE_JS, /\/api\/update-check/);
+  assert.match(GUIDE_JS, /does not download or upgrade anything/);
   assert.doesNotMatch(GUIDE_JS, /update-check[^\n]+--yes/);
 });
