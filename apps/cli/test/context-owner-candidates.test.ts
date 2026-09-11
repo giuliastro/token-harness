@@ -25,13 +25,16 @@ const NO_FILESYSTEM: FileSystemPort = {
   dirname: (path) => path,
   basename: (path) => path,
   isInside: () => false,
-  stat: () => Promise.reject(new Error('candidate observation must not read files when absent')),
-  readFile: () => Promise.reject(new Error('candidate observation must not read files when absent')),
+  stat: () =>
+    Promise.reject(new Error('candidate observation must not read files when absent')),
+  readFile: () =>
+    Promise.reject(new Error('candidate observation must not read files when absent')),
   writeFile: () => Promise.reject(new Error('candidate observation must not write files')),
   appendFile: () => Promise.reject(new Error('candidate observation must not write files')),
   createDirectory: () => Promise.reject(new Error('candidate observation must not write files')),
   remove: () => Promise.reject(new Error('candidate observation must not write files')),
-  readDirectory: () => Promise.reject(new Error('candidate observation must not read files when absent')),
+  readDirectory: () =>
+    Promise.reject(new Error('candidate observation must not read files when absent')),
 };
 
 function missingOutcome(request: ProcessRequest): ProcessOutcome {
@@ -118,7 +121,8 @@ test('projects all read-only optimization candidates into the shared context sna
   assert.equal(gitnexus?.minimumBenchmarkVersion, 'capability-gated');
   assert.ok(
     snapshot.diagnostics.some(
-      (item) => item.subject === 'gitnexus' && item.code === 'context-optimizer-gitnexus-absent',
+      (item) =>
+        item.subject === 'gitnexus' && item.code === 'context-optimizer-gitnexus-absent',
     ),
   );
 });
