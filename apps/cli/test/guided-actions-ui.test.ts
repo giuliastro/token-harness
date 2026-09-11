@@ -37,17 +37,12 @@ describe('guided setup UX', () => {
 
   it('never automatically refreshes the whole dashboard after apply', () => {
     assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
-    const start = GUIDE_JS.indexOf('async function applyTicket(ticket)');
-    assert.notEqual(start, -1);
-    const laterFunctionStarts = [
-      GUIDE_JS.indexOf('\n  function ', start + 1),
-      GUIDE_JS.indexOf('\n  async function ', start + 1),
-    ].filter(index => index > start);
-    const end = laterFunctionStarts.length
-      ? Math.min(...laterFunctionStarts)
-      : GUIDE_JS.length;
-    const applyTicketSource = GUIDE_JS.slice(start, end);
-    assert.doesNotMatch(applyTicketSource, /refresh\(true\)/);
+    const applyStart = GUIDE_JS.indexOf('async function applyTicket(ticket)');
+    const manualRefresh = "$('refresh').addEventListener";
+    const refreshHandler = GUIDE_JS.indexOf(manualRefresh, applyStart);
+    assert.notEqual(applyStart, -1);
+    assert.notEqual(refreshHandler, -1);
+    assert.doesNotMatch(GUIDE_JS.slice(applyStart, refreshHandler), /refresh\(true\)/);
   });
 
   it('labels experimental installation as external and manual', () => {
