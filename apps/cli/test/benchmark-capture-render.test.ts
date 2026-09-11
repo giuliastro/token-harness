@@ -66,8 +66,8 @@ describe('benchmark capture rendering', () => {
 
     assert.match(rendered, /Candidate target: headroom/);
     assert.match(rendered, /does not enable, disable, or prove/);
-    assert.match(rendered, /--candidate headroom --variant optimized/);
-    assert.match(rendered, /--task mechanical --harness codex/);
+    assert.match(rendered, /--candidate headroom/);
+    assert.match(rendered, /--variant optimized --task mechanical --harness codex/);
     for (const line of rendered.trimEnd().split('\n')) {
       assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
     }
