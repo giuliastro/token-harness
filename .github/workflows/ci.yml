@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -29,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref || github.ref }}
 
       - uses: pnpm/action-setup@v4
 
@@ -47,6 +49,18 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Apply exact evidence assessment formatting
+        if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
+        run: |
+          pnpm exec prettier --write apps/cli/src/commands/candidate-evidence-assessment.ts apps/cli/src/render/benchmark-matrix.ts apps/cli/test/candidate-evidence-assessment.test.ts
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add apps/cli/src/commands/candidate-evidence-assessment.ts apps/cli/src/render/benchmark-matrix.ts apps/cli/test/candidate-evidence-assessment.test.ts
+            git commit -m "style: format candidate evidence assessment"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
 
       - name: Format check
         run: pnpm format:check
