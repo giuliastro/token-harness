@@ -7,9 +7,9 @@ import {
 import type { CandidateEvidenceAssessment } from './candidate-evidence-assessment.js';
 
 export type CandidatePromotionGateId =
-  | 'selection-evidence'
   | 'benchmark-capability'
   | 'category-fit'
+  | 'selection-evidence'
   | 'activation-verification'
   | 'managed-lifecycle'
   | 'compatibility-reversibility'
@@ -46,7 +46,9 @@ export interface CandidatePromotionReview {
 
 export interface CandidatePromotionReadinessInput {
   candidateId: OptimizationCandidateId;
-  assessment: CandidateEvidenceAssessment;
+  /** Null when this surface has capability evidence but no paired benchmark summary. */
+  assessment: CandidateEvidenceAssessment | null;
+  /** Null when this surface has benchmark evidence but no fresh local capability observation. */
   observation: OptimizationCandidateObservation | null;
   review?: CandidatePromotionReview;
 }
@@ -127,7 +129,14 @@ function observedCategoryFit(
   };
 }
 
-function selectionEvidence(assessment: CandidateEvidenceAssessment): CandidatePromotionGate {
+function selectionEvidence(assessment: CandidateEvidenceAssessment | null): CandidatePromotionGate {
+  if (assessment === null) {
+    return {
+      id: 'selection-evidence',
+      state: 'unreviewed',
+      reason: 'paired candidate benchmark evidence is not available on this surface',
+    };
+  }
   const passed = assessment.decisionReady && assessment.signal === 'promising';
   return {
     id: 'selection-evidence',
@@ -150,18 +159,20 @@ function reviewedGate(
 }
 
 /**
- * Convert candidate evidence plus explicitly reviewed integration facts into promotion readiness.
- * No gate is inferred from another: benchmark readiness is not activation verification, a local
- * semantic version is not project maturity, and candidate attribution is not combined-stack proof.
+ * Convert available candidate evidence plus explicitly reviewed integration facts into promotion
+ * readiness. No gate is inferred from another: benchmark readiness is not activation verification,
+ * a local semantic version is not project maturity, and candidate attribution is not combined-stack
+ * proof. Partial surfaces may omit either benchmark or capability evidence and will report that gate
+ * as unreviewed rather than guessing.
  */
 export function assessCandidatePromotionReadiness(
   input: CandidatePromotionReadinessInput,
 ): CandidatePromotionReadiness {
   const review = input.review ?? {};
   const gates: CandidatePromotionGate[] = [
-    selectionEvidence(input.assessment),
     observedBenchmarkCapability(input.candidateId, input.observation),
     observedCategoryFit(input.candidateId, input.observation),
+    selectionEvidence(input.assessment),
     reviewedGate(
       'activation-verification',
       review.activationVerification,
