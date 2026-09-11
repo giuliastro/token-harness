@@ -36,6 +36,38 @@ state, the campaign stops instead of overwriting or guessing.
 Campaign evidence is aggregated only from completed planned pairs and remains separate by evidence
 class. Completion itself is not a promotion recommendation and no synthetic winner score is created.
 
+## Selection assessment
+
+The human campaign report also derives a conservative **selection signal** from the same paired
+evidence. This is deliberately not a composite score and not a promotion decision. The possible
+signals are `insufficient-evidence`, `promising`, `mixed`, and `negative`.
+
+A positive or mixed assessment becomes decision-ready only after at least six evidence-bearing
+completed pairs, evidence across at least three task classes, and at least 75% evidence coverage.
+Those thresholds allow an early comparative decision after three representative classes while the
+standard eight-pair/four-class campaign can continue to completion.
+
+Safety can stop the process earlier. A completed pair where the optimized side loses on explicit
+quality, failed attempts, total attempts, or runtime/provider errors produces a negative signal
+without waiting for the full sample. Once evidence is sufficient:
+
+- more baseline wins than optimized wins produce a negative signal;
+- any remaining mixture of baseline and optimized wins produces a mixed signal;
+- a quality-passed wall-clock regression of at least 15% across three or more comparable pairs
+  produces a mixed operational-cost signal;
+- a promising signal requires at least three candidate wins, no baseline wins, adequate coverage,
+  and no material timing regression.
+
+Even a promising signal remains **promotion-blocked**. Benchmark attribution does not independently
+verify that the candidate was actually active, and benchmark evidence cannot prove reviewed
+compatibility, managed install/configuration, verification, rollback, maturity/distinctness, or
+combined-stack safety. Headroom additionally remains subject to the dedicated broad-context-owner
+admission gate.
+
+The current human report renders this assessment from campaign evidence. JSON continues to expose the
+underlying campaign state and evidence rather than inventing a synthetic promotion field; those raw
+facts remain the automation contract.
+
 ## One paired experiment
 
 Choose one stable benchmark id, task class and harness. Run both variants from the same project.

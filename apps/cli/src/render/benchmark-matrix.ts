@@ -17,6 +17,7 @@ import type {
   TaskClass,
 } from '@token-harness/core';
 
+import { assessCandidateEvidence } from '../commands/candidate-evidence-assessment.js';
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
 
 interface CandidateEvidenceSummary {
@@ -184,7 +185,11 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
   );
 }
 
-function renderCampaign(lines: string[], campaign: CandidateCampaignSummary): void {
+function renderCampaign(
+  lines: string[],
+  campaign: CandidateCampaignSummary,
+  entries: readonly TaskBenchmarkMatrixEntry[],
+): void {
   lines.push('', 'Candidate campaign — experimental');
   lines.push(
     ...wrap(
@@ -229,9 +234,31 @@ function renderCampaign(lines: string[], campaign: CandidateCampaignSummary): vo
   if (local !== null) lines.push(...wrap(local, 4));
   const timing = candidateTimingLine(campaign.evidence);
   if (timing !== null) lines.push(...wrap(timing, 4));
+
+  const assessment = assessCandidateEvidence({
+    candidateId: campaign.candidateId,
+    totalPairs: campaign.totalPairs,
+    completedPairs: campaign.completedPairs,
+    invalidPairs: campaign.invalidPairs,
+    slots: campaign.slots,
+    entries,
+    evidence: campaign.evidence,
+  });
+  lines.push('', '  Selection assessment');
   lines.push(
     ...wrap(
-      'Campaign evidence stays separate by evidence class. Completion does not itself prove that the candidate was active or that it should be promoted.',
+      `Signal: ${assessment.signal}; ${assessment.decisionReady ? 'decision-ready' : 'not decision-ready'}. ` +
+        `Evidence ${String(assessment.evidencePairs)}/${String(assessment.minimumEvidencePairs)} minimum; ` +
+        `task classes ${String(assessment.coveredTaskClasses.length)}/${String(assessment.minimumTaskClasses)} minimum.`,
+      4,
+    ),
+  );
+  for (const reason of assessment.reasons) lines.push(...wrap(`Reason: ${reason}.`, 4));
+  lines.push(...wrap(`Promotion: blocked. ${assessment.promotionBlockers.join('; ')}.`, 4));
+
+  lines.push(
+    ...wrap(
+      'Campaign evidence stays separate by evidence class. The selection signal is not a composite score, and promotion remains a separate lifecycle decision.',
       2,
     ),
   );
@@ -256,7 +283,7 @@ export function renderBenchmarkMatrixReport(
     ),
   );
 
-  if (report.campaign !== undefined) renderCampaign(lines, report.campaign);
+  if (report.campaign !== undefined) renderCampaign(lines, report.campaign, report.entries);
 
   if (report.entries.length === 0) {
     lines.push(
@@ -295,10 +322,10 @@ export function renderBenchmarkMatrixReport(
     for (const candidate of report.candidateEvidence) {
       lines.push(`  ${candidate.candidateId}`);
       lines.push(...wrap(candidateSummaryLine(candidate), 4));
-      const local = candidateLocalLine(candidate);
-      if (local !== null) lines.push(...wrap(local, 4));
-      const timing = candidateTimingLine(candidate);
-      if (timing !== null) lines.push(...wrap(timing, 4));
+      const candidateLocal = candidateLocalLine(candidate);
+      if (candidateLocal !== null) lines.push(...wrap(candidateLocal, 4));
+      const candidateTiming = candidateTimingLine(candidate);
+      if (candidateTiming !== null) lines.push(...wrap(candidateTiming, 4));
     }
     lines.push(
       ...wrap(
