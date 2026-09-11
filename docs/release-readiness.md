@@ -9,15 +9,14 @@ existing users and testing well before it is the version we actively promote.
 
 ## Required before promotion
 
-- [x] Outcome-first **Monitor / Actions / Results** information architecture.
+- [x] Outcome-first **Dashboard / Setup / Results** information architecture.
 - [x] No periodic full app reload.
 - [x] Existing readings remain visible during refresh and after approved changes.
 - [x] Preview → approval → apply → verify → undo safety flow.
 - [x] Recorded reducer savings keep providers and measurement classes separate.
 - [x] Results display paired allowance and quality value when available and block unsupported claims.
-- [x] The primary UI can present **Your optimization stack**: component, version, category, health,
-      verification state, measured value, quality confidence and useful next action, while keeping
-      technical stack detail secondary to user outcomes.
+- [x] The primary UI can present the active optimization setup, measured value, quality state and a
+      useful next destination while keeping technical detail secondary to user outcomes.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
 - [ ] At least **three distinct useful savings mechanisms** are available through Token Harness.
 - [ ] Every counted mechanism has a real activation/configuration path, verification evidence and a
@@ -37,8 +36,8 @@ existing users and testing well before it is the version we actively promote.
 - [ ] Published package/install smoke test green for the exact release candidate artifact.
 - [ ] README onboarding verified against the exact published UI.
 - [ ] One clean end-to-end fresh-user scenario passes:
-      install → open → discover stack → review setup → apply → use agent → inspect evidence → verify →
-      check/update state → undo/uninstall.
+      install → open Dashboard → discover setup → open Setup → review/apply → use agent → inspect
+      Results → verify → check/update state → undo/uninstall.
 
 ## What counts as an integration
 
@@ -72,6 +71,11 @@ Before another mechanism is admitted, Token Harness compares candidates on:
 - reversibility and failure isolation;
 - project maturity, maintenance activity and adapter burden;
 - attributable measurement.
+
+Detection or a benchmark-ready surface is not promotion. Candidate promotion readiness also requires
+selection evidence, real activation verification, managed lifecycle coverage, reviewed compatibility
+and reversibility, project maturity and combined-stack validation. Broad context owners require an
+additional admission decision before they can own the session context path.
 
 The current research landscape includes repository-exploration/retrieval systems, MCP
 schema/discovery systems such as mcptoon/mcp-compressor-class projects, Caveman-class
