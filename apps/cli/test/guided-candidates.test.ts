@@ -2,19 +2,23 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Script } from 'node:vm';
 
-import { GUIDE_HTML, GUIDE_STACK_JS } from '../src/guided-assets.js';
+import { GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from '../src/guided-assets.js';
 
 describe('guided optimization candidates', () => {
   it('keeps future candidates visibly separate from the active optimization stack', () => {
-    assert.match(GUIDE_HTML, /<h2>Potential improvements<\/h2>/);
+    assert.match(GUIDE_HTML, /<h2>Active optimization tools<\/h2>/);
+    assert.match(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_HTML, /id="stack"/);
     assert.match(GUIDE_HTML, /id="candidates"/);
-    assert.match(GUIDE_HTML, /not presented as installed, recommended, or beneficial/);
+    assert.match(GUIDE_HTML, /not automatically installed, enabled, or recommended/);
+    assert.match(GUIDE_HTML, /Checking Headroom, mcptoon and GitNexus/);
   });
 
   it('renders the typed candidate lifecycle without promoting candidates into the active stack', () => {
     assert.match(GUIDE_STACK_JS, /displayName: 'Headroom'/);
     assert.match(GUIDE_STACK_JS, /displayName: 'mcptoon'/);
+    assert.match(GUIDE_JS, /GitNexus/);
+    assert.match(GUIDE_JS, /Repository exploration/);
     assert.match(GUIDE_STACK_JS, /'absent'/);
     assert.match(GUIDE_STACK_JS, /'installed'/);
     assert.match(GUIDE_STACK_JS, /'unsupported-version'/);
@@ -27,6 +31,7 @@ describe('guided optimization candidates', () => {
     assert.match(GUIDE_STACK_JS, /Benchmark baseline/);
     assert.doesNotMatch(GUIDE_STACK_JS, /Headroom[^\n]*saved/i);
     assert.doesNotMatch(GUIDE_STACK_JS, /mcptoon[^\n]*saved/i);
+    assert.doesNotMatch(GUIDE_JS, /GitNexus[^\n]*recommended/i);
   });
 
   it('shows attributed paired evidence and an explicit benchmark workflow only for ready candidates', () => {
@@ -41,16 +46,19 @@ describe('guided optimization candidates', () => {
     assert.match(GUIDE_STACK_JS, /--variant optimized/);
     assert.match(GUIDE_STACK_JS, /--quality <passed\|failed>/);
     assert.match(GUIDE_STACK_JS, /not proof that the optimized run really used the candidate/);
+    assert.match(GUIDE_JS, /--candidate gitnexus/);
   });
 
-  it('consumes existing overview data and adds no candidate network, install or activation action', () => {
+  it('consumes existing overview data and adds no candidate install or activation action', () => {
     assert.match(GUIDE_STACK_JS, /data\?\.optimizationCandidates/);
     assert.match(GUIDE_STACK_JS, /data\?\.value\?\.candidates/);
     assert.match(GUIDE_STACK_JS, /never performed silently/);
     assert.match(GUIDE_STACK_JS, /does not install, enable, sync or configure the candidate/);
     assert.match(GUIDE_STACK_JS, /No sync or compression policy is enabled automatically/);
+    assert.match(GUIDE_JS, /does not install, index repositories, register MCP, or enable it automatically/);
     assert.doesNotMatch(GUIDE_STACK_JS, /fetch\([^\n]*(headroom|mcptoon)/i);
     assert.doesNotMatch(GUIDE_STACK_JS, /proxyButton\([^\n]*(headroom|mcptoon)/i);
     assert.doesNotThrow(() => new Script(GUIDE_STACK_JS));
+    assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 });
