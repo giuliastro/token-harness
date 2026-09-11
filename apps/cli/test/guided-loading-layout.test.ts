@@ -4,17 +4,17 @@ import { describe, it } from 'node:test';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('guided loading layout', () => {
-  it('uses the loaded agent-card padding while Claude and Codex are still skeletons', () => {
-    assert.equal(GUIDE_HTML.match(/class="panel agent loading-card"/g)?.length, 2);
-    assert.equal(GUIDE_HTML.includes('class="panel loading-card"'), false);
+  it('shows stable setup-first loading surfaces while agent data is being read', () => {
+    assert.match(GUIDE_HTML, /id="dashboard-status"/);
+    assert.match(GUIDE_HTML, /id="setup-agents"/);
+    assert.match(GUIDE_HTML, /Checking agents…/);
+    assert.match(GUIDE_HTML, /id="agent-capabilities"/);
   });
 
   it('surfaces progressive read feedback without triggering another full refresh', () => {
-    assert.match(GUIDE_JS, /PROGRESS_POLL_MS = 500/);
     assert.match(GUIDE_JS, /checks finished/);
-    assert.match(GUIDE_JS, /Still /);
-    assert.match(GUIDE_JS, /target\.includes\('\/api\/activity'\)/);
-    assert.match(GUIDE_JS, /typeof activity === 'function'/);
-    assert.doesNotMatch(GUIDE_JS, /PROGRESS_POLL_MS[^]*refresh\(/);
+    assert.match(GUIDE_JS, /setInterval\(\(\) => \{ if \(!document\.hidden\) loadActivity\(\); \}, 700\)/);
+    assert.match(GUIDE_JS, /loadActivity\(\)/);
+    assert.doesNotMatch(GUIDE_JS, /setInterval\([^]*refresh\(/);
   });
 });
