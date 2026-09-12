@@ -125,7 +125,18 @@ describe('guided candidate campaign status', () => {
       );
     };
 
-    const status = await createGuideCandidateCampaignReader(call)({
+    const status = await createGuideCandidateCampaignReader(call, (candidateId) =>
+      candidateId === 'gitnexus'
+        ? {
+            id: 'gitnexus',
+            displayName: 'GitNexus',
+            category: 'repository-exploration',
+            state: 'benchmark-ready',
+            version: '1.2.3',
+            minimumBenchmarkVersion: 'capability-gated',
+          }
+        : null,
+    )({
       candidateId: 'gitnexus',
       harnessId: 'codex',
       campaignId: 'gitnexus-codex-eval-m123abc',
@@ -166,6 +177,11 @@ describe('guided candidate campaign status', () => {
       'the standard benchmark campaign is not complete',
       'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
     ]);
+    assert.equal(status.promotionReadiness?.passedGateCount, 2);
+    assert.equal(status.promotionReadiness?.requiredGateCount, 8);
+    assert.equal(status.promotionReadiness?.nextGate, 'selection-evidence');
+    assert.equal(status.promotionReadiness?.state, 'blocked');
+    assert.equal(status.promotionReadiness?.promotionEligible, false);
     assert.deepEqual(status.nextStep, {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
@@ -175,7 +191,28 @@ describe('guided candidate campaign status', () => {
     });
     assert.match(status.nextCommand ?? '', /--variant baseline/);
     assert.equal(status.promotionEligible, false);
+    assert.match(status.note, /current local candidate observation/);
     assert.match(status.note, /does not prove activation/);
     assert.match(status.note, /decision-ready does not mean promotion-ready/);
+  });
+
+  it('keeps capability gates unreviewed when no local observation is available', async () => {
+    const report = campaignReport();
+    const call: GuideCall = async <T>(): Promise<CliEnvelope<T>> =>
+      toEnvelope(
+        commandResult({ command: 'benchmark-matrix', exitCode: 0, data: report as unknown as T }),
+        'test',
+      );
+
+    const status = await createGuideCandidateCampaignReader(call)({
+      candidateId: 'gitnexus',
+      harnessId: 'codex',
+      campaignId: 'gitnexus-codex-eval-m123abc',
+    });
+
+    assert.equal(status.promotionReadiness?.passedGateCount, 0);
+    assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('benchmark-capability'));
+    assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('category-fit'));
+    assert.equal(status.promotionReadiness?.promotionEligible, false);
   });
 });
