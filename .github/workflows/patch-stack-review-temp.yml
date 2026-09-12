@@ -1,0 +1,127 @@
+name: Temporary stack review wiring patch
+
+on:
+  push:
+    branches:
+      - feat/combined-stack-review-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/combined-stack-review-evidence
+      - name: Wire exact stack review evidence
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'target not found in {path}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace(
+              'apps/cli/src/argv.ts',
+              "  'status',\n  'uninstall',",
+              "  'status',\n  'stack-review',\n  'uninstall',",
+          )
+
+          replace(
+              'apps/cli/src/run.ts',
+              "import { runStatus } from './commands/status.js';\n",
+              "import { runStatus } from './commands/status.js';\nimport { runStackReview } from './commands/stack-review.js';\n",
+          )
+          replace(
+              'apps/cli/src/run.ts',
+              "  status: runStatus,\n  uninstall: runUninstall,",
+              "  status: runStatus,\n  'stack-review': runStackReview,\n  uninstall: runUninstall,",
+          )
+
+          replace(
+              'apps/cli/src/render/index.ts',
+              "  StatusReport,\n  UpdateReport,",
+              "  StatusReport,\n  StackCombinationReviewCaptureReport,\n  UpdateReport,",
+          )
+          replace(
+              'apps/cli/src/render/index.ts',
+              "import { renderStatusReport } from './status.js';\n",
+              "import { renderStatusReport } from './status.js';\nimport { renderStackReviewReport } from './stack-review.js';\n",
+          )
+          replace(
+              'apps/cli/src/render/index.ts',
+              "      case 'status':\n        return plain(renderSimpleStatus(data as StatusReport));\n      case 'update':",
+              "      case 'status':\n        return plain(renderSimpleStatus(data as StatusReport));\n      case 'stack-review':\n        return plain(renderStackReviewReport(data as StackCombinationReviewCaptureReport, context));\n      case 'update':",
+          )
+          replace(
+              'apps/cli/src/render/index.ts',
+              "    case 'status':\n      return plain(renderStatusReport(data as StatusReport, context));\n    case 'verify':",
+              "    case 'status':\n      return plain(renderStatusReport(data as StatusReport, context));\n    case 'stack-review':\n      return plain(renderStackReviewReport(data as StackCombinationReviewCaptureReport, context));\n    case 'verify':",
+          )
+          replace(
+              'apps/cli/src/render/index.ts',
+              "  renderStatusReport,\n  renderUpdateReport,",
+              "  renderStatusReport,\n  renderStackReviewReport,\n  renderUpdateReport,",
+          )
+
+          replace(
+              'apps/cli/src/guided.ts',
+              "  providerId,\n  type ApplyReport,",
+              "  providerId,\n  selectStackCombinationReview,\n  type ApplyReport,",
+          )
+          replace(
+              'apps/cli/src/guided.ts',
+              "import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';\n",
+              "import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';\nimport { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.js';\n",
+          )
+          replace(
+              'apps/cli/src/guided.ts',
+              "      unattributedDrift: base?.drift ?? [],\n    });",
+              "      unattributedDrift: base?.drift ?? [],\n      combinationReview: selectStackCombinationReview(\n        SHIPPED_STACK_COMBINATION_REVIEWS,\n        base?.detections ?? [],\n      ),\n    });",
+          )
+
+          replace(
+              'apps/cli/src/usage.ts',
+              "  status      Show active harnesses, providers, and configuration health\n",
+              "  status      Show active harnesses, providers, and configuration health\n  stack-review Capture the exact multi-provider review fingerprint (read-only)\n",
+          )
+          marker = "const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {\n"
+          entry = """  'stack-review': `token-harness stack-review — capture exact combined-stack identity
+
+Usage
+  token-harness stack-review [--json] [--project <dir>]
+
+Read-only. Detects the providers that are actually configured, records their exact
+versions and managed harness sets, and emits a fingerprint for manual combined-stack
+validation. It never decides compatibility from individual provider health and never
+writes a reviewed record by itself.
+
+Use --json when submitting a real test result. A review becomes reusable only after
+that exact fingerprint has been tested together and a deliberate reviewed or
+incompatible record is added to Token Harness.`,
+
+"""
+          replace('apps/cli/src/usage.ts', marker, marker + entry)
+
+          Path('.github/workflows/patch-stack-review-temp.yml').unlink()
+          PY
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write packages/core/src/metrics/stack-combination-review.ts packages/core/test/stack-combination-review.test.ts apps/cli/src/argv.ts apps/cli/src/run.ts apps/cli/src/guided.ts apps/cli/src/stack-combination-reviews.ts apps/cli/src/commands/stack-review.ts apps/cli/src/render/index.ts apps/cli/src/render/stack-review.ts apps/cli/src/usage.ts
+      - name: Commit wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/core/src packages/core/test apps/cli/src .github/workflows/patch-stack-review-temp.yml
+          git commit -m "feat: wire exact combined-stack review evidence"
+          git push origin HEAD:feat/combined-stack-review-evidence
