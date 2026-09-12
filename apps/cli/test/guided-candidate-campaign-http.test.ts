@@ -4,7 +4,9 @@ import { describe, it } from 'node:test';
 
 import { commandResult, toEnvelope, type CliEnvelope } from '@token-harness/core';
 
+import type { GuideCandidateCampaignActionRequest } from '../src/guided-candidate-campaign-action.js';
 import type {
+  GuideCandidateCampaignController,
   GuideCandidateCampaignRequest,
   GuideCandidateCampaignStatus,
 } from '../src/guided-candidate-campaign-status.js';
@@ -35,6 +37,13 @@ function status(input: GuideCandidateCampaignRequest): GuideCandidateCampaignSta
     decisionReady: false,
     evidencePairs: 2,
     coveredTaskClasses: ['mechanical'],
+    nextStep: {
+      kind: 'start-baseline',
+      benchmarkId: 'gitnexus-codex-eval-m123abc-m-1',
+      taskClass: 'mechanical',
+      run: 1,
+      requiresActivationAcknowledgement: false,
+    },
     nextCommand: 'token-harness benchmark-start --variant baseline',
     nextInstruction: 'Run the next baseline task.',
     reasons: ['need more evidence'],
@@ -71,24 +80,65 @@ async function get(
   });
 }
 
-describe('guided candidate campaign HTTP status', () => {
-  it('accepts only a validated dashboard campaign and never accepts arbitrary argv', async () => {
-    const service = new GuideService(
-      emptyCall(),
-      () => 0,
-      () => 'ticket',
+async function post(
+  port: number,
+  authority: string,
+  body: unknown,
+): Promise<{ statusCode: number; body: string }> {
+  const encoded = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        hostname: '127.0.0.1',
+        port,
+        path: '/api/candidate-campaign/action',
+        method: 'POST',
+        headers: {
+          Host: authority,
+          Origin: `http://${authority}`,
+          'Sec-Fetch-Site': 'same-origin',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(encoded),
+          'X-Token-Harness-CSRF': 'csrf',
+        },
+      },
+      (response) => {
+        let responseBody = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        response.on('end', () =>
+          resolve({ statusCode: response.statusCode ?? 0, body: responseBody }),
+        );
+      },
     );
+    request.once('error', reject);
+    request.end(encoded);
+  });
+}
+
+describe('guided candidate campaign HTTP boundary', () => {
+  it('accepts only validated campaign reads and bounded current-step actions', async () => {
+    const service = new GuideService(emptyCall(), () => 0, () => 'ticket');
     const seen: GuideCandidateCampaignRequest[] = [];
+    const actionSeen: GuideCandidateCampaignActionRequest[] = [];
+    const campaign = (async (input: GuideCandidateCampaignRequest) => {
+      seen.push(input);
+      return status(input);
+    }) as GuideCandidateCampaignController;
+    campaign.action = async (input) => {
+      actionSeen.push(input);
+      return { ok: true, performed: input.expectedKind, status: status(input) };
+    };
+
     let authority = '';
     const server = createServer(
       createGuideHandler({
         service,
         token: 'csrf',
         authority: () => authority,
-        candidateCampaign: async (input) => {
-          seen.push(input);
-          return status(input);
-        },
+        candidateCampaign: campaign,
       }),
     );
     await new Promise<void>((resolve, reject) => {
@@ -107,13 +157,29 @@ describe('guided candidate campaign HTTP status', () => {
       );
       assert.equal(valid.statusCode, 200);
       assert.equal(JSON.parse(valid.body).progressPercent, 33);
-      assert.deepEqual(seen, [
-        {
-          candidateId: 'gitnexus',
-          harnessId: 'codex',
-          campaignId: 'gitnexus-codex-eval-m123abc',
-        },
-      ]);
+      assert.equal(seen.length, 1);
+
+      const actionBody = {
+        candidateId: 'gitnexus',
+        harnessId: 'codex',
+        campaignId: 'gitnexus-codex-eval-m123abc',
+        expectedKind: 'start-baseline',
+        expectedBenchmarkId: 'gitnexus-codex-eval-m123abc-m-1',
+        activationAcknowledged: false,
+        outcome: null,
+      };
+      const actionResponse = await post(address.port, authority, actionBody);
+      assert.equal(actionResponse.statusCode, 200);
+      assert.equal(JSON.parse(actionResponse.body).performed, 'start-baseline');
+      assert.equal(actionSeen.length, 1);
+
+      const arbitrary = await post(address.port, authority, {
+        ...actionBody,
+        argv: ['doctor', '--verbose'],
+      });
+      assert.equal(arbitrary.statusCode, 400);
+      assert.equal(actionSeen.length, 1);
+      assert.match(JSON.parse(arbitrary.body).error, /current guided campaign step/);
 
       const invalid = await get(
         address.port,
@@ -121,7 +187,6 @@ describe('guided candidate campaign HTTP status', () => {
         '/api/candidate-campaign?candidate=gitnexus&harness=codex&campaign=doctor--verbose',
       );
       assert.equal(invalid.statusCode, 400);
-      assert.equal(seen.length, 1);
       assert.match(JSON.parse(invalid.body).error, /valid candidate campaign/);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
