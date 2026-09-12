@@ -16,6 +16,18 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
     return element;
   };
 
+  const gateName = value => ({
+    'benchmark-capability': 'benchmark capability',
+    'category-fit': 'category fit',
+    'selection-evidence': 'selection evidence',
+    'activation-verification': 'activation verification',
+    'managed-lifecycle': 'managed lifecycle',
+    'compatibility-reversibility': 'compatibility and rollback',
+    'project-maturity': 'project maturity',
+    'combined-stack-validation': 'combined stack validation',
+    'context-owner-admission': 'context-owner admission',
+  })[value] || value || 'none';
+
   function campaignIdentity(agent) {
     const captions = Array.from(agent.querySelectorAll('p.caption'));
     const caption = captions.find(element => (element.textContent || '').startsWith('Campaign id: '));
@@ -49,7 +61,7 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
       node('strong', 'Decision evidence'),
       node(
         'p',
-        'These facts help compare candidates. They are not a composite score, activation proof, or promotion recommendation.',
+        'Benchmark evidence and current local capability are evaluated together. This is not a composite score, activation proof, or promotion recommendation.',
         'caption',
       ),
     );
@@ -65,6 +77,18 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
     const minimumClasses = data.minimumTaskClasses === null
       ? 'no threshold'
       : String(data.minimumTaskClasses) + ' minimum';
+    const readiness = data.promotionReadiness;
+    if (readiness) {
+      facts.append(
+        node('span', 'Promotion review'),
+        node(
+          'strong',
+          String(readiness.passedGateCount) + '/' + String(readiness.requiredGateCount) + ' gates · ' + String(readiness.state),
+        ),
+        node('span', 'Next gate'),
+        node('strong', gateName(readiness.nextGate)),
+      );
+    }
     facts.append(
       node('span', 'Evidence coverage'),
       node('strong', coverage + ' · ' + minimumCoverage),
@@ -82,7 +106,7 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
     block.append(
       node(
         'p',
-        'Local token/context evidence is not provider allowance. Wall-clock is operational evidence, not subscription or API savings.',
+        'Local token/context evidence is not provider allowance. Wall-clock is operational evidence, not subscription or API savings. Lifecycle and combined-stack gates remain explicit.',
         'caption',
       ),
     );
