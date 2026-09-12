@@ -22,9 +22,7 @@ export const CURRENT_PROVIDER_RELEASES = {
 export const CURRENT_PROVIDER_VERSION_RANGES = {
   rtk: { minimum: '0.44.0', maximum: CURRENT_PROVIDER_RELEASES.rtk },
   harnesstrim: { minimum: '0.0.5', maximum: CURRENT_PROVIDER_RELEASES.harnesstrim },
-} as const satisfies Readonly<
-  Record<keyof typeof CURRENT_PROVIDER_RELEASES, TestedVersionRange>
->;
+} as const satisfies Readonly<Record<keyof typeof CURRENT_PROVIDER_RELEASES, TestedVersionRange>>;
 
 /**
  * Apply the central provider release policy at the registry boundary.
@@ -45,9 +43,7 @@ export function withCurrentProviderVersionPolicy(
       return {
         ...detection,
         versionVerdict:
-          detection.version === null
-            ? null
-            : classifyVersion(detection.version, range),
+          detection.version === null ? null : classifyVersion(detection.version, range),
       };
     },
   };
