@@ -60,7 +60,34 @@ export {
  * advance compatibility independently when a newer upstream contract has been reviewed.
  */
 export const rtkAdapter = withProviderVersionCompatibility(baseRtkAdapter);
-export const harnesstrimAdapter = withProviderVersionCompatibility(baseHarnessTrimAdapter);
+
+/**
+ * HarnessTrim's supported package distribution is npm. Earlier builds declared `pnpm` because the
+ * Token Harness workspace itself uses pnpm, but a global pnpm install depends on PNPM_HOME being
+ * configured and failed on an otherwise healthy Windows machine. Keep the provider algorithm and
+ * its historical evidence unchanged; only the package/update transport is normalized here.
+ */
+const harnesstrimWithSupportedPackageChannel: ProviderAdapter = {
+  ...baseHarnessTrimAdapter,
+  manifest: {
+    ...baseHarnessTrimAdapter.manifest,
+    installationChannels: [
+      {
+        id: 'npm',
+        kind: 'npm',
+        priority: 0,
+        platforms: ['windows', 'macos', 'linux'],
+        requiresNetwork: true,
+        requiresElevation: false,
+        digestAvailable: false,
+      },
+    ],
+  },
+};
+
+export const harnesstrimAdapter = withProviderVersionCompatibility(
+  harnesstrimWithSupportedPackageChannel,
+);
 
 /**
  * The public HarnessTrim adapter keeps its direct skills-only planning surface for focused callers
