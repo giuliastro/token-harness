@@ -19,7 +19,7 @@ const CODEX = harnessId('codex');
 
 function detection(
   provider: ProviderId,
-  version: string,
+  version: string | null,
   harnesses = [CLAUDE],
   state: ProviderDetection['state'] = 'configured',
 ): ProviderDetection {
@@ -29,7 +29,7 @@ function detection(
     version,
     executable: `/tools/${provider}`,
     installationChannel: 'test',
-    versionVerdict: 'in-range',
+    versionVerdict: version === null ? null : 'in-range',
     configuredHarnesses: state === 'configured' ? harnesses : [],
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
@@ -123,5 +123,22 @@ describe('combined-stack review records', () => {
 
   it('fails closed on duplicate configured detections', () => {
     assert.equal(fingerprintConfiguredStack([...configuredPair(), detection(RTK, '0.44.0')]), null);
+  });
+
+  it('fails closed when a configured provider version is unknown', () => {
+    assert.equal(
+      fingerprintConfiguredStack([detection(RTK, null), detection(HARNESS_TRIM, '0.2.1')]),
+      null,
+    );
+  });
+
+  it('rejects a malformed review record with duplicate provider ids', () => {
+    assert.equal(
+      selectStackCombinationReview(
+        [record({ providerIds: [RTK, RTK, HARNESS_TRIM] })],
+        configuredPair(),
+      ),
+      null,
+    );
   });
 });
