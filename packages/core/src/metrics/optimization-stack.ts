@@ -303,11 +303,16 @@ function combinationReview(
     return {
       state: 'not-applicable',
       providerIds,
-      detail: 'A combined-stack review is required only when two or more managed components are configured.',
+      detail:
+        'A combined-stack review is required only when two or more managed components are configured.',
       evidence: [],
     };
   }
-  if (evidence === null || evidence === undefined || !sameProviderSet(providerIds, evidence.providerIds)) {
+  if (
+    evidence === null ||
+    evidence === undefined ||
+    !sameProviderSet(providerIds, evidence.providerIds)
+  ) {
     return {
       state: 'not-recorded',
       providerIds,

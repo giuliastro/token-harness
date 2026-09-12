@@ -284,10 +284,16 @@ describe('optimization stack snapshot', () => {
   it('does not infer combined compatibility from two individually healthy components', () => {
     const stack = buildOptimizationStack(healthyPairInput());
 
-    assert.equal(stack.components.every((component) => component.health === 'healthy'), true);
+    assert.equal(
+      stack.components.every((component) => component.health === 'healthy'),
+      true,
+    );
     assert.equal(stack.combinationReview.state, 'not-recorded');
     assert.deepEqual(stack.combinationReview.providerIds, [HARNESS_TRIM, RTK]);
-    assert.match(stack.combinationReview.detail, /do not prove these components were reviewed together/);
+    assert.match(
+      stack.combinationReview.detail,
+      /do not prove these components were reviewed together/,
+    );
     assert.equal(stack.state, 'incomplete');
   });
 
@@ -314,7 +320,10 @@ describe('optimization stack snapshot', () => {
       },
     });
     assert.equal(mismatched.combinationReview.state, 'not-recorded');
-    assert.match(mismatched.combinationReview.detail, /does not match the exact configured provider set/);
+    assert.match(
+      mismatched.combinationReview.detail,
+      /does not match the exact configured provider set/,
+    );
     assert.equal(mismatched.state, 'incomplete');
   });
 
