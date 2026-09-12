@@ -18,9 +18,10 @@ existing users and testing well before it is the version we actively promote.
 - [x] The primary UI can present the active optimization setup, measured value, quality state and a
       useful next destination while keeping technical detail secondary to user outcomes.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
-      Token Harness now keeps exact multi-provider review evidence separate from the individual
-      compatibility rows: until a real RTK + HarnessTrim combined fixture/recording exists, that
-      combination is reported as `not-recorded` and cannot make the stack `healthy` by inference.
+      Exact multi-provider evidence is separate from individual compatibility rows. Token Harness now
+      has a fail-closed exact matcher plus the read-only `stack-review --json` capture path for
+      provider/version/harness fingerprints, but the shipped review registry is intentionally empty
+      until a real RTK + HarnessTrim combination is tested together and deliberately reviewed.
 - [ ] At least **three distinct useful savings mechanisms** are available through Token Harness.
 - [ ] Every counted mechanism has a real activation/configuration path, verification evidence and a
       safe ownership/rollback or uninstall story.
