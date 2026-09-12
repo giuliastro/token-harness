@@ -107,10 +107,34 @@ export interface OptimizationStackComponent {
   nextAction: StackNextAction | null;
 }
 
+export type StackCombinationReviewState =
+  | 'not-applicable'
+  | 'not-recorded'
+  | 'reviewed'
+  | 'incompatible';
+
+/** Explicit evidence that one exact provider set was reviewed together. */
+export interface StackCombinationReviewEvidence {
+  state: 'reviewed' | 'incompatible';
+  providerIds: ProviderId[];
+  detail: string;
+  evidence: string[];
+}
+
+/** Product-facing projection. Individual compatibility or verification never fills this by inference. */
+export interface StackCombinationReview {
+  state: StackCombinationReviewState;
+  providerIds: ProviderId[];
+  detail: string;
+  evidence: string[];
+}
+
 export interface OptimizationStackSnapshot {
   components: OptimizationStackComponent[];
   /** Drift that the existing report cannot truthfully attribute to one provider stays here. */
   unattributedDrift: DriftFinding[];
+  /** Exact multi-component review state. Missing evidence is represented as not-recorded. */
+  combinationReview: StackCombinationReview;
   state: 'empty' | 'incomplete' | 'attention' | 'healthy';
 }
 
@@ -125,6 +149,8 @@ export interface BuildOptimizationStackInput {
   /** Same rule for conflicts. Status drift without provider identity belongs in unattributedDrift. */
   conflictsByProvider?: ReadonlyMap<ProviderId, readonly StackConflict[]>;
   unattributedDrift?: readonly DriftFinding[];
+  /** Exact-set evidence only. Individual compatibility rows must never imply a combined review. */
+  combinationReview?: StackCombinationReviewEvidence | null;
 }
 
 function installed(state: ProviderDetection['state']): boolean {
@@ -258,6 +284,48 @@ function savingsForProvider(report: MetricsReport | null | undefined, providerId
     .map((row) => ({ ...row, harnesses: [...row.harnesses] }));
 }
 
+function sameProviderSet(left: readonly ProviderId[], right: readonly ProviderId[]): boolean {
+  const normalize = (values: readonly ProviderId[]) => [...new Set(values)].sort();
+  const a = normalize(left);
+  const b = normalize(right);
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function combinationReview(
+  components: readonly OptimizationStackComponent[],
+  evidence: StackCombinationReviewEvidence | null | undefined,
+): StackCombinationReview {
+  const providerIds = components
+    .filter((component) => component.configured)
+    .map((component) => component.providerId)
+    .sort();
+  if (providerIds.length < 2) {
+    return {
+      state: 'not-applicable',
+      providerIds,
+      detail: 'A combined-stack review is required only when two or more managed components are configured.',
+      evidence: [],
+    };
+  }
+  if (evidence === null || evidence === undefined || !sameProviderSet(providerIds, evidence.providerIds)) {
+    return {
+      state: 'not-recorded',
+      providerIds,
+      detail:
+        evidence === null || evidence === undefined
+          ? 'No exact combined-stack review is recorded. Individual compatibility rows and runtime verification do not prove these components were reviewed together.'
+          : 'The supplied combined-stack review does not match the exact configured provider set, so it is not used.',
+      evidence: [],
+    };
+  }
+  return {
+    state: evidence.state,
+    providerIds,
+    detail: evidence.detail,
+    evidence: [...evidence.evidence],
+  };
+}
+
 /**
  * Build the product-facing stack state from already-observed lifecycle evidence.
  *
@@ -309,21 +377,23 @@ export function buildOptimizationStack(
   }
 
   const unattributedDrift = [...(input.unattributedDrift ?? [])];
+  const combined = combinationReview(components, input.combinationReview);
   const present = components.filter((component) => component.detectedState !== 'absent');
   const state: OptimizationStackSnapshot['state'] =
     present.length === 0
       ? 'empty'
       : present.some((component) => component.health === 'attention') ||
-          unattributedDrift.length > 0
+          unattributedDrift.length > 0 ||
+          combined.state === 'incompatible'
         ? 'attention'
         : present.every(
               (component) =>
                 component.health === 'healthy' &&
                 component.nextAction === null &&
                 (component.update === 'current' || component.update === 'pinned'),
-            )
+            ) && combined.state !== 'not-recorded'
           ? 'healthy'
           : 'incomplete';
 
-  return { components, unattributedDrift, state };
+  return { components, unattributedDrift, combinationReview: combined, state };
 }
