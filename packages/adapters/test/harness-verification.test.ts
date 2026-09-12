@@ -203,38 +203,44 @@ describe('harness-scoped passive verification', () => {
     assert.equal(scoped.achievedTier, 'config-only');
   });
 
-  it('does not duplicate provider-wide RTK runtime evidence across multiple harnesses', async () => {
-    const provider = verification('rtk', receipt());
-    for (const harness of [CLAUDE, OPENCODE]) {
+  it(
+    'does not duplicate provider-wide RTK runtime evidence across multiple harnesses',
+    async () => {
+      const provider = verification('rtk', receipt());
+      for (const harness of [CLAUDE, OPENCODE]) {
+        const scoped = await scopeProviderVerificationToHarness(
+          context(),
+          provider,
+          harness,
+          [CLAUDE, OPENCODE],
+        );
+        assert.equal(scoped.receipt, null);
+        assert.equal(scoped.achievedTier, 'config-only');
+        const canary = scoped.checks.find((check) => check.id === 'canary-intercepted');
+        assert.equal(canary?.status, 'info');
+        assert.equal(canary?.achievedTier, null);
+        assert.match(canary?.summary ?? '', /cannot attribute that receipt/);
+      }
+    },
+  );
+
+  it(
+    'can attribute provider-wide evidence by exclusion when exactly one harness is wired',
+    async () => {
+      const provider = verification('rtk', receipt());
       const scoped = await scopeProviderVerificationToHarness(
         context(),
         provider,
-        harness,
-        [CLAUDE, OPENCODE],
+        CLAUDE,
+        [CLAUDE],
       );
-      assert.equal(scoped.receipt, null);
-      assert.equal(scoped.achievedTier, 'config-only');
-      const canary = scoped.checks.find((check) => check.id === 'canary-intercepted');
-      assert.equal(canary?.status, 'info');
-      assert.equal(canary?.achievedTier, null);
-      assert.match(canary?.summary ?? '', /cannot attribute that receipt/);
-    }
-  });
 
-  it('can attribute provider-wide evidence by exclusion when exactly one harness is wired', async () => {
-    const provider = verification('rtk', receipt());
-    const scoped = await scopeProviderVerificationToHarness(
-      context(),
-      provider,
-      CLAUDE,
-      [CLAUDE],
-    );
-
-    assert.deepEqual(scoped.receipt, provider.receipt);
-    assert.equal(scoped.achievedTier, 'canary');
-    assert.equal(
-      scoped.checks.find((check) => check.id === 'canary-intercepted')?.status,
-      'pass',
-    );
-  });
+      assert.deepEqual(scoped.receipt, provider.receipt);
+      assert.equal(scoped.achievedTier, 'canary');
+      assert.equal(
+        scoped.checks.find((check) => check.id === 'canary-intercepted')?.status,
+        'pass',
+      );
+    },
+  );
 });
