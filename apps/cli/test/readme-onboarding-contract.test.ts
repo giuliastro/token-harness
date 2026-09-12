@@ -42,6 +42,10 @@ describe('README onboarding contract', () => {
 
     assert.match(readme, /Run standard evaluation/);
     assert.match(GUIDE_JS, /Run standard evaluation/);
+    assert.match(readme, /Refresh status/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Refresh status/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /\/api\/candidate-campaign/);
+    assert.match(readme, /do not need to run a separate status command/i);
     assert.match(readme, /benchmark-matrix/);
     for (const flag of ['--benchmark-id', '--candidate', '--harness']) {
       assert.match(readme, new RegExp(flag));
@@ -54,7 +58,7 @@ describe('README onboarding contract', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
     assert.doesNotMatch(
       GUIDE_CANDIDATE_CAMPAIGN_JS,
-      /benchmark-start|benchmark-finish|headroom wrap|pip install|npm install|gitnexus analyze/,
+      /headroom wrap|pip install|npm install|gitnexus analyze/,
     );
   });
 });
