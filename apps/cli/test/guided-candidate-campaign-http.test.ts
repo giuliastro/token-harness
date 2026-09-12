@@ -61,6 +61,7 @@ function status(input: GuideCandidateCampaignRequest): GuideCandidateCampaignSta
     reasons: ['need more evidence'],
     promotionEligible: false,
     promotionBlockers: ['the standard benchmark campaign is not complete'],
+    promotionReadiness: null,
     note: 'Selection evidence only.',
   };
 }
