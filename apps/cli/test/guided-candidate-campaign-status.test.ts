@@ -22,9 +22,16 @@ function campaignReport(): CandidateAwareBenchmarkMatrixReport {
       totalPairs: 6,
       completedPairs: 3,
       invalidPairs: 0,
-      slots: [],
+      slots: [
+        {
+          benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
+          taskClass: 'hard',
+          run: 1,
+          state: 'baseline-not-started',
+        },
+      ],
       nextCommand:
-        'token-harness benchmark-start --benchmark gitnexus-eval-h-1 --task hard --agent codex --variant baseline --candidate gitnexus --campaign-id gitnexus-codex-eval-m123abc',
+        'token-harness benchmark-start --benchmark-id gitnexus-codex-eval-m123abc-h-1 --task hard --harness codex --variant baseline --candidate gitnexus',
       nextInstruction: 'Run the next baseline task, then capture its result.',
       evidence: {
         candidateId: 'gitnexus',
@@ -138,6 +145,13 @@ describe('guided candidate campaign status', () => {
     assert.equal(status.decisionReady, false);
     assert.equal(status.evidencePairs, 3);
     assert.deepEqual(status.coveredTaskClasses, ['mechanical', 'standard']);
+    assert.deepEqual(status.nextStep, {
+      kind: 'start-baseline',
+      benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
+      taskClass: 'hard',
+      run: 1,
+      requiresActivationAcknowledgement: false,
+    });
     assert.match(status.nextCommand ?? '', /--variant baseline/);
     assert.equal(status.promotionEligible, false);
     assert.match(status.note, /does not prove activation/);
