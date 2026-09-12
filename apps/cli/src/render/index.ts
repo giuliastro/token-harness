@@ -28,6 +28,7 @@ import type {
   PlanReport,
   SetupReport,
   StatusReport,
+  StackCombinationReviewCaptureReport,
   UpdateReport,
   VerifyReport,
 } from '@token-harness/core';
@@ -45,6 +46,7 @@ import { renderMetricsReport } from './metrics.js';
 import { renderOptimizeReport } from './optimize.js';
 import { renderPlanReport } from './plan.js';
 import { renderStatusReport } from './status.js';
+import { renderStackReviewReport } from './stack-review.js';
 import { renderUpdateReport } from './update.js';
 import { renderVerifyReport } from './verify.js';
 import type { RenderContext } from './layout.js';
@@ -133,6 +135,8 @@ export function renderHuman(
         return plain(renderSimpleSetup(data as SetupReport, context));
       case 'status':
         return plain(renderSimpleStatus(data as StatusReport));
+      case 'stack-review':
+        return plain(renderStackReviewReport(data as StackCombinationReviewCaptureReport, context));
       case 'update':
         return plain(renderSimpleUpdate(data as UpdateReport));
       case 'verify':
@@ -173,6 +177,8 @@ export function renderHuman(
       return planRendering(data as PlanReport, result, context);
     case 'status':
       return plain(renderStatusReport(data as StatusReport, context));
+    case 'stack-review':
+      return plain(renderStackReviewReport(data as StackCombinationReviewCaptureReport, context));
     case 'verify':
       return plain(renderVerifyReport(data as VerifyReport, context));
     case 'metrics':
@@ -199,6 +205,7 @@ export {
   renderOptimizeReport,
   renderPlanReport,
   renderStatusReport,
+  renderStackReviewReport,
   renderUpdateReport,
   renderVerifyReport,
 };

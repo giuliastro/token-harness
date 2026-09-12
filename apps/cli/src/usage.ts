@@ -34,6 +34,7 @@ Everyday commands
   ui          Open the guided local application in your browser
   optimize    Show the best evidence-based action for the current task
   status      Show active harnesses, providers, and configuration health
+  stack-review Capture the exact multi-provider review fingerprint (read-only)
 
 Advanced commands
   doctor      Full installation and connection check
@@ -64,6 +65,20 @@ Useful flags
 Run token-harness <command> --help for advanced flags and safety details.`;
 
 const COMMAND_USAGE: Readonly<Record<AvailableCommand, string>> = {
+  'stack-review': `token-harness stack-review — capture exact combined-stack identity
+
+Usage
+  token-harness stack-review [--json] [--project <dir>]
+
+Read-only. Detects the providers that are actually configured, records their exact
+versions and managed harness sets, and emits a fingerprint for manual combined-stack
+validation. It never decides compatibility from individual provider health and never
+writes a reviewed record by itself.
+
+Use --json when submitting a real test result. A review becomes reusable only after
+that exact fingerprint has been tested together and a deliberate reviewed or
+incompatible record is added to Token Harness.`,
+
   setup: `token-harness setup — guided onboarding in one command
 
 Usage

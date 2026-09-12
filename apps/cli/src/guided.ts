@@ -2,6 +2,7 @@
 import {
   buildOptimizationStack,
   providerId,
+  selectStackCombinationReview,
   type ApplyReport,
   type BudgetReport,
   type CliEnvelope,
@@ -25,6 +26,7 @@ import { runMetrics } from './commands/metrics.js';
 import { runUpdateCheck } from './commands/update.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
+import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -758,6 +760,10 @@ export class GuideService {
           ? this.updates.report.providers
           : null,
       unattributedDrift: base?.drift ?? [],
+      combinationReview: selectStackCombinationReview(
+        SHIPPED_STACK_COMBINATION_REVIEWS,
+        base?.detections ?? [],
+      ),
     });
   }
   private invalidateObservedState(): void {

@@ -78,6 +78,8 @@ review is recorded, Setup says so and keeps the stack incomplete rather than inf
 from healthy individual checks. Token Harness can prepare their integration transactionally, show the
 exact plan, apply it only after approval, verify it, and remove only configuration it owns.
 
+For maintainers validating the combined stack, `token-harness stack-review --json` captures the exact configured provider versions and managed harness sets without making a compatibility decision. The shipped combined-review registry stays empty until that captured configuration has been tested together and deliberately reviewed; see `docs/combined-stack-reviews.md`.
+
 **3. Experimental tools**
 
 Headroom, mcptoon and GitNexus are visible as candidates, not silently promoted dependencies. Their
