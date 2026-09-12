@@ -1,3 +1,4 @@
+import { GUIDE_CANDIDATE_COMPARISON_JS } from './guided-candidate-comparison-client.js';
 import { GUIDE_CANDIDATE_DECISION_EVIDENCE_JS } from './guided-candidate-decision-evidence-client.js';
 import { GUIDE_STACK_COMBINATION_JS } from './guided-stack-combination-client.js';
 
@@ -32,6 +33,23 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
     const byName = new Map(items.map(item => [item.displayName, item]));
     observer.disconnect();
     try {
+      if (!root.querySelector('.candidate-comparison-toolbar')) {
+        const firstCard = root.querySelector('article.tool-card.experimental');
+        if (firstCard) {
+          const toolbar = document.createElement('div');
+          toolbar.className = 'candidate-comparison-toolbar inline-actions';
+          const compare = document.createElement('button');
+          compare.type = 'button';
+          compare.id = 'candidate-compare-evidence';
+          compare.className = 'secondary';
+          compare.dataset.action = 'candidate-comparison';
+          compare.textContent = 'Compare evaluation evidence';
+          compare.title = 'Compare saved campaigns only; no new environment scan is started.';
+          toolbar.append(compare);
+          root.insertBefore(toolbar, firstCard);
+        }
+      }
+
       for (const card of root.querySelectorAll('article.tool-card.experimental')) {
         const name = card.querySelector('h3')?.textContent || '';
         const item = byName.get(name);
@@ -97,4 +115,4 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
 })();
 `;
 
-export const GUIDE_CANDIDATE_READINESS_JS = `${GUIDE_CANDIDATE_READINESS_BASE_JS}\n${GUIDE_CANDIDATE_DECISION_EVIDENCE_JS}\n${GUIDE_STACK_COMBINATION_JS}`;
+export const GUIDE_CANDIDATE_READINESS_JS = `${GUIDE_CANDIDATE_READINESS_BASE_JS}\n${GUIDE_CANDIDATE_COMPARISON_JS}\n${GUIDE_CANDIDATE_DECISION_EVIDENCE_JS}\n${GUIDE_STACK_COMBINATION_JS}`;
