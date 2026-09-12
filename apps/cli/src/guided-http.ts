@@ -101,6 +101,29 @@ function stackNextAction(
   return null;
 }
 
+function stackState(
+  components: GuideOverview['stack']['components'],
+  unattributedDrift: GuideOverview['stack']['unattributedDrift'],
+  combinationReview: GuideOverview['stack']['combinationReview'],
+): GuideOverview['stack']['state'] {
+  const present = components.filter((component) => component.detectedState !== 'absent');
+  if (present.length === 0) return 'empty';
+  if (
+    present.some((component) => component.health === 'attention') ||
+    unattributedDrift.length > 0 ||
+    combinationReview.state === 'incompatible'
+  )
+    return 'attention';
+  return present.every(
+    (component) =>
+      component.health === 'healthy' &&
+      component.nextAction === null &&
+      (component.update === 'current' || component.update === 'pinned'),
+  ) && combinationReview.state !== 'not-recorded'
+    ? 'healthy'
+    : 'incomplete';
+}
+
 function mergeVerifiedStack(
   cached: GuideOverview['stack'],
   observed: GuideOverview['stack'],
@@ -133,22 +156,10 @@ function mergeVerifiedStack(
     };
     return { ...merged, nextAction: stackNextAction(merged) };
   });
-  const present = components.filter((component) => component.detectedState !== 'absent');
-  const state: GuideOverview['stack']['state'] =
-    present.length === 0
-      ? 'empty'
-      : present.some((component) => component.health === 'attention') ||
-          cached.unattributedDrift.length > 0
-        ? 'attention'
-        : present.every(
-              (component) =>
-                component.health === 'healthy' &&
-                component.nextAction === null &&
-                (component.update === 'current' || component.update === 'pinned'),
-            )
-          ? 'healthy'
-          : 'incomplete';
-  return { components, unattributedDrift: [...cached.unattributedDrift], state };
+  const combinationReview = observed.combinationReview;
+  const unattributedDrift = [...cached.unattributedDrift];
+  const state = stackState(components, unattributedDrift, combinationReview);
+  return { components, unattributedDrift, combinationReview, state };
 }
 
 function mergeUpdatedStack(
@@ -191,22 +202,10 @@ function mergeUpdatedStack(
     };
     return { ...merged, nextAction: stackNextAction(merged) };
   });
-  const present = components.filter((component) => component.detectedState !== 'absent');
-  const state: GuideOverview['stack']['state'] =
-    present.length === 0
-      ? 'empty'
-      : present.some((component) => component.health === 'attention') ||
-          cached.unattributedDrift.length > 0
-        ? 'attention'
-        : present.every(
-              (component) =>
-                component.health === 'healthy' &&
-                component.nextAction === null &&
-                (component.update === 'current' || component.update === 'pinned'),
-            )
-          ? 'healthy'
-          : 'incomplete';
-  return { components, unattributedDrift: [...cached.unattributedDrift], state };
+  const combinationReview = observed.combinationReview;
+  const unattributedDrift = [...cached.unattributedDrift];
+  const state = stackState(components, unattributedDrift, combinationReview);
+  return { components, unattributedDrift, combinationReview, state };
 }
 
 export function createGuideHandler(input: {

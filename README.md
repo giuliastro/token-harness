@@ -72,9 +72,11 @@ useful read-only allowance and connected-tool observations when available.
 
 **2. Managed optimizers**
 
-The managed stack currently consists of **RTK + HarnessTrim** on reviewed combinations. Token
-Harness can prepare their integration transactionally, show the exact plan, apply it only after
-approval, verify it, and remove only configuration it owns.
+The managed stack currently consists of **RTK + HarnessTrim** on individually reviewed
+combinations. Token Harness tracks the exact combined provider set separately: if no combined-stack
+review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
+from healthy individual checks. Token Harness can prepare their integration transactionally, show the
+exact plan, apply it only after approval, verify it, and remove only configuration it owns.
 
 **3. Experimental tools**
 
