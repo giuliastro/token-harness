@@ -120,7 +120,11 @@ async function post(
 
 describe('guided candidate campaign HTTP boundary', () => {
   it('accepts only validated campaign reads and bounded current-step actions', async () => {
-    const service = new GuideService(emptyCall(), () => 0, () => 'ticket');
+    const service = new GuideService(
+      emptyCall(),
+      () => 0,
+      () => 'ticket',
+    );
     const seen: GuideCandidateCampaignRequest[] = [];
     const actionSeen: GuideCandidateCampaignActionRequest[] = [];
     const campaign = (async (input: GuideCandidateCampaignRequest) => {
