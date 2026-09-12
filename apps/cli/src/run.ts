@@ -42,6 +42,7 @@ import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
 import { runSetup } from './commands/setup.js';
 import { runStatus } from './commands/status.js';
+import { runStackReview } from './commands/stack-review.js';
 import { runUpdate } from './commands/update.js';
 import { runVerify } from './commands/verify.js';
 import type { AdapterAccess, CommandContext } from './commands/context.js';
@@ -82,6 +83,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   rollback: runRollback,
   setup: runSetup,
   status: runStatus,
+  'stack-review': runStackReview,
   uninstall: runUninstall,
   update: runUpdate,
   verify: runVerify,

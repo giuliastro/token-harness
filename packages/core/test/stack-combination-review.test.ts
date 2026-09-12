@@ -40,7 +40,9 @@ function detection(
   };
 }
 
-function record(overrides: Partial<StackCombinationReviewRecord> = {}): StackCombinationReviewRecord {
+function record(
+  overrides: Partial<StackCombinationReviewRecord> = {},
+): StackCombinationReviewRecord {
   return {
     providerIds: [RTK, HARNESS_TRIM],
     versions: { rtk: '0.44.0', harnesstrim: '0.2.1' },
@@ -52,10 +54,7 @@ function record(overrides: Partial<StackCombinationReviewRecord> = {}): StackCom
   };
 }
 
-const configuredPair = () => [
-  detection(RTK, '0.44.0'),
-  detection(HARNESS_TRIM, '0.2.1'),
-];
+const configuredPair = () => [detection(RTK, '0.44.0'), detection(HARNESS_TRIM, '0.2.1')];
 
 describe('combined-stack review records', () => {
   it('captures a stable exact fingerprint for configured providers only', () => {
@@ -104,10 +103,7 @@ describe('combined-stack review records', () => {
 
   it('rejects a review when another configured provider joins the stack', () => {
     assert.equal(
-      selectStackCombinationReview(
-        [record()],
-        [...configuredPair(), detection(OTHER, '1.0.0')],
-      ),
+      selectStackCombinationReview([record()], [...configuredPair(), detection(OTHER, '1.0.0')]),
       null,
     );
   });
@@ -126,9 +122,6 @@ describe('combined-stack review records', () => {
   });
 
   it('fails closed on duplicate configured detections', () => {
-    assert.equal(
-      fingerprintConfiguredStack([...configuredPair(), detection(RTK, '0.44.0')]),
-      null,
-    );
+    assert.equal(fingerprintConfiguredStack([...configuredPair(), detection(RTK, '0.44.0')]), null);
   });
 });

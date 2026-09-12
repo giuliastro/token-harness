@@ -51,6 +51,7 @@ export const AVAILABLE_COMMANDS = [
   'rollback',
   'setup',
   'status',
+  'stack-review',
   'uninstall',
   'update',
   'verify',
