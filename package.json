@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write packages/adapters/test/harness-verification.test.ts && node --input-type=module -e \"process.stdout.write((await import('node:fs')).readFileSync('packages/adapters/test/harness-verification.test.ts','utf8'))\" && prettier --check .",
+    "format:check": "prettier --check .",
     "start": "npm run build && node dist/bundle/token-harness.mjs"
   },
   "devDependencies": {
