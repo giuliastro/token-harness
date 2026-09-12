@@ -16,7 +16,7 @@ The capture contains the configured managed providers, their exact observed vers
 
 Passive evidence is reported separately as:
 
-- `observed` when an existing canary or live receipt proves runtime use;
+- `observed` when an existing passive canary proves runtime use;
 - `not-exercised` when the integration is configured but its passive canary has not seen normal use yet;
 - `failed` when passive verification is failed or degraded;
 - `unavailable` when no passive runtime witness exists for that exact pair.
