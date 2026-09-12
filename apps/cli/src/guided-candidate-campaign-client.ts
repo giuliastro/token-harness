@@ -61,12 +61,12 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
     return harnesses;
   }
 
-  function newCampaignId(candidateId) {
-    return candidateId + '-eval-' + Date.now().toString(36);
+  function newCampaignId(candidateId, harness) {
+    return candidateId + '-' + harness + '-eval-' + Date.now().toString(36);
   }
 
-  function campaignId(candidateId, fresh = false) {
-    const key = 'token-harness:candidate-campaign:' + candidateId;
+  function campaignId(candidateId, harness, fresh = false) {
+    const key = 'token-harness:candidate-campaign:' + candidateId + ':' + harness;
     if (!fresh) {
       try {
         const saved = localStorage.getItem(key);
@@ -75,13 +75,12 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
         // Browser storage is optional; a generated id still gives a valid resumable campaign.
       }
     }
-    const value = newCampaignId(candidateId);
+    const value = newCampaignId(candidateId, harness);
     try { localStorage.setItem(key, value); } catch { /* optional */ }
     return value;
   }
 
   function openCampaign(candidate, fresh = false) {
-    const id = campaignId(candidate.id, fresh);
     const harnesses = detectedHarnesses();
     title.textContent = 'Evaluate ' + candidate.name + ' with a standard campaign';
     content.replaceChildren();
@@ -99,8 +98,6 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
         'For every optimized run, enable ' + candidate.name + ' through its own documented workflow first. Candidate attribution records the experiment target; it does not prove the candidate was active.',
         'warn',
       ),
-      node('h3', 'Campaign id'),
-      node('p', id, 'caption'),
     );
 
     if (!harnesses.length) {
@@ -116,22 +113,29 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
         node('h3', '1. Check campaign status'),
         node(
           'p',
-          'Run the command for the agent you are evaluating. It reconstructs progress from normal benchmark captures and tells you the exact next safe command.',
+          'Choose the agent you are evaluating. Each agent gets its own resumable campaign id so evidence from Claude Code and Codex can never be mixed accidentally.',
           'caption',
         ),
       );
       for (const harness of harnesses) {
         const label = harness === 'claude' ? 'Claude Code' : 'Codex';
-        content.append(node('strong', label), copyRow(
-          'token-harness benchmark-matrix --benchmark-id ' + id +
-          ' --candidate ' + candidate.id + ' --harness ' + harness,
-        ));
+        const id = campaignId(candidate.id, harness, fresh);
+        const agentBlock = node('div', undefined, 'candidate-campaign-agent');
+        agentBlock.append(
+          node('strong', label),
+          node('p', 'Campaign id: ' + id, 'caption'),
+          copyRow(
+            'token-harness benchmark-matrix --benchmark-id ' + id +
+            ' --candidate ' + candidate.id + ' --harness ' + harness,
+          ),
+        );
+        content.append(agentBlock);
       }
       content.append(
         node('h3', '2. Follow only the reported Next command'),
         node(
           'p',
-          'Complete the baseline or optimized task honestly, then rerun the campaign status command. Token Harness advances one state at a time and stops on ambiguous evidence instead of overwriting it.',
+          'Complete the baseline or optimized task honestly, then rerun the same campaign status command. Token Harness advances one state at a time and stops on ambiguous evidence instead of overwriting it.',
         ),
         node('h3', '3. Read the selection assessment'),
         node(
@@ -142,7 +146,7 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
     }
 
     actions.append(
-      button('New campaign id', () => openCampaign(candidate, true)),
+      button('New campaign ids', () => openCampaign(candidate, true)),
       button('Done', () => dialog.close()),
     );
     if (!dialog.open) dialog.showModal();
