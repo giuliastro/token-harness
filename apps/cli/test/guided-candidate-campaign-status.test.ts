@@ -44,14 +44,16 @@ function campaignReport(): CandidateAwareBenchmarkMatrixReport {
         quotaBacked: 0,
         localEvidence: 3,
         qualityOnly: 0,
+        evidencePairs: 3,
+        evidenceCoveragePercent: 100,
         localComparablePairs: 3,
         baselineLocalTokens: 300,
         optimizedLocalTokens: 200,
         localTokenSavingPercent: 33.3,
-        wallClockComparablePairs: 0,
-        baselineWallClockMs: null,
-        optimizedWallClockMs: null,
-        wallClockSavingPercent: null,
+        wallClockComparablePairs: 2,
+        baselineWallClockMs: 2000,
+        optimizedWallClockMs: 1800,
+        wallClockSavingPercent: 10,
       },
       assessment: {
         signal: 'insufficient-evidence',
@@ -65,7 +67,10 @@ function campaignReport(): CandidateAwareBenchmarkMatrixReport {
         hardRegressionPairs: 0,
         reasons: ['need at least 6 evidence-bearing completed pairs'],
         promotionEligible: false,
-        promotionBlockers: ['the standard benchmark campaign is not complete'],
+        promotionBlockers: [
+          'the standard benchmark campaign is not complete',
+          'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
+        ],
       },
     },
   } as unknown as CandidateAwareBenchmarkMatrixReport;
@@ -144,7 +149,23 @@ describe('guided candidate campaign status', () => {
     assert.equal(status.signal, 'insufficient-evidence');
     assert.equal(status.decisionReady, false);
     assert.equal(status.evidencePairs, 3);
+    assert.equal(status.evidenceCoveragePercent, 100);
+    assert.equal(status.minimumEvidencePairs, 6);
+    assert.equal(status.minimumTaskClasses, 3);
+    assert.equal(status.minimumEvidenceCoveragePercent, 75);
     assert.deepEqual(status.coveredTaskClasses, ['mechanical', 'standard']);
+    assert.equal(status.optimizedBetter, 2);
+    assert.equal(status.baselineBetter, 0);
+    assert.equal(status.equivalent, 1);
+    assert.equal(status.localComparablePairs, 3);
+    assert.equal(status.localTokenSavingPercent, 33.3);
+    assert.equal(status.wallClockComparablePairs, 2);
+    assert.equal(status.wallClockSavingPercent, 10);
+    assert.equal(status.hardRegressionPairs, 0);
+    assert.deepEqual(status.promotionBlockers, [
+      'the standard benchmark campaign is not complete',
+      'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
+    ]);
     assert.deepEqual(status.nextStep, {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
