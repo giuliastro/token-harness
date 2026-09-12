@@ -115,8 +115,10 @@ validation remain separate gates.
 
 Choose **Compare evaluation evidence** when you want one read-only view of campaigns you already
 started. The comparison is loaded only on request, never creates a campaign, keeps candidate and
-harness ordering fixed, and reports progress, selection signal, decision readiness and promotion
-gates without producing a composite score or automatic winner.
+harness ordering fixed, and reports progress, selection signal, decision readiness, runtime
+activation evidence and promotion gates without producing a composite score or automatic winner.
+Activation is shown separately as **Verified**, **Blocked** or **Unreviewed**, with
+verified/blocked/unknown pair counts when campaign evidence exists.
 
 **4. Optional agent tuning**
 

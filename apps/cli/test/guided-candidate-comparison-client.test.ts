@@ -8,9 +8,21 @@ describe('guided candidate campaign comparison', () => {
   it('compares saved campaign evidence without producing a score or winner', () => {
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Compare candidate evidence/);
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Evidence, not a leaderboard/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Activation evidence/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Activation pairs/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /verified: 'Verified'/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /blocked: 'Blocked'/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /unreviewed: 'Unreviewed'/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /activationVerifiedPairs/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /activationBlockedPairs/);
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /activationUnknownPairs/);
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Promotion review/);
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Next gate/);
-    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /Gate counts are not a score or a ranking/);
+    assert.match(
+      GUIDE_CANDIDATE_COMPARISON_JS,
+      /Selection, activation and promotion evidence stay separate/,
+    );
+    assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /not a score or a ranking/);
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /\/api\/candidate-campaign\?candidate=/);
     assert.doesNotThrow(() => new Script(GUIDE_CANDIDATE_COMPARISON_JS));
   });

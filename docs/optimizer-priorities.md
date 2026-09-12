@@ -84,10 +84,12 @@ compatibility, distinctness, operational cost, verification and reversibility ev
 
 The guided campaign now projects that selection evidence through the same promotion-readiness gates
 shown on the candidate card. An explicit **Compare evaluation evidence** action can read only saved
-candidate/harness campaigns and place their progress, selection signal, decision readiness and gate
-state side by side. It is intentionally on-demand, does not create missing campaigns or trigger a
-second environment scan, and preserves fixed candidate/harness ordering instead of ranking by a
-synthetic score.
+candidate/harness campaigns and place their progress, selection signal, decision readiness, runtime
+activation evidence and gate state side by side. Activation is shown independently as
+`Verified`, `Blocked` or `Unreviewed`, together with verified/blocked/unknown pair counts where that
+campaign evidence exists. It is intentionally on-demand, does not create missing campaigns or
+trigger a second environment scan, and preserves fixed candidate/harness ordering instead of ranking
+by a synthetic score.
 
 ## Candidate research queue
 

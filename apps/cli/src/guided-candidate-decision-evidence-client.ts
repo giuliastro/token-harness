@@ -28,6 +28,12 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
     'context-owner-admission': 'context-owner admission',
   })[value] || value || 'none';
 
+  const activationLabel = value => ({
+    verified: 'Verified',
+    blocked: 'Blocked',
+    unreviewed: 'Unreviewed',
+  })[value] || 'Unreviewed';
+
   function campaignIdentity(agent) {
     const captions = Array.from(agent.querySelectorAll('p.caption'));
     const caption = captions.find(element => (element.textContent || '').startsWith('Campaign id: '));
@@ -61,7 +67,7 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
       node('strong', 'Decision evidence'),
       node(
         'p',
-        'Benchmark evidence and current local capability are evaluated together. This is not a composite score, activation proof, or promotion recommendation.',
+        'Benchmark evidence, runtime activation evidence and current local capability are evaluated separately. This is not a composite score or promotion recommendation.',
         'caption',
       ),
     );
@@ -90,6 +96,15 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
       );
     }
     facts.append(
+      node('span', 'Activation evidence'),
+      node('strong', activationLabel(data.activationState)),
+      node('span', 'Activation pairs'),
+      node(
+        'strong',
+        String(data.activationVerifiedPairs || 0) + ' verified · ' +
+          String(data.activationBlockedPairs || 0) + ' blocked · ' +
+          String(data.activationUnknownPairs || 0) + ' unknown',
+      ),
       node('span', 'Evidence coverage'),
       node('strong', coverage + ' · ' + minimumCoverage),
       node('span', 'Task classes'),
@@ -106,7 +121,7 @@ export const GUIDE_CANDIDATE_DECISION_EVIDENCE_JS = String.raw`
     block.append(
       node(
         'p',
-        'Local token/context evidence is not provider allowance. Wall-clock is operational evidence, not subscription or API savings. Lifecycle and combined-stack gates remain explicit.',
+        'Activation evidence is independent from selection signal and promotion gates. Local token/context evidence is not provider allowance. Wall-clock is operational evidence, not subscription or API savings. Lifecycle and combined-stack gates remain explicit.',
         'caption',
       ),
     );

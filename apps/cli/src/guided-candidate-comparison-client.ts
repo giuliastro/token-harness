@@ -48,6 +48,12 @@ export const GUIDE_CANDIDATE_COMPARISON_JS = String.raw`
     unavailable: 'Unavailable',
   })[value] || String(value || 'Unavailable');
 
+  const activationLabel = value => ({
+    verified: 'Verified',
+    blocked: 'Blocked',
+    unreviewed: 'Unreviewed',
+  })[value] || 'Unreviewed';
+
   function savedCampaignId(candidateId, harnessId) {
     const key = 'token-harness:candidate-campaign:' + candidateId + ':' + harnessId;
     try {
@@ -114,6 +120,15 @@ export const GUIDE_CANDIDATE_COMPARISON_JS = String.raw`
       node('strong', signalLabel(data.signal)),
       node('span', 'Decision ready'),
       node('strong', data.decisionReady ? 'Yes' : 'No'),
+      node('span', 'Activation evidence'),
+      node('strong', activationLabel(data.activationState)),
+      node('span', 'Activation pairs'),
+      node(
+        'strong',
+        String(data.activationVerifiedPairs || 0) + ' verified · ' +
+          String(data.activationBlockedPairs || 0) + ' blocked · ' +
+          String(data.activationUnknownPairs || 0) + ' unknown',
+      ),
       node('span', 'Promotion review'),
       node(
         'strong',
@@ -128,7 +143,7 @@ export const GUIDE_CANDIDATE_COMPARISON_JS = String.raw`
       facts,
       node(
         'p',
-        'This row reports evidence for one candidate/harness campaign. Gate counts are not a score or a ranking.',
+        'Selection, activation and promotion evidence stay separate. Gate counts and activation pair counts are not a score or a ranking.',
         'caption',
       ),
     );
@@ -149,7 +164,7 @@ export const GUIDE_CANDIDATE_COMPARISON_JS = String.raw`
       ),
       messageBox(
         'Evidence, not a leaderboard',
-        'Candidates stay in a fixed order. Compare progress, selection evidence and independent promotion gates; no composite score or automatic winner is produced.',
+        'Candidates stay in a fixed order. Compare progress, selection evidence, activation evidence and independent promotion gates; no composite score or automatic winner is produced.',
       ),
     );
 
