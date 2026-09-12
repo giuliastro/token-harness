@@ -21,8 +21,10 @@ jobs:
         run: python3 scripts/fix-gitnexus-patch-temp.py
       - name: Apply patch
         run: python3 scripts/gitnexus-activation-patch-temp.py
+      - name: Patch dependent fixture
+        run: python3 scripts/fix-gitnexus-http-fixture-temp.py
       - name: Format
-        run: pnpm exec prettier --write packages/core/src/domain/benchmark-context.ts packages/core/test/benchmark-context.test.ts apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/guided-candidate-campaign-status.ts apps/cli/src/guided-candidate-campaign-client.ts apps/cli/test/candidate-benchmark.test.ts apps/cli/test/guided-candidate-campaign-status.test.ts apps/cli/test/guided-candidate-campaign-client.test.ts docs/candidates/gitnexus.md README.md
+        run: pnpm exec prettier --write packages/core/src/domain/benchmark-context.ts packages/core/test/benchmark-context.test.ts apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/guided-candidate-campaign-status.ts apps/cli/src/guided-candidate-campaign-client.ts apps/cli/test/candidate-benchmark.test.ts apps/cli/test/guided-candidate-campaign-status.test.ts apps/cli/test/guided-candidate-campaign-client.test.ts apps/cli/test/guided-candidate-campaign-http.test.ts docs/candidates/gitnexus.md README.md
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
@@ -30,7 +32,7 @@ jobs:
       - name: Commit validated patch
         run: |
           rm .github/workflows/gitnexus-activation-temp.yml
-          rm scripts/gitnexus-activation-patch-temp.py scripts/fix-gitnexus-patch-temp.py
+          rm scripts/gitnexus-activation-patch-temp.py scripts/fix-gitnexus-patch-temp.py scripts/fix-gitnexus-http-fixture-temp.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
