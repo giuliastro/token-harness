@@ -14,13 +14,19 @@ describe('guided candidate campaign', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /localStorage/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /candidateId \+ ':' \+ harness/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /candidateId \+ '-' \+ harness \+ '-eval-'/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /evidence from Claude Code and Codex can never be mixed accidentally/);
+    assert.match(
+      GUIDE_CANDIDATE_CAMPAIGN_JS,
+      /evidence from Claude Code and Codex can never be mixed accidentally/,
+    );
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /stopImmediatePropagation/);
     assert.doesNotThrow(() => new Script(GUIDE_CANDIDATE_CAMPAIGN_JS));
   });
 
   it('keeps activation and promotion separate from campaign evidence', () => {
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Candidate attribution records the experiment target/);
+    assert.match(
+      GUIDE_CANDIDATE_CAMPAIGN_JS,
+      /Candidate attribution records the experiment target/,
+    );
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
     assert.doesNotMatch(
