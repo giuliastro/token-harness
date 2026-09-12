@@ -12,6 +12,13 @@
  * available side comes from the **installation channel**, because that is where the knowledge is —
  * `winget` knows what exists for `rtk-ai.rtk` and RTK's adapter has no idea.
  *
+ * ## Package compatibility is not harness mutation compatibility
+ *
+ * Replacing an installed provider package does not itself write Claude, Codex or OpenCode config.
+ * Provider package updates therefore use the provider-level reviewed update policy. Exact
+ * provider × harness × version × platform rows remain mandatory when a later plan wants to mutate
+ * an integration; they no longer freeze the package binary at the version of the oldest fixture.
+ *
  * ## What it will not do
  *
  * - **Install a provider that is absent.** `update` updates. A machine without RTK is `plan`'s
@@ -21,6 +28,8 @@
  *   RFC 0004's binary rollback is a rollback, not an update.
  * - **Guess.** A channel that cannot be read produces `unknown` and no action. The alternative —
  *   reporting "already current" — is the same sentence a user reads as good news.
+ * - **Cross an unreviewed provider package target.** A future provider release remains visible but
+ *   unattended update stops until its consumed contract has been reviewed.
  * - **Elevate.** Inherited from the executor: `runPackageManagerInstall` refuses an action needing
  *   elevation and hands back the command to run.
  *
@@ -32,11 +41,9 @@
  */
 
 import {
-  COMPATIBILITY_ROWS,
   EXIT_CODES,
   FileJournalStore,
   TransactionSnapshotStore,
-  admitManagedMutation,
   channelCanReportInventory,
   commandResult,
   compareVersions,
@@ -52,13 +59,16 @@ import {
   type CommandResult,
   type Diagnostic,
   type ExitCode,
-  type PackageManagerInstallAction,
   type InstallationChannel,
-  type ManagedIntegration,
+  type PackageManagerInstallAction,
   type ProviderUpdateRow,
   type UpdateReport,
 } from '@token-harness/core';
-import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
+import {
+  admitProviderPackageUpdate,
+  listHarnessAdapters,
+  listProviderAdapters,
+} from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
 
@@ -78,49 +88,6 @@ function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
     unrestored: [],
     receiptId: null,
   };
-}
-
-/**
- * Reads explicit product-level ownership from committed journals.
- *
- * Older journals predate provider × harness attribution. Their ownership remains untouched: update
- * never rewrites or upgrades those records. When such a journal exists, the command recovers only
- * the compatibility question from the live harness configuration — "where is this provider wired
- * now?" — without claiming that Token Harness owns those entries.
- */
-interface ManagedState {
-  integrations: ManagedIntegration[];
-  legacyOwnershipUnknown: boolean;
-}
-
-async function managedIntegrations(context: CommandContext): Promise<ManagedState> {
-  const empty: ManagedState = { integrations: [], legacyOwnershipUnknown: false };
-  if (context.adapters === null || context.stateRoot === null) return empty;
-
-  const journalRoot = context.adapters.fs.join(context.stateRoot, 'journals');
-  if ((await context.adapters.fs.stat(journalRoot)) === null) return empty;
-
-  const store = new FileJournalStore({
-    fs: context.adapters.fs,
-    journalRoot,
-    backupRoot: context.adapters.fs.join(context.stateRoot, 'backups'),
-  });
-  const seen = new Set<string>();
-  const result: ManagedIntegration[] = [];
-  let legacyOwnershipUnknown = false;
-  for (const journal of await store.list()) {
-    if (journal.outcome !== 'committed') continue;
-    if (journal.managedIntegrations === undefined && journal.ownership.length > 0) {
-      legacyOwnershipUnknown = true;
-    }
-    for (const integration of journal.managedIntegrations ?? []) {
-      const key = `${integration.providerId}\0${integration.harnessId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push(integration);
-    }
-  }
-  return { integrations: result, legacyOwnershipUnknown };
 }
 
 function upgradeAction(input: {
@@ -194,16 +161,8 @@ export async function runUpdate(
     (adapter) => context.provider === null || adapter.manifest.id === context.provider,
   );
 
-  const managedState = await managedIntegrations(context);
-  const managed = managedState.integrations;
-  const harnessAdapters = listHarnessAdapters();
-  const managedHarnessIds = new Set(managed.map((entry) => entry.harnessId));
-  if (managedState.legacyOwnershipUnknown) {
-    // Legacy journals cannot say which integration they came from. Inspecting all harnesses is
-    // read-only and lets the provider adapter recover the *live* wiring without assigning ownership.
-    for (const harness of harnessAdapters) managedHarnessIds.add(harness.manifest.id);
-  }
-
+  // Provider detection may use live harness summaries to report where a tool is wired. That is a
+  // read-only observation and deliberately carries no ownership or mutation-admission meaning.
   const harnessContext = {
     fs: adapters.fs,
     runner: adapters.runner,
@@ -211,19 +170,11 @@ export async function runUpdate(
     paths: adapters.paths,
     projectRoot: context.projectRoot,
   };
-  const harnessVersions = new Map<string, string | null>();
-  for (const harness of harnessAdapters) {
-    if (!managedHarnessIds.has(harness.manifest.id)) continue;
-    const detection = await harness.detect(harnessContext);
-    harnessVersions.set(harness.manifest.id, detection.version);
-  }
-  const recoveryHarnessConfigs = managedState.legacyOwnershipUnknown
-    ? (
-        await Promise.all(
-          harnessAdapters.map(async (harness) => (await harness.inspect(harnessContext)).summaries),
-        )
-      ).flat()
-    : [];
+  const harnessConfigs = (
+    await Promise.all(
+      listHarnessAdapters().map(async (harness) => (await harness.inspect(harnessContext)).summaries),
+    )
+  ).flat();
 
   const pins =
     context.stateRoot === null
@@ -241,7 +192,7 @@ export async function runUpdate(
     facts: context.platform,
     paths: adapters.paths,
     projectRoot: context.projectRoot,
-    harnessConfigs: recoveryHarnessConfigs,
+    harnessConfigs,
     now: context.now,
     localDatabase: adapters.localDatabase,
     projectIdFor: adapters.projectIdFor,
@@ -252,8 +203,7 @@ export async function runUpdate(
     providerId: string;
     installed: string | null;
     target: string;
-    harnessId: string;
-    missing: string;
+    reason: string;
   }> = [];
   const destinations = new Set<string>();
 
@@ -323,41 +273,16 @@ export async function runUpdate(
       continue;
     }
 
-    const compatibilityHarnessIds = new Set(
-      managed
-        .filter((entry) => entry.providerId === adapter.manifest.id)
-        .map((entry) => entry.harnessId),
-    );
-    if (managedState.legacyOwnershipUnknown) {
-      // Detection from the live harness summaries answers only where the provider is configured.
-      // It deliberately does not answer who owns that configuration.
-      for (const harnessId of detection.configuredHarnesses) compatibilityHarnessIds.add(harnessId);
-    }
-
-    let updateAdmitted = true;
-    for (const harnessId of compatibilityHarnessIds) {
-      const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
-        provider: adapter.manifest.id,
-        providerVersion: query.version,
-        harness: harnessId,
-        harnessVersion: harnessVersions.get(harnessId) ?? null,
-        os: context.platform.os,
-        wsl: context.platform.isWsl,
-      });
-      if (admission.state === 'admitted') continue;
-      updateAdmitted = false;
+    const admission = admitProviderPackageUpdate(adapter.manifest.id, query.version);
+    if (admission.state !== 'admitted') {
+      row.verdict = 'blocked-unreviewed';
+      report.providers.push(row);
       blockedUpdates.push({
         providerId: adapter.manifest.id,
         installed: detection.version,
         target: query.version,
-        harnessId,
-        missing: admission.missing,
+        reason: admission.reason,
       });
-    }
-
-    if (!updateAdmitted) {
-      row.verdict = 'blocked-unreviewed';
-      report.providers.push(row);
       continue;
     }
 
@@ -382,19 +307,16 @@ export async function runUpdate(
     diagnostics.push(
       diagnostic({
         severity: 'info',
-        code: 'managed-update-blocked',
-        message:
-          `${blocked.providerId} ${blocked.target} is available but is not validated for ` +
-          `${blocked.harnessId}; keeping ${blocked.installed ?? 'the installed version'}`,
-        remediation:
-          'No action is required; Token Harness will allow the update after this combination has reviewed compatibility evidence',
+        code: 'provider-update-target-unreviewed',
+        message: `${blocked.providerId} ${blocked.target} is available but is outside the reviewed provider package-update policy; keeping ${blocked.installed ?? 'the installed version'}`,
+        remediation: 'Review the provider package contract before enabling unattended update to this release',
       }),
     );
     diagnostics.push(
       diagnostic({
         severity: 'info',
-        code: 'managed-update-blocked-detail',
-        message: `${blocked.providerId} ${blocked.target} compatibility evidence is missing: ${blocked.missing}`,
+        code: 'provider-update-target-unreviewed-detail',
+        message: blocked.reason,
         remediation: null,
       }),
     );
@@ -406,7 +328,7 @@ export async function runUpdate(
 
   if (actions.length === 0 && blockedUpdates.length > 0) {
     // A newer version existing is not itself an actionable problem. Refusing to cross the reviewed
-    // compatibility boundary is a successful update check, analogous to a deliberate version pin.
+    // provider package boundary is a successful update check, analogous to a deliberate pin.
     report.execution = emptyExecution('nothing-to-do');
     return finish(EXIT_CODES.ok, report);
   }
