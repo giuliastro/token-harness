@@ -49,7 +49,10 @@ describe('README onboarding contract', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Start optimized capture/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Record outcome/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /\/api\/candidate-campaign\/action/);
-    assert.match(readme, /Normal use no longer requires copying\s+`benchmark-start` or `benchmark-finish`/i);
+    assert.match(
+      readme,
+      /Normal use no longer requires copying\s+`benchmark-start` or `benchmark-finish`/i,
+    );
     assert.match(readme, /benchmark-matrix/);
     for (const flag of ['--benchmark-id', '--candidate', '--harness']) {
       assert.match(readme, new RegExp(flag));
