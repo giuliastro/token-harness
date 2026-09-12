@@ -52,10 +52,7 @@ describe('guided candidate campaign', () => {
       /Candidate attribution records the experiment target/,
     );
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
-    assert.match(
-      GUIDE_CANDIDATE_CAMPAIGN_JS,
-      /does not treat it as activation verification/,
-    );
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not treat it as activation verification/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /I enabled/);
     assert.doesNotMatch(
