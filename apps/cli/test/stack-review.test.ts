@@ -81,7 +81,8 @@ describe('stack-review CLI', () => {
         },
       ],
       instructions: [
-        'Exercise these integrations through normal agent use, then rerun verify and stack-review: harnesstrim on codex.',
+        'Passive runtime evidence is still missing for: harnesstrim on codex. Normal agent use may produce no receipt.',
+        'Generate an operation the provider is guaranteed to record, then rerun verify and stack-review; for reducers this means a qualifying reduction. If that cannot be produced deterministically without extra cost, retain controlled benchmark or manual evidence instead.',
       ],
     };
 
@@ -100,7 +101,9 @@ describe('stack-review CLI', () => {
     assert.match(rendered, /harnesstrim \/ codex\s+not exercised\s+config-only/);
     assert.match(rendered, /rtk \/ claude\s+observed\s+canary/);
     assert.match(rendered, /616 commands intercepted/);
-    assert.match(rendered, /Exercise these integrations through normal agent use/);
+    assert.match(rendered, /Normal agent use may produce no receipt/);
+    assert.match(rendered, /for reducers this means a qualifying reduction/);
+    assert.doesNotMatch(rendered, /Exercise these integrations through normal agent use/);
     assert.doesNotMatch(rendered, /compatible/i);
   });
 

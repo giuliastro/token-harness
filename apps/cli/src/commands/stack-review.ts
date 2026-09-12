@@ -40,7 +40,8 @@ function reviewInstructions(
   }
   if (notExercised.length > 0) {
     instructions.push(
-      `Exercise these integrations through normal agent use, then rerun verify and stack-review: ${describePairs(notExercised)}.`,
+      `Passive runtime evidence is still missing for: ${describePairs(notExercised)}. Normal agent use may produce no receipt.`,
+      'Generate an operation the provider is guaranteed to record, then rerun verify and stack-review; for reducers this means a qualifying reduction. If that cannot be produced deterministically without extra cost, retain controlled benchmark or manual evidence instead.',
     );
   }
   if (unavailable.length > 0) {
