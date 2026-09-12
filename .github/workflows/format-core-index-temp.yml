@@ -1,0 +1,32 @@
+name: Temporary format core export barrel
+
+on:
+  push:
+    branches:
+      - feat/combined-stack-review-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/combined-stack-review-evidence
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write packages/core/src/index.ts
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/format-core-index-temp.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/core/src/index.ts .github/workflows/format-core-index-temp.yml
+          git commit -m "chore: format core export barrel"
+          git push origin HEAD:feat/combined-stack-review-evidence
