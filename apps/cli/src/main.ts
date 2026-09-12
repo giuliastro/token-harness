@@ -62,6 +62,7 @@ import {
   type GuidePeriod,
 } from './guided.js';
 import { observeAgentSkill } from './agent-skill.js';
+import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
 
 /**
@@ -467,6 +468,7 @@ async function runGuidedUi(
       token,
       authority: () => authority,
       optimizationCandidates: () => optimizationCandidates,
+      candidateCampaign: createGuideCandidateCampaignReader(guideCall),
     }),
   );
   server.requestTimeout = 15_000;
