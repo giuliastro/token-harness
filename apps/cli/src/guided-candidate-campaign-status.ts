@@ -113,7 +113,9 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
   };
 }
 
-function activeSlot(campaign: CandidateBenchmarkCampaignReport): CandidateBenchmarkCampaignSlot | null {
+function activeSlot(
+  campaign: CandidateBenchmarkCampaignReport,
+): CandidateBenchmarkCampaignSlot | null {
   return campaign.slots.find((slot) => slot.state !== 'complete') ?? null;
 }
 
@@ -149,7 +151,9 @@ function campaignStep(campaign: CandidateBenchmarkCampaignReport): GuideCandidat
   };
 }
 
-export function createGuideCandidateCampaignReader(call: GuideCall): GuideCandidateCampaignController {
+export function createGuideCandidateCampaignReader(
+  call: GuideCall,
+): GuideCandidateCampaignController {
   const read = async (
     input: GuideCandidateCampaignRequest,
   ): Promise<GuideCandidateCampaignStatus> => {
