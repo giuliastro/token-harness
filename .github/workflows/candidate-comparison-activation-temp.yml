@@ -1,0 +1,38 @@
+name: Temporary candidate activation comparison validation
+on:
+  push:
+    branches:
+      - feat/candidate-comparison-activation-evidence
+permissions:
+  contents: write
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Normalize temporary patch script
+        run: python3 scripts/fix-candidate-comparison-temp.py
+      - name: Apply patch
+        run: python3 scripts/candidate-comparison-activation-temp.py
+      - name: Format changed files
+        run: pnpm exec prettier --write apps/cli/src/guided-candidate-comparison-client.ts apps/cli/src/guided-candidate-decision-evidence-client.ts apps/cli/test/guided-candidate-comparison-client.test.ts apps/cli/test/guided-candidate-decision-evidence-client.test.ts README.md docs/optimizer-priorities.md
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - name: Commit validated patch
+        run: |
+          rm .github/workflows/candidate-comparison-activation-temp.yml
+          rm scripts/candidate-comparison-activation-temp.py scripts/fix-candidate-comparison-temp.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: surface candidate activation evidence in comparisons"
+          git push
