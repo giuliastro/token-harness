@@ -86,10 +86,11 @@ repositories or register MCP servers.
 
 Choose **Run standard evaluation** to start or resume a paired candidate campaign. Campaign state is
 scoped to both the candidate and the selected harness, so Claude Code and Codex evidence cannot be
-mixed accidentally. The browser gives you the `benchmark-matrix` status command; the command engine
-reconstructs progress from normal benchmark captures and receipts and reports the exact **Next** step.
-The browser does not hard-code benchmark start/finish actions or claim that candidate attribution
-proves activation.
+mixed accidentally. The browser reads the campaign directly and shows **Progress**, the current
+selection signal, whether the evidence is **Decision ready**, the number of evidence-bearing pairs
+and the exact **Next** step. `benchmark-matrix` remains available as a terminal fallback for debugging
+or automation. The browser does not hard-code benchmark start/finish actions or claim that candidate
+attribution proves activation.
 
 A campaign selection assessment can report `insufficient-evidence`, `promising`, `mixed` or
 `negative`, plus whether the evidence is decision-ready. **Decision-ready is not promotion-ready.**
@@ -254,7 +255,9 @@ launching a browser.
 ### Evaluating an experimental candidate
 
 For normal use, open **Setup -> Experimental tools** and choose **Run standard evaluation**. The app
-keeps a resumable campaign ID for each candidate/harness pair and shows the status command to run.
+keeps a resumable campaign ID for each candidate/harness pair and reads campaign progress, assessment
+and the exact **Next** step directly in the browser. Use **Refresh status** after completing a reported
+baseline or optimized task. You do not need to run a separate status command for normal use.
 
 The equivalent advanced CLI flow starts by asking the campaign engine for its current state:
 
