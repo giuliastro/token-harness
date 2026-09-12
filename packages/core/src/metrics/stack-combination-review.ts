@@ -5,7 +5,7 @@ import type { StackCombinationReviewEvidence } from './optimization-stack.js';
 /** Exact machine-observed identity of a configured multi-provider stack. */
 export interface StackCombinationFingerprint {
   providerIds: ProviderId[];
-  versions: Readonly<Record<string, string | null>>;
+  versions: Readonly<Record<string, string>>;
   configuredHarnesses: Readonly<Record<string, HarnessId[]>>;
 }
 
@@ -45,20 +45,24 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
 /**
  * Capture only providers that are actually configured. Installed-but-unused providers
  * are not part of the combined runtime surface that RFC 0027 requires us to review.
- * Duplicate provider detections fail closed because their identity would be ambiguous.
+ * Duplicate provider detections and unknown provider versions fail closed because
+ * neither can identify one exact reproducible combination.
  */
 export function fingerprintConfiguredStack(
   detections: readonly ProviderDetection[],
 ): StackCombinationFingerprint | null {
   const configured = detections.filter((row) => row.state === 'configured');
-  if (configured.length < 2) return null;
+  if (configured.length < 2 || configured.some((row) => row.version === null)) return null;
 
   const providerIds = normalizeProviders(configured.map((row) => row.providerId));
   if (providerIds.length !== configured.length) return null;
 
-  const versions: Record<string, string | null> = {};
+  const versions: Record<string, string> = {};
   const configuredHarnesses: Record<string, HarnessId[]> = {};
   for (const provider of configured) {
+    // The null case was rejected above. Keep the local guard so this remains fail-closed
+    // even if the loop is refactored independently of the precondition later.
+    if (provider.version === null) return null;
     versions[provider.providerId] = provider.version;
     configuredHarnesses[provider.providerId] = normalizeHarnesses(provider.configuredHarnesses);
   }
@@ -71,7 +75,12 @@ function recordMatches(
   fingerprint: StackCombinationFingerprint,
 ): boolean {
   const recordProviders = normalizeProviders(record.providerIds);
-  if (!sameStrings(recordProviders, fingerprint.providerIds)) return false;
+  if (
+    recordProviders.length !== record.providerIds.length ||
+    !sameStrings(recordProviders, fingerprint.providerIds)
+  ) {
+    return false;
+  }
 
   for (const providerId of fingerprint.providerIds) {
     if (
