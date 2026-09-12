@@ -2,10 +2,18 @@ from pathlib import Path
 
 path = Path('scripts/candidate-comparison-activation-temp.py')
 text = path.read_text()
-start = text.find('\nreplace(\n    path,\n    "      /Local token')
-if start < 0:
-    raise SystemExit('temporary no-op block start not found')
-end = text.find('\n\n# README and roadmap docs:', start)
-if end < 0:
-    raise SystemExit('temporary no-op block end not found')
-path.write_text(text[:start] + text[end:])
+old = '''replace(
+    path,
+    "      /Local token\\\\/context evidence is not provider allowance/,\\n",
+    "      /Local token\\\\/context evidence is not provider allowance/,\\n",
+)
+'''
+new = '''replace(
+    path,
+    "      /Local token\\\\/context evidence is not provider allowance/,\\n",
+    "      /Local token\\\\/context evidence is not provider allowance/i,\\n",
+)
+'''
+if old not in text:
+    raise SystemExit('temporary decision-evidence assertion block not found')
+path.write_text(text.replace(old, new, 1))
