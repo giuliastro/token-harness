@@ -2,6 +2,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OptimizationCandidateObservation } from '@token-harness/core';
+import {
+  parseGuideCandidateCampaignRequest,
+  type GuideCandidateCampaignRequest,
+  type GuideCandidateCampaignStatus,
+} from './guided-candidate-campaign-status.js';
 import { guidedCandidateObservation } from './guided-candidate-readiness.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
 import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
@@ -209,6 +214,9 @@ export function createGuideHandler(input: {
   token: string;
   authority: () => string;
   optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
+  candidateCampaign?: (
+    request: GuideCandidateCampaignRequest,
+  ) => Promise<GuideCandidateCampaignStatus>;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -254,6 +262,15 @@ export function createGuideHandler(input: {
         }
         if (url.pathname === '/api/activity') {
           send(200, JSON.stringify(input.service.status()));
+          return;
+        }
+        if (url.pathname === '/api/candidate-campaign') {
+          if (input.candidateCampaign === undefined)
+            throw new GuideError(404, 'Candidate campaign status is unavailable.');
+          const campaign = parseGuideCandidateCampaignRequest(url.searchParams);
+          if (campaign === null)
+            throw new GuideError(400, 'Choose a valid candidate campaign from this dashboard.');
+          send(200, JSON.stringify(await input.candidateCampaign(campaign)));
           return;
         }
         if (url.pathname === '/api/overview') {
