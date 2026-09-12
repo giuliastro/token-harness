@@ -1,0 +1,54 @@
+name: Temporary stack-review integration table patch
+
+on:
+  push:
+    branches:
+      - feat/combined-stack-review-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/combined-stack-review-evidence
+      - name: Add stack-review to injected command tables
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          for filename in [
+              'tests/integration/exit-codes.test.ts',
+              'tests/integration/stream-discipline.test.ts',
+          ]:
+              path = Path(filename)
+              text = path.read_text()
+              needle = "        status: () => Promise.reject(new Error('unused')),\n"
+              indented_replacement = needle + "        'stack-review': () => Promise.reject(new Error('unused')),\n"
+              if needle in text:
+                  text = text.replace(needle, indented_replacement)
+              needle = "  status: () => Promise.reject(new Error('unused')),\n"
+              replacement = needle + "  'stack-review': () => Promise.reject(new Error('unused')),\n"
+              if needle in text:
+                  text = text.replace(needle, replacement)
+              path.write_text(text)
+
+          Path('.github/workflows/patch-stack-review-test-tables-temp.yml').unlink()
+          PY
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write tests/integration/exit-codes.test.ts tests/integration/stream-discipline.test.ts packages/core/src/metrics/stack-combination-review.ts packages/core/test/stack-combination-review.test.ts apps/cli/test/stack-review.test.ts
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/integration packages/core/src/metrics/stack-combination-review.ts packages/core/test/stack-combination-review.test.ts apps/cli/test/stack-review.test.ts .github/workflows/patch-stack-review-test-tables-temp.yml
+          git commit -m "test: include stack-review in integration command tables"
+          git push origin HEAD:feat/combined-stack-review-evidence
