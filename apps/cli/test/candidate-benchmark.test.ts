@@ -5,6 +5,7 @@ import { harnessId, type OptimizationCandidateId } from '@token-harness/core';
 
 import {
   buildCandidateBenchmarkEvidence,
+  summarizeCandidateActivationEvidence,
   summarizeCandidateBenchmarkEntries,
   type CandidateBenchmarkEvidenceEntry,
 } from '../src/commands/candidate-benchmark.js';
@@ -28,6 +29,40 @@ function entry(
     ...input,
   };
 }
+
+describe('candidate activation evidence', () => {
+  it('verifies GitNexus only when every completed optimized task sees usable MCP at both boundaries', () => {
+    assert.deepEqual(
+      summarizeCandidateActivationEvidence('gitnexus', [
+        { start: 'usable', finish: 'usable' },
+        { start: 'usable', finish: 'usable' },
+      ]),
+      {
+        candidateId: 'gitnexus',
+        state: 'verified',
+        verifiedPairs: 2,
+        blockedPairs: 0,
+        unknownPairs: 0,
+        reason:
+          '2 optimized pair(s) observed the GitNexus MCP server usable at both task boundaries',
+      },
+    );
+  });
+
+  it('blocks contradictory runtime evidence and keeps legacy evidence unreviewed', () => {
+    const blocked = summarizeCandidateActivationEvidence('gitnexus', [
+      { start: 'usable', finish: 'unusable' },
+    ]);
+    assert.equal(blocked.state, 'blocked');
+    assert.equal(blocked.blockedPairs, 1);
+
+    const legacy = summarizeCandidateActivationEvidence('gitnexus', [
+      { start: undefined, finish: undefined },
+    ]);
+    assert.equal(legacy.state, 'unreviewed');
+    assert.equal(legacy.unknownPairs, 1);
+  });
+});
 
 describe('candidate benchmark evidence', () => {
   it('parses supported explicit candidate attribution, including GitNexus', () => {

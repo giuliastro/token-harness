@@ -48,6 +48,14 @@ function report(state: 'baseline-not-started' | 'baseline-running' | 'optimized-
         optimizedWallClockMs: null,
         wallClockSavingPercent: null,
       },
+      activation: {
+        candidateId: 'gitnexus',
+        state: 'unreviewed',
+        verifiedPairs: 0,
+        blockedPairs: 0,
+        unknownPairs: 0,
+        reason: 'no completed optimized task has runtime activation evidence yet',
+      },
       assessment: {
         signal: 'insufficient-evidence',
         decisionReady: false,
