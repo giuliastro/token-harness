@@ -17,7 +17,7 @@
     "clean": "node scripts/clean.mjs",
     "compile": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "tsc -b && node --test --test-reporter=spec apps/cli/dist/test/guided-candidate-campaign-action.test.js apps/cli/dist/test/guided-candidate-campaign-client.test.js apps/cli/dist/test/guided-candidate-campaign-http.test.js apps/cli/dist/test/guided-candidate-campaign-status.test.js apps/cli/dist/test/readme-onboarding-contract.test.js",
+    "test": "tsc -b && node --test --test-reporter=spec \"packages/*/dist/test/**/*.test.js\" \"apps/*/dist/test/**/*.test.js\" \"tests/dist/integration/**/*.test.js\"",
     "build": "tsc -b && node scripts/bundle.mjs",
     "package": "node scripts/package.mjs",
     "smoke": "node scripts/smoke.mjs",
