@@ -41,9 +41,10 @@ import { parseSemanticVersion } from '../domain/version.js';
  * `WinGet/Packages/rtk-ai.rtk_.../rtk.exe`, `winget search rtk` returns the id `rtk-ai.rtk`, and
  * every flag below appears in `winget install --help`.
  *
- * `cargo` is declared but was **not** verified — cargo is not installed here, so `cargo install
- * <crate>` is the documented form rather than an observed one. It is marked, and the marking is
- * what `install-channel-unverified` reports at run time.
+ * `cargo` and `pnpm` are declared from their documented argv but have not yet been observed through
+ * this executor on a live machine. They stay `verified: false`, so the runtime reports
+ * `install-channel-unverified` instead of implying that evidence exists. pnpm's documented global
+ * exact-version form is `pnpm add --global <package>@<version>`.
  */
 const INSTALL_COMMANDS: Readonly<
   Record<
@@ -80,6 +81,15 @@ const INSTALL_COMMANDS: Readonly<
     ],
     verified: false,
   },
+  pnpm: {
+    executable: 'pnpm',
+    args: (packageName, version) => [
+      'add',
+      '--global',
+      version === null ? packageName : `${packageName}@${version}`,
+    ],
+    verified: false,
+  },
 };
 
 export function knownPackageManagers(): string[] {
@@ -87,16 +97,13 @@ export function knownPackageManagers(): string[] {
 }
 
 /**
- * Channels this build can *ask* about a version, which is deliberately not the same set it can
- * install through.
+ * Channels this build can ask about a version.
  *
- * A query is a read and an install is a mutation, so they are held to different standards of
- * evidence. `pnpm view <pkg> version` was verified against the machine; a global pnpm install argv
- * was not, and adding one unverified so the two lists would match would be shipping an unreviewed
- * mutation to make a symmetry look tidy.
- *
- * The asymmetry costs nothing today: RFC 0003 records that HarnessTrim, the provider whose channel
- * is pnpm, "is not installed by Token Harness at all".
+ * Reads and mutations still have independent evidence. For pnpm the version query has been
+ * observed on a real machine; the global install argv is documented and intentionally marked
+ * unverified until a live Token Harness update captures it. The important product property is now
+ * explicit: every channel used by a managed provider update has both a query recipe and an install
+ * recipe instead of discovering an update it cannot execute.
  */
 export function knownVersionQueryChannels(): string[] {
   return Object.keys(QUERY_COMMANDS).sort();
@@ -308,11 +315,9 @@ export async function queryAvailableVersion(
  * the version query: a channel that cannot answer is recorded as not having answered, never as
  * having answered "nothing".
  *
- * Two of the six are exercised by real plans today — RTK installs through `winget` and `cargo` —
- * and the other four are declared for the channels RFC 0009 names before a provider needs them.
- * `verified` means the invocation was observed against a real machine; the rest follow the
- * documented form and report `inventory-query-unverified` at run time, exactly as the cargo
- * install invocation already does.
+ * pnpm joins the existing inventory channels because HarnessTrim updates now run through the same
+ * transaction machinery as RTK. Its JSON mode avoids parsing locale-sensitive display text and lets
+ * rollback capture the exact previous HarnessTrim version before a global update.
  */
 const INVENTORY_COMMANDS: Readonly<
   Record<
@@ -363,8 +368,7 @@ const INVENTORY_COMMANDS: Readonly<
   },
   /**
    * `cargo install --list` prints one `crate v0.1.0:` line per installed crate, so absence is a
-   * positive answer: the crate simply does not appear. This is the one inventory among the six
-   * that can confirm absence.
+   * positive answer: the crate simply does not appear.
    */
   cargo: {
     executable: 'cargo',
@@ -390,6 +394,44 @@ const INVENTORY_COMMANDS: Readonly<
         return { status: 'unknown', version: null };
       }
       return { status: 'captured', version: candidate };
+    },
+    verified: false,
+  },
+  pnpm: {
+    executable: 'pnpm',
+    args: (packageName) => ['list', '--global', packageName, '--depth', '0', '--json'],
+    parse: (stdout, packageName) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stdout) as unknown;
+      } catch {
+        return { status: 'unknown', version: null };
+      }
+
+      const roots = Array.isArray(parsed) ? parsed : [parsed];
+      let sawObject = false;
+      for (const root of roots) {
+        if (typeof root !== 'object' || root === null || Array.isArray(root)) continue;
+        sawObject = true;
+        const record = root as Record<string, unknown>;
+        for (const field of ['dependencies', 'optionalDependencies', 'devDependencies']) {
+          const group = record[field];
+          if (typeof group !== 'object' || group === null || Array.isArray(group)) continue;
+          const dependency = (group as Record<string, unknown>)[packageName];
+          if (dependency === undefined) continue;
+          const candidate =
+            typeof dependency === 'string'
+              ? dependency
+              : typeof dependency === 'object' && dependency !== null && !Array.isArray(dependency)
+                ? (dependency as Record<string, unknown>)['version']
+                : null;
+          if (typeof candidate !== 'string' || parseSemanticVersion(candidate) === null) {
+            return { status: 'unknown', version: null };
+          }
+          return { status: 'captured', version: candidate };
+        }
+      }
+      return sawObject ? { status: 'absent', version: null } : { status: 'unknown', version: null };
     },
     verified: false,
   },

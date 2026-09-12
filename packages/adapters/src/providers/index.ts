@@ -49,8 +49,10 @@ export {
   type HarnessTrimHarnessCapabilities,
 } from './harnesstrim.js';
 export {
+  admitProviderPackageUpdate,
   applyProviderVersionCompatibility,
   withProviderVersionCompatibility,
+  type ProviderPackageUpdateAdmission,
 } from './version-compatibility.js';
 
 /**

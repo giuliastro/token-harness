@@ -1,4 +1,10 @@
-import { providerId, type ProviderDetection } from '@token-harness/core';
+import {
+  compareVersions,
+  parseSemanticVersion,
+  providerId,
+  type ProviderDetection,
+  type ProviderId,
+} from '@token-harness/core';
 
 import type { ProviderAdapter } from './contract.js';
 
@@ -15,6 +21,66 @@ const HARNESSTRIM = providerId('harnesstrim');
  * `unknown-newer` until their contract is reviewed.
  */
 const SOURCE_REVIEWED_RTK_RELEASES = new Set(['0.49.0']);
+
+/**
+ * Package-update admission is intentionally separate from managed harness mutation admission.
+ *
+ * These ranges answer only whether Token Harness has reviewed enough of the provider package itself
+ * to replace one installed release with another. They do not authorize writing Claude, Codex or
+ * OpenCode configuration; those writes still require their exact compatibility rows.
+ *
+ * HarnessTrim can validate a newer *installed* build dynamically through `capabilities`, but an
+ * updater has to decide before that build is installed. Until an install-and-verify transaction can
+ * roll a contract mismatch back atomically, unattended updates stop at the latest reviewed target.
+ */
+const REVIEWED_PACKAGE_UPDATE_RANGES: ReadonlyMap<
+  ProviderId,
+  { minimum: string; maximum: string }
+> = new Map([
+  [RTK, { minimum: '0.44.0', maximum: '0.49.0' }],
+  [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.0' }],
+]);
+
+export type ProviderPackageUpdateAdmission =
+  | { state: 'admitted' }
+  | { state: 'blocked'; reason: string };
+
+/**
+ * Decide whether a provider package may be upgraded to `targetVersion`.
+ *
+ * This is deliberately provider-only: harness versions, OS rows and managed ownership do not
+ * belong here because replacing the provider package does not itself mutate a harness. Exact
+ * provider × harness × platform evidence remains mandatory when a later plan wants to edit those
+ * harnesses.
+ */
+export function admitProviderPackageUpdate(
+  provider: ProviderId,
+  targetVersion: string,
+): ProviderPackageUpdateAdmission {
+  const range = REVIEWED_PACKAGE_UPDATE_RANGES.get(provider);
+  if (range === undefined) {
+    return { state: 'blocked', reason: `no package-update policy exists for ${provider}` };
+  }
+
+  const target = parseSemanticVersion(targetVersion);
+  const minimum = parseSemanticVersion(range.minimum);
+  const maximum = parseSemanticVersion(range.maximum);
+  if (target === null || minimum === null || maximum === null) {
+    return {
+      state: 'blocked',
+      reason: `${targetVersion} is not a parseable reviewed provider release`,
+    };
+  }
+
+  if (compareVersions(target, minimum) < 0 || compareVersions(target, maximum) > 0) {
+    return {
+      state: 'blocked',
+      reason: `${targetVersion} is outside the reviewed package-update range ${range.minimum}..${range.maximum}`,
+    };
+  }
+
+  return { state: 'admitted' };
+}
 
 function harnessTrimContractMatchesInstalledVersion(detection: ProviderDetection): boolean {
   const version = detection.version;

@@ -64,20 +64,19 @@ function capture(overrides: Partial<PackageInventoryCapture> = {}): PackageInven
 }
 
 describe('known inventory channels', () => {
-  it('lists the six channels RFC 0009 names, sorted', () => {
+  it('lists the seven channels RFC 0009/update policy knows, sorted', () => {
     assert.deepEqual(knownInventoryChannels(), [
       'cargo',
       'homebrew',
       'npm',
       'pipx',
+      'pnpm',
       'uv',
       'winget',
     ]);
-    // The channels RTK really installs through are both answerable — the planner half of the
-    // contract: an action declares `package-inventory` only where this is true.
     assert.equal(channelCanReportInventory('winget'), true);
     assert.equal(channelCanReportInventory('cargo'), true);
-    assert.equal(channelCanReportInventory('pnpm'), false);
+    assert.equal(channelCanReportInventory('pnpm'), true);
     assert.equal(channelCanReportInventory('not-a-channel'), false);
   });
 });
@@ -105,8 +104,6 @@ describe('asking a channel what it has installed', () => {
       runner: process,
       cwd: '/work',
     });
-    // `cargo install --list` prints every installed crate, so a missing crate is a positive
-    // answer, not a failure to read.
     assert.equal(outcome.status, 'absent');
     assert.equal(outcome.version, null);
   });
@@ -121,6 +118,39 @@ describe('asking a channel what it has installed', () => {
     });
     assert.equal(outcome.status, 'captured');
     assert.equal(outcome.version, '0.42.0');
+  });
+
+  it('reads HarnessTrim from pnpm global JSON inventory', async () => {
+    const stdout = JSON.stringify([
+      {
+        path: '/home/user/.local/share/pnpm/global/5',
+        dependencies: {
+          harnesstrim: { from: 'harnesstrim', version: '0.1.0' },
+        },
+      },
+    ]);
+    const { commands, runner: process } = runner({ stdout });
+    const outcome = await queryPackageInventory({
+      channel: 'pnpm',
+      packageName: 'harnesstrim',
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.status, 'captured');
+    assert.equal(outcome.version, '0.1.0');
+    assert.deepEqual(commands, ['pnpm list --global harnesstrim --depth 0 --json']);
+  });
+
+  it('treats a valid pnpm global JSON tree without the package as absent', async () => {
+    const { runner: process } = runner({ stdout: JSON.stringify([{ dependencies: {} }]) });
+    const outcome = await queryPackageInventory({
+      channel: 'pnpm',
+      packageName: 'harnesstrim',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'absent');
   });
 
   it('reads npm, homebrew, uv, and pipx in their documented shapes', async () => {
@@ -169,8 +199,6 @@ describe('asking a channel what it has installed', () => {
       runner: process,
       cwd: '/work',
     });
-    // "No package found" and a broken winget both exit non-zero, and this build cannot tell them
-    // apart — so it records neither as an answer.
     assert.equal(outcome.status, 'failed');
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'inventory-query-failed'));
   });
@@ -218,8 +246,6 @@ describe('restoring a captured inventory', () => {
       run: (request) => {
         commands.push(`${request.executable} ${request.args.join(' ')}`);
         const isList = request.args[1] === '--list';
-        // The list reports the captured version as soon as the restore "installed" it — the re-read
-        // the receipt depends on. Before that it reports nothing.
         const stdout = isList ? (installedOnly ? 'rtk v0.42.0:\n' : '') : '';
         if (request.args.includes('--version')) installedOnly = true;
         return Promise.resolve({
@@ -246,7 +272,6 @@ describe('restoring a captured inventory', () => {
     });
 
     assert.equal(outcome.restored, true);
-    // Install the captured version, then re-ask — the receipt is only written after the re-read.
     assert.deepEqual(commands, ['cargo install rtk --version 0.42.0', 'cargo install --list']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
   });
@@ -284,14 +309,50 @@ describe('restoring a captured inventory', () => {
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-restore-failed'));
   });
 
+  it('restores HarnessTrim through pnpm and verifies the previous global version', async () => {
+    const commands: string[] = [];
+    const runner: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        const isList = request.args[0] === 'list';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout: isList
+            ? JSON.stringify([{ dependencies: { harnesstrim: { version: '0.1.0' } } }])
+            : '',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({ channel: 'pnpm', packageName: 'harnesstrim', version: '0.1.0' }),
+      runner,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, [
+      'pnpm add --global harnesstrim@0.1.0',
+      'pnpm list --global harnesstrim --depth 0 --json',
+    ]);
+  });
+
   it('says a confirmed absence stays installed rather than inventing an uninstall', async () => {
     const outcome = await restorePackageInventory({
       capture: capture({ status: 'absent', version: null }),
       runner: null,
       cwd: '/work',
     });
-    // RFC 0004: "never by inventing an uninstall command". A machine that was not installed cannot
-    // be put back that way, and the receipt says the package stays.
     assert.equal(outcome.restored, false);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-unrestored'));
   });
