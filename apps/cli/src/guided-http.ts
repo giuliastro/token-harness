@@ -2,6 +2,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OptimizationCandidateObservation } from '@token-harness/core';
+import { guidedCandidateObservation } from './guided-candidate-readiness.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
 import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
 
@@ -269,9 +270,9 @@ export function createGuideHandler(input: {
           const overview = await input.service.overview(guidePeriod, force);
           const body = JSON.stringify({
             ...overview,
-            optimizationCandidates: (input.optimizationCandidates?.() ?? []).map((item) => ({
-              ...item,
-            })),
+            optimizationCandidates: (input.optimizationCandidates?.() ?? []).map(
+              guidedCandidateObservation,
+            ),
           });
           overviewCache.set(guidePeriod, { at: Date.now(), body });
           send(200, body);

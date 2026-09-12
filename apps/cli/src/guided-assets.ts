@@ -1,4 +1,5 @@
 /** Embedded local product UI. No remote assets, inline scripts, or framework runtime. */
+import { GUIDE_CANDIDATE_READINESS_JS } from './guided-candidate-readiness-client.js';
 import { GUIDE_CAPABILITIES_JS } from './guided-capabilities-client.js';
 import { GUIDE_CSS as GUIDE_BASE_CSS } from './guided-dashboard-styles.js';
 import { GUIDE_MODAL_GUARD_JS } from './guided-modal-guard-client.js';
@@ -8,7 +9,7 @@ import { GUIDE_STACK_JS } from './guided-stack-client.js';
 
 export const GUIDE_CSS = `${GUIDE_BASE_CSS}\n${GUIDE_PRODUCT_CSS}`;
 export { GUIDE_STACK_JS };
-export const GUIDE_JS = `${GUIDE_CAPABILITIES_JS}\n${GUIDE_MODAL_GUARD_JS}\n${GUIDE_PRODUCT_JS}`;
+export const GUIDE_JS = `${GUIDE_CAPABILITIES_JS}\n${GUIDE_MODAL_GUARD_JS}\n${GUIDE_PRODUCT_JS}\n${GUIDE_CANDIDATE_READINESS_JS}`;
 
 export const GUIDE_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
