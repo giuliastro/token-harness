@@ -48,10 +48,7 @@ function reviewInstructions(
       `No passive runtime witness is available for: ${describePairs(unavailable)}. Retain controlled benchmark or manual evidence for those pairs.`,
     );
   }
-  if (
-    evidence.length > 0 &&
-    evidence.every((row) => row.runtimeEvidence === 'observed')
-  ) {
+  if (evidence.length > 0 && evidence.every((row) => row.runtimeEvidence === 'observed')) {
     instructions.push(
       'Passive runtime evidence is observed for every configured provider/harness pair; retain controlled combined-stack benchmark evidence before deciding compatibility.',
     );
