@@ -63,6 +63,7 @@ const noisyCommands = {
   uninstall: () => Promise.reject(new Error('unused')),
   update: () => Promise.reject(new Error('unused')),
   status: () => Promise.reject(new Error('unused')),
+  'stack-review': () => Promise.reject(new Error('unused')),
 };
 
 describe('stream discipline', () => {
