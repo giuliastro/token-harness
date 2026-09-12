@@ -38,9 +38,11 @@ export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
         if (previous?.dataset.generatedAt === generatedAt) continue;
         previous?.remove();
 
+        const block = document.createElement('div');
+        block.className = 'candidate-readiness';
+        block.dataset.generatedAt = generatedAt;
         const facts = document.createElement('div');
-        facts.className = 'tool-facts candidate-readiness';
-        facts.dataset.generatedAt = generatedAt;
+        facts.className = 'tool-facts';
         const gateLabel = document.createElement('span');
         gateLabel.textContent = 'Promotion review';
         const gateValue = document.createElement('strong');
@@ -56,8 +58,10 @@ export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
         note.textContent = readiness.promotionEligible
           ? 'All reviewed promotion gates are satisfied.'
           : 'Evaluation readiness is not promotion approval. Remaining lifecycle gates stay explicit.';
-        facts.append(note);
-        card.append(facts);
+        block.append(facts, note);
+        const actions = card.querySelector('.inline-actions');
+        if (actions) card.insertBefore(block, actions);
+        else card.append(block);
       }
     } finally {
       observe();
@@ -66,7 +70,8 @@ export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
 
   async function refreshReadiness() {
     queued = false;
-    if (!root.querySelector('article.tool-card.experimental h3')) return;
+    const heading = root.querySelector('article.tool-card.experimental h3');
+    if (!heading || heading.textContent === 'Checking experimental tools…') return;
     try {
       const response = await fetch('/api/overview?period=' + encodeURIComponent(period.value), { cache: 'no-store' });
       if (!response.ok) return;
