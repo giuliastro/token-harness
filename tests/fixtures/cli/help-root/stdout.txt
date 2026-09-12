@@ -18,6 +18,7 @@ Everyday commands
   ui          Open the guided local application in your browser
   optimize    Show the best evidence-based action for the current task
   status      Show active harnesses, providers, and configuration health
+  stack-review Capture the exact multi-provider review fingerprint (read-only)
 
 Advanced commands
   doctor      Full installation and connection check
