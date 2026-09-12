@@ -88,9 +88,19 @@ Choose **Run standard evaluation** to start or resume a paired candidate campaig
 scoped to both the candidate and the selected harness, so Claude Code and Codex evidence cannot be
 mixed accidentally. The browser reads the campaign directly and shows **Progress**, the current
 selection signal, whether the evidence is **Decision ready**, the number of evidence-bearing pairs
-and the exact **Next** step. `benchmark-matrix` remains available as a terminal fallback for debugging
-or automation. The browser does not hard-code benchmark start/finish actions or claim that candidate
-attribution proves activation.
+and the exact **Next** step.
+
+For normal use, the browser can now start and finish the local benchmark capture itself. You still
+run the actual task in Claude Code or Codex. When the task finishes, record the quality result,
+attempt count and failed-attempt count you actually observed. Before an optimized capture, Token
+Harness requires you to acknowledge that you enabled the candidate through its own documented
+workflow. That acknowledgement is **not activation verification** and is never treated as promotion
+evidence. Every browser capture action is matched against the campaign engine's current step before
+it can write local benchmark state, so a stale tab cannot advance a different step.
+
+`benchmark-matrix`, `benchmark-start` and `benchmark-finish` remain available as advanced terminal
+fallbacks for debugging or automation. The browser does not run the coding task, install or activate
+a candidate, or claim that candidate attribution proves activation.
 
 A campaign selection assessment can report `insufficient-evidence`, `promising`, `mixed` or
 `negative`, plus whether the evidence is decision-ready. **Decision-ready is not promotion-ready.**
@@ -256,8 +266,10 @@ launching a browser.
 
 For normal use, open **Setup -> Experimental tools** and choose **Run standard evaluation**. The app
 keeps a resumable campaign ID for each candidate/harness pair and reads campaign progress, assessment
-and the exact **Next** step directly in the browser. Use **Refresh status** after completing a reported
-baseline or optimized task. You do not need to run a separate status command for normal use.
+and the exact **Next** step directly in the browser. Use **Start baseline capture** or **Start optimized
+capture**, run the requested task in the selected coding agent, then choose **Record outcome** and
+enter the quality/attempt values you actually observed. Normal use no longer requires copying
+`benchmark-start` or `benchmark-finish` commands into a terminal.
 
 The equivalent advanced CLI flow starts by asking the campaign engine for its current state:
 
@@ -270,8 +282,8 @@ token-harness benchmark-matrix \
 
 Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
 same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
-documented workflow. Token Harness records the experiment target but does not treat attribution as
-proof that the candidate was active.
+documented workflow. Token Harness records the experiment target but does not treat attribution—or
+the browser acknowledgement—as proof that the candidate was active.
 
 The selection assessment can become decision-ready after enough evidence across task classes, but it
 still cannot promote a candidate by itself. The remaining lifecycle and combined-stack gates must be
@@ -315,7 +327,10 @@ For normal use, prefer the browser workflow.
 Token Harness is conservative by design:
 
 - opening the app and normal read-only commands do not change agent/project configuration;
-- a browser mutation requires preview and explicit approval;
+- a browser configuration mutation requires preview and explicit approval;
+- guided candidate capture buttons write only bounded local benchmark state, are CSRF-protected and
+  must still match the campaign engine's current step immediately before the write;
+- a browser activation acknowledgement is never treated as verified candidate activation;
 - CLI mutations require their explicit `--yes` form;
 - plans are checked again immediately before apply;
 - existing files are backed up before a managed write;

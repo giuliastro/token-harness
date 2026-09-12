@@ -1,16 +1,40 @@
 import type { TaskClass } from '@token-harness/core';
 
-import type { CandidateAwareBenchmarkMatrixReport } from './commands/candidate-benchmark.js';
+import type {
+  CandidateAwareBenchmarkMatrixReport,
+  CandidateBenchmarkCampaignReport,
+  CandidateBenchmarkCampaignSlot,
+} from './commands/candidate-benchmark.js';
 import type { CandidateEvidenceSignal } from './commands/candidate-evidence-assessment.js';
+import {
+  createGuideCandidateCampaignActionRunner,
+  type GuideCandidateCampaignActionRequest,
+  type GuideCandidateCampaignActionResult,
+} from './guided-candidate-campaign-action.js';
 import type { GuideCall } from './guided.js';
 
 export type GuideCandidateId = 'headroom' | 'mcptoon' | 'gitnexus';
 export type GuideCandidateHarness = 'claude' | 'codex';
+export type GuideCandidateCampaignStepKind =
+  | 'start-baseline'
+  | 'finish-baseline'
+  | 'start-optimized'
+  | 'finish-optimized'
+  | 'complete'
+  | 'invalid';
 
 export interface GuideCandidateCampaignRequest {
   candidateId: GuideCandidateId;
   harnessId: GuideCandidateHarness;
   campaignId: string;
+}
+
+export interface GuideCandidateCampaignStep {
+  kind: GuideCandidateCampaignStepKind;
+  benchmarkId: string | null;
+  taskClass: TaskClass | null;
+  run: number | null;
+  requiresActivationAcknowledgement: boolean;
 }
 
 export interface GuideCandidateCampaignStatus {
@@ -26,11 +50,17 @@ export interface GuideCandidateCampaignStatus {
   decisionReady: boolean;
   evidencePairs: number;
   coveredTaskClasses: TaskClass[];
+  nextStep: GuideCandidateCampaignStep | null;
   nextCommand: string | null;
   nextInstruction: string;
   reasons: string[];
   promotionEligible: false;
   note: string;
+}
+
+export interface GuideCandidateCampaignController {
+  (input: GuideCandidateCampaignRequest): Promise<GuideCandidateCampaignStatus>;
+  action(input: GuideCandidateCampaignActionRequest): Promise<GuideCandidateCampaignActionResult>;
 }
 
 const CANDIDATES = new Set<GuideCandidateId>(['headroom', 'mcptoon', 'gitnexus']);
@@ -73,6 +103,7 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
     decisionReady: false,
     evidencePairs: 0,
     coveredTaskClasses: [],
+    nextStep: null,
     nextCommand: null,
     nextInstruction:
       'Campaign evidence could not be read. No automatic retry or candidate activation was attempted.',
@@ -82,10 +113,50 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
   };
 }
 
+function activeSlot(
+  campaign: CandidateBenchmarkCampaignReport,
+): CandidateBenchmarkCampaignSlot | null {
+  return campaign.slots.find((slot) => slot.state !== 'complete') ?? null;
+}
+
+function campaignStep(campaign: CandidateBenchmarkCampaignReport): GuideCandidateCampaignStep {
+  const slot = activeSlot(campaign);
+  if (slot === null) {
+    return {
+      kind: 'complete',
+      benchmarkId: null,
+      taskClass: null,
+      run: null,
+      requiresActivationAcknowledgement: false,
+    };
+  }
+
+  const kind: GuideCandidateCampaignStepKind =
+    slot.state === 'baseline-not-started'
+      ? 'start-baseline'
+      : slot.state === 'baseline-running'
+        ? 'finish-baseline'
+        : slot.state === 'optimized-not-started'
+          ? 'start-optimized'
+          : slot.state === 'optimized-running'
+            ? 'finish-optimized'
+            : 'invalid';
+
+  return {
+    kind,
+    benchmarkId: slot.benchmarkId,
+    taskClass: slot.taskClass,
+    run: slot.run,
+    requiresActivationAcknowledgement: kind === 'start-optimized',
+  };
+}
+
 export function createGuideCandidateCampaignReader(
   call: GuideCall,
-): (input: GuideCandidateCampaignRequest) => Promise<GuideCandidateCampaignStatus> {
-  return async (input) => {
+): GuideCandidateCampaignController {
+  const read = async (
+    input: GuideCandidateCampaignRequest,
+  ): Promise<GuideCandidateCampaignStatus> => {
     const result = await call<CandidateAwareBenchmarkMatrixReport>([
       'benchmark-matrix',
       '--benchmark-id',
@@ -118,6 +189,7 @@ export function createGuideCandidateCampaignReader(
       decisionReady: campaign.assessment.decisionReady,
       evidencePairs: campaign.assessment.evidencePairs,
       coveredTaskClasses: [...campaign.assessment.coveredTaskClasses],
+      nextStep: campaignStep(campaign),
       nextCommand: campaign.nextCommand,
       nextInstruction: campaign.nextInstruction,
       reasons: [...campaign.assessment.reasons],
@@ -125,4 +197,8 @@ export function createGuideCandidateCampaignReader(
       note: 'Campaign evidence is selection evidence only. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
     };
   };
+
+  const controller = read as GuideCandidateCampaignController;
+  controller.action = createGuideCandidateCampaignActionRunner(call, read);
+  return controller;
 }
