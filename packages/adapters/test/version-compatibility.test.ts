@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { diagnostic, type ProviderDetection } from '@token-harness/core';
+import { diagnostic, providerId, type ProviderDetection } from '@token-harness/core';
 
 import {
   admitProviderPackageUpdate,
   applyProviderVersionCompatibility,
 } from '../src/index.js';
+
+const RTK = providerId('rtk');
+const HARNESSTRIM = providerId('harnesstrim');
 
 function detection(
   provider: 'rtk' | 'harnesstrim',
@@ -14,7 +17,7 @@ function detection(
   overrides: Partial<ProviderDetection> = {},
 ): ProviderDetection {
   return {
-    providerId: provider as ProviderDetection['providerId'],
+    providerId: providerId(provider),
     version,
     state: 'installed',
     executable: `C:\\tools\\${provider}.exe`,
@@ -117,20 +120,20 @@ describe('provider version compatibility', () => {
 
 describe('provider package update admission', () => {
   it('admits the current reviewed RTK package target without a harness compatibility row', () => {
-    assert.deepEqual(admitProviderPackageUpdate('rtk', '0.49.0'), { state: 'admitted' });
+    assert.deepEqual(admitProviderPackageUpdate(RTK, '0.49.0'), { state: 'admitted' });
   });
 
   it('blocks a future RTK target until its consumed source contract is reviewed', () => {
-    assert.equal(admitProviderPackageUpdate('rtk', '0.50.0').state, 'blocked');
+    assert.equal(admitProviderPackageUpdate(RTK, '0.50.0').state, 'blocked');
   });
 
   it('admits the current reviewed HarnessTrim package target', () => {
-    assert.deepEqual(admitProviderPackageUpdate('harnesstrim', '0.3.0'), {
+    assert.deepEqual(admitProviderPackageUpdate(HARNESSTRIM, '0.3.0'), {
       state: 'admitted',
     });
   });
 
   it('keeps future HarnessTrim unattended package targets blocked before install-time validation', () => {
-    assert.equal(admitProviderPackageUpdate('harnesstrim', '0.4.0').state, 'blocked');
+    assert.equal(admitProviderPackageUpdate(HARNESSTRIM, '0.4.0').state, 'blocked');
   });
 });
