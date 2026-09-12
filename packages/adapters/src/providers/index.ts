@@ -42,7 +42,7 @@ export {
   type McptoonCandidateObservation,
   type McptoonCandidateState,
 } from './mcptoon-candidate.js';
-export { parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
+export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
   compareCapabilities,
   harnessesWiredToHarnessTrim,
