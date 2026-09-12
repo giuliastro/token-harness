@@ -64,7 +64,8 @@ function exactKeys(value: Record<string, unknown>, allowed: readonly string[]): 
 }
 
 function parseOutcome(value: unknown): GuideCandidateCampaignOutcome | null {
-  if (!plainObject(value) || !exactKeys(value, ['quality', 'attempts', 'failedAttempts'])) return null;
+  if (!plainObject(value) || !exactKeys(value, ['quality', 'attempts', 'failedAttempts']))
+    return null;
   const quality = value['quality'];
   const attempts = value['attempts'];
   const failedAttempts = value['failedAttempts'];
@@ -85,7 +86,9 @@ function parseOutcome(value: unknown): GuideCandidateCampaignOutcome | null {
   };
 }
 
-function parseCampaignIdentity(value: Record<string, unknown>): GuideCandidateCampaignRequest | null {
+function parseCampaignIdentity(
+  value: Record<string, unknown>,
+): GuideCandidateCampaignRequest | null {
   const candidateId = value['candidateId'];
   const harnessId = value['harnessId'];
   const campaignId = value['campaignId'];
