@@ -59,7 +59,9 @@ async function get(
         response.on('data', (chunk) => {
           body += chunk;
         });
-        response.on('end', () => resolve({ statusCode: response.statusCode ?? 0, body }));
+        response.on('end', () =>
+          resolve({ statusCode: response.statusCode ?? 0, body }),
+        );
       },
     );
     request.once('error', reject);
