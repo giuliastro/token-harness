@@ -1,0 +1,54 @@
+name: Provider update fix
+
+on:
+  push:
+    branches:
+      - codex/provider-tool-updates-2026-09-12
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'fix: preserve update-only provider semantics'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/provider-tool-updates-2026-09-12
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply focused fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          update = Path('apps/cli/src/commands/update.ts')
+          text = update.read_text()
+          old = """    if (detection.state === 'absent') {\n      row.verdict = 'not-installed';\n      report.providers.push(row);\n      continue;\n    }\n"""
+          new = """    // `update` never turns stale wiring into an implicit install. A provider can be `broken`\n    // precisely because an agent still names it while its executable is gone; that is still not an\n    // installed package for update purposes. A runnable executable with unreadable version output is\n    // different and remains observable as an unknown/current-version case below.\n    if (detection.state === 'absent' || detection.executable === null) {\n      row.verdict = 'not-installed';\n      report.providers.push(row);\n      continue;\n    }\n"""
+          if old not in text:
+              raise SystemExit('update.ts target not found')
+          update.write_text(text.replace(old, new, 1))
+
+          test = Path('tests/integration/update-command.test.ts')
+          text = test.read_text()
+          old = """  it('recovers compatibility from live wiring when a legacy journal lacks attribution', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ legacyOwnedState: true }),\n      {\n        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },\n        compatibilityRows: [admittedRow()],\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(result.data?.execution?.outcome, 'committed');\n    assert.equal(result.codes.includes('managed-update-blocked'), false);\n    assert.ok(\n      result.asked.some(\n        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),\n      ),\n      JSON.stringify(result.asked),\n    );\n  });\n\n  it('keeps the current version when a managed target has no reviewed row', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),\n      {\n        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },\n        compatibilityRows: [],\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');\n    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');\n    assert.ok(result.codes.includes('managed-update-blocked'));\n    assert.equal(\n      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),\n      false,\n      JSON.stringify(result.asked),\n    );\n  });\n\n  it('updates a managed provider only when a row admits the target version', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),\n      {\n        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },\n        compatibilityRows: [admittedRow()],\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(result.data?.execution?.outcome, 'committed');\n    assert.ok(\n      result.asked.some(\n        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),\n      ),\n      JSON.stringify(result.asked),\n    );\n  });\n"""
+          new = """  it('does not treat legacy journal attribution as a package-update compatibility gate', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ legacyOwnedState: true }),\n      {\n        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(result.data?.execution?.outcome, 'committed');\n    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);\n    assert.ok(\n      result.asked.some(\n        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),\n      ),\n      JSON.stringify(result.asked),\n    );\n  });\n\n  it('updates a reviewed provider package without a managed-mutation compatibility row', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),\n      {\n        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },\n        compatibilityRows: [],\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');\n    assert.equal(result.data?.execution?.outcome, 'committed');\n    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);\n    assert.ok(\n      result.asked.some(\n        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),\n      ),\n      JSON.stringify(result.asked),\n    );\n  });\n\n  it('blocks an unreviewed future package target even when an old config row exists', async () => {\n    const result = await invoke(\n      ['update', '--provider', 'rtk', '--yes'],\n      world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),\n      {\n        installed: { rtk: 'rtk 0.49.0', claude: '2.1.220' },\n        channelStdout: { [CHANNEL]: channelAnswer('0.50.0') },\n        compatibilityRows: [admittedRow()],\n      },\n    );\n\n    assert.equal(result.exitCode, EXIT_CODES.ok);\n    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');\n    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');\n    assert.ok(result.codes.includes('provider-update-target-unreviewed'));\n    assert.equal(\n      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),\n      false,\n      JSON.stringify(result.asked),\n    );\n  });\n"""
+          if old not in text:
+              raise SystemExit('integration test target not found')
+          test.write_text(text.replace(old, new, 1))
+          PY
+          pnpm exec prettier --write apps/cli/src/commands/update.ts tests/integration/update-command.test.ts
+          pnpm typecheck
+          pnpm test
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/commands/update.ts tests/integration/update-command.test.ts
+          git commit -m "fix: preserve update-only provider semantics"
+          git push origin HEAD:codex/provider-tool-updates-2026-09-12
