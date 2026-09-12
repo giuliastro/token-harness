@@ -220,9 +220,7 @@ export function createGuideCandidateCampaignActionRunner(
     if (
       step.kind !== request.expectedKind ||
       step.benchmarkId === null ||
-      step.benchmarkId !== request.expectedBenchmarkId ||
-      step.kind === 'complete' ||
-      step.kind === 'invalid'
+      step.benchmarkId !== request.expectedBenchmarkId
     ) {
       return stale(status);
     }
