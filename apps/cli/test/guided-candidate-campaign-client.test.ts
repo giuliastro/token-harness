@@ -20,6 +20,8 @@ describe('guided candidate campaign', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Progress/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Selection signal/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Decision ready/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Activation/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Verified at task boundaries/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Evidence pairs/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Refresh status/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /data\.nextStep/);

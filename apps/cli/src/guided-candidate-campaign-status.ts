@@ -66,6 +66,10 @@ export interface GuideCandidateCampaignStatus {
   wallClockComparablePairs: number;
   wallClockSavingPercent: number | null;
   hardRegressionPairs: number;
+  activationState: CandidateBenchmarkCampaignReport['activation']['state'];
+  activationVerifiedPairs: number;
+  activationBlockedPairs: number;
+  activationUnknownPairs: number;
   nextStep: GuideCandidateCampaignStep | null;
   nextCommand: string | null;
   nextInstruction: string;
@@ -137,6 +141,10 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
     wallClockComparablePairs: 0,
     wallClockSavingPercent: null,
     hardRegressionPairs: 0,
+    activationState: 'unreviewed',
+    activationVerifiedPairs: 0,
+    activationBlockedPairs: 0,
+    activationUnknownPairs: 0,
     nextStep: null,
     nextCommand: null,
     nextInstruction:
@@ -214,10 +222,19 @@ export function createGuideCandidateCampaignReader(
     }
 
     const totalPairs = campaign.totalPairs;
+    const activationVerification =
+      input.candidateId === 'gitnexus'
+        ? {
+            state:
+              campaign.activation.state === 'verified' ? ('passed' as const) : ('blocked' as const),
+            reason: campaign.activation.reason,
+          }
+        : undefined;
     const promotionReadiness = assessCandidatePromotionReadiness({
       candidateId: input.candidateId,
       assessment: campaign.assessment,
       observation: observationFor?.(input.candidateId) ?? null,
+      ...(activationVerification === undefined ? {} : { review: { activationVerification } }),
     });
     return {
       available: true,
@@ -243,6 +260,10 @@ export function createGuideCandidateCampaignReader(
       wallClockComparablePairs: campaign.evidence.wallClockComparablePairs,
       wallClockSavingPercent: campaign.evidence.wallClockSavingPercent,
       hardRegressionPairs: campaign.assessment.hardRegressionPairs,
+      activationState: campaign.activation.state,
+      activationVerifiedPairs: campaign.activation.verifiedPairs,
+      activationBlockedPairs: campaign.activation.blockedPairs,
+      activationUnknownPairs: campaign.activation.unknownPairs,
       nextStep: campaignStep(campaign),
       nextCommand: campaign.nextCommand,
       nextInstruction: campaign.nextInstruction,
@@ -250,7 +271,7 @@ export function createGuideCandidateCampaignReader(
       promotionEligible: false,
       promotionBlockers: [...campaign.assessment.promotionBlockers],
       promotionReadiness,
-      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
+      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus can pass that gate only from runtime MCP evidence observed at task boundaries. Decision-ready does not mean promotion-ready.',
     };
   };
 

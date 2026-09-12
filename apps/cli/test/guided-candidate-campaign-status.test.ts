@@ -55,6 +55,15 @@ function campaignReport(): CandidateAwareBenchmarkMatrixReport {
         optimizedWallClockMs: 1800,
         wallClockSavingPercent: 10,
       },
+      activation: {
+        candidateId: 'gitnexus',
+        state: 'verified',
+        verifiedPairs: 3,
+        blockedPairs: 0,
+        unknownPairs: 0,
+        reason:
+          '3 optimized pair(s) observed the GitNexus MCP server usable at both task boundaries',
+      },
       assessment: {
         signal: 'insufficient-evidence',
         decisionReady: false,
@@ -173,11 +182,15 @@ describe('guided candidate campaign status', () => {
     assert.equal(status.wallClockComparablePairs, 2);
     assert.equal(status.wallClockSavingPercent, 10);
     assert.equal(status.hardRegressionPairs, 0);
+    assert.equal(status.activationState, 'verified');
+    assert.equal(status.activationVerifiedPairs, 3);
+    assert.equal(status.activationBlockedPairs, 0);
+    assert.equal(status.activationUnknownPairs, 0);
     assert.deepEqual(status.promotionBlockers, [
       'the standard benchmark campaign is not complete',
       'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
     ]);
-    assert.equal(status.promotionReadiness?.passedGateCount, 2);
+    assert.equal(status.promotionReadiness?.passedGateCount, 3);
     assert.equal(status.promotionReadiness?.requiredGateCount, 8);
     assert.equal(status.promotionReadiness?.nextGate, 'selection-evidence');
     assert.equal(status.promotionReadiness?.state, 'blocked');
@@ -192,8 +205,9 @@ describe('guided candidate campaign status', () => {
     assert.match(status.nextCommand ?? '', /--variant baseline/);
     assert.equal(status.promotionEligible, false);
     assert.match(status.note, /current local candidate observation/);
-    assert.match(status.note, /does not prove activation/);
-    assert.match(status.note, /decision-ready does not mean promotion-ready/);
+    assert.match(status.note, /do not prove activation/);
+    assert.match(status.note, /runtime MCP evidence/);
+    assert.match(status.note, /[Dd]ecision-ready does not mean promotion-ready/);
   });
 
   it('keeps capability gates unreviewed when no local observation is available', async () => {
@@ -210,7 +224,7 @@ describe('guided candidate campaign status', () => {
       campaignId: 'gitnexus-codex-eval-m123abc',
     });
 
-    assert.equal(status.promotionReadiness?.passedGateCount, 0);
+    assert.equal(status.promotionReadiness?.passedGateCount, 1);
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('benchmark-capability'));
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('category-fit'));
     assert.equal(status.promotionReadiness?.promotionEligible, false);

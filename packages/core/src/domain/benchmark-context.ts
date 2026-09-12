@@ -7,11 +7,14 @@
  */
 
 import {
+  assessMcpServer,
   effectiveMcpExposure,
   type HarnessContextObservation,
   type ToolDeferralObservation,
   type ToolDeferralState,
 } from './context-cost.js';
+
+export type GitNexusMcpRuntimeState = 'usable' | 'unusable' | 'absent' | 'unknown';
 
 export interface TaskBenchmarkContextSnapshot {
   observationState: Extract<HarnessContextObservation['state'], 'observed' | 'partial'>;
@@ -23,6 +26,8 @@ export interface TaskBenchmarkContextSnapshot {
   effectiveStaticMcpToolCount: number;
   toolDeferralState: ToolDeferralState | null;
   toolDeferralMechanism: ToolDeferralObservation['mechanism'] | null;
+  /** Bounded candidate witness; no MCP arguments, tool names, paths, or credentials are persisted. */
+  gitNexusMcpRuntimeState?: GitNexusMcpRuntimeState;
 }
 
 export type TaskBenchmarkContextVerdict = 'reduced' | 'same' | 'increased' | 'unknown';
@@ -44,6 +49,25 @@ const DEFERRAL_MECHANISMS = new Set<ToolDeferralObservation['mechanism']>([
   'native-defer-loading',
   'external',
 ]);
+const GITNEXUS_MCP_RUNTIME_STATES = new Set<GitNexusMcpRuntimeState>([
+  'usable',
+  'unusable',
+  'absent',
+  'unknown',
+]);
+
+function gitNexusMcpRuntimeState(observation: HarnessContextObservation): GitNexusMcpRuntimeState {
+  const matches = observation.mcpServers.filter(
+    (server) => server.name.trim().toLowerCase() === 'gitnexus',
+  );
+  if (matches.length > 1) return 'unknown';
+  const server = matches[0];
+  if (server === undefined) return observation.mcpInventoryTruncated ? 'unknown' : 'absent';
+  const usability = assessMcpServer(server).usability;
+  if (usability === 'usable') return 'usable';
+  if (usability === 'attention' || usability === 'disabled') return 'unusable';
+  return 'unknown';
+}
 
 /** Convert one context observation into a bounded benchmark witness without storing tool names. */
 export function taskBenchmarkContextSnapshot(
@@ -68,6 +92,7 @@ export function taskBenchmarkContextSnapshot(
     effectiveStaticMcpToolCount: exposure.knownToolCountForPressure,
     toolDeferralState: observation.toolDeferral?.state ?? null,
     toolDeferralMechanism: observation.toolDeferral?.mechanism ?? null,
+    gitNexusMcpRuntimeState: gitNexusMcpRuntimeState(observation),
   };
 }
 
@@ -87,6 +112,7 @@ export function parseTaskBenchmarkContextSnapshot(
   const effectiveStaticMcpToolCount = nonNegativeInteger(row['effectiveStaticMcpToolCount']);
   const toolDeferralState = row['toolDeferralState'];
   const toolDeferralMechanism = row['toolDeferralMechanism'];
+  const gitNexusMcpRuntimeState = row['gitNexusMcpRuntimeState'];
 
   if (
     (observationState !== 'observed' && observationState !== 'partial') ||
@@ -111,7 +137,12 @@ export function parseTaskBenchmarkContextSnapshot(
     effectiveStaticMcpServerCount > rawMcpServerCount ||
     effectiveStaticMcpToolCount > rawKnownMcpToolCount ||
     (toolDeferralState === 'active' &&
-      (effectiveStaticMcpServerCount !== 0 || effectiveStaticMcpToolCount !== 0))
+      (effectiveStaticMcpServerCount !== 0 || effectiveStaticMcpToolCount !== 0)) ||
+    !(
+      gitNexusMcpRuntimeState === undefined ||
+      (typeof gitNexusMcpRuntimeState === 'string' &&
+        GITNEXUS_MCP_RUNTIME_STATES.has(gitNexusMcpRuntimeState as GitNexusMcpRuntimeState))
+    )
   ) {
     return undefined;
   }
@@ -126,6 +157,9 @@ export function parseTaskBenchmarkContextSnapshot(
     effectiveStaticMcpToolCount,
     toolDeferralState: toolDeferralState as ToolDeferralState | null,
     toolDeferralMechanism: toolDeferralMechanism as ToolDeferralObservation['mechanism'] | null,
+    ...(gitNexusMcpRuntimeState === undefined
+      ? {}
+      : { gitNexusMcpRuntimeState: gitNexusMcpRuntimeState as GitNexusMcpRuntimeState }),
   };
 }
 

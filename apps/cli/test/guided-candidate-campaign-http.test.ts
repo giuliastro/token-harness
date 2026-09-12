@@ -49,6 +49,10 @@ function status(input: GuideCandidateCampaignRequest): GuideCandidateCampaignSta
     wallClockComparablePairs: 0,
     wallClockSavingPercent: null,
     hardRegressionPairs: 0,
+    activationState: 'unreviewed',
+    activationVerifiedPairs: 0,
+    activationBlockedPairs: 0,
+    activationUnknownPairs: 0,
     nextStep: {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-m-1',

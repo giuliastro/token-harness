@@ -207,3 +207,71 @@ test('completed receipts preserve start and finish context witnesses additively'
   assert.equal(completed.receipt.contextAtFinish?.rawKnownMcpToolCount, 5);
   assert.equal(completed.receipt.contextAtFinish?.mcpInventoryTruncated, false);
 });
+
+test('records bounded GitNexus MCP runtime usability without persisting server details', () => {
+  const usable = taskBenchmarkContextSnapshot(observation([mcp('GitNexus', 7)]));
+  assert.equal(usable?.gitNexusMcpRuntimeState, 'usable');
+
+  const duplicate = taskBenchmarkContextSnapshot(
+    observation([mcp('gitnexus', 7), mcp('GitNexus', 7)]),
+  );
+  assert.equal(duplicate?.gitNexusMcpRuntimeState, 'unknown');
+
+  const truncatedAbsent = taskBenchmarkContextSnapshot(observation([mcp('other', 3)], null, true));
+  assert.equal(truncatedAbsent?.gitNexusMcpRuntimeState, 'unknown');
+
+  const absent = taskBenchmarkContextSnapshot(observation([mcp('other', 3)]));
+  assert.equal(absent?.gitNexusMcpRuntimeState, 'absent');
+});
+
+test('GitNexus MCP runtime witness fails closed on unusable or unknown status', () => {
+  const broken: McpServerObservation = {
+    ...mcp('gitnexus', 7),
+    runtimeStatus: 'error',
+  };
+  assert.equal(
+    taskBenchmarkContextSnapshot(observation([broken]))?.gitNexusMcpRuntimeState,
+    'unusable',
+  );
+
+  const unknown: McpServerObservation = {
+    ...mcp('gitnexus', 7),
+    runtimeStatus: null,
+  };
+  assert.equal(
+    taskBenchmarkContextSnapshot(observation([unknown]))?.gitNexusMcpRuntimeState,
+    'unknown',
+  );
+});
+
+test('legacy context witnesses without GitNexus runtime state remain readable and unknown', () => {
+  const parsed = parseTaskBenchmarkContextSnapshot({
+    observationState: 'observed',
+    rawMcpServerCount: 0,
+    rawKnownMcpToolCount: 0,
+    unknownMcpToolServerCount: 0,
+    mcpInventoryTruncated: false,
+    effectiveStaticMcpServerCount: 0,
+    effectiveStaticMcpToolCount: 0,
+    toolDeferralState: null,
+    toolDeferralMechanism: null,
+  });
+  assert.notEqual(parsed, undefined);
+  assert.equal(parsed?.gitNexusMcpRuntimeState, undefined);
+
+  assert.equal(
+    parseTaskBenchmarkContextSnapshot({
+      observationState: 'observed',
+      rawMcpServerCount: 0,
+      rawKnownMcpToolCount: 0,
+      unknownMcpToolServerCount: 0,
+      mcpInventoryTruncated: false,
+      effectiveStaticMcpServerCount: 0,
+      effectiveStaticMcpToolCount: 0,
+      toolDeferralState: null,
+      toolDeferralMechanism: null,
+      gitNexusMcpRuntimeState: 'definitely-active',
+    }),
+    undefined,
+  );
+});

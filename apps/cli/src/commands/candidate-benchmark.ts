@@ -7,6 +7,7 @@ import {
   parseTaskBenchmarkReceipt,
   type CommandResult,
   type Diagnostic,
+  type GitNexusMcpRuntimeState,
   type HarnessId,
   type OptimizationCandidateId,
   type TaskBenchmarkCapture,
@@ -83,6 +84,17 @@ export interface CandidateBenchmarkCampaignSlot {
   state: CandidateBenchmarkCampaignSlotState;
 }
 
+export type CandidateActivationEvidenceState = 'verified' | 'blocked' | 'unreviewed';
+
+export interface CandidateActivationEvidence {
+  candidateId: OptimizationCandidateId;
+  state: CandidateActivationEvidenceState;
+  verifiedPairs: number;
+  blockedPairs: number;
+  unknownPairs: number;
+  reason: string;
+}
+
 export interface CandidateBenchmarkCampaignReport {
   campaignId: string;
   candidateId: OptimizationCandidateId;
@@ -95,6 +107,7 @@ export interface CandidateBenchmarkCampaignReport {
   nextCommand: string | null;
   nextInstruction: string;
   evidence: CandidateBenchmarkEvidence;
+  activation: CandidateActivationEvidence;
   assessment: CandidateEvidenceAssessment;
 }
 
@@ -124,6 +137,76 @@ interface CampaignDefinition {
 function roundedPercent(numerator: number, denominator: number): number | null {
   if (denominator <= 0) return null;
   return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+export function summarizeCandidateActivationEvidence(
+  candidateId: OptimizationCandidateId,
+  boundaries: readonly {
+    start: GitNexusMcpRuntimeState | undefined;
+    finish: GitNexusMcpRuntimeState | undefined;
+  }[],
+): CandidateActivationEvidence {
+  if (candidateId !== 'gitnexus') {
+    return {
+      candidateId,
+      state: 'unreviewed',
+      verifiedPairs: 0,
+      blockedPairs: 0,
+      unknownPairs: boundaries.length,
+      reason:
+        'this build has no reviewed task-boundary runtime activation witness for this candidate',
+    };
+  }
+
+  let verifiedPairs = 0;
+  let blockedPairs = 0;
+  let unknownPairs = 0;
+  for (const boundary of boundaries) {
+    if (boundary.start === 'usable' && boundary.finish === 'usable') {
+      verifiedPairs += 1;
+    } else if (
+      boundary.start === 'absent' ||
+      boundary.start === 'unusable' ||
+      boundary.finish === 'absent' ||
+      boundary.finish === 'unusable'
+    ) {
+      blockedPairs += 1;
+    } else {
+      unknownPairs += 1;
+    }
+  }
+
+  if (blockedPairs > 0) {
+    return {
+      candidateId,
+      state: 'blocked',
+      verifiedPairs,
+      blockedPairs,
+      unknownPairs,
+      reason: `${String(blockedPairs)} optimized pair(s) observed GitNexus absent or unusable at a task boundary`,
+    };
+  }
+  if (verifiedPairs > 0 && unknownPairs === 0) {
+    return {
+      candidateId,
+      state: 'verified',
+      verifiedPairs,
+      blockedPairs,
+      unknownPairs,
+      reason: `${String(verifiedPairs)} optimized pair(s) observed the GitNexus MCP server usable at both task boundaries`,
+    };
+  }
+  return {
+    candidateId,
+    state: 'unreviewed',
+    verifiedPairs,
+    blockedPairs,
+    unknownPairs,
+    reason:
+      boundaries.length === 0
+        ? 'no completed optimized task has runtime activation evidence yet'
+        : 'one or more optimized tasks lack complete GitNexus runtime activation evidence',
+  };
 }
 
 export function summarizeCandidateBenchmarkEntries(
@@ -473,9 +556,30 @@ async function buildCampaignReport(
     evidenceEntries.push({ ...entry, ...timing });
   }
 
+  const activationBoundaries: Array<{
+    start: GitNexusMcpRuntimeState | undefined;
+    finish: GitNexusMcpRuntimeState | undefined;
+  }> = [];
+  for (const slot of slots) {
+    if (slot.state !== 'complete') continue;
+    const optimizedReceipt = await readReceiptArtifact(context, slot.benchmarkId, 'optimized');
+    activationBoundaries.push(
+      optimizedReceipt === 'absent' || optimizedReceipt === 'invalid'
+        ? { start: undefined, finish: undefined }
+        : {
+            start: optimizedReceipt.contextAtStart?.gitNexusMcpRuntimeState,
+            finish: optimizedReceipt.contextAtFinish?.gitNexusMcpRuntimeState,
+          },
+    );
+  }
+
   const completedPairs = slots.filter((slot) => slot.state === 'complete').length;
   const invalidPairs = slots.filter((slot) => slot.state === 'invalid').length;
   const evidence = summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries);
+  const activation = summarizeCandidateActivationEvidence(
+    definition.candidateId,
+    activationBoundaries,
+  );
   const assessment = assessCandidateEvidence({
     candidateId: definition.candidateId,
     totalPairs: slots.length,
@@ -498,6 +602,7 @@ async function buildCampaignReport(
     nextCommand: next.command,
     nextInstruction: next.instruction,
     evidence,
+    activation,
     assessment,
   };
 }

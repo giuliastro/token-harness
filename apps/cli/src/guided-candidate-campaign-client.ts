@@ -274,6 +274,15 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
       node('strong', data.decisionReady ? 'Yes' : 'No'),
       node('span', 'Evidence pairs'),
       node('strong', String(data.evidencePairs)),
+      node('span', 'Activation'),
+      node(
+        'strong',
+        data.activationState === 'verified'
+          ? 'Verified at task boundaries'
+          : data.activationState === 'blocked'
+            ? 'Not active consistently'
+            : 'Not verified yet',
+      ),
     );
     host.append(facts);
 

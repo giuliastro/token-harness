@@ -294,7 +294,7 @@ token-harness benchmark-matrix \
 Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
 same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
 documented workflow. Token Harness records the experiment target but does not treat attribution—or
-the browser acknowledgement—as proof that the candidate was active.
+the browser acknowledgement—as proof that the candidate was active. For GitNexus, new benchmark receipts can additionally verify activation from the harness-native MCP inventory when the GitNexus server is observed usable at both task boundaries; missing or ambiguous runtime evidence stays unverified.
 
 The selection assessment can become decision-ready after enough evidence across task classes, but it
 still cannot promote a candidate by itself. The remaining lifecycle and combined-stack gates must be
