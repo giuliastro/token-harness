@@ -89,7 +89,7 @@ function scopeHookCheck(
   harnessId: HarnessId,
   configured: boolean,
 ): VerificationCheck {
-  if (check.id !== 'hook-registered') return check;
+  if (check.id !== 'hook-registered' || check.status === 'fail') return check;
   return configured
     ? {
         ...check,
@@ -115,7 +115,7 @@ function scopeCanaryCheck(
     providerHasAttributableReceipt: boolean;
   },
 ): VerificationCheck {
-  if (check.id !== 'canary-intercepted') return check;
+  if (check.id !== 'canary-intercepted' || check.status === 'fail') return check;
 
   if (!input.configured) {
     return {
