@@ -15,6 +15,9 @@ describe('guided candidate readiness presentation', () => {
 
   it('only reuses the local overview endpoint and never runs candidate install or activation commands', () => {
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /\/api\/overview\?period=/);
-    assert.doesNotMatch(GUIDE_CANDIDATE_READINESS_JS, /headroom wrap|pip install|npm install|gitnexus analyze/);
+    assert.doesNotMatch(
+      GUIDE_CANDIDATE_READINESS_JS,
+      /headroom wrap|pip install|npm install|gitnexus analyze/,
+    );
   });
 });
