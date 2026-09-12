@@ -412,20 +412,19 @@ describe('update', () => {
     assert.notEqual(row(result.data, 'rtk')?.verdict, 'current');
   });
 
-  it('recovers compatibility from live wiring when a legacy journal lacks attribution', async () => {
+  it('does not treat legacy journal attribution as a package-update compatibility gate', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ legacyOwnedState: true }),
       {
         installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
         channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
-        compatibilityRows: [admittedRow()],
       },
     );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
     assert.equal(result.data?.execution?.outcome, 'committed');
-    assert.equal(result.codes.includes('managed-update-blocked'), false);
+    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);
     assert.ok(
       result.asked.some(
         (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
@@ -434,7 +433,7 @@ describe('update', () => {
     );
   });
 
-  it('keeps the current version when a managed target has no reviewed row', async () => {
+  it('updates a reviewed provider package without a managed-mutation compatibility row', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
@@ -446,33 +445,35 @@ describe('update', () => {
     );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');
-    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');
-    assert.ok(result.codes.includes('managed-update-blocked'));
-    assert.equal(
-      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
-      false,
+    assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
+      ),
       JSON.stringify(result.asked),
     );
   });
 
-  it('updates a managed provider only when a row admits the target version', async () => {
+  it('blocks an unreviewed future package target even when an old config row exists', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
       {
-        installed: { rtk: 'rtk 0.42.0', claude: '2.1.220' },
-        channelStdout: { [CHANNEL]: channelAnswer('0.44.0') },
+        installed: { rtk: 'rtk 0.49.0', claude: '2.1.220' },
+        channelStdout: { [CHANNEL]: channelAnswer('0.50.0') },
         compatibilityRows: [admittedRow()],
       },
     );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    assert.equal(result.data?.execution?.outcome, 'committed');
-    assert.ok(
-      result.asked.some(
-        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
-      ),
+    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');
+    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');
+    assert.ok(result.codes.includes('provider-update-target-unreviewed'));
+    assert.equal(
+      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
+      false,
       JSON.stringify(result.asked),
     );
   });
