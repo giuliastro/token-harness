@@ -41,10 +41,10 @@ reported as `unknown-newer` until the specific contract Token Harness consumes h
 
 ## Package updates are a separate gate
 
-`token-harness update` replaces a provider package. That operation does **not** by itself edit
-Claude Code, Codex or OpenCode configuration, so it no longer requires an exact
-provider × harness × provider-version × harness-version × OS compatibility row merely to replace the
-binary/package.
+`token-harness update` replaces an already-installed provider package; it does not silently install
+an absent provider. Replacing that package does **not** by itself edit Claude Code, Codex or OpenCode
+configuration, so it no longer requires an exact provider × harness × provider-version ×
+harness-version × OS compatibility row merely to replace the binary/package.
 
 Instead, package replacement has its own reviewed provider-target policy:
 
