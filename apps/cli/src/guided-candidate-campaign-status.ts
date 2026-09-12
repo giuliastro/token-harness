@@ -6,6 +6,11 @@ import type {
   CandidateBenchmarkCampaignSlot,
 } from './commands/candidate-benchmark.js';
 import type { CandidateEvidenceSignal } from './commands/candidate-evidence-assessment.js';
+import {
+  createGuideCandidateCampaignActionRunner,
+  type GuideCandidateCampaignActionRequest,
+  type GuideCandidateCampaignActionResult,
+} from './guided-candidate-campaign-action.js';
 import type { GuideCall } from './guided.js';
 
 export type GuideCandidateId = 'headroom' | 'mcptoon' | 'gitnexus';
@@ -51,6 +56,11 @@ export interface GuideCandidateCampaignStatus {
   reasons: string[];
   promotionEligible: false;
   note: string;
+}
+
+export interface GuideCandidateCampaignController {
+  (input: GuideCandidateCampaignRequest): Promise<GuideCandidateCampaignStatus>;
+  action(input: GuideCandidateCampaignActionRequest): Promise<GuideCandidateCampaignActionResult>;
 }
 
 const CANDIDATES = new Set<GuideCandidateId>(['headroom', 'mcptoon', 'gitnexus']);
@@ -139,10 +149,10 @@ function campaignStep(campaign: CandidateBenchmarkCampaignReport): GuideCandidat
   };
 }
 
-export function createGuideCandidateCampaignReader(
-  call: GuideCall,
-): (input: GuideCandidateCampaignRequest) => Promise<GuideCandidateCampaignStatus> {
-  return async (input) => {
+export function createGuideCandidateCampaignReader(call: GuideCall): GuideCandidateCampaignController {
+  const read = async (
+    input: GuideCandidateCampaignRequest,
+  ): Promise<GuideCandidateCampaignStatus> => {
     const result = await call<CandidateAwareBenchmarkMatrixReport>([
       'benchmark-matrix',
       '--benchmark-id',
@@ -183,4 +193,8 @@ export function createGuideCandidateCampaignReader(
       note: 'Campaign evidence is selection evidence only. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
     };
   };
+
+  const controller = read as GuideCandidateCampaignController;
+  controller.action = createGuideCandidateCampaignActionRunner(call, read);
+  return controller;
 }
