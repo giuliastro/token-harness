@@ -9,6 +9,15 @@ export interface StackCombinationFingerprint {
   configuredHarnesses: Readonly<Record<string, HarnessId[]>>;
 }
 
+/** Read-only capture handed to a human/reviewer before any compatibility decision exists. */
+export interface StackCombinationReviewCaptureReport {
+  capturedAt: string;
+  ready: boolean;
+  fingerprint: StackCombinationFingerprint | null;
+  reviewState: 'pending-manual-decision';
+  instructions: string[];
+}
+
 /**
  * Deliberately reviewed evidence for one exact provider/version/harness combination.
  *
@@ -65,7 +74,10 @@ function recordMatches(
   if (!sameStrings(recordProviders, fingerprint.providerIds)) return false;
 
   for (const providerId of fingerprint.providerIds) {
-    if (!(providerId in record.versions) || record.versions[providerId] !== fingerprint.versions[providerId]) {
+    if (
+      !(providerId in record.versions) ||
+      record.versions[providerId] !== fingerprint.versions[providerId]
+    ) {
       return false;
     }
     const expected = normalizeHarnesses(record.configuredHarnesses[providerId] ?? []);
@@ -77,7 +89,10 @@ function recordMatches(
   // the exact provider set it claims to cover, never a superset that happens to match.
   const versionKeys = Object.keys(record.versions).sort();
   const harnessKeys = Object.keys(record.configuredHarnesses).sort();
-  return sameStrings(versionKeys, fingerprint.providerIds) && sameStrings(harnessKeys, fingerprint.providerIds);
+  return (
+    sameStrings(versionKeys, fingerprint.providerIds) &&
+    sameStrings(harnessKeys, fingerprint.providerIds)
+  );
 }
 
 /** Return explicit review evidence only for an exact configured-stack match. */
