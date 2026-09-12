@@ -1,11 +1,11 @@
 import { isTaskBenchmarkId, type TaskQualityGate } from '@token-harness/core';
 
-import {
-  createGuideCandidateCampaignReader,
-  parseGuideCandidateCampaignRequest,
-  type GuideCandidateCampaignRequest,
-  type GuideCandidateCampaignStatus,
-  type GuideCandidateCampaignStepKind,
+import type {
+  GuideCandidateCampaignRequest,
+  GuideCandidateCampaignStatus,
+  GuideCandidateCampaignStepKind,
+  GuideCandidateHarness,
+  GuideCandidateId,
 } from './guided-candidate-campaign-status.js';
 import type { GuideCall } from './guided.js';
 
@@ -40,12 +40,19 @@ export type GuideCandidateCampaignActionResult =
       status: GuideCandidateCampaignStatus | null;
     };
 
+export type GuideCandidateCampaignReader = (
+  request: GuideCandidateCampaignRequest,
+) => Promise<GuideCandidateCampaignStatus>;
+
 const MUTABLE_STEPS = new Set<GuideCandidateCampaignMutableStep>([
   'start-baseline',
   'finish-baseline',
   'start-optimized',
   'finish-optimized',
 ]);
+const CANDIDATES = new Set<GuideCandidateId>(['headroom', 'mcptoon', 'gitnexus']);
+const HARNESSES = new Set<GuideCandidateHarness>(['claude', 'codex']);
+const CAMPAIGN_SUFFIX = /^[a-z0-9]{1,32}$/;
 
 function plainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -78,6 +85,30 @@ function parseOutcome(value: unknown): GuideCandidateCampaignOutcome | null {
   };
 }
 
+function parseCampaignIdentity(value: Record<string, unknown>): GuideCandidateCampaignRequest | null {
+  const candidateId = value['candidateId'];
+  const harnessId = value['harnessId'];
+  const campaignId = value['campaignId'];
+  if (
+    typeof candidateId !== 'string' ||
+    typeof harnessId !== 'string' ||
+    typeof campaignId !== 'string' ||
+    !CANDIDATES.has(candidateId as GuideCandidateId) ||
+    !HARNESSES.has(harnessId as GuideCandidateHarness)
+  ) {
+    return null;
+  }
+  const prefix = `${candidateId}-${harnessId}-eval-`;
+  if (!campaignId.startsWith(prefix) || !CAMPAIGN_SUFFIX.test(campaignId.slice(prefix.length))) {
+    return null;
+  }
+  return {
+    candidateId: candidateId as GuideCandidateId,
+    harnessId: harnessId as GuideCandidateHarness,
+    campaignId,
+  };
+}
+
 export function parseGuideCandidateCampaignActionRequest(
   value: unknown,
 ): GuideCandidateCampaignActionRequest | null {
@@ -96,17 +127,12 @@ export function parseGuideCandidateCampaignActionRequest(
     return null;
   }
 
-  const candidateId = value['candidateId'];
-  const harnessId = value['harnessId'];
-  const campaignId = value['campaignId'];
+  const campaign = parseCampaignIdentity(value);
   const expectedKind = value['expectedKind'];
   const expectedBenchmarkId = value['expectedBenchmarkId'];
   const activationAcknowledged = value['activationAcknowledged'];
-
   if (
-    typeof candidateId !== 'string' ||
-    typeof harnessId !== 'string' ||
-    typeof campaignId !== 'string' ||
+    campaign === null ||
     typeof expectedKind !== 'string' ||
     !MUTABLE_STEPS.has(expectedKind as GuideCandidateCampaignMutableStep) ||
     typeof expectedBenchmarkId !== 'string' ||
@@ -115,15 +141,6 @@ export function parseGuideCandidateCampaignActionRequest(
   ) {
     return null;
   }
-
-  const campaign = parseGuideCandidateCampaignRequest(
-    new URLSearchParams({
-      candidate: candidateId,
-      harness: harnessId,
-      campaign: campaignId,
-    }),
-  );
-  if (campaign === null) return null;
 
   const finish = expectedKind === 'finish-baseline' || expectedKind === 'finish-optimized';
   const outcome = value['outcome'] === null ? null : parseOutcome(value['outcome']);
@@ -138,9 +155,7 @@ export function parseGuideCandidateCampaignActionRequest(
   };
 }
 
-function stale(
-  status: GuideCandidateCampaignStatus,
-): GuideCandidateCampaignActionResult {
+function stale(status: GuideCandidateCampaignStatus): GuideCandidateCampaignActionResult {
   return {
     ok: false,
     statusCode: 409,
@@ -196,8 +211,8 @@ function finishArgs(
 
 export function createGuideCandidateCampaignActionRunner(
   call: GuideCall,
+  read: GuideCandidateCampaignReader,
 ): (request: GuideCandidateCampaignActionRequest) => Promise<GuideCandidateCampaignActionResult> {
-  const read = createGuideCandidateCampaignReader(call);
   return async (request) => {
     const status = await read(request);
     if (!status.available || status.nextStep === null) return stale(status);
