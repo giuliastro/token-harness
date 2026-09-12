@@ -23,7 +23,7 @@ describe('guided candidate decision evidence', () => {
   it('keeps local-token, wall-clock, activation and promotion meanings separate', () => {
     assert.match(
       GUIDE_CANDIDATE_DECISION_EVIDENCE_JS,
-      /Local token\/context evidence is not provider allowance/,
+      /Local token\/context evidence is not provider allowance/i,
     );
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /operational evidence/);
     assert.match(
