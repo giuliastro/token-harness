@@ -12,9 +12,16 @@ Use the read-only command:
 token-harness stack-review --json
 ```
 
-The capture contains only the configured managed providers, their exact observed versions, and the exact managed harness set for each provider. It also marks the decision as `pending-manual-decision`.
+The capture contains the configured managed providers, their exact observed versions, the exact managed harness set for each provider, and a bounded projection of the existing passive `verify` evidence for those exact provider/harness pairs. It also marks the decision as `pending-manual-decision`.
 
-The command does not install, configure, enable, disable, update, or approve anything. It delegates inventory to the same provider detection used by `doctor`.
+Passive evidence is reported separately as:
+
+- `observed` when an existing passive canary proves runtime use;
+- `not-exercised` when the integration is configured but its passive canary has not seen normal use yet;
+- `failed` when passive verification is failed or degraded;
+- `unavailable` when no passive runtime witness exists for that exact pair.
+
+The command does not run an active canary, spend a model call, execute a benchmark, install, configure, enable, disable, update, or approve anything. It reuses the same provider inventory as `doctor` and the same passive verification path as `verify`.
 
 ## Review rule
 
@@ -28,14 +35,16 @@ There are no version ranges or wildcard harnesses in this layer. Provider upgrad
 
 ## Making a decision
 
-A reviewer should test the captured stack together and retain the evidence used for the decision. At minimum, use the existing verification path and relevant controlled benchmark evidence; individual provider health alone is insufficient.
+A reviewer should test the captured stack together and retain the evidence used for the decision. `stack-review` now makes the first evidence gaps explicit: a `not-exercised` pair should be exercised through normal agent use and checked again, while a failed/degraded pair should be fixed before review. An `unavailable` passive witness requires controlled benchmark or manual evidence instead of an inferred pass.
+
+Even when every exact pair is `observed`, passive provider evidence is not proof that the providers compose safely together. Retain relevant controlled combined-stack benchmark evidence as well; individual provider health alone is insufficient.
 
 Only after the combined result has been deliberately reviewed should an exact registry record be added with either:
 
 - `reviewed` — the captured combination is accepted; or
 - `incompatible` — the combination reproduced a conflict or unsafe result.
 
-The shipped registry intentionally starts empty. Token Harness does not auto-promote a combination from `doctor`, `verify`, compatibility rows, or candidate scores.
+The shipped registry intentionally starts empty. Token Harness does not auto-promote a combination from `doctor`, `verify`, passive runtime evidence, compatibility rows, or candidate scores.
 
 ## Product behavior
 

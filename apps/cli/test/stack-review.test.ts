@@ -49,20 +49,40 @@ describe('stack-review CLI', () => {
     });
   });
 
-  it('renders the exact fingerprint without claiming compatibility', () => {
+  it('renders the exact fingerprint and passive evidence gaps without claiming compatibility', () => {
     const report: StackCombinationReviewCaptureReport = {
       capturedAt: '2026-09-12T09:00:00.000Z',
       ready: true,
       reviewState: 'pending-manual-decision',
       fingerprint: {
         providerIds: [HARNESS_TRIM, RTK],
-        versions: { harnesstrim: '0.2.1', rtk: '0.44.0' },
+        versions: { harnesstrim: '0.1.0', rtk: '0.44.0' },
         configuredHarnesses: {
-          harnesstrim: [CLAUDE, CODEX],
+          harnesstrim: [CODEX],
           rtk: [CLAUDE],
         },
       },
-      instructions: ['Test this exact combination together before recording a decision.'],
+      verificationEvidence: [
+        {
+          providerId: HARNESS_TRIM,
+          harnessId: CODEX,
+          declaredTier: 'config-only',
+          verificationStatus: 'healthy',
+          runtimeEvidence: 'not-exercised',
+          detail: 'No telemetry file yet, so nothing has been observed.',
+        },
+        {
+          providerId: RTK,
+          harnessId: CLAUDE,
+          declaredTier: 'canary',
+          verificationStatus: 'healthy',
+          runtimeEvidence: 'observed',
+          detail: '616 commands intercepted on 2026-09-11.',
+        },
+      ],
+      instructions: [
+        'Exercise these integrations through normal agent use, then rerun verify and stack-review: harnesstrim on codex.',
+      ],
     };
 
     const rendered = renderStackReviewReport(report, {
@@ -73,9 +93,14 @@ describe('stack-review CLI', () => {
 
     assert.match(rendered, /STACK REVIEW CAPTURE/);
     assert.match(rendered, /harnesstrim \+ rtk/);
-    assert.match(rendered, /harnesstrim\s+0\.2\.1\s+claude, codex/);
+    assert.match(rendered, /harnesstrim\s+0\.1\.0\s+codex/);
     assert.match(rendered, /rtk\s+0\.44\.0\s+claude/);
     assert.match(rendered, /pending manual review/);
+    assert.match(rendered, /PASSIVE VERIFICATION/);
+    assert.match(rendered, /harnesstrim \/ codex\s+not exercised\s+config-only/);
+    assert.match(rendered, /rtk \/ claude\s+observed\s+canary/);
+    assert.match(rendered, /616 commands intercepted/);
+    assert.match(rendered, /Exercise these integrations through normal agent use/);
     assert.doesNotMatch(rendered, /compatible/i);
   });
 
@@ -85,6 +110,7 @@ describe('stack-review CLI', () => {
       ready: false,
       reviewState: 'pending-manual-decision',
       fingerprint: null,
+      verificationEvidence: [],
       instructions: ['Configure at least two managed optimization providers.'],
     };
 

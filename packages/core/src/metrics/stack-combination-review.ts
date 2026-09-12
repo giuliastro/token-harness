@@ -1,5 +1,6 @@
 import type { ProviderDetection } from '../domain/detection.js';
 import type { HarnessId, ProviderId } from '../domain/ids.js';
+import type { VerificationResult } from '../domain/verification.js';
 import type { StackCombinationReviewEvidence } from './optimization-stack.js';
 
 /** Exact machine-observed identity of a configured multi-provider stack. */
@@ -9,11 +10,28 @@ export interface StackCombinationFingerprint {
   configuredHarnesses: Readonly<Record<string, HarnessId[]>>;
 }
 
+export type StackCombinationRuntimeEvidenceState =
+  | 'observed'
+  | 'not-exercised'
+  | 'failed'
+  | 'unavailable';
+
+/** Passive verification evidence for one exact configured provider × harness pair. */
+export interface StackCombinationVerificationEvidence {
+  providerId: ProviderId;
+  harnessId: HarnessId;
+  declaredTier: VerificationResult['declaredTier'] | null;
+  verificationStatus: VerificationResult['status'] | null;
+  runtimeEvidence: StackCombinationRuntimeEvidenceState;
+  detail: string;
+}
+
 /** Read-only capture handed to a human/reviewer before any compatibility decision exists. */
 export interface StackCombinationReviewCaptureReport {
   capturedAt: string;
   ready: boolean;
   fingerprint: StackCombinationFingerprint | null;
+  verificationEvidence: StackCombinationVerificationEvidence[];
   reviewState: 'pending-manual-decision';
   instructions: string[];
 }
@@ -68,6 +86,73 @@ export function fingerprintConfiguredStack(
   }
 
   return { providerIds, versions, configuredHarnesses };
+}
+
+function runtimeEvidenceFor(
+  result: VerificationResult | undefined,
+): Pick<StackCombinationVerificationEvidence, 'runtimeEvidence' | 'detail'> {
+  if (result === undefined) {
+    return {
+      runtimeEvidence: 'unavailable',
+      detail: 'No passive verification result was available for this configured integration.',
+    };
+  }
+
+  const failed = result.checks.find((check) => check.status === 'fail');
+  if (result.status === 'degraded' || result.status === 'failed' || failed !== undefined) {
+    return {
+      runtimeEvidence: 'failed',
+      detail: failed?.summary ?? `Verification status is ${result.status}.`,
+    };
+  }
+
+  const observed = result.checks.find(
+    (check) => check.status === 'pass' && check.achievedTier === 'canary',
+  );
+  if (observed !== undefined) {
+    return { runtimeEvidence: 'observed', detail: observed.summary };
+  }
+
+  const notExercised = result.checks.find((check) => check.status === 'not-exercised');
+  if (notExercised !== undefined) {
+    return { runtimeEvidence: 'not-exercised', detail: notExercised.summary };
+  }
+
+  return {
+    runtimeEvidence: 'unavailable',
+    detail:
+      'The integration is healthy at its declared tier, but no passive runtime canary is available.',
+  };
+}
+
+/**
+ * Project passive verification onto the exact configured provider × harness pairs in a captured
+ * fingerprint. This is review evidence only: it never upgrades the combination to reviewed and it
+ * never turns `not-exercised` into an ordinary verification failure.
+ */
+export function summarizeStackCombinationVerification(
+  fingerprint: StackCombinationFingerprint | null,
+  results: readonly VerificationResult[],
+): StackCombinationVerificationEvidence[] {
+  if (fingerprint === null) return [];
+
+  const evidence: StackCombinationVerificationEvidence[] = [];
+  for (const providerId of fingerprint.providerIds) {
+    for (const harnessId of fingerprint.configuredHarnesses[providerId] ?? []) {
+      const result = results.find(
+        (row) => row.providerId === providerId && row.harnessId === harnessId,
+      );
+      const runtime = runtimeEvidenceFor(result);
+      evidence.push({
+        providerId,
+        harnessId,
+        declaredTier: result?.declaredTier ?? null,
+        verificationStatus: result?.status ?? null,
+        ...runtime,
+      });
+    }
+  }
+  return evidence;
 }
 
 function recordMatches(

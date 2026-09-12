@@ -78,7 +78,13 @@ review is recorded, Setup says so and keeps the stack incomplete rather than inf
 from healthy individual checks. Token Harness can prepare their integration transactionally, show the
 exact plan, apply it only after approval, verify it, and remove only configuration it owns.
 
-For maintainers validating the combined stack, `token-harness stack-review --json` captures the exact configured provider versions and managed harness sets without making a compatibility decision. The shipped combined-review registry stays empty until that captured configuration has been tested together and deliberately reviewed; see `docs/combined-stack-reviews.md`.
+For maintainers validating the combined stack, `token-harness stack-review --json` captures the exact
+configured provider versions and managed harness sets and reuses the existing passive `verify`
+evidence to identify exact provider/harness pairs that were observed at runtime, are not yet
+exercised, failed/degraded, or have no passive runtime witness. It does not run an active canary or
+spend a model call, and it never makes the compatibility decision itself. The shipped combined-review
+registry stays empty until that captured configuration has been exercised, benchmarked together and
+deliberately reviewed; see `docs/combined-stack-reviews.md`.
 
 **3. Experimental tools**
 
@@ -450,16 +456,19 @@ through `token-harness@latest`.
 ```sh
 git clone https://github.com/giuliastro/token-harness.git
 cd token-harness
-corepack enable
-pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm smoke
-pnpm package
-pnpm smoke:install
+npx --yes pnpm@10.33.4 install --frozen-lockfile
+npx --yes pnpm@10.33.4 typecheck
+npx --yes pnpm@10.33.4 lint
+npx --yes pnpm@10.33.4 test
+npx --yes pnpm@10.33.4 build
+npx --yes pnpm@10.33.4 smoke
+npx --yes pnpm@10.33.4 package
+npx --yes pnpm@10.33.4 smoke:install
 ```
+
+Using `corepack enable` is optional. On a system-wide Windows Node installation it can require
+administrator permission to modify `C:\Program Files\nodejs`; the `npx pnpm@10.33.4` form above does
+not require that Corepack shim write.
 
 Before changing public behavior or architecture, read
 [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),

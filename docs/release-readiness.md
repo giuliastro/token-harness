@@ -20,8 +20,10 @@ existing users and testing well before it is the version we actively promote.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
       Exact multi-provider evidence is separate from individual compatibility rows. Token Harness now
       has a fail-closed exact matcher plus the read-only `stack-review --json` capture path for
-      provider/version/harness fingerprints, but the shipped review registry is intentionally empty
-      until a real RTK + HarnessTrim combination is tested together and deliberately reviewed.
+      provider/version/harness fingerprints. That capture also reuses passive `verify` evidence to
+      expose exact provider/harness pairs that are observed, not yet exercised, failed/degraded, or
+      lack a passive runtime witness. The shipped review registry remains intentionally empty until a
+      real RTK + HarnessTrim combination is exercised, benchmarked together and deliberately reviewed.
 - [ ] At least **three distinct useful savings mechanisms** are available through Token Harness.
 - [ ] Every counted mechanism has a real activation/configuration path, verification evidence and a
       safe ownership/rollback or uninstall story.

@@ -6,9 +6,12 @@ import {
   harnessId,
   providerId,
   selectStackCombinationReview,
+  summarizeStackCombinationVerification,
+  type HarnessId,
   type ProviderDetection,
   type ProviderId,
   type StackCombinationReviewRecord,
+  type VerificationResult,
 } from '../src/index.js';
 
 const RTK = providerId('rtk');
@@ -37,6 +40,37 @@ function detection(
     assignableHarnesses: harnesses,
     evidence: [],
     warnings: [],
+  };
+}
+
+function verification(
+  provider: ProviderId,
+  harness: HarnessId,
+  options: {
+    status?: VerificationResult['status'];
+    declaredTier?: VerificationResult['declaredTier'];
+    checkStatus?: VerificationResult['checks'][number]['status'];
+    achievedTier?: VerificationResult['checks'][number]['achievedTier'];
+    summary?: string;
+  } = {},
+): VerificationResult {
+  const declaredTier = options.declaredTier ?? 'canary';
+  return {
+    providerId: provider,
+    harnessId: harness,
+    status: options.status ?? 'healthy',
+    declaredTier,
+    managedByTokenHarness: true,
+    checks: [
+      {
+        id: 'canary',
+        status: options.checkStatus ?? 'pass',
+        summary: options.summary ?? 'Runtime canary observed.',
+        achievedTier: options.achievedTier === undefined ? declaredTier : options.achievedTier,
+        evidence: [],
+        remediation: null,
+      },
+    ],
   };
 }
 
@@ -69,6 +103,80 @@ describe('combined-stack review records', () => {
       versions: { harnesstrim: '0.2.1', rtk: '0.44.0' },
       configuredHarnesses: { harnesstrim: [CLAUDE, CODEX], rtk: [CLAUDE] },
     });
+  });
+
+  it('projects passive runtime evidence onto the exact configured provider/harness pairs', () => {
+    const fingerprint = fingerprintConfiguredStack([
+      detection(HARNESS_TRIM, '0.1.0', [CODEX]),
+      detection(RTK, '0.44.0', [CLAUDE]),
+    ]);
+    const evidence = summarizeStackCombinationVerification(fingerprint, [
+      verification(RTK, CLAUDE, {
+        declaredTier: 'canary',
+        checkStatus: 'pass',
+        achievedTier: 'canary',
+        summary: '616 commands intercepted.',
+      }),
+      verification(HARNESS_TRIM, CODEX, {
+        declaredTier: 'config-only',
+        checkStatus: 'not-exercised',
+        achievedTier: null,
+        summary: 'No telemetry file yet.',
+      }),
+    ]);
+
+    assert.deepEqual(evidence, [
+      {
+        providerId: HARNESS_TRIM,
+        harnessId: CODEX,
+        declaredTier: 'config-only',
+        verificationStatus: 'healthy',
+        runtimeEvidence: 'not-exercised',
+        detail: 'No telemetry file yet.',
+      },
+      {
+        providerId: RTK,
+        harnessId: CLAUDE,
+        declaredTier: 'canary',
+        verificationStatus: 'healthy',
+        runtimeEvidence: 'observed',
+        detail: '616 commands intercepted.',
+      },
+    ]);
+  });
+
+  it('keeps failed or degraded passive verification visible for review', () => {
+    const fingerprint = fingerprintConfiguredStack(configuredPair());
+    const evidence = summarizeStackCombinationVerification(fingerprint, [
+      verification(RTK, CLAUDE, {
+        status: 'degraded',
+        checkStatus: 'fail',
+        achievedTier: null,
+        summary: 'Hook verification failed.',
+      }),
+      verification(HARNESS_TRIM, CLAUDE, {
+        declaredTier: 'config-only',
+        achievedTier: 'config-only',
+      }),
+    ]);
+
+    assert.equal(evidence[1]?.runtimeEvidence, 'failed');
+    assert.equal(evidence[1]?.detail, 'Hook verification failed.');
+  });
+
+  it('fails closed when a configured pair has no passive verification result', () => {
+    const fingerprint = fingerprintConfiguredStack(configuredPair());
+    const evidence = summarizeStackCombinationVerification(fingerprint, [
+      verification(RTK, CLAUDE),
+    ]);
+
+    assert.equal(evidence[0]?.providerId, HARNESS_TRIM);
+    assert.equal(evidence[0]?.runtimeEvidence, 'unavailable');
+    assert.match(evidence[0]?.detail ?? '', /No passive verification result/);
+  });
+
+  it('returns no verification projection when no exact fingerprint exists', () => {
+    assert.deepEqual(summarizeStackCombinationVerification(null, []), []);
   });
 
   it('accepts only an exact provider/version/harness review', () => {
