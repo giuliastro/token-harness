@@ -33,9 +33,7 @@ describe('guided candidate promotion readiness', () => {
 
     assert.equal(candidate.promotionReadiness.passedGateCount, 2);
     assert.equal(candidate.promotionReadiness.requiredGateCount, 9);
-    assert.ok(
-      candidate.promotionReadiness.unreviewedGateIds.includes('context-owner-admission'),
-    );
+    assert.ok(candidate.promotionReadiness.unreviewedGateIds.includes('context-owner-admission'));
     assert.equal(candidate.promotionReadiness.promotionEligible, false);
   });
 });
