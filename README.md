@@ -216,10 +216,19 @@ Provider compatibility is deliberately **not pinned forever to the first fixture
 current compatibility policy includes RTK **0.49.0** (source-contract reviewed; the latest live
 Windows fixture is 0.48.0) and HarnessTrim **0.3.0**. Newer HarnessTrim builds can be accepted
 without another hard-coded version bump when their executable version matches their machine-readable
-`capabilities` version and the semantic surface/write-set comparison reports no drift. Managed
-writes remain separately gated by the reviewed containment/write-set checks. RTK has no equivalent
-capability endpoint, so releases newer than the explicitly reviewed RTK set remain visible as
-`unknown-newer` until their consumed contract is checked. See
+`capabilities` version and the semantic surface/write-set comparison reports no drift.
+
+Provider **package updates are separate from harness configuration writes**. `token-harness update`
+can replace a reviewed provider target without requiring an exact historical Claude/Codex fixture
+for that package version; exact compatibility rows still gate any later managed agent-config
+mutation. HarnessTrim updates are executable through its pnpm channel and capture the previous global
+version for rollback. On Windows RTK still uses WinGet; as of 2026-09-12 the public WinGet package
+repository reaches 0.48.0, so it cannot yet deliver upstream RTK 0.49.0 until WinGet catches up or a
+managed upstream-release fallback is added. Token Harness reports what the selected channel actually
+offers rather than pretending it can install a release the channel does not contain.
+
+RTK has no equivalent machine-readable capability endpoint, so releases newer than the explicitly
+reviewed RTK set remain visible as `unknown-newer` until their consumed contract is checked. See
 [docs/provider-version-compatibility.md](docs/provider-version-compatibility.md).
 
 Current experimental candidates include Headroom, mcptoon and GitNexus. Detection or a promising
@@ -282,7 +291,7 @@ browser controller itself.
 | `verify` | Check the declared integration tier | No |
 | `metrics` | Report attributable reducer savings | No |
 | `status` | Report pipelines, drift and importer modes | No |
-| `update` | Check/update reviewed providers | Yes, only with `--yes` |
+| `update` | Check/update reviewed provider packages | Yes, only with `--yes` |
 | `rollback` | Restore the latest transaction snapshot | Yes, only with `--yes` |
 | `uninstall` | Remove owned integration entries | Yes, only with `--yes` |
 | `schedule` | Compare Claude Code and Codex using available evidence | No |
@@ -373,7 +382,8 @@ Token Harness is conservative by design:
 - existing files are backed up before a managed write;
 - only exact Token Harness-owned entries are removed by uninstall;
 - newer or untested combinations are reported rather than guessed;
-- an available provider update outside reviewed compatibility is kept out rather than forced;
+- an available provider update outside reviewed package compatibility is kept out rather than forced;
+- provider package replacement does not bypass the stricter compatibility gate for harness config writes;
 - the guided app binds only to `127.0.0.1` and protects local controls with Host/Origin checks, a
   per-process anti-forgery token and single-use approval tickets;
 - source code, prompts, command contents, credentials and cookies are not sent to a Token Harness
@@ -393,7 +403,18 @@ Update Token Harness itself:
 npm install --global token-harness@latest
 ```
 
-Provider checks and reviewed updates are in **Setup -> Checks and maintenance**.
+Provider checks and reviewed updates are in **Setup -> Checks and maintenance**. From the advanced
+CLI, first preview and then explicitly apply the provider-package updates:
+
+```sh
+token-harness update
+token-harness update --yes
+```
+
+`update` replaces only installed providers whose target is inside the reviewed provider-package
+policy. HarnessTrim uses pnpm and captures the previous global version for rollback. RTK uses the
+selected RTK installation channel; on Windows that is currently WinGet, so the newest RTK Token
+Harness can install through that path is the newest version WinGet actually publishes.
 
 Remove only Token Harness-owned integration entries:
 
@@ -485,7 +506,7 @@ npx --yes pnpm@10.33.4 smoke:install
 ```
 
 Using `corepack enable` is optional. On a system-wide Windows Node installation it can require
-administrator permission to modify `C:\\Program Files\\nodejs`; the `npx pnpm@10.33.4` form above
+administrator permission to modify `C:\Program Files\nodejs`; the `npx pnpm@10.33.4` form above
 does not require that Corepack shim write.
 
 Before changing public behavior or architecture, read
