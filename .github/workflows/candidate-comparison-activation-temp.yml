@@ -22,7 +22,7 @@ jobs:
       - name: Apply patch
         run: python3 scripts/candidate-comparison-activation-temp.py
       - name: Format changed files
-        run: pnpm exec prettier --write apps/cli/src/guided-candidate-comparison-client.ts apps/cli/src/guided-candidate-decision-evidence-client.ts apps/cli/test/guided-candidate-comparison-client.test.ts apps/cli/test/guided-candidate-decision-evidence-client.test.ts README.md docs/optimizer-priorities.md
+        run: pnpm exec prettier --write apps/cli/src/guided-candidate-comparison-client.ts apps/cli/src/guided-candidate-decision-evidence-client.ts apps/cli/test/guided-candidate-comparison-client.test.ts apps/cli/test/guided-candidate-decision-evidence-client.test.ts README.md docs/optimizer-priorities.md .github/workflows/candidate-comparison-activation-temp.yml
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
@@ -36,4 +36,3 @@ jobs:
           git add -A
           git commit -m "feat: surface candidate activation evidence in comparisons"
           git push
-# trigger validation after normalization fix
