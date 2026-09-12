@@ -186,24 +186,14 @@ describe('asking a channel what version it has', () => {
     assert.equal(outcome.version, null);
   });
 
-  it('can ask more channels than it can install through, on purpose', () => {
+  it('can execute every provider update channel it knows how to query', () => {
     /**
-     * The asymmetry is the assertion, because a test demanding the two match would force an
-     * unverified pnpm install argv into the build to satisfy it.
-     *
-     * A query is a read; an install is a mutation. `pnpm view <pkg> version` was verified against
-     * the machine, a global pnpm install was not, and RFC 0003 records that HarnessTrim — the
-     * provider whose channel is pnpm — "is not installed by Token Harness at all". So nothing
-     * needs the install side today.
-     *
-     * What must hold is the other direction: anything installable must be queryable, or `update`
-     * could not report on a provider `plan` had installed.
+     * `update` must never discover an actionable provider version through a channel whose exact
+     * install argv it cannot execute. pnpm is now part of both sides because HarnessTrim package
+     * replacement is an update responsibility, not a harness configuration mutation.
      */
-    assert.deepEqual(knownPackageManagers(), ['cargo', 'winget']);
+    assert.deepEqual(knownPackageManagers(), ['cargo', 'pnpm', 'winget']);
     assert.deepEqual(knownVersionQueryChannels(), ['cargo', 'pnpm', 'winget']);
-    for (const manager of knownPackageManagers()) {
-      assert.ok(knownVersionQueryChannels().includes(manager), manager);
-    }
   });
 });
 
