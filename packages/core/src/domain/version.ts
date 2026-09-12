@@ -16,8 +16,15 @@ export interface SemanticVersion {
   build: string | null;
 }
 
+/**
+ * Accept the common release-tag `v` prefix as transport syntax, not as part of SemVer.
+ *
+ * WinGet currently publishes RTK releases as values such as `v0.48.0`, while the RTK executable
+ * reports `0.48.0`. Treating those as different version grammars made an otherwise valid WinGet
+ * version table unreadable and prevented updates. The parsed semantic value stays identical.
+ */
 const SEMVER =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+  /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
 export function parseSemanticVersion(value: string): SemanticVersion | null {
   const match = SEMVER.exec(value.trim());
