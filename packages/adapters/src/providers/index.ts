@@ -37,6 +37,7 @@ export {
   type McptoonCandidateObservation,
   type McptoonCandidateState,
 } from './mcptoon-candidate.js';
+export { scopeProviderVerificationToHarness } from './harness-verification.js';
 export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
 export {
   compareCapabilities,
