@@ -80,7 +80,7 @@ async function harnessTrimReceiptFor(
 }
 
 function strongestTier(checks: readonly VerificationCheck[]): VerificationTier | null {
-  const order: readonly VerificationTier[] = ['live-receipt', 'canary', 'config-only', 'presence'];
+  const order: readonly VerificationTier[] = ['canary', 'config-only', 'presence'];
   return order.find((tier) => checks.some((check) => check.achievedTier === tier)) ?? null;
 }
 
