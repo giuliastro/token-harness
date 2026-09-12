@@ -2,10 +2,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OptimizationCandidateObservation } from '@token-harness/core';
+import { parseGuideCandidateCampaignActionRequest } from './guided-candidate-campaign-action.js';
 import {
   parseGuideCandidateCampaignRequest,
-  type GuideCandidateCampaignRequest,
-  type GuideCandidateCampaignStatus,
+  type GuideCandidateCampaignController,
 } from './guided-candidate-campaign-status.js';
 import { guidedCandidateObservation } from './guided-candidate-readiness.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
@@ -214,9 +214,7 @@ export function createGuideHandler(input: {
   token: string;
   authority: () => string;
   optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
-  candidateCampaign?: (
-    request: GuideCandidateCampaignRequest,
-  ) => Promise<GuideCandidateCampaignStatus>;
+  candidateCampaign?: GuideCandidateCampaignController;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -305,6 +303,16 @@ export function createGuideHandler(input: {
       )
         throw new GuideError(403, 'Refresh this dashboard before approving a change.');
       const body = await readBody(request);
+      if (url.pathname === '/api/candidate-campaign/action') {
+        if (input.candidateCampaign === undefined)
+          throw new GuideError(404, 'Candidate campaign actions are unavailable.');
+        const action = parseGuideCandidateCampaignActionRequest(body);
+        if (action === null)
+          throw new GuideError(400, 'Choose the current guided campaign step from this dashboard.');
+        const result = await input.candidateCampaign.action(action);
+        send(result.ok ? 200 : result.statusCode, JSON.stringify(result));
+        return;
+      }
       if (url.pathname === '/api/preview') {
         send(200, JSON.stringify(await input.service.preview(body)));
         return;
