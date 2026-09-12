@@ -17,6 +17,8 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prepare patch script
+        run: python3 scripts/fix-gitnexus-patch-temp.py
       - name: Apply patch
         run: python3 scripts/gitnexus-activation-patch-temp.py
       - name: Format
@@ -28,7 +30,7 @@ jobs:
       - name: Commit validated patch
         run: |
           rm .github/workflows/gitnexus-activation-temp.yml
-          rm scripts/gitnexus-activation-patch-temp.py
+          rm scripts/gitnexus-activation-patch-temp.py scripts/fix-gitnexus-patch-temp.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
