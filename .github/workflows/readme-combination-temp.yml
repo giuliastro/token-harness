@@ -1,0 +1,44 @@
+name: Temporary README combination patch
+
+on:
+  push:
+    branches:
+      - feat/managed-stack-combination-review
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/managed-stack-combination-review
+      - name: Update README and remove temporary workflow
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('README.md')
+          text = path.read_text()
+          old = """The managed stack currently consists of **RTK + HarnessTrim** on reviewed combinations. Token
+Harness can prepare their integration transactionally, show the exact plan, apply it only after
+approval, verify it, and remove only configuration it owns.
+"""
+          new = """The managed stack currently consists of **RTK + HarnessTrim** on individually reviewed
+combinations. Token Harness tracks the exact combined provider set separately: if no combined-stack
+review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
+from healthy individual checks. Token Harness can prepare their integration transactionally, show the
+exact plan, apply it only after approval, verify it, and remove only configuration it owns.
+"""
+          if old not in text:
+              raise SystemExit('README target text not found')
+          path.write_text(text.replace(old, new, 1))
+          Path('.github/workflows/readme-combination-temp.yml').unlink()
+      - name: Commit README patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md .github/workflows/readme-combination-temp.yml
+          git commit -m "docs: explain exact combined-stack review in README"
+          git push origin HEAD:feat/managed-stack-combination-review
