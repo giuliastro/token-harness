@@ -1,7 +1,7 @@
 import {
   classifyVersion,
   type ProviderDetection,
-  type VersionRange,
+  type TestedVersionRange,
 } from '@token-harness/core';
 
 import type { ProviderAdapter, ProviderContext } from './contract.js';
@@ -10,7 +10,7 @@ import type { ProviderAdapter, ProviderContext } from './contract.js';
  * Current stable upstream releases deliberately reviewed for the provider-facing CLI contract.
  *
  * This policy is intentionally separate from the exact managed-mutation compatibility matrix.
- * A provider release can remain API-compatible and therefore be recognised here while still
+ * A provider release can remain CLI-compatible and therefore be recognised here while still
  * requiring a real provider × harness × platform fixture before Token Harness may mutate that
  * integration automatically.
  */
@@ -22,7 +22,9 @@ export const CURRENT_PROVIDER_RELEASES = {
 export const CURRENT_PROVIDER_VERSION_RANGES = {
   rtk: { minimum: '0.44.0', maximum: CURRENT_PROVIDER_RELEASES.rtk },
   harnesstrim: { minimum: '0.0.5', maximum: CURRENT_PROVIDER_RELEASES.harnesstrim },
-} as const satisfies Readonly<Record<keyof typeof CURRENT_PROVIDER_RELEASES, VersionRange>>;
+} as const satisfies Readonly<
+  Record<keyof typeof CURRENT_PROVIDER_RELEASES, TestedVersionRange>
+>;
 
 /**
  * Apply the central provider release policy at the registry boundary.
@@ -34,7 +36,7 @@ export const CURRENT_PROVIDER_VERSION_RANGES = {
  */
 export function withCurrentProviderVersionPolicy(
   adapter: ProviderAdapter,
-  range: VersionRange,
+  range: TestedVersionRange,
 ): ProviderAdapter {
   return {
     ...adapter,
