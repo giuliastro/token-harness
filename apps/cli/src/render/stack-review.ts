@@ -41,6 +41,9 @@ export function renderStackReviewReport(
     }
   }
   lines.push('', ...report.instructions.map((instruction) => `- ${instruction}`));
-  lines.push('', 'Use --json to copy the exact machine-readable review fingerprint and evidence gaps.');
+  lines.push(
+    '',
+    'Use --json to copy the exact machine-readable review fingerprint and evidence gaps.',
+  );
   return `${lines.join('\n')}\n`;
 }
