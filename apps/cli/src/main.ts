@@ -468,7 +468,10 @@ async function runGuidedUi(
       token,
       authority: () => authority,
       optimizationCandidates: () => optimizationCandidates,
-      candidateCampaign: createGuideCandidateCampaignReader(guideCall),
+      candidateCampaign: createGuideCandidateCampaignReader(
+        guideCall,
+        (candidateId) => optimizationCandidates.find((item) => item.id === candidateId) ?? null,
+      ),
     }),
   );
   server.requestTimeout = 15_000;
