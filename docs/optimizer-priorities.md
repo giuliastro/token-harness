@@ -82,6 +82,13 @@ The candidate evidence view deliberately emits **no composite score, winner, act
 promotion recommendation**. Promotion remains a separate product decision that also requires
 compatibility, distinctness, operational cost, verification and reversibility evidence.
 
+The guided campaign now projects that selection evidence through the same promotion-readiness gates
+shown on the candidate card. An explicit **Compare evaluation evidence** action can read only saved
+candidate/harness campaigns and place their progress, selection signal, decision readiness and gate
+state side by side. It is intentionally on-demand, does not create missing campaigns or trigger a
+second environment scan, and preserves fixed candidate/harness ordering instead of ranking by a
+synthetic score.
+
 ## Candidate research queue
 
 The queue is category-first. No project owns a roadmap slot merely because it was suggested first.

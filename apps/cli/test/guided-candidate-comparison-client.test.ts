@@ -17,7 +17,10 @@ describe('guided candidate campaign comparison', () => {
 
   it('reads only existing campaign ids and never creates or activates candidate state', () => {
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /localStorage\.getItem/);
-    assert.doesNotMatch(GUIDE_CANDIDATE_COMPARISON_JS, /localStorage\.setItem|newCampaignId|Date\.now/);
+    assert.doesNotMatch(
+      GUIDE_CANDIDATE_COMPARISON_JS,
+      /localStorage\.setItem|newCampaignId|Date\.now/,
+    );
     assert.match(GUIDE_CANDIDATE_COMPARISON_JS, /document\.addEventListener\('click'/);
     assert.doesNotMatch(
       GUIDE_CANDIDATE_COMPARISON_JS,
