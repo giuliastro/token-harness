@@ -6,20 +6,28 @@ on:
       - codex/provider-tool-updates-2026-09-12
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prettier-diff:
+  prettier-write:
+    if: github.event.head_commit.message != 'chore: apply prettier output'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: codex/provider-tool-updates-2026-09-12
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Print Prettier diff
+      - name: Apply repository formatter and remove this temporary workflow
         run: |
           pnpm exec prettier --write apps/cli/src/commands/update.ts packages/adapters/test/version-compatibility.test.ts packages/core/src/state/install.ts
-          git diff -- apps/cli/src/commands/update.ts packages/adapters/test/version-compatibility.test.ts packages/core/src/state/install.ts
+          rm .github/workflows/format-debug.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/commands/update.ts packages/adapters/test/version-compatibility.test.ts packages/core/src/state/install.ts .github/workflows/format-debug.yml
+          git commit -m "chore: apply prettier output"
+          git push origin HEAD:codex/provider-tool-updates-2026-09-12
