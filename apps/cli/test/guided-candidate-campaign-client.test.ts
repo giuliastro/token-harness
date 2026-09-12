@@ -10,7 +10,7 @@ describe('guided candidate campaign', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /localStorage/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /candidateId \+ ':' \+ harness/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /candidateId \+ '-' \+ harness \+ '-eval-'/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Each agent has its own resumable campaign/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Campaign id:/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /stopImmediatePropagation/);
     assert.doesNotThrow(() => new Script(GUIDE_CANDIDATE_CAMPAIGN_JS));
   });
@@ -22,12 +22,23 @@ describe('guided candidate campaign', () => {
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Decision ready/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Evidence pairs/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Refresh status/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /data\.nextCommand/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /without a separate status command/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /data\.nextStep/);
+  });
+
+  it('starts and finishes only bounded local capture steps through the protected endpoint', () => {
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /\/api\/candidate-campaign\/action/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /X-Token-Harness-CSRF/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Start baseline capture/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Start optimized capture/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Record outcome/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /quality: quality\.value/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /failedAttempts: failedCount/);
+    assert.doesNotMatch(GUIDE_CANDIDATE_CAMPAIGN_JS, /argv\s*:/);
   });
 
   it('keeps a benchmark-matrix terminal fallback without making it the primary workflow', () => {
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Terminal fallback/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Terminal campaign status/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /CLI fallback for this step/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /benchmark-matrix/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /--benchmark-id/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /--candidate/);
@@ -41,7 +52,9 @@ describe('guided candidate campaign', () => {
       /Candidate attribution records the experiment target/,
     );
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not activation verification/);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /I enabled/);
     assert.doesNotMatch(
       GUIDE_CANDIDATE_CAMPAIGN_JS,
       /headroom wrap|pip install|npm install|gitnexus analyze/,
