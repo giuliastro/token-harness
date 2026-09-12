@@ -7,9 +7,10 @@
 
 import type { ProviderId } from '@token-harness/core';
 
-import { harnesstrimAdapter } from './harnesstrim.js';
-import { rtkAdapter } from './rtk.js';
+import { harnesstrimAdapter as baseHarnessTrimAdapter } from './harnesstrim.js';
+import { rtkAdapter as baseRtkAdapter } from './rtk.js';
 import type { ProviderAdapter } from './contract.js';
+import { withProviderVersionCompatibility } from './version-compatibility.js';
 
 export * from './contract.js';
 export {
@@ -38,16 +39,26 @@ export {
   type McptoonCandidateState,
 } from './mcptoon-candidate.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
-export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
+export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
   compareCapabilities,
-  harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   metricsLocations,
   synthesizeEventId,
   type HarnessTrimCapabilities,
   type HarnessTrimHarnessCapabilities,
 } from './harnesstrim.js';
+export {
+  applyProviderVersionCompatibility,
+  withProviderVersionCompatibility,
+} from './version-compatibility.js';
+
+/**
+ * Provider algorithms retain their fixture-backed historical baseline. This thin policy layer can
+ * advance compatibility independently when a newer upstream contract has been reviewed.
+ */
+export const rtkAdapter = withProviderVersionCompatibility(baseRtkAdapter);
+export const harnesstrimAdapter = withProviderVersionCompatibility(baseHarnessTrimAdapter);
 
 /**
  * The public HarnessTrim adapter keeps its direct skills-only planning surface for focused callers

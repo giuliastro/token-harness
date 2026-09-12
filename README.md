@@ -212,6 +212,16 @@ algorithms into this repository.
 | [cclimits](https://github.com/cruzanstx/cclimits) | Optional Claude allowance evidence | Read-only evidence; not an optimizer |
 | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
 
+Provider compatibility is deliberately **not pinned forever to the first fixture version**. The
+current compatibility policy includes RTK **0.49.0** (source-contract reviewed; the latest live
+Windows fixture is 0.48.0) and HarnessTrim **0.3.0**. Newer HarnessTrim builds can be accepted
+without another hard-coded version bump when their executable version matches their machine-readable
+`capabilities` version and the semantic surface/write-set comparison reports no drift. Managed
+writes remain separately gated by the reviewed containment/write-set checks. RTK has no equivalent
+capability endpoint, so releases newer than the explicitly reviewed RTK set remain visible as
+`unknown-newer` until their consumed contract is checked. See
+[docs/provider-version-compatibility.md](docs/provider-version-compatibility.md).
+
 Current experimental candidates include Headroom, mcptoon and GitNexus. Detection or a promising
 benchmark is not enough for promotion. Their campaign assessment is structured evidence for the
 selection gate, not an activation or promotion decision. A candidate must pass structured promotion
@@ -307,7 +317,10 @@ token-harness benchmark-matrix \
 Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
 same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
 documented workflow. Token Harness records the experiment target but does not treat attribution—or
-the browser acknowledgement—as proof that the candidate was active. For GitNexus, new benchmark receipts can additionally verify activation from the harness-native MCP inventory when the GitNexus server is observed usable at both task boundaries; missing or ambiguous runtime evidence stays unverified.
+the browser acknowledgement—as proof that the candidate was active. For GitNexus, new benchmark
+receipts can additionally verify activation from the harness-native MCP inventory when the GitNexus
+server is observed usable at both task boundaries; missing or ambiguous runtime evidence stays
+unverified.
 
 The selection assessment can become decision-ready after enough evidence across task classes, but it
 still cannot promote a candidate by itself. The remaining lifecycle and combined-stack gates must be
@@ -472,8 +485,8 @@ npx --yes pnpm@10.33.4 smoke:install
 ```
 
 Using `corepack enable` is optional. On a system-wide Windows Node installation it can require
-administrator permission to modify `C:\Program Files\nodejs`; the `npx pnpm@10.33.4` form above does
-not require that Corepack shim write.
+administrator permission to modify `C:\\Program Files\\nodejs`; the `npx pnpm@10.33.4` form above
+does not require that Corepack shim write.
 
 Before changing public behavior or architecture, read
 [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),
