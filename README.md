@@ -108,8 +108,15 @@ a candidate, or claim that candidate attribution proves activation.
 
 A campaign selection assessment can report `insufficient-evidence`, `promising`, `mixed` or
 `negative`, plus whether the evidence is decision-ready. **Decision-ready is not promotion-ready.**
-Activation verification, managed lifecycle, compatibility/reversibility, project maturity and
-combined-stack validation remain separate gates.
+The campaign shows the same promotion-review gate count and next gate as the candidate card, using
+the current local observation rather than starting another environment scan. Activation
+verification, managed lifecycle, compatibility/reversibility, project maturity and combined-stack
+validation remain separate gates.
+
+Choose **Compare evaluation evidence** when you want one read-only view of campaigns you already
+started. The comparison is loaded only on request, never creates a campaign, keeps candidate and
+harness ordering fixed, and reports progress, selection signal, decision readiness and promotion
+gates without producing a composite score or automatic winner.
 
 **4. Optional agent tuning**
 

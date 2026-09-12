@@ -13,8 +13,12 @@ describe('guided candidate readiness presentation', () => {
     assert.doesNotThrow(() => new Script(GUIDE_CANDIDATE_READINESS_JS));
   });
 
-  it('only reuses the local overview endpoint and never runs candidate install or activation commands', () => {
+  it('reuses existing read-only endpoints and never runs candidate install or activation commands', () => {
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /\/api\/overview\?period=/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /\/api\/candidate-campaign\?candidate=/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Compare evaluation evidence/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /localStorage\.getItem/);
+    assert.doesNotMatch(GUIDE_CANDIDATE_READINESS_JS, /localStorage\.setItem/);
     assert.doesNotMatch(
       GUIDE_CANDIDATE_READINESS_JS,
       /headroom wrap|pip install|npm install|gitnexus analyze/,

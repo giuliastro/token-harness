@@ -81,6 +81,11 @@ selection evidence, real activation verification, managed lifecycle coverage, re
 and reversibility, project maturity and combined-stack validation. Broad context owners require an
 additional admission decision before they can own the session context path.
 
+The browser can now compare already-saved candidate/harness campaigns on demand using those same
+gates. That makes the third-mechanism decision easier to review, but it does **not** satisfy the
+third-mechanism requirement by itself: no campaign is created by the comparison and no candidate is
+ranked, activated or promoted automatically.
+
 The current research landscape includes repository-exploration/retrieval systems, MCP
 schema/discovery systems such as mcptoon/mcp-compressor-class projects, Caveman-class
 prompt/context/output minimizers, broad context owners such as Headroom/Context Mode-class systems,
