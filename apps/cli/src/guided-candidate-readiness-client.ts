@@ -1,0 +1,90 @@
+/** Candidate promotion-readiness presentation layered over the guided product UI. */
+export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
+'use strict';
+(() => {
+  const root = document.getElementById('experimental-tools');
+  const period = document.getElementById('period');
+  if (!root || !period) return;
+
+  const gateName = value => ({
+    'benchmark-capability': 'benchmark capability',
+    'category-fit': 'category fit',
+    'selection-evidence': 'selection evidence',
+    'activation-verification': 'activation verification',
+    'managed-lifecycle': 'managed lifecycle',
+    'compatibility-reversibility': 'compatibility and rollback',
+    'project-maturity': 'project maturity',
+    'combined-stack-validation': 'combined stack validation',
+    'context-owner-admission': 'context-owner admission',
+  })[value] || value || 'none';
+
+  let queued = false;
+  let observer;
+
+  function observe() {
+    observer.observe(root, { childList: true, subtree: true });
+  }
+
+  function apply(items, generatedAt) {
+    const byName = new Map(items.map(item => [item.displayName, item]));
+    observer.disconnect();
+    try {
+      for (const card of root.querySelectorAll('article.tool-card.experimental')) {
+        const name = card.querySelector('h3')?.textContent || '';
+        const item = byName.get(name);
+        const readiness = item?.promotionReadiness;
+        if (!readiness) continue;
+        const previous = card.querySelector('.candidate-readiness');
+        if (previous?.dataset.generatedAt === generatedAt) continue;
+        previous?.remove();
+
+        const facts = document.createElement('div');
+        facts.className = 'tool-facts candidate-readiness';
+        facts.dataset.generatedAt = generatedAt;
+        const gateLabel = document.createElement('span');
+        gateLabel.textContent = 'Promotion review';
+        const gateValue = document.createElement('strong');
+        gateValue.textContent = String(readiness.passedGateCount) + '/' + String(readiness.requiredGateCount) + ' gates';
+        const nextLabel = document.createElement('span');
+        nextLabel.textContent = 'Next gate';
+        const nextValue = document.createElement('strong');
+        nextValue.textContent = gateName(readiness.nextGate);
+        facts.append(gateLabel, gateValue, nextLabel, nextValue);
+
+        const note = document.createElement('p');
+        note.className = 'caption candidate-readiness-note';
+        note.textContent = readiness.promotionEligible
+          ? 'All reviewed promotion gates are satisfied.'
+          : 'Evaluation readiness is not promotion approval. Remaining lifecycle gates stay explicit.';
+        facts.append(note);
+        card.append(facts);
+      }
+    } finally {
+      observe();
+    }
+  }
+
+  async function refreshReadiness() {
+    queued = false;
+    if (!root.querySelector('article.tool-card.experimental h3')) return;
+    try {
+      const response = await fetch('/api/overview?period=' + encodeURIComponent(period.value), { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      apply(data.optimizationCandidates || [], data.generatedAt || 'unknown');
+    } catch {
+      // Promotion readiness is supplementary; the main dashboard remains authoritative.
+    }
+  }
+
+  function schedule() {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(refreshReadiness);
+  }
+
+  observer = new MutationObserver(schedule);
+  observe();
+  schedule();
+})();
+`;
