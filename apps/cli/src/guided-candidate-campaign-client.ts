@@ -80,6 +80,111 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
     return value;
   }
 
+  function signalLabel(signal) {
+    return ({
+      'insufficient-evidence': 'More evidence needed',
+      promising: 'Promising',
+      mixed: 'Mixed',
+      negative: 'Negative',
+      unavailable: 'Unavailable',
+    })[signal] || String(signal || 'Unavailable');
+  }
+
+  function statusUrl(candidateId, harness, campaign) {
+    return '/api/candidate-campaign?candidate=' + encodeURIComponent(candidateId) +
+      '&harness=' + encodeURIComponent(harness) +
+      '&campaign=' + encodeURIComponent(campaign);
+  }
+
+  function terminalStatusCommand(candidateId, harness, campaign) {
+    return 'token-harness benchmark-matrix --benchmark-id ' + campaign +
+      ' --candidate ' + candidateId + ' --harness ' + harness;
+  }
+
+  async function renderCampaignStatus(candidate, harness, campaign, host) {
+    host.replaceChildren(node('p', 'Reading campaign progress…', 'caption'));
+    try {
+      const response = await fetch(statusUrl(candidate.id, harness, campaign), {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(120000),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Campaign status is unavailable.');
+
+      host.replaceChildren();
+      if (!data.available) {
+        host.append(
+          messageBox(
+            'Campaign status unavailable',
+            data.nextInstruction || 'Campaign evidence could not be read. Nothing was changed.',
+            'warn',
+          ),
+          button('Try again', () => renderCampaignStatus(candidate, harness, campaign, host)),
+        );
+        return;
+      }
+
+      const facts = node('div', undefined, 'tool-facts');
+      facts.append(
+        node('span', 'Progress'),
+        node('strong', String(data.completedPairs) + '/' + String(data.totalPairs) + ' pairs · ' + String(data.progressPercent) + '%'),
+        node('span', 'Selection signal'),
+        node('strong', signalLabel(data.signal)),
+        node('span', 'Decision ready'),
+        node('strong', data.decisionReady ? 'Yes' : 'No'),
+        node('span', 'Evidence pairs'),
+        node('strong', String(data.evidencePairs)),
+      );
+      host.append(facts);
+
+      if (data.invalidPairs > 0) {
+        host.append(
+          messageBox(
+            'Campaign needs attention',
+            String(data.invalidPairs) + ' pair(s) contain ambiguous or incompatible state. Start a new campaign instead of repairing evidence in place.',
+            'warn',
+          ),
+        );
+      }
+
+      host.append(
+        messageBox(
+          data.nextCommand ? 'Next' : 'Campaign assessment',
+          data.nextInstruction || 'No further campaign step was reported.',
+          data.invalidPairs > 0 ? 'warn' : '',
+        ),
+      );
+      if (data.nextCommand) host.append(copyRow(data.nextCommand));
+
+      if (Array.isArray(data.reasons) && data.reasons.length) {
+        const reasons = node('div', undefined, 'explain-box');
+        reasons.append(node('strong', 'Why this signal'));
+        const list = node('ul');
+        for (const reason of data.reasons) list.append(node('li', reason));
+        reasons.append(list);
+        host.append(reasons);
+      }
+
+      host.append(
+        node(
+          'p',
+          data.note || 'Selection evidence does not prove activation or promotion readiness.',
+          'caption',
+        ),
+        button('Refresh status', () => renderCampaignStatus(candidate, harness, campaign, host)),
+      );
+    } catch {
+      host.replaceChildren(
+        messageBox(
+          'Campaign status could not be read',
+          'No automatic retry or candidate activation was attempted. You can retry here or use the terminal fallback below.',
+          'warn',
+        ),
+        button('Try again', () => renderCampaignStatus(candidate, harness, campaign, host)),
+      );
+    }
+  }
+
   function openCampaign(candidate, fresh = false) {
     const harnesses = detectedHarnesses();
     title.textContent = 'Evaluate ' + candidate.name + ' with a standard campaign';
@@ -110,10 +215,10 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
       );
     } else {
       content.append(
-        node('h3', '1. Check campaign status'),
+        node('h3', 'Campaign status'),
         node(
           'p',
-          'Choose the agent you are evaluating. Each agent gets its own resumable campaign id so evidence from Claude Code and Codex can never be mixed accidentally.',
+          'Choose the agent you are evaluating. Each agent has its own resumable campaign. Progress, assessment and the exact Next step are read here without a separate status command.',
           'caption',
         ),
       );
@@ -121,23 +226,33 @@ export const GUIDE_CANDIDATE_CAMPAIGN_JS = String.raw`
         const label = harness === 'claude' ? 'Claude Code' : 'Codex';
         const id = campaignId(candidate.id, harness, fresh);
         const agentBlock = node('div', undefined, 'candidate-campaign-agent');
+        const liveStatus = node('div', undefined, 'candidate-campaign-status');
+        const fallback = document.createElement('details');
+        fallback.append(
+          node('summary', 'Terminal fallback'),
+          node(
+            'p',
+            'The browser status above is read-only. This command shows the same campaign assessment in a terminal if you need it for debugging or automation.',
+            'caption',
+          ),
+          copyRow(terminalStatusCommand(candidate.id, harness, id)),
+        );
         agentBlock.append(
           node('strong', label),
           node('p', 'Campaign id: ' + id, 'caption'),
-          copyRow(
-            'token-harness benchmark-matrix --benchmark-id ' + id +
-            ' --candidate ' + candidate.id + ' --harness ' + harness,
-          ),
+          liveStatus,
+          fallback,
         );
         content.append(agentBlock);
+        void renderCampaignStatus(candidate, harness, id, liveStatus);
       }
       content.append(
-        node('h3', '2. Follow only the reported Next command'),
+        node('h3', 'How the campaign advances'),
         node(
           'p',
-          'Complete the baseline or optimized task honestly, then rerun the same campaign status command. Token Harness advances one state at a time and stops on ambiguous evidence instead of overwriting it.',
+          'Complete the baseline or optimized task honestly, then use Refresh status. Token Harness advances one state at a time and stops on ambiguous evidence instead of overwriting it.',
         ),
-        node('h3', '3. Read the selection assessment'),
+        node('h3', 'How to read the assessment'),
         node(
           'p',
           'The campaign reports insufficient-evidence, promising, mixed or negative plus whether the evidence is decision-ready. Even a promising decision-ready result is still not promotion approval; activation, lifecycle, compatibility and combined-stack gates remain separate.',
