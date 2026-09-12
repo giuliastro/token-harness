@@ -80,13 +80,16 @@ exact plan, apply it only after approval, verify it, and remove only configurati
 
 For maintainers validating the combined stack, `token-harness stack-review --json` captures the exact
 configured provider versions and managed harness sets and reuses the existing passive `verify`
-evidence to identify exact provider/harness pairs that were observed at runtime, are not yet
-exercised, failed/degraded, or have no passive runtime witness. A `not-exercised` result does not
-promise that ordinary agent use will create a receipt: the provider must record a qualifying
-operation, and for reducers that means a real reduction. It does not run an active canary or spend a
-model call, and it never makes the compatibility decision itself. The shipped combined-review
-registry stays empty until the captured configuration has enough real verification evidence, has
-been benchmarked together, and has been deliberately reviewed; see `docs/combined-stack-reviews.md`.
+evidence for exact provider/harness pairs. Runtime evidence is credited only when it can be
+attributed to that harness: HarnessTrim uses its native event harness field, while provider-wide
+telemetry can be attributed by exclusion only when one harness is wired. With multiple harnesses, an
+unattributable receipt stays **Unavailable** instead of being copied across rows. A `not-exercised`
+result does not promise that ordinary agent use will create a receipt: the provider must record a
+qualifying operation, and for reducers that means a real reduction. `stack-review` does not run an
+active canary or spend a model call, and it never makes the compatibility decision itself. The
+shipped combined-review registry stays empty until the captured configuration has enough real
+verification evidence, has been benchmarked together, and has been deliberately reviewed; see
+`docs/combined-stack-reviews.md`.
 
 **3. Experimental tools**
 

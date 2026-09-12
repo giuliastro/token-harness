@@ -26,7 +26,11 @@
  * yet" stops being reported as "something is broken".
  */
 
-import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
+import {
+  listHarnessAdapters,
+  listProviderAdapters,
+  scopeProviderVerificationToHarness,
+} from '@token-harness/adapters';
 import {
   EXIT_CODES,
   FileJournalStore,
@@ -158,27 +162,29 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
       /**
        * The tier the manifest declares for *this* harness, not the provider's overall one.
        *
-       * The comment above says a tier is "per harness, per version, and per tool family", and the
-       * loop existed to honour that — but every row still carried one provider-wide tier, which
-       * made the per-harness field in the manifest decorative. It went unnoticed while every
-       * provider declared the same tier on every harness it supported.
-       *
-       * RTK is the first that does not: its receipt is per-harness on Claude Code and provider-wide
-       * on OpenCode, so it declares `canary` on one and `config-only` on the other. Reading the
-       * provider-wide value here would print `canary` against OpenCode — the overclaim the
-       * per-harness declaration exists to prevent.
+       * The verification adapter still runs once per provider, but its passive receipt is projected
+       * through `scopeProviderVerificationToHarness` before it reaches this row. A provider-wide
+       * receipt is attributable by exclusion only when one harness is wired; HarnessTrim can do
+       * better because its native TrimEvent carries the harness identity. This keeps a receipt from
+       * one harness from silently certifying its siblings.
        */
       const declaredTier =
         adapter.manifest.harnesses.find((entry) => entry.harness === harnessId)?.verificationTier ??
         verification.declaredTier;
+      const scopedVerification = await scopeProviderVerificationToHarness(
+        providerContext,
+        verification,
+        harnessId as VerificationResult['harnessId'],
+        detection.configuredHarnesses,
+      );
       results.push({
         providerId: adapter.manifest.id,
         harnessId: harnessId as VerificationResult['harnessId'],
-        status: statusFor(verification.achievedTier, declaredTier),
+        status: statusFor(scopedVerification.achievedTier, declaredTier),
         declaredTier,
         managedByTokenHarness: managedIntegrations.has(`${adapter.manifest.id}\0${harnessId}`),
         providerManagedByTokenHarness: detection.managedByTokenHarness,
-        checks: verification.checks,
+        checks: scopedVerification.checks,
       });
     }
   }

@@ -49,6 +49,7 @@ function verification(
   options: {
     status?: VerificationResult['status'];
     declaredTier?: VerificationResult['declaredTier'];
+    checkId?: string;
     checkStatus?: VerificationResult['checks'][number]['status'];
     achievedTier?: VerificationResult['checks'][number]['achievedTier'];
     summary?: string;
@@ -63,7 +64,7 @@ function verification(
     managedByTokenHarness: true,
     checks: [
       {
-        id: 'canary',
+        id: options.checkId ?? 'canary',
         status: options.checkStatus ?? 'pass',
         summary: options.summary ?? 'Runtime canary observed.',
         achievedTier: options.achievedTier === undefined ? declaredTier : options.achievedTier,
@@ -143,6 +144,28 @@ describe('combined-stack review records', () => {
         detail: '616 commands intercepted.',
       },
     ]);
+  });
+
+  it('keeps an unattributable provider-wide receipt unavailable rather than failed', () => {
+    const fingerprint = fingerprintConfiguredStack(configuredPair());
+    const evidence = summarizeStackCombinationVerification(fingerprint, [
+      verification(RTK, CLAUDE, {
+        status: 'degraded',
+        declaredTier: 'canary',
+        checkId: 'canary-intercepted',
+        checkStatus: 'info',
+        achievedTier: null,
+        summary:
+          'provider telemetry shows runtime activity, but it cannot attribute that receipt to claude while 2 harnesses are wired',
+      }),
+      verification(HARNESS_TRIM, CLAUDE, {
+        declaredTier: 'config-only',
+        achievedTier: 'config-only',
+      }),
+    ]);
+
+    assert.equal(evidence[1]?.runtimeEvidence, 'unavailable');
+    assert.match(evidence[1]?.detail ?? '', /cannot attribute that receipt to claude/);
   });
 
   it('keeps failed or degraded passive verification visible for review', () => {
