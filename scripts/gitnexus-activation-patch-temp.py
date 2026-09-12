@@ -1,0 +1,292 @@
+from pathlib import Path
+
+
+def replace(path: str, old: str, new: str) -> None:
+    p = Path(path)
+    text = p.read_text()
+    if old not in text:
+        raise SystemExit(f"missing replacement anchor in {path}: {old[:80]!r}")
+    p.write_text(text.replace(old, new, 1))
+
+
+# Core bounded runtime witness.
+path = "packages/core/src/domain/benchmark-context.ts"
+replace(
+    path,
+    "import {\n  effectiveMcpExposure,\n  type HarnessContextObservation,",
+    "import {\n  assessMcpServer,\n  effectiveMcpExposure,\n  type HarnessContextObservation,",
+)
+replace(
+    path,
+    "export interface TaskBenchmarkContextSnapshot {\n",
+    "export type GitNexusMcpRuntimeState = 'usable' | 'unusable' | 'absent' | 'unknown';\n\nexport interface TaskBenchmarkContextSnapshot {\n",
+)
+replace(
+    path,
+    "  toolDeferralMechanism: ToolDeferralObservation['mechanism'] | null;\n}",
+    "  toolDeferralMechanism: ToolDeferralObservation['mechanism'] | null;\n  /** Bounded candidate witness; no MCP arguments, tool names, paths, or credentials are persisted. */\n  gitNexusMcpRuntimeState?: GitNexusMcpRuntimeState;\n}",
+)
+replace(
+    path,
+    "const DEFERRAL_MECHANISMS = new Set<ToolDeferralObservation['mechanism']>([\n  'native-tool-search',\n  'native-defer-loading',\n  'external',\n]);\n",
+    "const DEFERRAL_MECHANISMS = new Set<ToolDeferralObservation['mechanism']>([\n  'native-tool-search',\n  'native-defer-loading',\n  'external',\n]);\nconst GITNEXUS_MCP_RUNTIME_STATES = new Set<GitNexusMcpRuntimeState>([\n  'usable',\n  'unusable',\n  'absent',\n  'unknown',\n]);\n\nfunction gitNexusMcpRuntimeState(\n  observation: HarnessContextObservation,\n): GitNexusMcpRuntimeState {\n  const matches = observation.mcpServers.filter(\n    (server) => server.name.trim().toLowerCase() === 'gitnexus',\n  );\n  if (matches.length > 1) return 'unknown';\n  const server = matches[0];\n  if (server === undefined) return observation.mcpInventoryTruncated ? 'unknown' : 'absent';\n  const usability = assessMcpServer(server).usability;\n  if (usability === 'usable') return 'usable';\n  if (usability === 'attention' || usability === 'disabled') return 'unusable';\n  return 'unknown';\n}\n",
+)
+replace(
+    path,
+    "    toolDeferralMechanism: observation.toolDeferral?.mechanism ?? null,\n  };",
+    "    toolDeferralMechanism: observation.toolDeferral?.mechanism ?? null,\n    gitNexusMcpRuntimeState: gitNexusMcpRuntimeState(observation),\n  };",
+)
+replace(
+    path,
+    "  const toolDeferralMechanism = row['toolDeferralMechanism'];\n",
+    "  const toolDeferralMechanism = row['toolDeferralMechanism'];\n  const gitNexusMcpRuntimeState = row['gitNexusMcpRuntimeState'];\n",
+)
+replace(
+    path,
+    "    (toolDeferralState === 'active' &&\n      (effectiveStaticMcpServerCount !== 0 || effectiveStaticMcpToolCount !== 0))\n  ) {",
+    "    (toolDeferralState === 'active' &&\n      (effectiveStaticMcpServerCount !== 0 || effectiveStaticMcpToolCount !== 0)) ||\n    !(\n      gitNexusMcpRuntimeState === undefined ||\n      (typeof gitNexusMcpRuntimeState === 'string' &&\n        GITNEXUS_MCP_RUNTIME_STATES.has(gitNexusMcpRuntimeState as GitNexusMcpRuntimeState))\n    )\n  ) {",
+)
+replace(
+    path,
+    "    toolDeferralMechanism: toolDeferralMechanism as ToolDeferralObservation['mechanism'] | null,\n  };",
+    "    toolDeferralMechanism: toolDeferralMechanism as ToolDeferralObservation['mechanism'] | null,\n    ...(gitNexusMcpRuntimeState === undefined\n      ? {}\n      : { gitNexusMcpRuntimeState: gitNexusMcpRuntimeState as GitNexusMcpRuntimeState }),\n  };",
+)
+
+# Campaign-level activation evidence.
+path = "apps/cli/src/commands/candidate-benchmark.ts"
+replace(
+    path,
+    "  type HarnessId,\n  type OptimizationCandidateId,",
+    "  type GitNexusMcpRuntimeState,\n  type HarnessId,\n  type OptimizationCandidateId,",
+)
+replace(
+    path,
+    "export interface CandidateBenchmarkCampaignReport {\n",
+    "export type CandidateActivationEvidenceState = 'verified' | 'blocked' | 'unreviewed';\n\nexport interface CandidateActivationEvidence {\n  candidateId: OptimizationCandidateId;\n  state: CandidateActivationEvidenceState;\n  verifiedPairs: number;\n  blockedPairs: number;\n  unknownPairs: number;\n  reason: string;\n}\n\nexport interface CandidateBenchmarkCampaignReport {\n",
+)
+replace(
+    path,
+    "  evidence: CandidateBenchmarkEvidence;\n  assessment: CandidateEvidenceAssessment;\n}",
+    "  evidence: CandidateBenchmarkEvidence;\n  activation: CandidateActivationEvidence;\n  assessment: CandidateEvidenceAssessment;\n}",
+)
+replace(
+    path,
+    "function roundedPercent(numerator: number, denominator: number): number | null {\n  if (denominator <= 0) return null;\n  return Math.round((numerator / denominator) * 1000) / 10;\n}\n",
+    "function roundedPercent(numerator: number, denominator: number): number | null {\n  if (denominator <= 0) return null;\n  return Math.round((numerator / denominator) * 1000) / 10;\n}\n\nexport function summarizeCandidateActivationEvidence(\n  candidateId: OptimizationCandidateId,\n  boundaries: readonly {\n    start: GitNexusMcpRuntimeState | undefined;\n    finish: GitNexusMcpRuntimeState | undefined;\n  }[],\n): CandidateActivationEvidence {\n  if (candidateId !== 'gitnexus') {\n    return {\n      candidateId,\n      state: 'unreviewed',\n      verifiedPairs: 0,\n      blockedPairs: 0,\n      unknownPairs: boundaries.length,\n      reason: 'this build has no reviewed task-boundary runtime activation witness for this candidate',\n    };\n  }\n\n  let verifiedPairs = 0;\n  let blockedPairs = 0;\n  let unknownPairs = 0;\n  for (const boundary of boundaries) {\n    if (boundary.start === 'usable' && boundary.finish === 'usable') {\n      verifiedPairs += 1;\n    } else if (\n      boundary.start === 'absent' ||\n      boundary.start === 'unusable' ||\n      boundary.finish === 'absent' ||\n      boundary.finish === 'unusable'\n    ) {\n      blockedPairs += 1;\n    } else {\n      unknownPairs += 1;\n    }\n  }\n\n  if (blockedPairs > 0) {\n    return {\n      candidateId,\n      state: 'blocked',\n      verifiedPairs,\n      blockedPairs,\n      unknownPairs,\n      reason: `${String(blockedPairs)} optimized pair(s) observed GitNexus absent or unusable at a task boundary`,\n    };\n  }\n  if (verifiedPairs > 0 && unknownPairs === 0) {\n    return {\n      candidateId,\n      state: 'verified',\n      verifiedPairs,\n      blockedPairs,\n      unknownPairs,\n      reason: `${String(verifiedPairs)} optimized pair(s) observed the GitNexus MCP server usable at both task boundaries`,\n    };\n  }\n  return {\n    candidateId,\n    state: 'unreviewed',\n    verifiedPairs,\n    blockedPairs,\n    unknownPairs,\n    reason:\n      boundaries.length === 0\n        ? 'no completed optimized task has runtime activation evidence yet'\n        : 'one or more optimized tasks lack complete GitNexus runtime activation evidence',\n  };\n}\n",
+)
+replace(
+    path,
+    "  const completedPairs = slots.filter((slot) => slot.state === 'complete').length;\n  const invalidPairs = slots.filter((slot) => slot.state === 'invalid').length;\n  const evidence = summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries);",
+    "  const activationBoundaries: Array<{\n    start: GitNexusMcpRuntimeState | undefined;\n    finish: GitNexusMcpRuntimeState | undefined;\n  }> = [];\n  for (const slot of slots) {\n    if (slot.state !== 'complete') continue;\n    const optimizedReceipt = await readReceiptArtifact(context, slot.benchmarkId, 'optimized');\n    activationBoundaries.push(\n      optimizedReceipt === 'absent' || optimizedReceipt === 'invalid'\n        ? { start: undefined, finish: undefined }\n        : {\n            start: optimizedReceipt.contextAtStart?.gitNexusMcpRuntimeState,\n            finish: optimizedReceipt.contextAtFinish?.gitNexusMcpRuntimeState,\n          },\n    );\n  }\n\n  const completedPairs = slots.filter((slot) => slot.state === 'complete').length;\n  const invalidPairs = slots.filter((slot) => slot.state === 'invalid').length;\n  const evidence = summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries);\n  const activation = summarizeCandidateActivationEvidence(\n    definition.candidateId,\n    activationBoundaries,\n  );",
+)
+replace(path, "    evidence,\n    assessment,\n  };", "    evidence,\n    activation,\n    assessment,\n  };")
+
+# Feed exact runtime evidence into only the activation gate.
+path = "apps/cli/src/guided-candidate-campaign-status.ts"
+replace(
+    path,
+    "  hardRegressionPairs: number;\n  nextStep:",
+    "  hardRegressionPairs: number;\n  activationState: CandidateBenchmarkCampaignReport['activation']['state'];\n  activationVerifiedPairs: number;\n  activationBlockedPairs: number;\n  activationUnknownPairs: number;\n  nextStep:",
+)
+replace(
+    path,
+    "    hardRegressionPairs: 0,\n    nextStep: null,",
+    "    hardRegressionPairs: 0,\n    activationState: 'unreviewed',\n    activationVerifiedPairs: 0,\n    activationBlockedPairs: 0,\n    activationUnknownPairs: 0,\n    nextStep: null,",
+)
+replace(
+    path,
+    "    const totalPairs = campaign.totalPairs;\n    const promotionReadiness = assessCandidatePromotionReadiness({\n      candidateId: input.candidateId,\n      assessment: campaign.assessment,\n      observation: observationFor?.(input.candidateId) ?? null,\n    });",
+    "    const totalPairs = campaign.totalPairs;\n    const activationVerification =\n      input.candidateId === 'gitnexus'\n        ? {\n            state: campaign.activation.state === 'verified' ? ('passed' as const) : ('blocked' as const),\n            reason: campaign.activation.reason,\n          }\n        : undefined;\n    const promotionReadiness = assessCandidatePromotionReadiness({\n      candidateId: input.candidateId,\n      assessment: campaign.assessment,\n      observation: observationFor?.(input.candidateId) ?? null,\n      ...(activationVerification === undefined\n        ? {}\n        : { review: { activationVerification } }),\n    });",
+)
+replace(
+    path,
+    "      hardRegressionPairs: campaign.assessment.hardRegressionPairs,\n      nextStep: campaignStep(campaign),",
+    "      hardRegressionPairs: campaign.assessment.hardRegressionPairs,\n      activationState: campaign.activation.state,\n      activationVerifiedPairs: campaign.activation.verifiedPairs,\n      activationBlockedPairs: campaign.activation.blockedPairs,\n      activationUnknownPairs: campaign.activation.unknownPairs,\n      nextStep: campaignStep(campaign),",
+)
+replace(
+    path,
+    "      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',",
+    "      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus can pass that gate only from runtime MCP evidence observed at task boundaries. Decision-ready does not mean promotion-ready.',",
+)
+
+# Campaign UI exposes activation separately.
+path = "apps/cli/src/guided-candidate-campaign-client.ts"
+replace(
+    path,
+    "      node('span', 'Evidence pairs'),\n      node('strong', String(data.evidencePairs)),\n    );",
+    "      node('span', 'Evidence pairs'),\n      node('strong', String(data.evidencePairs)),\n      node('span', 'Activation'),\n      node(\n        'strong',\n        data.activationState === 'verified'\n          ? 'Verified at task boundaries'\n          : data.activationState === 'blocked'\n            ? 'Not active consistently'\n            : 'Not verified yet',\n      ),\n    );",
+)
+
+# Core tests.
+path = "packages/core/test/benchmark-context.test.ts"
+p = Path(path)
+text = p.read_text()
+text += r'''
+
+test('records bounded GitNexus MCP runtime usability without persisting server details', () => {
+  const usable = taskBenchmarkContextSnapshot(observation([mcp('GitNexus', 7)]));
+  assert.equal(usable?.gitNexusMcpRuntimeState, 'usable');
+
+  const duplicate = taskBenchmarkContextSnapshot(observation([mcp('gitnexus', 7), mcp('GitNexus', 7)]));
+  assert.equal(duplicate?.gitNexusMcpRuntimeState, 'unknown');
+
+  const truncatedAbsent = taskBenchmarkContextSnapshot(observation([mcp('other', 3)], null, true));
+  assert.equal(truncatedAbsent?.gitNexusMcpRuntimeState, 'unknown');
+
+  const absent = taskBenchmarkContextSnapshot(observation([mcp('other', 3)]));
+  assert.equal(absent?.gitNexusMcpRuntimeState, 'absent');
+});
+
+test('GitNexus MCP runtime witness fails closed on unusable or unknown status', () => {
+  const broken: McpServerObservation = {
+    ...mcp('gitnexus', 7),
+    runtimeStatus: 'error',
+  };
+  assert.equal(taskBenchmarkContextSnapshot(observation([broken]))?.gitNexusMcpRuntimeState, 'unusable');
+
+  const unknown: McpServerObservation = {
+    ...mcp('gitnexus', 7),
+    runtimeStatus: null,
+  };
+  assert.equal(taskBenchmarkContextSnapshot(observation([unknown]))?.gitNexusMcpRuntimeState, 'unknown');
+});
+
+test('legacy context witnesses without GitNexus runtime state remain readable and unknown', () => {
+  const parsed = parseTaskBenchmarkContextSnapshot({
+    observationState: 'observed',
+    rawMcpServerCount: 0,
+    rawKnownMcpToolCount: 0,
+    unknownMcpToolServerCount: 0,
+    mcpInventoryTruncated: false,
+    effectiveStaticMcpServerCount: 0,
+    effectiveStaticMcpToolCount: 0,
+    toolDeferralState: null,
+    toolDeferralMechanism: null,
+  });
+  assert.notEqual(parsed, undefined);
+  assert.equal(parsed?.gitNexusMcpRuntimeState, undefined);
+
+  assert.equal(
+    parseTaskBenchmarkContextSnapshot({
+      observationState: 'observed',
+      rawMcpServerCount: 0,
+      rawKnownMcpToolCount: 0,
+      unknownMcpToolServerCount: 0,
+      mcpInventoryTruncated: false,
+      effectiveStaticMcpServerCount: 0,
+      effectiveStaticMcpToolCount: 0,
+      toolDeferralState: null,
+      toolDeferralMechanism: null,
+      gitNexusMcpRuntimeState: 'definitely-active',
+    }),
+    undefined,
+  );
+});
+'''
+p.write_text(text)
+
+# Pure activation summary coverage.
+path = "apps/cli/test/candidate-benchmark.test.ts"
+replace(
+    path,
+    "  buildCandidateBenchmarkEvidence,\n  summarizeCandidateBenchmarkEntries,",
+    "  buildCandidateBenchmarkEvidence,\n  summarizeCandidateActivationEvidence,\n  summarizeCandidateBenchmarkEntries,",
+)
+p = Path(path)
+text = p.read_text()
+marker = "describe('candidate benchmark evidence', () => {\n"
+insert = r'''describe('candidate activation evidence', () => {
+  it('verifies GitNexus only when every completed optimized task sees usable MCP at both boundaries', () => {
+    assert.deepEqual(
+      summarizeCandidateActivationEvidence('gitnexus', [
+        { start: 'usable', finish: 'usable' },
+        { start: 'usable', finish: 'usable' },
+      ]),
+      {
+        candidateId: 'gitnexus',
+        state: 'verified',
+        verifiedPairs: 2,
+        blockedPairs: 0,
+        unknownPairs: 0,
+        reason: '2 optimized pair(s) observed the GitNexus MCP server usable at both task boundaries',
+      },
+    );
+  });
+
+  it('blocks contradictory runtime evidence and keeps legacy evidence unreviewed', () => {
+    const blocked = summarizeCandidateActivationEvidence('gitnexus', [
+      { start: 'usable', finish: 'unusable' },
+    ]);
+    assert.equal(blocked.state, 'blocked');
+    assert.equal(blocked.blockedPairs, 1);
+
+    const legacy = summarizeCandidateActivationEvidence('gitnexus', [
+      { start: undefined, finish: undefined },
+    ]);
+    assert.equal(legacy.state, 'unreviewed');
+    assert.equal(legacy.unknownPairs, 1);
+  });
+});
+
+'''
+if marker not in text:
+    raise SystemExit("candidate benchmark describe anchor missing")
+p.write_text(text.replace(marker, insert + marker, 1))
+
+# Guided status fixture gets activation evidence.
+path = "apps/cli/test/guided-candidate-campaign-status.test.ts"
+replace(
+    path,
+    "      assessment: {\n        signal: 'insufficient-evidence',",
+    "      activation: {\n        candidateId: 'gitnexus',\n        state: 'verified',\n        verifiedPairs: 3,\n        blockedPairs: 0,\n        unknownPairs: 0,\n        reason: '3 optimized pair(s) observed the GitNexus MCP server usable at both task boundaries',\n      },\n      assessment: {\n        signal: 'insufficient-evidence',",
+)
+replace(
+    path,
+    "    assert.equal(status.hardRegressionPairs, 0);\n",
+    "    assert.equal(status.hardRegressionPairs, 0);\n    assert.equal(status.activationState, 'verified');\n    assert.equal(status.activationVerifiedPairs, 3);\n    assert.equal(status.activationBlockedPairs, 0);\n    assert.equal(status.activationUnknownPairs, 0);\n",
+)
+replace(
+    path,
+    "    assert.equal(status.promotionReadiness?.passedGateCount, 2);",
+    "    assert.equal(status.promotionReadiness?.passedGateCount, 3);",
+)
+replace(
+    path,
+    "    assert.match(status.note, /does not prove activation/);",
+    "    assert.match(status.note, /do not prove activation/);\n    assert.match(status.note, /runtime MCP evidence/);",
+)
+
+# Client test expects visible activation status.
+path = "apps/cli/test/guided-candidate-campaign-client.test.ts"
+p = Path(path)
+text = p.read_text()
+needle = "    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Decision ready/);\n"
+if needle not in text:
+    raise SystemExit("campaign client test anchor missing")
+text = text.replace(
+    needle,
+    needle
+    + "    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Activation/);\n"
+    + "    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Verified at task boundaries/);\n",
+    1,
+)
+p.write_text(text)
+
+# Product docs.
+path = "docs/candidates/gitnexus.md"
+p = Path(path)
+text = p.read_text()
+old = "Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This\nonly labels benchmark evidence; it does not activate GitNexus and does not prove that GitNexus was\nused in either side of a pair. Activation evidence must be established separately by the benchmark\nprocedure."
+new = "Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This\nonly labels benchmark evidence; it does not activate GitNexus. For new receipts, Token Harness also\nrecords a bounded GitNexus MCP runtime witness from the harness-native MCP inventory at benchmark\nstart and finish. The activation gate can pass only when the optimized task observes exactly one\nGitNexus MCP server as usable at both boundaries. Truncated, ambiguous, absent, unusable, or legacy\nmissing evidence fails closed. No MCP arguments, tool names, paths, credentials, or config contents\nare persisted in that witness."
+if old not in text:
+    raise SystemExit("gitnexus docs anchor missing")
+p.write_text(text.replace(old, new, 1))
+
+path = "README.md"
+p = Path(path)
+text = p.read_text()
+old = "Before an optimized run, enable the candidate through its own documented workflow. Token Harness records the experiment target but does not treat attribution—or\nthe browser acknowledgement—as proof that the candidate was active."
+new = "Before an optimized run, enable the candidate through its own documented workflow. Token Harness records the experiment target but does not treat attribution—or\nthe browser acknowledgement—as proof that the candidate was active. For GitNexus, new benchmark\nreceipts can additionally verify activation from the harness-native MCP inventory when the GitNexus\nserver is observed usable at both task boundaries; missing or ambiguous runtime evidence stays\nunverified."
+if old not in text:
+    raise SystemExit("README activation anchor missing")
+p.write_text(text.replace(old, new, 1))
