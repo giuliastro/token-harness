@@ -1,5 +1,7 @@
+import { GUIDE_CANDIDATE_DECISION_EVIDENCE_JS } from './guided-candidate-decision-evidence-client.js';
+
 /** Candidate promotion-readiness presentation layered over the guided product UI. */
-export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
+const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
 'use strict';
 (() => {
   const root = document.getElementById('experimental-tools');
@@ -93,3 +95,5 @@ export const GUIDE_CANDIDATE_READINESS_JS = String.raw`
   schedule();
 })();
 `;
+
+export const GUIDE_CANDIDATE_READINESS_JS = `${GUIDE_CANDIDATE_READINESS_BASE_JS}\n${GUIDE_CANDIDATE_DECISION_EVIDENCE_JS}`;

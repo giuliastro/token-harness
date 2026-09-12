@@ -49,12 +49,25 @@ export interface GuideCandidateCampaignStatus {
   signal: CandidateEvidenceSignal | 'unavailable';
   decisionReady: boolean;
   evidencePairs: number;
+  evidenceCoveragePercent: number | null;
+  minimumEvidencePairs: number | null;
+  minimumTaskClasses: number | null;
+  minimumEvidenceCoveragePercent: number | null;
   coveredTaskClasses: TaskClass[];
+  optimizedBetter: number;
+  baselineBetter: number;
+  equivalent: number;
+  localComparablePairs: number;
+  localTokenSavingPercent: number | null;
+  wallClockComparablePairs: number;
+  wallClockSavingPercent: number | null;
+  hardRegressionPairs: number;
   nextStep: GuideCandidateCampaignStep | null;
   nextCommand: string | null;
   nextInstruction: string;
   reasons: string[];
   promotionEligible: false;
+  promotionBlockers: string[];
   note: string;
 }
 
@@ -102,13 +115,26 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
     signal: 'unavailable',
     decisionReady: false,
     evidencePairs: 0,
+    evidenceCoveragePercent: null,
+    minimumEvidencePairs: null,
+    minimumTaskClasses: null,
+    minimumEvidenceCoveragePercent: null,
     coveredTaskClasses: [],
+    optimizedBetter: 0,
+    baselineBetter: 0,
+    equivalent: 0,
+    localComparablePairs: 0,
+    localTokenSavingPercent: null,
+    wallClockComparablePairs: 0,
+    wallClockSavingPercent: null,
+    hardRegressionPairs: 0,
     nextStep: null,
     nextCommand: null,
     nextInstruction:
       'Campaign evidence could not be read. No automatic retry or candidate activation was attempted.',
     reasons: [],
     promotionEligible: false,
+    promotionBlockers: [],
     note: 'Campaign evidence is selection evidence only. Candidate activation and promotion remain separate checks.',
   };
 }
@@ -188,12 +214,25 @@ export function createGuideCandidateCampaignReader(
       signal: campaign.assessment.signal,
       decisionReady: campaign.assessment.decisionReady,
       evidencePairs: campaign.assessment.evidencePairs,
+      evidenceCoveragePercent: campaign.evidence.evidenceCoveragePercent,
+      minimumEvidencePairs: campaign.assessment.minimumEvidencePairs,
+      minimumTaskClasses: campaign.assessment.minimumTaskClasses,
+      minimumEvidenceCoveragePercent: campaign.assessment.minimumEvidenceCoveragePercent,
       coveredTaskClasses: [...campaign.assessment.coveredTaskClasses],
+      optimizedBetter: campaign.evidence.optimizedBetter,
+      baselineBetter: campaign.evidence.baselineBetter,
+      equivalent: campaign.evidence.equivalent,
+      localComparablePairs: campaign.evidence.localComparablePairs,
+      localTokenSavingPercent: campaign.evidence.localTokenSavingPercent,
+      wallClockComparablePairs: campaign.evidence.wallClockComparablePairs,
+      wallClockSavingPercent: campaign.evidence.wallClockSavingPercent,
+      hardRegressionPairs: campaign.assessment.hardRegressionPairs,
       nextStep: campaignStep(campaign),
       nextCommand: campaign.nextCommand,
       nextInstruction: campaign.nextInstruction,
       reasons: [...campaign.assessment.reasons],
       promotionEligible: false,
+      promotionBlockers: [...campaign.assessment.promotionBlockers],
       note: 'Campaign evidence is selection evidence only. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
     };
   };

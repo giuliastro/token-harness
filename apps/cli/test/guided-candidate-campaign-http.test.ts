@@ -36,7 +36,19 @@ function status(input: GuideCandidateCampaignRequest): GuideCandidateCampaignSta
     signal: 'insufficient-evidence',
     decisionReady: false,
     evidencePairs: 2,
+    evidenceCoveragePercent: 100,
+    minimumEvidencePairs: 6,
+    minimumTaskClasses: 3,
+    minimumEvidenceCoveragePercent: 75,
     coveredTaskClasses: ['mechanical'],
+    optimizedBetter: 1,
+    baselineBetter: 0,
+    equivalent: 1,
+    localComparablePairs: 2,
+    localTokenSavingPercent: 12.5,
+    wallClockComparablePairs: 0,
+    wallClockSavingPercent: null,
+    hardRegressionPairs: 0,
     nextStep: {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-m-1',
@@ -48,6 +60,7 @@ function status(input: GuideCandidateCampaignRequest): GuideCandidateCampaignSta
     nextInstruction: 'Run the next baseline task.',
     reasons: ['need more evidence'],
     promotionEligible: false,
+    promotionBlockers: ['the standard benchmark campaign is not complete'],
     note: 'Selection evidence only.',
   };
 }
