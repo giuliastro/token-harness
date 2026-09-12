@@ -26,7 +26,10 @@ describe('guided candidate decision evidence', () => {
       /Local token\/context evidence is not provider allowance/,
     );
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /operational evidence/);
-    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Lifecycle and combined-stack gates remain explicit/);
+    assert.match(
+      GUIDE_CANDIDATE_DECISION_EVIDENCE_JS,
+      /Lifecycle and combined-stack gates remain explicit/,
+    );
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /What still blocks promotion/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /hard regression gate/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /\/api\/candidate-campaign/);
