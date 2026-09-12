@@ -172,7 +172,9 @@ export async function runUpdate(
   };
   const harnessConfigs = (
     await Promise.all(
-      listHarnessAdapters().map(async (harness) => (await harness.inspect(harnessContext)).summaries),
+      listHarnessAdapters().map(
+        async (harness) => (await harness.inspect(harnessContext)).summaries,
+      ),
     )
   ).flat();
 
@@ -309,7 +311,8 @@ export async function runUpdate(
         severity: 'info',
         code: 'provider-update-target-unreviewed',
         message: `${blocked.providerId} ${blocked.target} is available but is outside the reviewed provider package-update policy; keeping ${blocked.installed ?? 'the installed version'}`,
-        remediation: 'Review the provider package contract before enabling unattended update to this release',
+        remediation:
+          'Review the provider package contract before enabling unattended update to this release',
       }),
     );
     diagnostics.push(

@@ -3,10 +3,7 @@ import { describe, it } from 'node:test';
 
 import { diagnostic, providerId, type ProviderDetection } from '@token-harness/core';
 
-import {
-  admitProviderPackageUpdate,
-  applyProviderVersionCompatibility,
-} from '../src/index.js';
+import { admitProviderPackageUpdate, applyProviderVersionCompatibility } from '../src/index.js';
 
 const RTK = providerId('rtk');
 const HARNESSTRIM = providerId('harnesstrim');

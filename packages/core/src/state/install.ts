@@ -431,9 +431,7 @@ const INVENTORY_COMMANDS: Readonly<
           return { status: 'captured', version: candidate };
         }
       }
-      return sawObject
-        ? { status: 'absent', version: null }
-        : { status: 'unknown', version: null };
+      return sawObject ? { status: 'absent', version: null } : { status: 'unknown', version: null };
     },
     verified: false,
   },
