@@ -3,7 +3,10 @@ import { describe, it } from 'node:test';
 
 import { diagnostic, type ProviderDetection } from '@token-harness/core';
 
-import { applyProviderVersionCompatibility } from '../src/index.js';
+import {
+  admitProviderPackageUpdate,
+  applyProviderVersionCompatibility,
+} from '../src/index.js';
 
 function detection(
   provider: 'rtk' | 'harnesstrim',
@@ -109,5 +112,25 @@ describe('provider version compatibility', () => {
     );
 
     assert.equal(result.versionVerdict, 'unknown-newer');
+  });
+});
+
+describe('provider package update admission', () => {
+  it('admits the current reviewed RTK package target without a harness compatibility row', () => {
+    assert.deepEqual(admitProviderPackageUpdate('rtk', '0.49.0'), { state: 'admitted' });
+  });
+
+  it('blocks a future RTK target until its consumed source contract is reviewed', () => {
+    assert.equal(admitProviderPackageUpdate('rtk', '0.50.0').state, 'blocked');
+  });
+
+  it('admits the current reviewed HarnessTrim package target', () => {
+    assert.deepEqual(admitProviderPackageUpdate('harnesstrim', '0.3.0'), {
+      state: 'admitted',
+    });
+  });
+
+  it('keeps future HarnessTrim unattended package targets blocked before install-time validation', () => {
+    assert.equal(admitProviderPackageUpdate('harnesstrim', '0.4.0').state, 'blocked');
   });
 });
