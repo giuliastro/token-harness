@@ -7,8 +7,13 @@
 
 import type { ProviderId } from '@token-harness/core';
 
-import { harnesstrimAdapter } from './harnesstrim.js';
-import { rtkAdapter } from './rtk.js';
+import { harnesstrimAdapter as baseHarnessTrimAdapter } from './harnesstrim.js';
+import {
+  CURRENT_PROVIDER_RELEASES,
+  CURRENT_PROVIDER_VERSION_RANGES,
+  withCurrentProviderVersionPolicy,
+} from './provider-version-policy.js';
+import { rtkAdapter as baseRtkAdapter } from './rtk.js';
 import type { ProviderAdapter } from './contract.js';
 
 export * from './contract.js';
@@ -37,16 +42,33 @@ export {
   type McptoonCandidateObservation,
   type McptoonCandidateState,
 } from './mcptoon-candidate.js';
-export { rtkAdapter, parseRtkAnalytics, harnessesWiredToRtk } from './rtk.js';
+export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
   compareCapabilities,
-  harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
   metricsLocations,
   synthesizeEventId,
   type HarnessTrimCapabilities,
   type HarnessTrimHarnessCapabilities,
 } from './harnesstrim.js';
+export { CURRENT_PROVIDER_RELEASES, CURRENT_PROVIDER_VERSION_RANGES };
+
+/**
+ * Product-facing adapters use one central current-release policy.
+ *
+ * The underlying provider modules keep historical observation constants because their focused unit
+ * tests and provenance comments describe the builds that were actually inspected at the time. The
+ * registry is the boundary used by the CLI/UI and is where current stable upstream compatibility is
+ * declared. Managed writes remain independently fail-closed behind exact COMPATIBILITY_ROWS.
+ */
+export const rtkAdapter: ProviderAdapter = withCurrentProviderVersionPolicy(
+  baseRtkAdapter,
+  CURRENT_PROVIDER_VERSION_RANGES.rtk,
+);
+export const harnesstrimAdapter: ProviderAdapter = withCurrentProviderVersionPolicy(
+  baseHarnessTrimAdapter,
+  CURRENT_PROVIDER_VERSION_RANGES.harnesstrim,
+);
 
 /**
  * The public HarnessTrim adapter keeps its direct skills-only planning surface for focused callers

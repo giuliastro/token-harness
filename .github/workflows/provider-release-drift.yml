@@ -1,0 +1,80 @@
+name: Provider release drift
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-provider-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read current provider release policy
+        id: policy
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const text = fs.readFileSync('packages/adapters/src/providers/provider-version-policy.ts', 'utf8');
+          const value = (name) => {
+            const match = new RegExp(`${name}:\\s*'([^']+)'`).exec(text);
+            if (!match) throw new Error(`Could not read ${name} from provider release policy`);
+            return match[1];
+          };
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `rtk=${value('rtk')}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `harnesstrim=${value('harnesstrim')}\n`);
+          NODE
+
+      - name: Read latest stable upstream releases
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          rtk="$(gh api repos/rtk-ai/rtk/releases/latest --jq '.tag_name | sub("^v"; "")')"
+          harnesstrim="$(gh api repos/giuliastro/HarnessTrim/releases/latest --jq '.tag_name | sub("^v"; "")')"
+          echo "rtk=$rtk" >> "$GITHUB_OUTPUT"
+          echo "harnesstrim=$harnesstrim" >> "$GITHUB_OUTPUT"
+
+      - name: Report drift and open one tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RTK_REVIEWED: ${{ steps.policy.outputs.rtk }}
+          RTK_LATEST: ${{ steps.upstream.outputs.rtk }}
+          HARNESSTRIM_REVIEWED: ${{ steps.policy.outputs.harnesstrim }}
+          HARNESSTRIM_LATEST: ${{ steps.upstream.outputs.harnesstrim }}
+        shell: bash
+        run: |
+          if [[ "$RTK_REVIEWED" == "$RTK_LATEST" && "$HARNESSTRIM_REVIEWED" == "$HARNESSTRIM_LATEST" ]]; then
+            echo "Provider release policy is current."
+            exit 0
+          fi
+
+          title="Provider release drift detected"
+          body=$(cat <<EOF
+          The scheduled upstream release check found a newer stable provider release than the current Token Harness provider release policy.
+
+          | Provider | Token Harness current | Upstream latest |
+          | --- | --- | --- |
+          | RTK | $RTK_REVIEWED | $RTK_LATEST |
+          | HarnessTrim | $HARNESSTRIM_REVIEWED | $HARNESSTRIM_LATEST |
+
+          This issue is an alert, not an automatic compatibility approval. Review upstream changes, update the central provider release policy, run CI, and keep exact managed-mutation compatibility rows evidence-gated.
+          EOF
+          )
+
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing" ]]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          else
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          fi
+
+          echo "::error::Provider release policy is behind upstream stable releases."
+          exit 1

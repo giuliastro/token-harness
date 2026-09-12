@@ -56,7 +56,7 @@ describe('stack-review CLI', () => {
       reviewState: 'pending-manual-decision',
       fingerprint: {
         providerIds: [HARNESS_TRIM, RTK],
-        versions: { harnesstrim: '0.1.0', rtk: '0.44.0' },
+        versions: { harnesstrim: '0.3.0', rtk: '0.49.0' },
         configuredHarnesses: {
           harnesstrim: [CODEX],
           rtk: [CLAUDE],
@@ -93,8 +93,8 @@ describe('stack-review CLI', () => {
 
     assert.match(rendered, /STACK REVIEW CAPTURE/);
     assert.match(rendered, /harnesstrim \+ rtk/);
-    assert.match(rendered, /harnesstrim\s+0\.1\.0\s+codex/);
-    assert.match(rendered, /rtk\s+0\.44\.0\s+claude/);
+    assert.match(rendered, /harnesstrim\s+0\.3\.0\s+codex/);
+    assert.match(rendered, /rtk\s+0\.49\.0\s+claude/);
     assert.match(rendered, /pending manual review/);
     assert.match(rendered, /PASSIVE VERIFICATION/);
     assert.match(rendered, /harnesstrim \/ codex\s+not exercised\s+config-only/);
