@@ -1,0 +1,25 @@
+name: Format debug
+
+on:
+  push:
+    branches:
+      - codex/provider-tool-updates-2026-09-12
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print Prettier diff
+        run: |
+          pnpm exec prettier --write apps/cli/src/commands/update.ts packages/adapters/test/version-compatibility.test.ts packages/core/src/state/install.ts
+          git diff -- apps/cli/src/commands/update.ts packages/adapters/test/version-compatibility.test.ts packages/core/src/state/install.ts
