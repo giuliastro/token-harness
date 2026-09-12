@@ -1,4 +1,4 @@
-import type { TaskClass } from '@token-harness/core';
+import type { OptimizationCandidateObservation, TaskClass } from '@token-harness/core';
 
 import type {
   CandidateAwareBenchmarkMatrixReport,
@@ -6,6 +6,10 @@ import type {
   CandidateBenchmarkCampaignSlot,
 } from './commands/candidate-benchmark.js';
 import type { CandidateEvidenceSignal } from './commands/candidate-evidence-assessment.js';
+import {
+  assessCandidatePromotionReadiness,
+  type CandidatePromotionReadiness,
+} from './commands/candidate-promotion-readiness.js';
 import {
   createGuideCandidateCampaignActionRunner,
   type GuideCandidateCampaignActionRequest,
@@ -68,6 +72,7 @@ export interface GuideCandidateCampaignStatus {
   reasons: string[];
   promotionEligible: false;
   promotionBlockers: string[];
+  promotionReadiness: CandidatePromotionReadiness | null;
   note: string;
 }
 
@@ -75,6 +80,10 @@ export interface GuideCandidateCampaignController {
   (input: GuideCandidateCampaignRequest): Promise<GuideCandidateCampaignStatus>;
   action(input: GuideCandidateCampaignActionRequest): Promise<GuideCandidateCampaignActionResult>;
 }
+
+export type GuideCandidateObservationLookup = (
+  candidateId: GuideCandidateId,
+) => OptimizationCandidateObservation | null;
 
 const CANDIDATES = new Set<GuideCandidateId>(['headroom', 'mcptoon', 'gitnexus']);
 const HARNESSES = new Set<GuideCandidateHarness>(['claude', 'codex']);
@@ -135,6 +144,7 @@ function unavailable(input: GuideCandidateCampaignRequest): GuideCandidateCampai
     reasons: [],
     promotionEligible: false,
     promotionBlockers: [],
+    promotionReadiness: null,
     note: 'Campaign evidence is selection evidence only. Candidate activation and promotion remain separate checks.',
   };
 }
@@ -179,6 +189,7 @@ function campaignStep(campaign: CandidateBenchmarkCampaignReport): GuideCandidat
 
 export function createGuideCandidateCampaignReader(
   call: GuideCall,
+  observationFor?: GuideCandidateObservationLookup,
 ): GuideCandidateCampaignController {
   const read = async (
     input: GuideCandidateCampaignRequest,
@@ -203,6 +214,11 @@ export function createGuideCandidateCampaignReader(
     }
 
     const totalPairs = campaign.totalPairs;
+    const promotionReadiness = assessCandidatePromotionReadiness({
+      candidateId: input.candidateId,
+      assessment: campaign.assessment,
+      observation: observationFor?.(input.candidateId) ?? null,
+    });
     return {
       available: true,
       ...input,
@@ -233,7 +249,8 @@ export function createGuideCandidateCampaignReader(
       reasons: [...campaign.assessment.reasons],
       promotionEligible: false,
       promotionBlockers: [...campaign.assessment.promotionBlockers],
-      note: 'Campaign evidence is selection evidence only. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
+      promotionReadiness,
+      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution does not prove activation, and decision-ready does not mean promotion-ready.',
     };
   };
 
