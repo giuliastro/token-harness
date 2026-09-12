@@ -45,9 +45,7 @@ function harnessTrimContractMatchesInstalledVersion(detection: ProviderDetection
  * promoted. This keeps future RTK releases usable for detection while refusing to silently claim a
  * contract Token Harness has not inspected.
  */
-export function applyProviderVersionCompatibility(
-  detection: ProviderDetection,
-): ProviderDetection {
+export function applyProviderVersionCompatibility(detection: ProviderDetection): ProviderDetection {
   if (detection.versionVerdict !== 'unknown-newer' || detection.version === null) return detection;
 
   const compatible =
