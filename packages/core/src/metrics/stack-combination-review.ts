@@ -99,7 +99,7 @@ function runtimeEvidenceFor(
   }
 
   const failed = result.checks.find((check) => check.status === 'fail');
-  if (result.status === 'degraded' || result.status === 'failed' || failed !== undefined) {
+  if (result.status === 'failed' || failed !== undefined) {
     return {
       runtimeEvidence: 'failed',
       detail: failed?.summary ?? `Verification status is ${result.status}.`,
@@ -118,10 +118,19 @@ function runtimeEvidenceFor(
     return { runtimeEvidence: 'not-exercised', detail: notExercised.summary };
   }
 
+  const unattributed = result.checks.find(
+    (check) => check.id === 'canary-intercepted' && check.status === 'info',
+  );
+  if (unattributed !== undefined) {
+    return { runtimeEvidence: 'unavailable', detail: unattributed.summary };
+  }
+
   return {
     runtimeEvidence: 'unavailable',
     detail:
-      'The integration is healthy at its declared tier, but no passive runtime canary is available.',
+      result.status === 'degraded'
+        ? 'The declared runtime tier was not reached with evidence attributable to this exact harness.'
+        : 'The integration is healthy at its declared tier, but no passive runtime canary is available.',
   };
 }
 
