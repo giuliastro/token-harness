@@ -82,7 +82,6 @@ describe('exit codes', () => {
         update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
         'stack-review': () => Promise.reject(new Error('unused')),
-        'stack-review': () => Promise.reject(new Error('unused')),
       },
     });
     assert.equal(result.exitCode, EXIT_CODES['internal-error']);
@@ -163,7 +162,6 @@ describe('exit codes', () => {
         update: () => Promise.reject(new Error('unused')),
         status: () => Promise.reject(new Error('unused')),
         'stack-review': () => Promise.reject(new Error('unused')),
-        'stack-review': () => Promise.reject(new Error('unused')),
       },
     });
     assert.equal(result.exitCode, EXIT_CODES['problems-found']);
@@ -191,7 +189,6 @@ describe('exit codes', () => {
             }),
           ),
         status: () => Promise.reject(new Error('unused')),
-        'stack-review': () => Promise.reject(new Error('unused')),
         'stack-review': () => Promise.reject(new Error('unused')),
         metrics: () => Promise.reject(new Error('unused')),
         mcp: () => Promise.reject(new Error('unused')),
