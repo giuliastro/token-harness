@@ -79,10 +79,22 @@ approval, verify it, and remove only configuration it owns.
 **3. Experimental tools**
 
 Headroom, mcptoon and GitNexus are visible as candidates, not silently promoted dependencies. Their
-cards distinguish CLI installation, candidate-side activation/evaluation, and Token Harness
-benchmark evidence. External install or activation commands are shown for review; Token Harness does
-not silently execute package managers, activate wrappers, index repositories or register MCP
-servers.
+cards distinguish CLI installation, candidate-side activation/evaluation, Token Harness benchmark
+evidence and promotion-readiness gates. External install or activation commands are shown for
+review; Token Harness does not silently execute package managers, activate wrappers, index
+repositories or register MCP servers.
+
+Choose **Run standard evaluation** to start or resume a paired candidate campaign. Campaign state is
+scoped to both the candidate and the selected harness, so Claude Code and Codex evidence cannot be
+mixed accidentally. The browser gives you the `benchmark-matrix` status command; the command engine
+reconstructs progress from normal benchmark captures and receipts and reports the exact **Next** step.
+The browser does not hard-code benchmark start/finish actions or claim that candidate attribution
+proves activation.
+
+A campaign selection assessment can report `insufficient-evidence`, `promising`, `mixed` or
+`negative`, plus whether the evidence is decision-ready. **Decision-ready is not promotion-ready.**
+Activation verification, managed lifecycle, compatibility/reversibility, project maturity and
+combined-stack validation remain separate gates.
 
 **4. Optional agent tuning**
 
@@ -103,7 +115,7 @@ show:
 - authoritative paired 5-hour / 7-day allowance evidence;
 - API cost only when billed-token evidence and a verified price basis exist;
 - paired quality evidence;
-- experimental benchmark evidence;
+- experimental candidate evidence and campaign selection assessment when available;
 - recent checks and changes from the current local app session.
 
 **Not measured** means exactly that. Token Harness does not turn local token estimates into fake
@@ -166,10 +178,11 @@ algorithms into this repository.
 | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
 
 Current experimental candidates include Headroom, mcptoon and GitNexus. Detection or a promising
-benchmark is not enough for promotion. A candidate must pass structured promotion readiness across
-benchmark capability, category fit, selection evidence, real activation verification, managed
-lifecycle, compatibility/reversibility, project maturity and combined-stack validation. Broader
-context owners also require an explicit admission decision.
+benchmark is not enough for promotion. Their campaign assessment is structured evidence for the
+selection gate, not an activation or promotion decision. A candidate must pass structured promotion
+readiness across benchmark capability, category fit, selection evidence, real activation
+verification, managed lifecycle, compatibility/reversibility, project maturity and combined-stack
+validation. Broader context owners also require an explicit admission decision.
 
 See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) and
 [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md).
@@ -237,6 +250,29 @@ Need stable machine-readable output? Add `--json`. Need the evidence behind a hu
 The older automation contracts remain available. `ui --json` preserves its existing schema-1
 report; `ui --read-only` opens the legacy read-only UI; `ui --no-open` starts the guided app without
 launching a browser.
+
+### Evaluating an experimental candidate
+
+For normal use, open **Setup -> Experimental tools** and choose **Run standard evaluation**. The app
+keeps a resumable campaign ID for each candidate/harness pair and shows the status command to run.
+
+The equivalent advanced CLI flow starts by asking the campaign engine for its current state:
+
+```sh
+token-harness benchmark-matrix \
+  --benchmark-id gitnexus-codex-eval-1 \
+  --candidate gitnexus \
+  --harness codex
+```
+
+Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
+same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
+documented workflow. Token Harness records the experiment target but does not treat attribution as
+proof that the candidate was active.
+
+The selection assessment can become decision-ready after enough evidence across task classes, but it
+still cannot promote a candidate by itself. The remaining lifecycle and combined-stack gates must be
+satisfied separately.
 
 ### Workload-aware allowance planning
 
