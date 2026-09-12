@@ -36,3 +36,4 @@ jobs:
           git add -A
           git commit -m "feat: surface candidate activation evidence in comparisons"
           git push
+# trigger validation after normalization fix
