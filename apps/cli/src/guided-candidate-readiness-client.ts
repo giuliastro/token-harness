@@ -1,4 +1,5 @@
 import { GUIDE_CANDIDATE_DECISION_EVIDENCE_JS } from './guided-candidate-decision-evidence-client.js';
+import { GUIDE_STACK_COMBINATION_JS } from './guided-stack-combination-client.js';
 
 /** Candidate promotion-readiness presentation layered over the guided product UI. */
 const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
@@ -96,4 +97,4 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
 })();
 `;
 
-export const GUIDE_CANDIDATE_READINESS_JS = `${GUIDE_CANDIDATE_READINESS_BASE_JS}\n${GUIDE_CANDIDATE_DECISION_EVIDENCE_JS}`;
+export const GUIDE_CANDIDATE_READINESS_JS = `${GUIDE_CANDIDATE_READINESS_BASE_JS}\n${GUIDE_CANDIDATE_DECISION_EVIDENCE_JS}\n${GUIDE_STACK_COMBINATION_JS}`;
