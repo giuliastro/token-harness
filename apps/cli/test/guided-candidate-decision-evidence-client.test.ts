@@ -11,6 +11,14 @@ describe('guided candidate decision evidence', () => {
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Next gate/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /passedGateCount/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /requiredGateCount/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Activation evidence/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Activation pairs/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /verified: 'Verified'/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /blocked: 'Blocked'/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /unreviewed: 'Unreviewed'/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /activationVerifiedPairs/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /activationBlockedPairs/);
+    assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /activationUnknownPairs/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Evidence coverage/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Task classes/);
     assert.match(GUIDE_CANDIDATE_DECISION_EVIDENCE_JS, /Pair verdicts/);
@@ -21,6 +29,10 @@ describe('guided candidate decision evidence', () => {
   });
 
   it('keeps local-token, wall-clock, activation and promotion meanings separate', () => {
+    assert.match(
+      GUIDE_CANDIDATE_DECISION_EVIDENCE_JS,
+      /Activation evidence is independent from selection signal and promotion gates/,
+    );
     assert.match(
       GUIDE_CANDIDATE_DECISION_EVIDENCE_JS,
       /Local token\/context evidence is not provider allowance/,
