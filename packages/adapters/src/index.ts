@@ -9,5 +9,4 @@
 
 export * from './harnesses/index.js';
 export * from './providers/index.js';
-export * from './providers/rtk.js';
 export * from './providers/rtk-plan.js';
