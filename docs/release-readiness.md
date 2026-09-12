@@ -82,9 +82,11 @@ and reversibility, project maturity and combined-stack validation. Broad context
 additional admission decision before they can own the session context path.
 
 The browser can now compare already-saved candidate/harness campaigns on demand using those same
-gates. That makes the third-mechanism decision easier to review, but it does **not** satisfy the
-third-mechanism requirement by itself: no campaign is created by the comparison and no candidate is
-ranked, activated or promoted automatically.
+gates and shows runtime activation evidence explicitly as a separate state, including
+verified/blocked/unknown pair counts where the campaign has such evidence. That makes the
+third-mechanism decision easier to review, but it does **not** satisfy the third-mechanism requirement
+by itself: no campaign is created by the comparison and no candidate is ranked, activated or
+promoted automatically.
 
 The current research landscape includes repository-exploration/retrieval systems, MCP
 schema/discovery systems such as mcptoon/mcp-compressor-class projects, Caveman-class
