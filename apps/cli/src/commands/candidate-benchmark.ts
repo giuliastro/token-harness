@@ -25,6 +25,10 @@ import {
   readCandidateBenchmarkAttribution,
   writeCandidateBenchmarkAttribution,
 } from './candidate-benchmark-attribution.js';
+import {
+  assessCandidateEvidence,
+  type CandidateEvidenceAssessment,
+} from './candidate-evidence-assessment.js';
 import type { CommandContext } from './context.js';
 
 export type CandidateAwareTaskBenchmarkCaptureStartReport = TaskBenchmarkCaptureStartReport & {
@@ -91,6 +95,7 @@ export interface CandidateBenchmarkCampaignReport {
   nextCommand: string | null;
   nextInstruction: string;
   evidence: CandidateBenchmarkEvidence;
+  assessment: CandidateEvidenceAssessment;
 }
 
 export type CandidateAwareBenchmarkMatrixReport = TaskBenchmarkContextMatrixReport & {
@@ -468,6 +473,18 @@ async function buildCampaignReport(
     evidenceEntries.push({ ...entry, ...timing });
   }
 
+  const completedPairs = slots.filter((slot) => slot.state === 'complete').length;
+  const invalidPairs = slots.filter((slot) => slot.state === 'invalid').length;
+  const evidence = summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries);
+  const assessment = assessCandidateEvidence({
+    candidateId: definition.candidateId,
+    totalPairs: slots.length,
+    completedPairs,
+    invalidPairs,
+    slots,
+    entries: matrix.entries,
+    evidence,
+  });
   const next = campaignNextStep(definition, slots);
   return {
     campaignId: definition.campaignId,
@@ -475,12 +492,13 @@ async function buildCampaignReport(
     harnessId: definition.harnessId,
     runsPerTask: CAMPAIGN_RUNS_PER_TASK,
     totalPairs: slots.length,
-    completedPairs: slots.filter((slot) => slot.state === 'complete').length,
-    invalidPairs: slots.filter((slot) => slot.state === 'invalid').length,
+    completedPairs,
+    invalidPairs,
     slots,
     nextCommand: next.command,
     nextInstruction: next.instruction,
-    evidence: summarizeCandidateBenchmarkEntries(definition.candidateId, evidenceEntries),
+    evidence,
+    assessment,
   };
 }
 

@@ -17,7 +17,7 @@ import type {
   TaskClass,
 } from '@token-harness/core';
 
-import { assessCandidateEvidence } from '../commands/candidate-evidence-assessment.js';
+import type { CandidateEvidenceAssessment } from '../commands/candidate-evidence-assessment.js';
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
 
 interface CandidateEvidenceSummary {
@@ -65,6 +65,7 @@ interface CandidateCampaignSummary {
   nextCommand: string | null;
   nextInstruction: string;
   evidence: CandidateEvidenceSummary;
+  assessment: CandidateEvidenceAssessment;
 }
 
 type CandidateAwareReport = (TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport) & {
@@ -185,11 +186,7 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
   );
 }
 
-function renderCampaign(
-  lines: string[],
-  campaign: CandidateCampaignSummary,
-  entries: readonly TaskBenchmarkMatrixEntry[],
-): void {
+function renderCampaign(lines: string[], campaign: CandidateCampaignSummary): void {
   lines.push('', 'Candidate campaign — experimental');
   lines.push(
     ...wrap(
@@ -235,15 +232,7 @@ function renderCampaign(
   const timing = candidateTimingLine(campaign.evidence);
   if (timing !== null) lines.push(...wrap(timing, 4));
 
-  const assessment = assessCandidateEvidence({
-    candidateId: campaign.candidateId,
-    totalPairs: campaign.totalPairs,
-    completedPairs: campaign.completedPairs,
-    invalidPairs: campaign.invalidPairs,
-    slots: campaign.slots,
-    entries,
-    evidence: campaign.evidence,
-  });
+  const assessment = campaign.assessment;
   lines.push('', '  Selection assessment');
   lines.push(
     ...wrap(
@@ -283,7 +272,7 @@ export function renderBenchmarkMatrixReport(
     ),
   );
 
-  if (report.campaign !== undefined) renderCampaign(lines, report.campaign, report.entries);
+  if (report.campaign !== undefined) renderCampaign(lines, report.campaign);
 
   if (report.entries.length === 0) {
     lines.push(

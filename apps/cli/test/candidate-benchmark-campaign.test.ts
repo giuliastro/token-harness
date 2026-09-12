@@ -249,6 +249,9 @@ describe('candidate benchmark campaign', () => {
     assert.equal(result.data.campaign.completedPairs, 0);
     assert.equal(result.data.campaign.invalidPairs, 0);
     assert.equal(result.data.campaign.slots[0]?.state, 'baseline-not-started');
+    assert.equal(result.data.campaign.assessment.signal, 'insufficient-evidence');
+    assert.equal(result.data.campaign.assessment.decisionReady, false);
+    assert.equal(result.data.campaign.assessment.promotionEligible, false);
     assert.match(result.data.campaign.nextCommand ?? '', /gitnexus-eval-m-1/);
     assert.match(result.data.campaign.nextCommand ?? '', /--variant baseline/);
     assert.match(result.data.campaign.nextCommand ?? '', /--candidate gitnexus/);
@@ -279,7 +282,36 @@ describe('candidate benchmark campaign', () => {
     assert.equal(result.data.campaign.evidence.optimizedBetter, 1);
     assert.equal(result.data.campaign.evidence.localTokenSavingPercent, 33.3);
     assert.equal(result.data.campaign.evidence.wallClockSavingPercent, 25);
+    assert.equal(result.data.campaign.assessment.signal, 'insufficient-evidence');
+    assert.equal(result.data.campaign.assessment.evidencePairs, 1);
     assert.match(result.data.campaign.nextCommand ?? '', /gitnexus-eval-m-2/);
+  });
+
+  it('emits a decision-ready promising selection signal without promoting the candidate', async () => {
+    const world = fixture();
+    const completed: Array<[string, TaskClass]> = [
+      ['gitnexus-eval-m-1', 'mechanical'],
+      ['gitnexus-eval-m-2', 'mechanical'],
+      ['gitnexus-eval-s-1', 'standard'],
+      ['gitnexus-eval-s-2', 'standard'],
+      ['gitnexus-eval-h-1', 'hard'],
+      ['gitnexus-eval-h-2', 'hard'],
+    ];
+    for (const [benchmarkId, taskClass] of completed) {
+      world.addBaseline(benchmarkId, taskClass);
+      world.addOptimized(benchmarkId, taskClass);
+    }
+
+    const result = await runCandidateBenchmarkMatrix(world.context());
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data?.campaign);
+    assert.equal(result.data.campaign.completedPairs, 6);
+    assert.equal(result.data.campaign.assessment.signal, 'promising');
+    assert.equal(result.data.campaign.assessment.decisionReady, true);
+    assert.equal(result.data.campaign.assessment.coveredTaskClasses.length, 3);
+    assert.equal(result.data.campaign.assessment.evidencePairs, 6);
+    assert.equal(result.data.campaign.assessment.promotionEligible, false);
+    assert.match(result.data.campaign.assessment.promotionBlockers.join(' '), /activation/);
   });
 
   it('fails closed when a planned slot belongs to a different candidate', async () => {
@@ -292,6 +324,7 @@ describe('candidate benchmark campaign', () => {
     assert.equal(result.data.campaign.invalidPairs, 1);
     assert.equal(result.data.campaign.slots[0]?.state, 'invalid');
     assert.equal(result.data.campaign.nextCommand, null);
+    assert.equal(result.data.campaign.assessment.decisionReady, false);
     assert.equal(
       result.diagnostics.some(
         (entry) => entry.code === 'candidate-benchmark-campaign-state-invalid',
