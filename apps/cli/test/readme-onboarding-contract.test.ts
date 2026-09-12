@@ -62,7 +62,10 @@ describe('README onboarding contract', () => {
     assert.match(readme, /Decision-ready is not promotion-ready/i);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
     assert.match(readme, /not activation verification/i);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not activation verification/);
+    assert.match(
+      GUIDE_CANDIDATE_CAMPAIGN_JS,
+      /does not treat it as activation verification/,
+    );
     assert.match(readme, /does not treat attribution.*proof that the candidate was active/is);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
     assert.doesNotMatch(GUIDE_CANDIDATE_CAMPAIGN_JS, /argv\s*:/);
