@@ -107,9 +107,7 @@ function runtimeEvidenceFor(
   }
 
   const observed = result.checks.find(
-    (check) =>
-      check.status === 'pass' &&
-      (check.achievedTier === 'canary' || check.achievedTier === 'live-receipt'),
+    (check) => check.status === 'pass' && check.achievedTier === 'canary',
   );
   if (observed !== undefined) {
     return { runtimeEvidence: 'observed', detail: observed.summary };
@@ -123,7 +121,7 @@ function runtimeEvidenceFor(
   return {
     runtimeEvidence: 'unavailable',
     detail:
-      'The integration is healthy at its declared tier, but no passive runtime canary or live receipt is available.',
+      'The integration is healthy at its declared tier, but no passive runtime canary is available.',
   };
 }
 
