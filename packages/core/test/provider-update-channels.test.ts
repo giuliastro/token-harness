@@ -42,7 +42,9 @@ describe('provider update channels', () => {
   });
 
   it('reads RTK versions from the current WinGet spelling', async () => {
-    const process = runner('Found RTK [rtk-ai.rtk]\r\nVersion\r\n-------\r\nv0.48.0\r\nv0.47.0\r\n');
+    const process = runner(
+      'Found RTK [rtk-ai.rtk]\r\nVersion\r\n-------\r\nv0.48.0\r\nv0.47.0\r\n',
+    );
     const result = await queryAvailableVersion({
       packageManager: 'winget',
       packageName: 'rtk-ai.rtk',
@@ -82,7 +84,10 @@ describe('provider update channels', () => {
 
     assert.equal(result.status, 'installed');
     assert.deepEqual(process.commands, ['npm install --global harnesstrim@0.3.0']);
-    assert.equal(result.diagnostics.some((entry) => entry.code === 'install-channel-unverified'), false);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'install-channel-unverified'),
+      false,
+    );
   });
 
   it('queries HarnessTrim through npm without locale-sensitive parsing', async () => {
