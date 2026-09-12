@@ -34,18 +34,7 @@ import type { PackageManagerInstallAction } from '../domain/actions.js';
 import type { ProcessRunner } from '../domain/process.js';
 import { parseSemanticVersion } from '../domain/version.js';
 
-/**
- * How to ask each package manager for a package, without a shell.
- *
- * Verified against the machine this was written on: `rtk` resolves to
- * `WinGet/Packages/rtk-ai.rtk_.../rtk.exe`, `winget search rtk` returns the id `rtk-ai.rtk`, and
- * every flag below appears in `winget install --help`.
- *
- * `cargo` and `pnpm` are declared from their documented argv but have not yet been observed through
- * this executor on a live machine. They stay `verified: false`, so the runtime reports
- * `install-channel-unverified` instead of implying that evidence exists. pnpm's documented global
- * exact-version form is `pnpm add --global <package>@<version>`.
- */
+/** How to ask each package manager for a package, without a shell. */
 const INSTALL_COMMANDS: Readonly<
   Record<
     string,
@@ -63,8 +52,6 @@ const INSTALL_COMMANDS: Readonly<
       '--id',
       packageName,
       '--exact',
-      // Non-interactive: the runner gives a child no usable stdin, so a prompt would hang until
-      // the timeout rather than ask anybody anything.
       '--silent',
       '--accept-package-agreements',
       '--accept-source-agreements',
@@ -81,6 +68,17 @@ const INSTALL_COMMANDS: Readonly<
     ],
     verified: false,
   },
+  npm: {
+    executable: 'npm',
+    args: (packageName, version) => [
+      'install',
+      '--global',
+      version === null ? packageName : `${packageName}@${version}`,
+    ],
+    // HarnessTrim's upstream install contract is npm; this argv is intentionally simple and works
+    // without the PNPM_HOME requirement that broke a real Windows update.
+    verified: true,
+  },
   pnpm: {
     executable: 'pnpm',
     args: (packageName, version) => [
@@ -96,41 +94,18 @@ export function knownPackageManagers(): string[] {
   return Object.keys(INSTALL_COMMANDS).sort();
 }
 
-/**
- * Channels this build can ask about a version.
- *
- * Reads and mutations still have independent evidence. For pnpm the version query has been
- * observed on a real machine; the global install argv is documented and intentionally marked
- * unverified until a live Token Harness update captures it. The important product property is now
- * explicit: every channel used by a managed provider update has both a query recipe and an install
- * recipe instead of discovering an update it cannot execute.
- */
+/** Channels this build can ask about a version. */
 export function knownVersionQueryChannels(): string[] {
   return Object.keys(QUERY_COMMANDS).sort();
 }
 
-/**
- * How to ask each package manager what version is *available* — RFC 0004 §Amended: version
- * discovery belongs to the channel, not the provider.
- *
- * The provider contract cannot answer this: `detect` reports the version that is installed, which
- * is the wrong side of the arrow `update` has to print. `winget` knows what exists for
- * `rtk-ai.rtk`; RTK's own adapter has no idea.
- *
- * The parse is the interesting part, and verifying it changed the answer. `winget show --id <id>
- * --exact` prints the version behind a **localized label** — `Versione:` on the machine this was
- * written on, `Version:` on an English one — so matching that label would have shipped something
- * that works in one locale and silently reports nothing in every other. `--versions` instead
- * prints a table whose header is localized but whose body is bare versions, newest first, after a
- * separator line of dashes that no translation touches.
- */
+/** How to ask each package manager what version is available. */
 const QUERY_COMMANDS: Readonly<
   Record<
     string,
     {
       executable: string;
       args: (packageName: string) => string[];
-      /** The newest available version, or null when the output named none. */
       parse: (stdout: string) => string | null;
       verified: boolean;
     }
@@ -141,31 +116,28 @@ const QUERY_COMMANDS: Readonly<
     args: (packageName) => ['show', '--id', packageName, '--exact', '--versions'],
     parse: (stdout) => {
       const lines = stdout.split(/\r?\n/);
-      // Anchored on the dashes rather than on a line count: `winget` prints a "Found <name> [<id>]"
-      // line above the table whose wording is also localized.
       const separator = lines.findIndex((line) => /^-{3,}\s*$/.test(line.trim()));
       if (separator < 0) return null;
       for (const line of lines.slice(separator + 1)) {
         const candidate = line.trim();
         if (candidate === '') continue;
-        // Newest first, so the first parseable line is the answer. A line that is not a version is
-        // not skipped past — it means the table shape is not what was verified, and guessing
-        // further down would be reading an unknown format.
+        // WinGet package versions may use the common release-tag prefix (`v0.48.0`). The shared
+        // semantic parser accepts that transport spelling while keeping comparison semantics.
         return parseSemanticVersion(candidate) === null ? null : candidate;
       }
       return null;
     },
     verified: true,
   },
-  /**
-   * `pnpm view <pkg> version` prints the version alone, on one line, in every locale — the
-   * registry answers with data rather than with a rendered table, which is why this one needs no
-   * separator trick.
-   *
-   * Verified on the machine this was written on: `pnpm view harnesstrim version` → `0.0.6`, which
-   * matches what the installed binary reports. `npm view` prints the same thing, but the channel a
-   * user installed through is the channel to ask.
-   */
+  npm: {
+    executable: 'npm',
+    args: (packageName) => ['view', packageName, 'version'],
+    parse: (stdout) => {
+      const candidate = stdout.trim().split(/\r?\n/).at(-1)?.trim() ?? '';
+      return parseSemanticVersion(candidate) === null ? null : candidate;
+    },
+    verified: true,
+  },
   pnpm: {
     executable: 'pnpm',
     args: (packageName) => ['view', packageName, 'version'],
@@ -178,8 +150,6 @@ const QUERY_COMMANDS: Readonly<
   cargo: {
     executable: 'cargo',
     args: (packageName) => ['search', packageName, '--limit', '1'],
-    // `name = "0.1.0"    # description`, per cargo's documented output. Not observed: cargo is not
-    // installed on the machine this was written on, which is what `verified: false` reports.
     parse: (stdout) => {
       const match = /^\s*\S+\s*=\s*"([^"]+)"/m.exec(stdout);
       const candidate = match?.[1] ?? null;
@@ -194,9 +164,7 @@ export type VersionQueryStatus = 'found' | 'unknown' | 'unsupported' | 'failed';
 
 export interface VersionQueryOutcome {
   status: VersionQueryStatus;
-  /** Non-null only when `status` is `found`. */
   version: string | null;
-  /** The destination the query reached, for the plan's network summary. Null when none was. */
   destination: string | null;
   diagnostics: Diagnostic[];
 }
@@ -209,7 +177,6 @@ export interface QueryVersionInput {
   timeoutMs?: number;
 }
 
-/** A query is a read, so it is held to a much shorter leash than an install. */
 const DEFAULT_QUERY_TIMEOUT_MS = 60_000;
 
 export async function queryAvailableVersion(
@@ -285,13 +252,6 @@ export async function queryAvailableVersion(
 
   const version = recipe.parse(outcome.stdout);
   if (version === null) {
-    /**
-     * A warning rather than an error, and never a guess.
-     *
-     * `unknown` is what a locale or a changed table shape produces, and the honest consequence is
-     * that `update` cannot say what a newer version would be — not that it invents one or reports
-     * "already current", which is the same sentence a user reads as good news.
-     */
     diagnostics.push(
       diagnostic({
         severity: 'warning',
@@ -306,31 +266,13 @@ export async function queryAvailableVersion(
   return { status: 'found', version, destination, diagnostics };
 }
 
-/**
- * How to ask each package manager what it has *installed* — the inventory side of
- * `rollbackData: 'package-inventory'`.
- *
- * A query is a read and an install is a mutation, and an inventory query is a read that decides
- * whether a rollback may claim it restored something. The same evidence standard applies as to
- * the version query: a channel that cannot answer is recorded as not having answered, never as
- * having answered "nothing".
- *
- * pnpm joins the existing inventory channels because HarnessTrim updates now run through the same
- * transaction machinery as RTK. Its JSON mode avoids parsing locale-sensitive display text and lets
- * rollback capture the exact previous HarnessTrim version before a global update.
- */
+/** How to ask each package manager what it has installed. */
 const INVENTORY_COMMANDS: Readonly<
   Record<
     string,
     {
       executable: string;
       args: (packageName: string) => string[];
-      /**
-       * `captured` means the channel reported the package installed at a parseable version;
-       * `absent` means the channel's answer positively excludes it (`cargo install --list` lists
-       * every installed crate, so a crate that is not listed is not installed). Anything else is
-       * `unknown` — a parse failure is not an answer.
-       */
       parse: (
         stdout: string,
         packageName: string,
@@ -339,15 +281,6 @@ const INVENTORY_COMMANDS: Readonly<
     }
   >
 > = {
-  /**
-   * `winget list --id <id> --exact` prints the same dashes-anchored table as `show --versions`,
-   * with the installed version as the last token of the row. The header is localized, which is
-   * why the parse is anchored on the separator and the row tail rather than on a column title.
-   *
-   * A missing package makes winget exit non-zero with a localized "no package found" message,
-   * which this build cannot tell from any other failure — so that case is `failed` at the caller,
-   * never `absent`.
-   */
   winget: {
     executable: 'winget',
     args: (packageName) => ['list', '--id', packageName, '--exact'],
@@ -366,10 +299,6 @@ const INVENTORY_COMMANDS: Readonly<
     },
     verified: false,
   },
-  /**
-   * `cargo install --list` prints one `crate v0.1.0:` line per installed crate, so absence is a
-   * positive answer: the crate simply does not appear.
-   */
   cargo: {
     executable: 'cargo',
     args: () => ['install', '--list'],
@@ -477,18 +406,10 @@ const INVENTORY_COMMANDS: Readonly<
   },
 };
 
-/** The channels that can report an inventory, sorted for deterministic output. */
 export function knownInventoryChannels(): string[] {
   return Object.keys(INVENTORY_COMMANDS).sort();
 }
 
-/**
- * Whether a channel can report the inventory a `package-inventory` rollback needs.
- *
- * This is the planner-facing half of RFC 0009 §Initial delivery order item 1: an action declares
- * `rollbackData: 'package-inventory'` only where the channel can actually be asked. The executor
- * half is `queryPackageInventory`.
- */
 export function channelCanReportInventory(channelId: string): boolean {
   return Object.hasOwn(INVENTORY_COMMANDS, channelId);
 }
@@ -499,7 +420,6 @@ export interface PackageInventoryCapture {
   channel: string;
   packageName: string;
   status: PackageInventoryStatus;
-  /** Non-null only when `status` is `captured`. */
   version: string | null;
   diagnostics: Diagnostic[];
 }
@@ -514,13 +434,6 @@ export interface QueryInventoryInput {
 
 const DEFAULT_INVENTORY_TIMEOUT_MS = 60_000;
 
-/**
- * Asks the channel what it has installed, before a `package-inventory` install runs.
- *
- * A read, held to the same standard as the version query: an unreadable answer is `unknown` and
- * a channel not in the table is `unsupported` — both recorded as "could not answer" in the
- * capture, which is what the rollback receipt later says rather than inventing a restoration.
- */
 export async function queryPackageInventory(
   input: QueryInventoryInput,
 ): Promise<PackageInventoryCapture> {
@@ -579,8 +492,6 @@ export async function queryPackageInventory(
   });
 
   if (outcome.failure !== null || outcome.exitCode !== 0) {
-    // A non-zero exit can be "no package found" and can be a broken tool; the machine is the
-    // only one that knows which, so this build records neither.
     diagnostics.push(
       diagnostic({
         severity: 'warning',
@@ -633,7 +544,6 @@ export interface RunInstallInput {
   action: PackageManagerInstallAction;
   runner: ProcessRunner | null;
   cwd: string;
-  /** Bounded: an installer that hangs must not hold a transaction open indefinitely. */
   timeoutMs?: number;
 }
 
@@ -643,8 +553,6 @@ export async function runPackageManagerInstall(input: RunInstallInput): Promise<
   const { action } = input;
 
   if (action.requiresElevation) {
-    // RFC 0004 §Process policy: "Provider commands run with current-user privileges. Elevation is
-    // never automatic." Refusing is the specified behaviour, not a limitation.
     const recipe = INSTALL_COMMANDS[action.packageManager];
     const shown =
       recipe === undefined
@@ -665,7 +573,6 @@ export async function runPackageManagerInstall(input: RunInstallInput): Promise<
 
   const recipe = INSTALL_COMMANDS[action.packageManager];
   if (recipe === undefined) {
-    // Guessing an unknown manager's argv is how a plan becomes a command nobody reviewed.
     return {
       status: 'failed',
       diagnostics: [
@@ -729,7 +636,6 @@ export async function runPackageManagerInstall(input: RunInstallInput): Promise<
       diagnostic({
         severity: 'error',
         code: 'install-command-failed',
-        // The runner already redacted the display command and bounded the output.
         message: `${outcome.displayCommand} exited with ${String(outcome.exitCode)}`,
         remediation: `Run it yourself to see the full output: ${outcome.displayCommand}`,
       }),
@@ -737,35 +643,9 @@ export async function runPackageManagerInstall(input: RunInstallInput): Promise<
     return { status: 'failed', diagnostics };
   }
 
-  /**
-   * The success receipt is deliberately not emitted here.
-   *
-   * What a rollback can do with an installed package depends on the inventory captured before the
-   * install ran — `install-inventory-captured` when the prior version is known, `install-not-reversible`
-   * when it is not. That capture lives in the executor, so the receipt belongs there too; emitting
-   * it here would let an executor that skipped the capture report a restoration it cannot perform.
-   */
   return { status: 'installed', diagnostics };
 }
 
-/**
- * Restores a captured package inventory after a rollback — RFC 0009 §Initial delivery order
- * item 1, the executor half of `rollbackData: 'package-inventory'`.
- *
- * ## What "restoring an inventory" is, and is not
- *
- * The capture holds what the channel reported *before* the install: a version, or a confirmed
- * absence. A version is restored by installing that exact version through the same channel — an
- * install command, which RFC 0004 permits, not the "invented uninstall command" it forbids. A
- * confirmed absence cannot be restored: putting the machine back to "not installed" would mean
- * exactly such an invented uninstall, so the receipt says the package stays.
- *
- * ## Why the restore verifies itself
- *
- * The same clause that makes a file rollback read the disk back instead of trusting the write
- * applies here: the inventory is re-queried after the restore install and must match the capture.
- * A mismatch is a failed restore, reported as such — never a successful one.
- */
 export interface InventoryRestoreOutcome {
   restored: boolean;
   diagnostics: Diagnostic[];
