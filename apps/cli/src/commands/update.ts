@@ -224,7 +224,11 @@ export async function runUpdate(
       pin: pins.pins.get(adapter.manifest.id) ?? null,
     };
 
-    if (detection.state === 'absent') {
+    // `update` never turns stale wiring into an implicit install. A provider can be `broken`
+    // precisely because an agent still names it while its executable is gone; that is still not an
+    // installed package for update purposes. A runnable executable with unreadable version output is
+    // different and remains observable as an unknown-version case below.
+    if (detection.state === 'absent' || detection.executable === null) {
       row.verdict = 'not-installed';
       report.providers.push(row);
       continue;
@@ -269,7 +273,12 @@ export async function runUpdate(
 
     const installed = detection.version === null ? null : parseSemanticVersion(detection.version);
     const offered = parseSemanticVersion(query.version);
-    if (installed === null || offered === null || compareVersions(offered, installed) <= 0) {
+    if (installed === null || offered === null) {
+      row.verdict = 'unknown';
+      report.providers.push(row);
+      continue;
+    }
+    if (compareVersions(offered, installed) <= 0) {
       row.verdict = 'current';
       report.providers.push(row);
       continue;
