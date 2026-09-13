@@ -157,3 +157,11 @@ pass.
 
 Upstream claims or fixture-only results are never copied into user savings. A positive promotion
 signal must come from Token Harness's own attributable campaign evidence while preserving quality.
+
+## Token Harness-managed benchmark lifecycle
+
+Candidate campaigns no longer require the user to install or toggle mcptoon manually. On an exact reviewed row, `token-harness apply --candidate mcptoon --harness <id> --yes` reuses the same transactional planner used by compatibility recording: it installs pinned `mcptoon==0.7.10` through an already available `pipx` when absent, adds only Token Harness-owned agent guidance, verifies the resulting activation, and rolls back automatically on a failed postcondition.
+
+`token-harness uninstall --candidate mcptoon --harness <id> --yes` is intentionally narrower than a full package uninstall: it removes only the guidance Token Harness can prove it owns, preserving unrelated `AGENTS.md`/skill content and the reviewed binary for the next paired run. The guided campaign chains activation before optimized capture and deactivation after optimized finish, so the task window never includes installation work and the next baseline runs with mcptoon inactive.
+
+This does **not** promote mcptoon into the production provider registry. Unreviewed platforms, harness versions, provider versions, malformed/user-owned guidance, and missing `pipx` continue to fail closed. `~/.mcptoon/config.json` and project `.mcptoon.json` remain read-only user configuration.

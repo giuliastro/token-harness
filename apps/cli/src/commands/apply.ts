@@ -51,6 +51,7 @@ import {
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
+import { runCandidateApply } from './candidate-lifecycle.js';
 import { computePlan } from './plan.js';
 
 /** Where plans live inside the state root. */
@@ -137,6 +138,8 @@ async function loadStoredPlan(
 }
 
 export async function runApply(context: CommandContext): Promise<CommandResult<ApplyReport>> {
+  if ((context.optimizationCandidate ?? null) !== null) return runCandidateApply(context);
+
   const diagnostics: Diagnostic[] = [];
 
   let stored: StoredPlan | null = null;

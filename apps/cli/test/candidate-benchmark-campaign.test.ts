@@ -269,6 +269,25 @@ describe('candidate benchmark campaign', () => {
     assert.match(result.data.campaign.nextInstruction, /Enable gitnexus/);
   });
 
+  it('uses Token Harness itself to activate mcptoon before an optimized pair', async () => {
+    const world = fixture();
+    world.addBaseline('mcptoon-eval-m-1', 'mechanical', 'mcptoon');
+    const context = world.context();
+    context.benchmarkId = 'mcptoon-eval';
+    context.optimizationCandidate = 'mcptoon';
+
+    const result = await runCandidateBenchmarkMatrix(context);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data?.campaign);
+    assert.equal(result.data.campaign.slots[0]?.state, 'optimized-not-started');
+    assert.match(
+      result.data.campaign.nextCommand ?? '',
+      /token-harness apply --candidate mcptoon --harness codex --yes/,
+    );
+    assert.match(result.data.campaign.nextCommand ?? '', /&& token-harness benchmark-start/);
+    assert.doesNotMatch(result.data.campaign.nextInstruction, /documented workflow first/);
+  });
+
   it('aggregates only completed campaign pairs and advances to the next slot', async () => {
     const world = fixture();
     world.addBaseline('gitnexus-eval-m-1', 'mechanical');

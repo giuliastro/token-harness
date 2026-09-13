@@ -264,7 +264,7 @@ reported, but this command cannot redeem or consume credits.`,
 
 Usage
   token-harness apply [--json] [--yes] [--plan <id>] [--harness <id>]
-                      [--provider <id>] [--project <dir>] [--native-policy]
+                      [--provider <id>] [--candidate mcptoon] [--project <dir>] [--native-policy]
                       [--task <class>] [--profile <name>] [--reserve <0-95>]
                       [--tasks-left <n>]
 
@@ -283,6 +283,11 @@ so a rollback can restore their absence. Exit 6 means a step failed and the
 rollback was verified. Exit 7 means the rollback did not fully restore the files;
 it names them and the transaction id, and it leaves a journal in the state
 directory. Exit 4 means a hard capability conflict prevents applying at all.
+
+With --candidate mcptoon, the reviewed candidate campaign lifecycle is separate from
+the production provider registry: Token Harness installs the exact reviewed pipx build when
+needed and activates only its owned agent guidance. It never creates or rewrites mcptoon MCP
+configuration.
 
 Token Harness only ever removes what it recorded as its own.`,
   doctor: `token-harness doctor — report detected harnesses and providers

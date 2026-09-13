@@ -12,3 +12,5 @@ Current focus: mcptoon candidate selection evidence after the successful Token H
 - Use a fresh campaign id if a real run contains ambiguous state or the production-stack configuration changes; do not repair selection evidence by overwriting an unlike pair.
 - If selection evidence is promising, continue with combined-stack validation against the exact RTK + HarnessTrim baseline, then make a separate compatibility/reversibility decision for the intended promoted surface.
 - Do not add mcptoon to `PROVIDER_ADAPTERS` until those independent gates are closed.
+
+- 2026-09-13: mcptoon candidate campaigns now have a Token Harness-managed transactional lifecycle on exact reviewed rows. `apply --candidate mcptoon` can install the pinned 0.7.10 build through existing pipx and activate owned guidance; `uninstall --candidate mcptoon` surgically deactivates only owned guidance between paired runs. mcptoon remains candidate-only and is not in `PROVIDER_ADAPTERS`.
