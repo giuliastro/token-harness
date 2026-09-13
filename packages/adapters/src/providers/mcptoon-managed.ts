@@ -16,8 +16,9 @@ import { observeMcptoonCandidate } from './mcptoon-candidate.js';
  * consumes AGENTS.md instructions. This slice owns only those instructions. It never runs
  * `mcptoon init`, `mcptoon add`, starts a server, or rewrites ~/.mcptoon/config.json.
  */
-export const MCPTOON_MANAGED_MINIMUM_VERSION = '0.7.8';
 export const MCPTOON_REVIEWED_INSTALL_VERSION = '0.7.10';
+/** Backwards-compatible alias. Managed admission is exact, not a semver floor. */
+export const MCPTOON_MANAGED_MINIMUM_VERSION = MCPTOON_REVIEWED_INSTALL_VERSION;
 export const MCPTOON_MARKER_BEGIN = 'TOKEN-HARNESS:MCPTOON:BEGIN';
 export const MCPTOON_MARKER_END = 'TOKEN-HARNESS:MCPTOON:END';
 
@@ -383,7 +384,7 @@ export async function planMcptoonManagedActivation(
         subject: harness,
         message:
           `mcptoon ${observation.version ?? ''} is runnable but not on the reviewed managed-activation surface`.trim(),
-        remediation: `Keep the existing installation user-owned, or move to mcptoon ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the reviewed manifest surfaces`,
+        remediation: `Keep the existing installation user-owned, or move to the exact reviewed mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} build`,
       }),
     ],
   };
