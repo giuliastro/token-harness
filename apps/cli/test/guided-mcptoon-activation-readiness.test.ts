@@ -95,7 +95,7 @@ const observation = {
 };
 
 describe('guided mcptoon activation readiness', () => {
-  it('passes activation and explicit project-maturity gates from reviewed evidence', async () => {
+  it('passes activation, managed-lifecycle and project-maturity gates from reviewed evidence', async () => {
     const status = await createGuideCandidateCampaignReader(
       callWith(report('verified')),
       () => observation,
@@ -108,18 +108,27 @@ describe('guided mcptoon activation readiness', () => {
     const activationGate = status.promotionReadiness?.gates.find(
       (item) => item.id === 'activation-verification',
     );
+    const lifecycleGate = status.promotionReadiness?.gates.find(
+      (item) => item.id === 'managed-lifecycle',
+    );
     const maturityGate = status.promotionReadiness?.gates.find(
       (item) => item.id === 'project-maturity',
+    );
+    const compatibilityGate = status.promotionReadiness?.gates.find(
+      (item) => item.id === 'compatibility-reversibility',
     );
     assert.equal(status.activationState, 'verified');
     assert.equal(activationGate?.state, 'passed');
     assert.match(activationGate?.reason ?? '', /mcptoon 0\.7\.10/);
+    assert.equal(lifecycleGate?.state, 'passed');
+    assert.match(lifecycleGate?.reason ?? '', /rollback\/uninstall/);
     assert.equal(maturityGate?.state, 'passed');
     assert.match(maturityGate?.reason ?? '', /Reviewed 2026-09-13/);
+    assert.equal(compatibilityGate?.state, 'unreviewed');
     assert.match(status.note, /explicit dated upstream review/);
   });
 
-  it('keeps activation blocked without discarding the independent maturity review', async () => {
+  it('keeps activation blocked without discarding independent lifecycle and maturity reviews', async () => {
     const status = await createGuideCandidateCampaignReader(
       callWith(report('blocked')),
       () => observation,
@@ -132,11 +141,15 @@ describe('guided mcptoon activation readiness', () => {
     const activationGate = status.promotionReadiness?.gates.find(
       (item) => item.id === 'activation-verification',
     );
+    const lifecycleGate = status.promotionReadiness?.gates.find(
+      (item) => item.id === 'managed-lifecycle',
+    );
     const maturityGate = status.promotionReadiness?.gates.find(
       (item) => item.id === 'project-maturity',
     );
     assert.equal(status.activationState, 'blocked');
     assert.equal(activationGate?.state, 'blocked');
+    assert.equal(lifecycleGate?.state, 'passed');
     assert.equal(maturityGate?.state, 'passed');
   });
 });
