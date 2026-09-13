@@ -11,6 +11,7 @@ import type {
 
 import {
   HEADROOM_MINIMUM_BENCHMARK_VERSION,
+  HEADROOM_REVIEWED_BENCHMARK_VERSION,
   headroomVersionAtLeast,
   observeHeadroomCandidate,
   parseHeadroomVersion,
@@ -96,23 +97,24 @@ function context(options: RunnerOptions): ProviderContext {
     },
     projectRoot: '/work/demo',
     harnessConfigs: [],
-    now: () => '2026-09-09T08:00:00.000Z',
+    now: () => '2026-09-13T11:00:00.000Z',
     localDatabase: null,
     projectIdFor: (path) => `p_${path.length.toString(16)}`,
   };
 }
 
 test('parses Headroom semantic versions', () => {
-  assert.equal(parseHeadroomVersion('headroom 0.36.0'), '0.36.0');
+  assert.equal(parseHeadroomVersion('headroom 0.37.0'), '0.37.0');
   assert.equal(parseHeadroomVersion('headroom version unknown'), null);
 });
 
-test('requires the current benchmark floor', () => {
-  assert.equal(HEADROOM_MINIMUM_BENCHMARK_VERSION, '0.36.0');
-  assert.equal(headroomVersionAtLeast('0.36.0', '0.36.0'), true);
-  assert.equal(headroomVersionAtLeast('0.37.1', '0.36.0'), true);
-  assert.equal(headroomVersionAtLeast('0.35.9', '0.36.0'), false);
-  assert.equal(headroomVersionAtLeast('0.36.0-beta.1', '0.36.0'), false);
+test('records the exact reviewed Headroom benchmark build', () => {
+  assert.equal(HEADROOM_REVIEWED_BENCHMARK_VERSION, '0.37.0');
+  assert.equal(HEADROOM_MINIMUM_BENCHMARK_VERSION, '0.37.0');
+  assert.equal(headroomVersionAtLeast('0.37.0', '0.37.0'), true);
+  assert.equal(headroomVersionAtLeast('0.37.1', '0.37.0'), true);
+  assert.equal(headroomVersionAtLeast('0.36.5', '0.37.0'), false);
+  assert.equal(headroomVersionAtLeast('0.37.0-beta.1', '0.37.0'), false);
 });
 
 test('recognizes advertised wrap targets', () => {
@@ -134,14 +136,27 @@ test('reports Headroom absent', async () => {
 test('rejects an older benchmark candidate', async () => {
   const observation = await observeHeadroomCandidate(
     context({
-      version: 'headroom 0.35.9',
+      version: 'headroom 0.36.5',
       wrapHelp: 'Commands: claude codex aider',
     }),
   );
   assert.equal(observation.state, 'unsupported-version');
-  assert.equal(observation.version, '0.35.9');
+  assert.equal(observation.version, '0.36.5');
   assert.equal(observation.supportsClaudeWrap, true);
   assert.equal(observation.supportsCodexWrap, true);
+  assert.match(observation.reasons[0] ?? '', /predates the reviewed 0\.37\.0/);
+});
+
+test('does not auto-admit a newer unreviewed Headroom build', async () => {
+  const observation = await observeHeadroomCandidate(
+    context({
+      version: 'headroom 0.37.1',
+      wrapHelp: 'Commands: claude codex aider',
+    }),
+  );
+  assert.equal(observation.state, 'unsupported-version');
+  assert.equal(observation.version, '0.37.1');
+  assert.match(observation.reasons[0] ?? '', /newer than the reviewed 0\.37\.0/);
 });
 
 test('requires both managed harness wrap targets', async () => {
@@ -157,7 +172,7 @@ test('requires both managed harness wrap targets', async () => {
   assert.equal(observation.supportsCodexWrap, false);
 });
 
-test('marks a reviewed current build benchmark-ready', async () => {
+test('marks only the reviewed current build benchmark-ready', async () => {
   const observation = await observeHeadroomCandidate(
     context({
       version: 'headroom 0.37.0',
