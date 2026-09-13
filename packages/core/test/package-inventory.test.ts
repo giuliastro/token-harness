@@ -385,6 +385,83 @@ describe('restoring a captured inventory', () => {
     ]);
   });
 
+  it('restores a pipx absence by uninstalling and re-reading inventory', async () => {
+    let installed = true;
+    const commands: string[] = [];
+    const process: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        if (request.args[0] === 'uninstall') installed = false;
+        const isList = request.args[0] === 'list';
+        const stdout = isList
+          ? JSON.stringify({
+              pipx_spec_version: '0.1',
+              venvs: installed
+                ? {
+                    mcptoon: {
+                      metadata: {
+                        main_package: { package: 'mcptoon', package_version: '0.7.10' },
+                      },
+                    },
+                  }
+                : {},
+            })
+          : '';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'pipx',
+        packageName: 'mcptoon',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, [
+      'pipx list --output json',
+      'pipx uninstall mcptoon',
+      'pipx list --output json',
+    ]);
+    assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
+  });
+
+  it('does not uninstall pipx when the live inventory is unreadable', async () => {
+    const { commands, runner: process } = runner({ stdout: 'not-json' });
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'pipx',
+        packageName: 'mcptoon',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, false);
+    assert.deepEqual(commands, ['pipx list --output json']);
+    assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-restore-failed'));
+  });
+
   it('says a confirmed absence stays installed rather than inventing an uninstall', async () => {
     const outcome = await restorePackageInventory({
       capture: capture({ status: 'absent', version: null }),
