@@ -43,6 +43,7 @@ export {
 } from './headroom-candidate.js';
 export {
   MCPTOON_MINIMUM_BENCHMARK_VERSION,
+  MCPTOON_REVIEWED_BENCHMARK_VERSION,
   mcptoonVersionAtLeast,
   observeMcptoonCandidate,
   parseMcptoonManifestCapabilities,
