@@ -1,0 +1,160 @@
+name: Integrate mcptoon Codex 0.153.0 row
+
+on:
+  push:
+    branches:
+      - codex/mcptoon-codex-0.153.0-row
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/mcptoon-codex-0.153.0-row
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Integrate exact reviewed row
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one anchor, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+
+          # Compatibility matrix: add a second exact Codex point, never a range.
+          path = 'packages/core/src/domain/compatibility-rows.ts'
+          replace_once(
+              path,
+              " * Windows supplied the first reviewed rows. Linux now has exact Codex 0.152.1 rows for HarnessTrim\n * 0.2.1 and mcptoon 0.7.10, plus an exact Claude Code 2.1.269 row for mcptoon 0.7.10. The mcptoon\n",
+              " * Windows supplied the first reviewed rows. Linux now has an exact Codex 0.152.1 row for HarnessTrim\n * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, plus an exact Claude Code\n * 2.1.269 row for mcptoon 0.7.10. The mcptoon\n",
+          )
+          replace_once(
+              path,
+              "    fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10',\n    verificationTier: 'config-only',\n  },\n];",
+              "    fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10',\n    verificationTier: 'config-only',\n  },\n  {\n    harness: 'codex' as HarnessId,\n    harnessVersion: { minimum: '0.153.0', maximum: '0.153.0' },\n    provider: 'mcptoon' as ProviderId,\n    providerVersion: '0.7.10',\n    platform: { os: 'linux', wsl: false, supported: true, limitation: null },\n    // Separate real Ubuntu/Linux recording for Codex 0.153.0. Keep this as an exact point: the\n    // owned surface is still only the Token Harness AGENTS.md marker, with drift, rollback and\n    // surgical uninstall recorded independently for this harness version.\n    configSchema: 'codex-agents-md-marker-block',\n    fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.153.0-0.7.10',\n    verificationTier: 'config-only',\n  },\n];",
+          )
+
+          # Core admission coverage for the newly recorded point and its fail-closed neighbours.
+          path = 'packages/core/test/compatibility-rows.test.ts'
+          marker = "  it('ships the exact Linux Claude 2.1.269 / mcptoon 0.7.10 admission and nothing broader', () => {"
+          new_test = """  it('ships the exact Linux Codex 0.153.0 / mcptoon 0.7.10 admission without widening', () => {
+            const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
+              provider: providerId('mcptoon'),
+              providerVersion: '0.7.10',
+              harness: harnessId('codex'),
+              harnessVersion: '0.153.0',
+              os: 'linux',
+              wsl: false,
+            });
+            assert.equal(exact.state, 'admitted');
+            if (exact.state === 'admitted') {
+              assert.equal(exact.row.configSchema, 'codex-agents-md-marker-block');
+              assert.equal(exact.row.fixture, 'tests/fixtures/rows/mcptoon-codex-linux-0.153.0-0.7.10');
+              assert.equal(exact.row.verificationTier, 'config-only');
+            }
+
+            for (const variant of [
+              { harnessVersion: '0.153.1', providerVersion: '0.7.10', os: 'linux', wsl: false },
+              { harnessVersion: '0.153.0', providerVersion: '0.7.11', os: 'linux', wsl: false },
+              { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'linux', wsl: true },
+              { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'windows', wsl: false },
+              { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'macos', wsl: false },
+            ] as const) {
+              const outcome = admitManagedMutation(COMPATIBILITY_ROWS, {
+                provider: providerId('mcptoon'),
+                providerVersion: variant.providerVersion,
+                harness: harnessId('codex'),
+                harnessVersion: variant.harnessVersion,
+                os: variant.os,
+                wsl: variant.wsl,
+              });
+              assert.equal(outcome.state, 'refused');
+            }
+          });
+
+"""
+          replace_once(path, marker, new_test + marker)
+
+          # Campaign gate coverage: 0.153.0 becomes exact-reviewed, 0.153.1 remains refused.
+          path = 'apps/cli/test/mcptoon-campaign-version-admission.test.ts'
+          replace_once(
+              path,
+              "  it('rejects a newer unreviewed harness version', async () => {\n    const diagnostic = await validateCandidateCampaignRuntimeSurface(\n      context({ harness: 'codex', harnessVersion: '0.153.0' }),\n      false,\n    );\n    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-row-unreviewed');\n  });\n",
+              "  it('admits the separately reviewed Codex 0.153.0 row', async () => {\n    const diagnostic = await validateCandidateCampaignRuntimeSurface(\n      context({ harness: 'codex', harnessVersion: '0.153.0' }),\n      false,\n    );\n    assert.equal(diagnostic, null);\n  });\n\n  it('still rejects an unreviewed harness version above the new row', async () => {\n    const diagnostic = await validateCandidateCampaignRuntimeSurface(\n      context({ harness: 'codex', harnessVersion: '0.153.1' }),\n      false,\n    );\n    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-row-unreviewed');\n  });\n",
+          )
+          replace_once(
+              path,
+              "context({ harness: 'codex', harnessVersion: '0.152.1', mcptoonVersion: '0.8.0' })",
+              "context({ harness: 'codex', harnessVersion: '0.153.0', mcptoonVersion: '0.8.0' })",
+          )
+          replace_once(
+              path,
+              "context({ harness: 'codex', harnessVersion: '0.152.1', mcptoonVersion: '0.7.10' })",
+              "context({ harness: 'codex', harnessVersion: '0.153.0', mcptoonVersion: '0.7.10' })",
+          )
+
+          replace_once(
+              'docs/candidates/mcptoon-selection-surface.md',
+              "Current campaign admission permits only native Linux (`wsl: false`) on an exact reviewed harness row: Codex 0.152.1 or Claude Code 2.1.269. Windows, macOS, WSL, other harness families and different harness versions are rejected before `benchmark-matrix` can emit campaign steps and before a copied `benchmark-start` command can create a capture.",
+              "Current campaign admission permits only native Linux (`wsl: false`) on an exact reviewed harness row: Codex 0.152.1, Codex 0.153.0, or Claude Code 2.1.269. Windows, macOS, WSL, other harness families and different harness versions are rejected before `benchmark-matrix` can emit campaign steps and before a copied `benchmark-start` command can create a capture.",
+          )
+
+          replace_once(
+              'docs/development-status.md',
+              "- mcptoon selection campaigns now fail closed outside the exact reviewed native-Linux rows: Codex 0.152.1 or Claude Code 2.1.269. Optimized starts additionally require mcptoon 0.7.10; Windows, macOS, WSL, different harness versions and other harness families cannot create selection evidence.",
+              "- mcptoon selection campaigns now fail closed outside the exact reviewed native-Linux rows: Codex 0.152.1, Codex 0.153.0, or Claude Code 2.1.269. The Codex 0.153.0 point has its own real Ubuntu compatibility/reversibility recording; it is not a widened semver range. Optimized starts additionally require mcptoon 0.7.10; Windows, macOS, WSL, different harness versions and other harness families cannot create selection evidence.",
+          )
+          PY
+
+      - name: Format changed sources
+        run: pnpm exec prettier --write packages/core/src/domain/compatibility-rows.ts packages/core/test/compatibility-rows.test.ts apps/cli/test/mcptoon-campaign-version-admission.test.ts docs/candidates/mcptoon-selection-surface.md docs/development-status.md
+
+      - name: Validate integration
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+          pnpm build
+
+      - name: Commit integration and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/mcptoon-codex-0153-integrate.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/core/src/domain/compatibility-rows.ts \
+            packages/core/test/compatibility-rows.test.ts \
+            apps/cli/test/mcptoon-campaign-version-admission.test.ts \
+            docs/candidates/mcptoon-selection-surface.md \
+            docs/development-status.md \
+            .github/workflows/mcptoon-codex-0153-integrate.yml
+          git commit -m 'feat(mcptoon): admit exact Codex 0.153.0 Linux row'
+          git push origin HEAD:codex/mcptoon-codex-0.153.0-row
