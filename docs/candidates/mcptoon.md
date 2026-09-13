@@ -7,7 +7,9 @@ turning one successful checkpoint into promotion approval.
 ## Reviewed build
 
 The managed lifecycle and activation witness are pinned to **mcptoon 0.7.10**. Newer versions do not
-inherit this evidence automatically.
+inherit this evidence automatically. The read-only `benchmark-capability` admission now follows the
+same fail-closed rule: only the exact reviewed 0.7.10 build can become `benchmark-ready`; older or
+future releases remain `unsupported-version` until their observation contract is reviewed again.
 
 The reviewed lifecycle includes exact-version `pipx` installation, inventory, restore and uninstall,
 brownfield-safe Claude Code/Codex instruction surfaces, passive verification, and exact RFC 0009
