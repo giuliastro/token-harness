@@ -9,6 +9,7 @@ export interface GitNexusCandidateObservation {
   supportsQuery: boolean;
   supportsContext: boolean;
   supportsStatusJson: boolean;
+  supportsMcp: boolean;
   reasons: string[];
 }
 
@@ -33,12 +34,14 @@ export function parseGitNexusCliCapabilities(
   query: boolean;
   context: boolean;
   statusJson: boolean;
+  mcp: boolean;
 } {
   const status = advertisesCommand(helpText, 'status');
   return {
     query: advertisesCommand(helpText, 'query'),
     context: advertisesCommand(helpText, 'context'),
     statusJson: status && /(?:^|\s)--json(?:\s|,|$)/m.test(statusHelpText.toLowerCase()),
+    mcp: advertisesCommand(helpText, 'mcp'),
   };
 }
 
@@ -48,9 +51,10 @@ export function parseGitNexusCliCapabilities(
  * The reviewed GitNexus CLI excludes `--version` and `--help` invocations from its background
  * update checker. Keep this observer restricted to those surfaces: it must never run `analyze`,
  * `setup`, `status`, `query`, `context`, MCP, hooks, package managers, or any command that can create
- * an index or change agent configuration. A `benchmark-ready` result only means that the installed
- * CLI advertises the direct query/context and machine-readable status surfaces needed to design a
- * paired benchmark; it does not admit or enable GitNexus as an optimization provider.
+ * an index or change agent configuration. `supportsMcp` is inferred from root help only; observing it
+ * does not start the MCP server. A `benchmark-ready` result still means only that the installed CLI
+ * advertises the direct query/context and machine-readable status surfaces needed to design a paired
+ * benchmark; it does not admit or enable GitNexus as an optimization provider.
  */
 export async function observeGitNexusCandidate(
   context: ProviderContext,
@@ -70,6 +74,7 @@ export async function observeGitNexusCandidate(
       supportsQuery: false,
       supportsContext: false,
       supportsStatusJson: false,
+      supportsMcp: false,
       reasons: [`gitnexus --version failed: ${versionOutcome.failure.reason}`],
     };
   }
@@ -81,6 +86,7 @@ export async function observeGitNexusCandidate(
       supportsQuery: false,
       supportsContext: false,
       supportsStatusJson: false,
+      supportsMcp: false,
       reasons: [`gitnexus --version exited ${String(versionOutcome.exitCode)}`],
     };
   }
@@ -120,6 +126,7 @@ export async function observeGitNexusCandidate(
       supportsQuery: capabilities.query,
       supportsContext: capabilities.context,
       supportsStatusJson: capabilities.statusJson,
+      supportsMcp: capabilities.mcp,
       reasons: ['gitnexus is runnable but did not report a recognisable semantic version'],
     };
   }
@@ -137,6 +144,7 @@ export async function observeGitNexusCandidate(
       supportsQuery: capabilities.query,
       supportsContext: capabilities.context,
       supportsStatusJson: capabilities.statusJson,
+      supportsMcp: capabilities.mcp,
       reasons: [`this GitNexus build does not advertise benchmark surfaces: ${missing.join(', ')}`],
     };
   }
@@ -148,6 +156,7 @@ export async function observeGitNexusCandidate(
     supportsQuery: true,
     supportsContext: true,
     supportsStatusJson: true,
+    supportsMcp: capabilities.mcp,
     reasons: [
       'GitNexus is eligible for paired repository-exploration benchmarking; no index, MCP, hooks, skills, or agent configuration were changed',
     ],
