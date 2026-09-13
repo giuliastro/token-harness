@@ -1,470 +1,592 @@
 /**
- * `token-harness update` — RFC 0001 §CLI contract, the last of the nine commands it declares.
+ * `token-harness update` coordinator.
  *
- * RFC 0004 §Provider update policy governs it, and implementing it is what forced RFC 0004
- * §Amended: three of that section's six bullets named a mechanism they did not specify. What
- * follows is the contract that amendment fixed, not an interpretation of the bullets.
+ * Ordinary provider updates stay in `update-base.ts` and retain the existing package-manager
+ * transaction. Native Windows gets one additional RTK-only route: when WinGet is behind the newest
+ * provider release Token Harness has already source-reviewed, the exact official GitHub release can
+ * replace the one unambiguous resolved `rtk.exe` after SHA-256 verification.
  *
- * ## Two versions, from two different places
- *
- * RFC 0006 makes mutating commands dry-run by default, so this has to print `0.42.0 → 0.44.0`
- * before touching anything. The installed side comes from the provider's own `detect`; the
- * available side comes from the **installation channel**, because that is where the knowledge is —
- * `winget` knows what exists for `rtk-ai.rtk` and RTK's adapter has no idea.
- *
- * ## Package compatibility is not harness mutation compatibility
- *
- * Replacing an installed provider package does not itself write Claude, Codex or OpenCode config.
- * Provider package updates therefore use the provider-level reviewed update policy. Exact
- * provider × harness × version × platform rows remain mandatory when a later plan wants to mutate
- * an integration; they no longer freeze the package binary at the version of the oldest fixture.
- *
- * ## What it will not do
- *
- * - **Install a provider that is absent.** `update` updates. A machine without RTK is `plan`'s
- *   business, and an update that silently installed would be an install nobody reviewed as one.
- * - **Downgrade.** A channel offering an older version than the one installed is reported as
- *   `current`, not acted on: the user may have deliberately installed something newer, and
- *   RFC 0004's binary rollback is a rollback, not an update.
- * - **Guess.** A channel that cannot be read produces `unknown` and no action. The alternative —
- *   reporting "already current" — is the same sentence a user reads as good news.
- * - **Cross an unreviewed provider package target.** A future provider release remains visible but
- *   unattended update stops until its consumed contract has been reviewed.
- * - **Elevate.** Inherited from the executor: `runPackageManagerInstall` refuses an action needing
- *   elevation and hands back the command to run.
- *
- * ## The pin is a refusal
- *
- * RFC 0004 §Amended: a pinned provider is skipped and the pin is named, and that is *not* a
- * problem — an environment the user deliberately froze is a state, in the sense RFC 0006 means it.
- * So a pin does not change the exit code.
+ * The direct route still participates in Token Harness' normal durability contract: the exact
+ * pre-update binary is snapshotted under a transaction id and an in-progress journal is persisted
+ * before mutation. The journal records the release URL/digest and can later drive the ordinary
+ * `rollback` command after a committed update. `--yes` is the explicit adoption boundary for the
+ * existing binary; multiple PATH candidates are refused rather than guessed.
  */
 
 import {
   EXIT_CODES,
   FileJournalStore,
+  JOURNAL_SCHEMA_VERSION,
   TransactionSnapshotStore,
-  channelCanReportInventory,
   commandResult,
-  compareVersions,
   diagnostic,
   digestText,
-  executeTransaction,
-  parseSemanticVersion,
-  preferredInstallationChannel,
-  queryAvailableVersion,
-  readPins,
-  statusForExitCode,
   type ApplyReport,
   type CommandResult,
   type Diagnostic,
   type ExitCode,
-  type InstallationChannel,
-  type PackageManagerInstallAction,
-  type ProviderUpdateRow,
+  type TransactionJournal,
+  type TransactionOutcomeKind,
   type UpdateReport,
 } from '@token-harness/core';
-import {
-  admitProviderPackageUpdate,
-  listHarnessAdapters,
-  listProviderAdapters,
-} from '@token-harness/adapters';
+import { RTK_RELEASE_ASSET_DESTINATION } from '@token-harness/platform';
 
 import type { CommandContext } from './context.js';
+import { runPackageChannelUpdate, runPackageChannelUpdateCheck } from './update-base.js';
+import {
+  planDirectRtkWindowsRelease,
+  type DirectRtkWindowsReleasePlan,
+} from './rtk-release-update.js';
 
-/** Mirrors `apply.ts`: derived from the content and the instant, never random. */
-function transactionIdFor(seed: string, at: string): string {
-  const digest = digestText(`${seed} ${at}`);
+interface PreparedDirectUpdate {
+  ordinary: CommandResult<UpdateReport>;
+  report: UpdateReport;
+  plan: DirectRtkWindowsReleasePlan | null;
+  directDiagnostics: Diagnostic[];
+}
+
+function directTransactionId(plan: DirectRtkWindowsReleasePlan, at: string): string {
+  const digest = digestText(`rtk github-release ${plan.id} ${at}`);
   return digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 13);
 }
 
-function emptyExecution(outcome: ApplyReport['outcome']): ApplyReport {
+function execution(input: {
+  transactionId: string | null;
+  outcome: ApplyReport['outcome'];
+  directPlan: DirectRtkWindowsReleasePlan;
+  directStatus: string;
+  base?: ApplyReport | null;
+  unrestored?: string[];
+}): ApplyReport {
+  const direct = {
+    actionId: input.directPlan.id,
+    kind: 'download-artifact',
+    status: input.directStatus,
+    path: input.directPlan.targetPath,
+  };
   return {
     planId: null,
-    transactionId: null,
+    transactionId: input.base?.transactionId ?? input.transactionId,
     fromStoredPlan: false,
-    outcome,
-    results: [],
-    unrestored: [],
-    receiptId: null,
+    outcome: input.outcome,
+    results: [direct, ...(input.base?.results ?? [])],
+    unrestored: input.unrestored ?? input.base?.unrestored ?? [],
+    receiptId:
+      input.base?.receiptId ??
+      (input.outcome === 'committed' && input.transactionId !== null ? input.transactionId : null),
   };
 }
 
-function upgradeAction(input: {
-  providerId: string;
-  channel: string;
-  packageName: string;
-  target: string;
-  requiresNetwork: boolean;
-  requiresElevation: boolean;
-  installed: string;
-}): PackageManagerInstallAction {
-  const digest = digestText(`${input.providerId} update ${input.channel} ${input.target}`);
+function withDirectRow(
+  report: UpdateReport,
+  plan: DirectRtkWindowsReleasePlan,
+  destinations: readonly string[],
+): UpdateReport {
   return {
-    kind: 'package-manager-install',
-    id: digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 9),
-    riskClass: 'delegated',
-    requiresNetwork: input.requiresNetwork,
-    requiresElevation: input.requiresElevation,
-    affectedPaths: [],
-    affectedProcesses: [input.channel],
-    preconditions: [
-      `${input.channel} is available on this machine`,
-      `${input.packageName} is installed at ${input.installed}`,
-    ],
-    postconditions: [`${input.packageName} reports ${input.target}`],
-    rollbackData: channelCanReportInventory(input.channel) ? 'package-inventory' : 'none',
-    explanation: `Update ${input.packageName} from ${input.installed} to ${input.target} through ${input.channel}`,
-    packageManager: input.channel,
-    packageName: input.packageName,
-    version: input.target,
+    providers: report.providers.map((row) =>
+      row.providerId === plan.providerId
+        ? {
+            ...row,
+            available: plan.target,
+            channel: 'github-release',
+            verdict: 'upgradable' as const,
+          }
+        : row,
+    ),
+    network: [...new Set([...report.network, ...destinations])].sort(),
+    execution: report.execution,
   };
 }
 
-interface RunUpdateOptions {
-  preserveConfirmationReport?: boolean;
-}
-
-export async function runUpdate(
+async function prepareDirectRtkUpdate(
   context: CommandContext,
-  options: RunUpdateOptions = {},
-): Promise<CommandResult<UpdateReport>> {
-  const diagnostics: Diagnostic[] = [];
-  const report: UpdateReport = { providers: [], network: [], execution: null };
+): Promise<PreparedDirectUpdate | null> {
+  if (context.adapters === null) return null;
+  if (context.platform.os !== 'windows' || context.platform.isWsl) return null;
+  if (context.provider !== null && context.provider !== 'rtk') return null;
 
-  const finish = (exitCode: ExitCode, data: UpdateReport | null): CommandResult<UpdateReport> =>
-    commandResult<UpdateReport>({
-      command: 'update',
-      exitCode,
-      data:
-        statusForExitCode(exitCode) === 'error' &&
-        !(options.preserveConfirmationReport && exitCode === EXIT_CODES['confirmation-required'])
-          ? null
-          : data,
-      diagnostics,
-    });
+  const ordinary = await runPackageChannelUpdateCheck(context);
+  if (ordinary.data === null) return null;
+  const row = ordinary.data.providers.find((entry) => entry.providerId === 'rtk');
+  if (row === undefined || row.installed === null || row.pin !== null) return null;
 
-  if (context.adapters === null) {
-    diagnostics.push(
-      diagnostic({
-        severity: 'error',
-        code: 'unsupported-environment',
-        message: 'No platform adapters are available, so no channel can be consulted',
-        remediation: null,
-      }),
-    );
-    return finish(EXIT_CODES['unsupported-environment'], null);
-  }
+  const resolved = context.adapters.resolveExecutables?.('rtk') ?? [];
+  const direct = await planDirectRtkWindowsRelease({
+    providerId: row.providerId,
+    installedVersion: row.installed,
+    executablePaths: resolved.map((entry) => entry.path),
+    channelAvailableVersion: row.available,
+    platform: context.platform,
+    fs: context.adapters.fs,
+    runner: context.adapters.runner,
+  });
 
-  const adapters = context.adapters;
-  const providerAdapters = listProviderAdapters().filter(
-    (adapter) => context.provider === null || adapter.manifest.id === context.provider,
-  );
-
-  // Provider detection may use live harness summaries to report where a tool is wired. That is a
-  // read-only observation and deliberately carries no ownership or mutation-admission meaning.
-  const harnessContext = {
-    fs: adapters.fs,
-    runner: adapters.runner,
-    facts: context.platform,
-    paths: adapters.paths,
-    projectRoot: context.projectRoot,
+  if (direct.plan === null && direct.diagnostics.length === 0) return null;
+  return {
+    ordinary,
+    report:
+      direct.plan === null
+        ? ordinary.data
+        : withDirectRow(ordinary.data, direct.plan, direct.destinations),
+    plan: direct.plan,
+    directDiagnostics: direct.diagnostics,
   };
-  const harnessConfigs = (
-    await Promise.all(
-      listHarnessAdapters().map(
-        async (harness) => (await harness.inspect(harnessContext)).summaries,
-      ),
-    )
-  ).flat();
+}
 
-  const pins =
-    context.stateRoot === null
-      ? { pins: new Map<string, string>(), unhonoredProjectPinPath: null, diagnostics: [] }
-      : await readPins({
-          fs: adapters.fs,
-          stateRoot: context.stateRoot,
-          projectRoot: context.projectRoot,
-        });
-  diagnostics.push(...pins.diagnostics);
+function confirmationDiagnostic(report: UpdateReport): Diagnostic {
+  const summary = report.providers
+    .filter((entry) => entry.verdict === 'upgradable')
+    .map((entry) => `${entry.providerId} ${String(entry.installed)} → ${String(entry.available)}`)
+    .join(', ');
+  return diagnostic({
+    severity: 'error',
+    code: 'confirmation-required',
+    message: `Would update ${summary}`,
+    remediation: 'Re-run with `--yes` to apply it',
+  });
+}
 
-  const providerContext = {
-    fs: adapters.fs,
-    runner: adapters.runner,
-    facts: context.platform,
-    paths: adapters.paths,
-    projectRoot: context.projectRoot,
-    harnessConfigs,
-    now: context.now,
-    localDatabase: adapters.localDatabase,
-    projectIdFor: adapters.projectIdFor,
-  };
+function adoptionConfirmationDiagnostic(plan: DirectRtkWindowsReleasePlan): Diagnostic {
+  return diagnostic({
+    severity: 'error',
+    code: 'rtk-release-existing-binary-adoption-required',
+    subject: 'rtk',
+    path: plan.targetPath,
+    message: `The GitHub release fallback would replace the existing RTK executable at ${plan.targetPath}. This exact path will be snapshotted and adopted for this confirmed update only.`,
+    remediation:
+      'Re-run with `--yes` only if this is the RTK executable you intend Token Harness to replace; otherwise fix PATH first',
+  });
+}
 
-  const actions: PackageManagerInstallAction[] = [];
-  const blockedUpdates: Array<{
-    providerId: string;
-    installed: string | null;
-    target: string;
-    reason: string;
-  }> = [];
-  const destinations = new Set<string>();
+function provenanceDiagnostic(plan: DirectRtkWindowsReleasePlan): Diagnostic {
+  return diagnostic({
+    severity: 'info',
+    code: 'rtk-release-provenance',
+    subject: 'rtk',
+    path: plan.targetPath,
+    message: `Confirmed RTK ${plan.installed} → ${plan.target} replacement of ${plan.targetPath} from ${plan.asset.tag} asset ${plan.asset.downloadUrl}; published archive sha256:${plan.asset.sha256}; ${String(plan.asset.sizeBytes)} bytes`,
+    remediation: null,
+  });
+}
 
-  for (const adapter of providerAdapters) {
-    const detection = await adapter.detect(providerContext);
-    const channel = preferredInstallationChannel<InstallationChannel>(
-      adapter.manifest.installationChannels,
-      context.platform.os,
-    );
-    const row: ProviderUpdateRow = {
-      providerId: adapter.manifest.id,
-      installed: detection.version,
-      available: null,
-      channel: channel?.id ?? null,
-      verdict: 'unknown',
-      pin: pins.pins.get(adapter.manifest.id) ?? null,
-    };
+function result(
+  exitCode: ExitCode,
+  data: UpdateReport | null,
+  diagnostics: readonly Diagnostic[],
+): CommandResult<UpdateReport> {
+  return commandResult({ command: 'update', exitCode, data, diagnostics: [...diagnostics] });
+}
 
-    // `update` never turns stale wiring into an implicit install. A provider can be `broken`
-    // precisely because an agent still names it while its executable is gone; that is still not an
-    // installed package for update purposes. A runnable executable with unreadable version output is
-    // different and remains observable as an unknown-version case below.
-    if (detection.state === 'absent' || detection.executable === null) {
-      row.verdict = 'not-installed';
-      report.providers.push(row);
-      continue;
-    }
+/** Public mutating update path. */
+export async function runUpdate(context: CommandContext): Promise<CommandResult<UpdateReport>> {
+  const prepared = await prepareDirectRtkUpdate(context);
+  if (prepared === null) return runPackageChannelUpdate(context);
 
-    if (row.pin !== null) {
-      row.verdict = 'pinned';
-      report.providers.push(row);
-      diagnostics.push(
-        diagnostic({
-          severity: 'info',
-          code: 'provider-pinned',
-          message: `${adapter.manifest.id} is pinned at ${row.pin}, so no update was planned for it`,
-          remediation: `Remove it from the pin file to allow updates`,
-        }),
-      );
-      continue;
-    }
-
-    if (channel === null) {
-      row.verdict = 'no-channel';
-      report.providers.push(row);
-      continue;
-    }
-
-    const packageName = channel.packageId ?? adapter.manifest.id;
-    const query = await queryAvailableVersion({
-      packageManager: channel.id,
-      packageName,
-      runner: adapters.runner,
-      cwd: context.projectRoot,
-    });
-    diagnostics.push(...query.diagnostics);
-    if (query.destination !== null) destinations.add(query.destination);
-
-    row.available = query.version;
-    if (query.status !== 'found' || query.version === null) {
-      row.verdict = query.status === 'unknown' ? 'unknown' : 'unavailable';
-      report.providers.push(row);
-      continue;
-    }
-
-    const installed = detection.version === null ? null : parseSemanticVersion(detection.version);
-    const offered = parseSemanticVersion(query.version);
-    if (installed === null || offered === null) {
-      row.verdict = 'unknown';
-      report.providers.push(row);
-      continue;
-    }
-    if (compareVersions(offered, installed) <= 0) {
-      row.verdict = 'current';
-      report.providers.push(row);
-      continue;
-    }
-
-    const admission = admitProviderPackageUpdate(adapter.manifest.id, query.version);
-    if (admission.state !== 'admitted') {
-      row.verdict = 'blocked-unreviewed';
-      report.providers.push(row);
-      blockedUpdates.push({
-        providerId: adapter.manifest.id,
-        installed: detection.version,
-        target: query.version,
-        reason: admission.reason,
-      });
-      continue;
-    }
-
-    row.verdict = 'upgradable';
-    report.providers.push(row);
-    actions.push(
-      upgradeAction({
-        providerId: adapter.manifest.id,
-        channel: channel.id,
-        packageName,
-        target: query.version,
-        requiresNetwork: channel.requiresNetwork,
-        requiresElevation: channel.requiresElevation,
-        installed: detection.version ?? 'an unknown version',
-      }),
-    );
+  if (prepared.plan === null) {
+    const ordinary = await runPackageChannelUpdate(context);
+    return result(ordinary.exitCode, ordinary.data, [
+      ...ordinary.diagnostics,
+      ...prepared.directDiagnostics,
+    ]);
   }
-
-  report.network = [...destinations].sort();
-
-  for (const blocked of blockedUpdates) {
-    diagnostics.push(
-      diagnostic({
-        severity: 'info',
-        code: 'provider-update-target-unreviewed',
-        message: `${blocked.providerId} ${blocked.target} is available but is outside the reviewed provider package-update policy; keeping ${blocked.installed ?? 'the installed version'}`,
-        remediation:
-          'Review the provider package contract before enabling unattended update to this release',
-      }),
-    );
-    diagnostics.push(
-      diagnostic({
-        severity: 'info',
-        code: 'provider-update-target-unreviewed-detail',
-        message: blocked.reason,
-        remediation: null,
-      }),
-    );
-  }
-
-  if (pins.unhonoredProjectPinPath !== null) {
-    // Already carried as a diagnostic by `readPins`; nothing more to add here.
-  }
-
-  if (actions.length === 0 && blockedUpdates.length > 0) {
-    // A newer version existing is not itself an actionable problem. Refusing to cross the reviewed
-    // provider package boundary is a successful update check, analogous to a deliberate pin.
-    report.execution = emptyExecution('nothing-to-do');
-    return finish(EXIT_CODES.ok, report);
-  }
-
-  if (actions.length === 0) {
-    report.execution = emptyExecution('nothing-to-do');
-    diagnostics.push(
-      diagnostic({
-        severity: 'info',
-        code: 'nothing-to-update',
-        message: 'No provider has a newer version available through its channel',
-        remediation: null,
-      }),
-    );
-    return finish(EXIT_CODES.ok, report);
-  }
+  const plan = prepared.plan;
+  const preparedDiagnostics = [
+    ...prepared.ordinary.diagnostics.filter((entry) => entry.code !== 'nothing-to-update'),
+    ...prepared.directDiagnostics,
+  ];
 
   if (!context.confirmed) {
-    const summary = report.providers
-      .filter((entry) => entry.verdict === 'upgradable')
-      .map((entry) => `${entry.providerId} ${String(entry.installed)} → ${String(entry.available)}`)
-      .join(', ');
-    diagnostics.push(
-      diagnostic({
-        severity: 'error',
-        code: 'confirmation-required',
-        message: `Would update ${summary}`,
-        remediation: 'Re-run with `--yes` to apply it',
-      }),
-    );
-    report.execution = emptyExecution('confirmation-required');
-    return finish(EXIT_CODES['confirmation-required'], report);
+    const report: UpdateReport = {
+      ...prepared.report,
+      execution: {
+        planId: null,
+        transactionId: null,
+        fromStoredPlan: false,
+        outcome: 'confirmation-required',
+        results: [],
+        unrestored: [],
+        receiptId: null,
+      },
+    };
+    return result(EXIT_CODES['confirmation-required'], null, [
+      ...preparedDiagnostics,
+      adoptionConfirmationDiagnostic(plan),
+      confirmationDiagnostic(report),
+    ]);
   }
 
-  if (context.stateRoot === null) {
-    diagnostics.push(
+  if (context.stateRoot === null || context.adapters === null) {
+    return result(EXIT_CODES['unsupported-environment'], null, [
+      ...preparedDiagnostics,
       diagnostic({
         severity: 'error',
         code: 'state-directory-unavailable',
-        message: 'No transactional state directory is available, so nothing was updated',
-        remediation: null,
+        message: 'No transactional state directory is available, so RTK was not updated',
       }),
-    );
-    return finish(EXIT_CODES['unsupported-environment'], null);
+    ]);
   }
 
-  const fs = adapters.fs;
-  const startedAt = context.now();
-  const transactionId = transactionIdFor(actions.map((action) => action.id).join(' '), startedAt);
+  const fs = context.adapters.fs;
+  const journalStore = new FileJournalStore({
+    fs,
+    journalRoot: fs.join(context.stateRoot, 'journals'),
+    backupRoot: fs.join(context.stateRoot, 'backups'),
+  });
+  const unfinished = (await journalStore.list()).find(
+    (journal) =>
+      journal.outcome === 'in-progress' &&
+      journal.entries.some(
+        (entry) =>
+          entry.kind === 'download-artifact' &&
+          entry.snapshots.some((snapshot) => snapshot.path === plan.targetPath),
+      ),
+  );
+  if (unfinished !== undefined) {
+    return result(EXIT_CODES['apply-failed-dirty'], null, [
+      ...preparedDiagnostics,
+      diagnostic({
+        severity: 'error',
+        code: 'rtk-release-unfinished-transaction',
+        subject: 'rtk',
+        path: plan.targetPath,
+        message: `RTK was not touched because transaction ${unfinished.transactionId} is still recorded in-progress for the same executable`,
+        remediation: `Inspect transaction ${unfinished.transactionId} and its backups before retrying; Token Harness will not overwrite uncertain recovery state`,
+      }),
+    ]);
+  }
 
-  const creation = TransactionSnapshotStore.create({
+  const startedAt = context.now();
+  const transactionId = directTransactionId(plan, startedAt);
+  const snapshotCreation = TransactionSnapshotStore.create({
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
     projectRoot: context.projectRoot,
     now: context.now,
   });
-  if (!creation.ok) {
-    diagnostics.push(...creation.diagnostics);
-    return finish(EXIT_CODES['unsupported-environment'], null);
+  if (!snapshotCreation.ok) {
+    return result(EXIT_CODES['unsupported-environment'], null, [
+      ...preparedDiagnostics,
+      ...snapshotCreation.diagnostics,
+    ]);
   }
 
-  const transaction = await executeTransaction({
-    transactionId,
-    planId: null,
-    projectId: adapters.projectIdFor(context.projectRoot),
-    projectRoot: context.projectRoot,
-    actions,
-    fs,
-    snapshots: creation.store,
-    journal: new FileJournalStore({
-      fs,
-      journalRoot: fs.join(context.stateRoot, 'journals'),
-      backupRoot: fs.join(context.stateRoot, 'backups'),
-    }),
-    runner: adapters.runner,
-    now: context.now,
-  });
-  diagnostics.push(...transaction.diagnostics);
+  const provenance = provenanceDiagnostic(plan);
+  let snapshot;
+  try {
+    snapshot = await snapshotCreation.store.capture(plan.targetPath);
+  } catch (error) {
+    return result(EXIT_CODES['internal-error'], null, [
+      ...preparedDiagnostics,
+      diagnostic({
+        severity: 'error',
+        code: 'rtk-release-snapshot-failed',
+        subject: 'rtk',
+        path: plan.targetPath,
+        message: `RTK was not touched because its pre-update snapshot could not be captured: ${error instanceof Error ? error.message : String(error)}`,
+        remediation: 'Check the state directory and executable permissions, then retry',
+      }),
+    ]);
+  }
 
-  report.execution = {
-    planId: null,
+  const directJournal: TransactionJournal = {
+    schemaVersion: JOURNAL_SCHEMA_VERSION,
     transactionId,
-    fromStoredPlan: false,
-    outcome:
-      transaction.journal.outcome === 'committed'
-        ? 'committed'
-        : transaction.journal.outcome === 'rolled-back'
-          ? 'rolled-back'
-          : transaction.journal.outcome === 'dirty'
-            ? 'dirty'
-            : 'rejected',
-    results: transaction.journal.entries.map((entry) => ({
-      actionId: entry.actionId,
-      kind: entry.kind,
-      status: entry.status,
-      path: null,
-    })),
-    unrestored: transaction.unrestored,
-    receiptId: transaction.journal.outcome === 'committed' ? transactionId : null,
+    planId: null,
+    projectId: context.adapters.projectIdFor(context.projectRoot),
+    projectRoot: context.projectRoot,
+    startedAt,
+    finishedAt: null,
+    outcome: 'in-progress',
+    entries: [
+      {
+        actionId: plan.id,
+        kind: 'download-artifact',
+        // Until the verified replacement completes, this entry is deliberately not credited as
+        // applied. The snapshot is still persisted here so an interrupted run leaves exact recovery
+        // evidence rather than an orphan backup directory.
+        status: 'failed',
+        snapshots: [snapshot],
+        ownership: [],
+        diagnostics: [provenance],
+        packageInventory: null,
+      },
+    ],
+    ownership: [],
+    pinned: false,
+    diagnostics: [provenance],
   };
 
-  return finish(transaction.exitCode, report);
+  try {
+    await journalStore.write(directJournal);
+  } catch (error) {
+    return result(EXIT_CODES['internal-error'], null, [
+      ...preparedDiagnostics,
+      diagnostic({
+        severity: 'error',
+        code: 'rtk-release-journal-failed',
+        subject: 'rtk',
+        path: plan.targetPath,
+        message: `RTK was not touched because its in-progress transaction journal could not be persisted: ${error instanceof Error ? error.message : String(error)}`,
+        remediation: 'Check the Token Harness state directory, then retry',
+      }),
+    ]);
+  }
+
+  const finishDirectJournal = async (
+    outcome: TransactionOutcomeKind,
+    status: 'applied' | 'failed',
+    extraDiagnostics: readonly Diagnostic[] = [],
+  ): Promise<void> => {
+    directJournal.outcome = outcome;
+    directJournal.finishedAt = context.now();
+    directJournal.entries[0]!.status = status;
+    directJournal.entries[0]!.diagnostics.push(...extraDiagnostics);
+    directJournal.diagnostics.push(...extraDiagnostics);
+    if (outcome === 'dirty') directJournal.pinned = true;
+    await journalStore.write(directJournal);
+  };
+
+  const markDirectAppliedInProgress = async (): Promise<void> => {
+    directJournal.entries[0]!.status = 'applied';
+    // Keep `outcome: in-progress` until any ordinary provider updates have either committed or
+    // failed and the coordinated RTK rollback has finished.
+    await journalStore.write(directJournal);
+  };
+
+  const installed = await plan.runtime.install({
+    asset: plan.asset,
+    targetPath: plan.targetPath,
+    previousVersion: plan.installed,
+    // Keep the runtime's immediate-recovery copy inside this transaction's retained backup tree.
+    // Journal eviction therefore removes both copies together rather than leaking one indefinitely.
+    stateRoot: fs.join(context.stateRoot, 'backups', transactionId),
+    cwd: context.projectRoot,
+  });
+  const network = [...new Set([...prepared.report.network, RTK_RELEASE_ASSET_DESTINATION])].sort();
+  const report: UpdateReport = { ...prepared.report, network };
+
+  if (installed.status !== 'installed') {
+    const exitCode: ExitCode =
+      installed.status === 'dirty'
+        ? EXIT_CODES['apply-failed-dirty']
+        : installed.status === 'rolled-back'
+          ? EXIT_CODES['apply-failed-rolled-back']
+          : EXIT_CODES['internal-error'];
+    const outcome: ApplyReport['outcome'] =
+      installed.status === 'dirty'
+        ? 'dirty'
+        : installed.status === 'rolled-back'
+          ? 'rolled-back'
+          : 'rejected';
+    const failureDiagnostic = diagnostic({
+      severity: 'error',
+      code: installed.code,
+      subject: 'rtk',
+      path: plan.targetPath,
+      message: installed.message,
+      remediation:
+        installed.status === 'dirty'
+          ? `Recovery backup: ${installed.backupPath ?? 'unavailable'}. Do not retry until the executable path is inspected.`
+          : 'Correct the reported release or Windows application-control problem, then retry the update',
+    });
+    try {
+      await finishDirectJournal(installed.status === 'dirty' ? 'dirty' : 'rolled-back', 'failed', [
+        failureDiagnostic,
+      ]);
+    } catch (error) {
+      return result(EXIT_CODES['apply-failed-dirty'], null, [
+        ...preparedDiagnostics,
+        failureDiagnostic,
+        diagnostic({
+          severity: 'error',
+          code: 'rtk-release-failure-journal-write-failed',
+          subject: 'rtk',
+          path: plan.targetPath,
+          message: `RTK update failed and its final journal state could not be persisted: ${error instanceof Error ? error.message : String(error)}`,
+          remediation: `Inspect transaction ${transactionId} and its backups before retrying`,
+        }),
+      ]);
+    }
+    report.execution = execution({
+      transactionId,
+      outcome,
+      directPlan: plan,
+      directStatus: installed.status,
+      unrestored: installed.status === 'dirty' ? [plan.targetPath] : [],
+    });
+    return result(exitCode, exitCode === EXIT_CODES['internal-error'] ? null : report, [
+      ...preparedDiagnostics,
+      failureDiagnostic,
+    ]);
+  }
+
+  try {
+    await markDirectAppliedInProgress();
+  } catch (error) {
+    const rollback = await plan.runtime.rollback(installed.handle, context.projectRoot);
+    const dirty = rollback.status === 'dirty';
+    const persistenceDiagnostic = diagnostic({
+      severity: 'error',
+      code: 'rtk-release-applied-journal-write-failed',
+      subject: 'rtk',
+      path: plan.targetPath,
+      message: `RTK ${plan.target} was installed but Token Harness could not persist the applied journal state: ${error instanceof Error ? error.message : String(error)}. ${rollback.message}`,
+      remediation: `Inspect transaction ${transactionId} and its backups before retrying`,
+    });
+    try {
+      await finishDirectJournal(dirty ? 'dirty' : 'rolled-back', 'failed', [persistenceDiagnostic]);
+    } catch {
+      // The original in-progress journal is intentionally left in place. That is safer than
+      // pretending a final state was recorded when the state directory itself is failing.
+    }
+    return result(
+      dirty ? EXIT_CODES['apply-failed-dirty'] : EXIT_CODES['apply-failed-rolled-back'],
+      null,
+      [...preparedDiagnostics, persistenceDiagnostic],
+    );
+  }
+
+  const directResult = execution({
+    transactionId,
+    outcome: 'committed',
+    directPlan: plan,
+    directStatus: 'applied',
+  });
+  const base = await runPackageChannelUpdate(context);
+  const combinedDiagnostics = [
+    ...preparedDiagnostics,
+    ...base.diagnostics.filter((entry) => entry.code !== 'nothing-to-update'),
+  ];
+
+  if (base.exitCode !== EXIT_CODES.ok) {
+    const rollback = await plan.runtime.rollback(installed.handle, context.projectRoot);
+    if (rollback.status === 'dirty') {
+      const rollbackDiagnostic = diagnostic({
+        severity: 'error',
+        code: 'rtk-release-coordinated-rollback-failed',
+        subject: 'rtk',
+        path: plan.targetPath,
+        message: `A later provider update failed and RTK could not be restored: ${rollback.message}`,
+        remediation: `Restore the retained RTK backup manually from ${installed.backupPath}`,
+      });
+      await finishDirectJournal('dirty', 'failed', [rollbackDiagnostic]).catch(() => undefined);
+      report.execution = execution({
+        transactionId,
+        outcome: 'dirty',
+        directPlan: plan,
+        directStatus: 'rollback-failed',
+        base: base.data?.execution ?? null,
+        unrestored: [plan.targetPath, ...(base.data?.execution?.unrestored ?? [])],
+      });
+      return result(EXIT_CODES['apply-failed-dirty'], report, [
+        ...combinedDiagnostics,
+        rollbackDiagnostic,
+      ]);
+    }
+
+    const rollbackDiagnostic = diagnostic({
+      severity: 'info',
+      code: 'rtk-release-coordinated-rollback',
+      subject: 'rtk',
+      path: plan.targetPath,
+      message: rollback.message,
+      remediation: null,
+    });
+    await finishDirectJournal('rolled-back', 'failed', [rollbackDiagnostic]).catch(() => undefined);
+    report.execution = execution({
+      transactionId,
+      outcome: base.data?.execution?.outcome === 'dirty' ? 'dirty' : 'rolled-back',
+      directPlan: plan,
+      directStatus: 'rolled-back',
+      base: base.data?.execution ?? null,
+      unrestored: base.data?.execution?.unrestored ?? [],
+    });
+    const finalExit =
+      base.exitCode === EXIT_CODES['apply-failed-dirty']
+        ? EXIT_CODES['apply-failed-dirty']
+        : EXIT_CODES['apply-failed-rolled-back'];
+    return result(finalExit, report, [...combinedDiagnostics, rollbackDiagnostic]);
+  }
+
+  const committedDiagnostic = diagnostic({
+    severity: 'info',
+    code: 'rtk-release-transaction-committed',
+    subject: 'rtk',
+    path: plan.targetPath,
+    message: `RTK ${plan.target} was verified and transaction ${transactionId} now records the exact previous executable snapshot plus GitHub release provenance`,
+    remediation: `Use token-harness rollback --transaction ${transactionId} to review reversal of this committed update`,
+  });
+  try {
+    await finishDirectJournal('committed', 'applied', [committedDiagnostic]);
+  } catch (error) {
+    const rollback = await plan.runtime.rollback(installed.handle, context.projectRoot);
+    const dirty = rollback.status === 'dirty';
+    const persistenceDiagnostic = diagnostic({
+      severity: 'error',
+      code: 'rtk-release-commit-journal-write-failed',
+      subject: 'rtk',
+      path: plan.targetPath,
+      message: `RTK ${plan.target} was installed but the committed journal could not be persisted: ${error instanceof Error ? error.message : String(error)}. ${rollback.message}`,
+      remediation: `Inspect transaction ${transactionId} and its backups before retrying`,
+    });
+    await finishDirectJournal(dirty ? 'dirty' : 'rolled-back', 'failed', [
+      persistenceDiagnostic,
+    ]).catch(() => undefined);
+    return result(
+      dirty ? EXIT_CODES['apply-failed-dirty'] : EXIT_CODES['apply-failed-rolled-back'],
+      null,
+      [...combinedDiagnostics, persistenceDiagnostic],
+    );
+  }
+
+  report.execution = execution({
+    transactionId,
+    outcome: 'committed',
+    directPlan: plan,
+    directStatus: directResult.results[0]?.status ?? 'applied',
+    base: base.data?.execution ?? null,
+  });
+  return result(EXIT_CODES.ok, report, [...combinedDiagnostics, provenance, committedDiagnostic]);
 }
 
-/**
- * Dashboard-only observation path. It can never apply an update: confirmation is forced off even
- * if a caller accidentally supplies a confirmed context. The ordinary CLI keeps exit 8 + null data
- * for its public JSON contract; this internal adapter turns that already-computed dry-run into a
- * successful read-only report for the local UI.
- */
+/** Dashboard/read-only update observation, with the same RTK release preference but no mutation. */
 export async function runUpdateCheck(
   context: CommandContext,
 ): Promise<CommandResult<UpdateReport>> {
-  const result = await runUpdate(
-    { ...context, confirmed: false },
-    { preserveConfirmationReport: true },
+  const prepared = await prepareDirectRtkUpdate({ ...context, confirmed: false });
+  if (prepared === null) return runPackageChannelUpdateCheck(context);
+  if (prepared.plan === null) {
+    return result(prepared.ordinary.exitCode, prepared.ordinary.data, [
+      ...prepared.ordinary.diagnostics,
+      ...prepared.directDiagnostics,
+    ]);
+  }
+  return result(
+    EXIT_CODES.ok,
+    {
+      ...prepared.report,
+      execution: {
+        planId: null,
+        transactionId: null,
+        fromStoredPlan: false,
+        outcome: 'confirmation-required',
+        results: [],
+        unrestored: [],
+        receiptId: null,
+      },
+    },
+    [
+      ...prepared.ordinary.diagnostics.filter((entry) => entry.code !== 'nothing-to-update'),
+      ...prepared.directDiagnostics,
+      diagnostic({
+        severity: 'info',
+        code: 'rtk-release-target',
+        subject: 'rtk',
+        path: prepared.plan.targetPath,
+        message: `The verified GitHub fallback would target the single resolved RTK executable at ${prepared.plan.targetPath}`,
+        remediation: null,
+      }),
+    ],
   );
-  if (result.exitCode !== EXIT_CODES['confirmation-required'] || result.data === null)
-    return result;
-  return commandResult<UpdateReport>({
-    command: 'update',
-    exitCode: EXIT_CODES.ok,
-    data: result.data,
-    diagnostics: result.diagnostics.filter((entry) => entry.code !== 'confirmation-required'),
-  });
 }

@@ -6,15 +6,16 @@ layers for provider detection, provider package replacement and managed harness 
 
 ## Current upstream releases
 
-As reviewed on 2026-09-12:
+As reviewed on 2026-09-13:
 
 - **RTK 0.49.0** is the current reviewed RTK release. Its source still exposes the
   `rtk gain --all --format json` analytics contract consumed by Token Harness. The existing live
-  Windows fixture remains 0.48.0, so 0.49.0 is a source-contract review until a real-machine run is
-  captured.
-- **HarnessTrim 0.3.0** is the current release. It continues to expose the machine-readable
+  Windows fixture remains 0.48.0, so 0.49.0 remains source-reviewed until the direct-release path is
+  exercised on a real Windows machine.
+- **HarnessTrim 0.3.0** is the current reviewed release. It continues to expose the machine-readable
   `harnesstrim capabilities` contract. The additional `digests` field is additive and does not
-  invalidate Token Harness's semantic surface/write-set checks.
+  invalidate Token Harness's semantic surface/write-set checks. A real Windows update to 0.3.0 via
+  npm has been validated.
 
 ## Detection policy
 
@@ -59,21 +60,36 @@ HarnessTrim package updates use **npm**, matching the upstream install contract.
 This also avoids making a working Windows update depend on a configured `PNPM_HOME`; the earlier
 pnpm-only channel failed on a real Windows machine even though HarnessTrim itself was healthy.
 
-RTK continues to use the provider's selected installation channel. On Windows the current manifest
-prefers WinGet. WinGet publishes RTK version strings with the common release-tag `v` prefix (for
-example `v0.48.0`), which Token Harness now accepts as the same semantic version as `0.48.0` while
-preserving the raw channel spelling for an exact install request.
+RTK's ordinary Windows channel remains WinGet. WinGet publishes RTK version strings with the common
+release-tag `v` prefix (for example `v0.48.0`), which Token Harness accepts as the same semantic
+version as `0.48.0` while preserving the raw channel spelling for an exact WinGet install request.
+The v-prefixed WinGet query/update path has been validated on a real Windows machine.
 
-As of 2026-09-12 the public WinGet package repository contains RTK through **v0.48.0**, while
-upstream RTK is **0.49.0**, so WinGet cannot yet deliver 0.49.0. Supporting the upstream Windows
-release ZIP as a managed fallback is a distinct installation-channel task: it needs verified
-download, staging/replacement and rollback semantics. Until that exists, Token Harness reports and
-uses the newest version actually available through WinGet instead of pretending the channel can
-supply upstream 0.49.0.
+The public WinGet package repository currently contains RTK through **v0.48.0**, while the reviewed
+upstream release is **0.49.0**. On native Windows, when WinGet is behind the already-reviewed RTK
+package ceiling, Token Harness can use the exact official GitHub release asset
+`rtk-x86_64-pc-windows-msvc.zip` instead of pretending the stale package catalog is current.
 
-The exact compatibility matrix is still required when Token Harness wants to **mutate an agent
-integration**. This preserves the strict RFC 0009 safety boundary without turning historical fixture
-versions into permanent package pins.
+That direct-release path is intentionally narrower than a generic downloader:
+
+- it queries the exact stable reviewed tag from `api.github.com/repos/rtk-ai/rtk`;
+- it accepts only the exact Windows x64 ZIP from the official `rtk-ai/rtk` release path;
+- it requires GitHub's published SHA-256 and verifies the complete ZIP before extraction;
+- metadata, redirects, archive size, archive entry count and extracted executable size are bounded;
+- only the root `rtk.exe` is extracted, so archive paths are never materialized on disk;
+- it replaces the currently resolved `rtk.exe`, never an arbitrary directory merely because it is
+  on `PATH`;
+- previous executable bytes are retained under the Token Harness state directory;
+- the replacement is staged beside the target, then `rtk --version` must report the reviewed target;
+- a failed postcondition restores and re-verifies the exact previous bytes/version;
+- if Windows Smart App Control or another application-control policy blocks a freshly released
+  unsigned binary, the updater reports that possibility after restoring the previous executable;
+- if another ordinary provider update fails later in the same `update` command, Token Harness also
+  attempts to restore RTK before returning.
+
+This direct path still grants **no harness-write permission**. Exact provider × harness × version ×
+platform compatibility rows remain mandatory when Token Harness wants to mutate an agent
+integration. The release updater changes a provider binary only; it does not widen RFC 0009.
 
 A future HarnessTrim build can be accepted after it is installed when its capability contract still
 matches, but that does not automatically make an unknown future package target safe for unattended
