@@ -11,6 +11,7 @@ import {
   type HarnessId,
   type OptimizationCandidateId,
   type TaskBenchmarkCapture,
+  type TaskBenchmarkCaptureFinishReport,
   type TaskBenchmarkCaptureStartReport,
   type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixEntry,
@@ -19,7 +20,7 @@ import {
   type TaskClass,
 } from '@token-harness/core';
 
-import { runBenchmarkStart } from './benchmark-capture.js';
+import { runBenchmarkFinish, runBenchmarkStart } from './benchmark-capture.js';
 import { runBenchmarkMatrix } from './benchmark-matrix.js';
 import {
   OPTIMIZATION_CANDIDATES,
@@ -31,6 +32,12 @@ import {
   type CandidateEvidenceAssessment,
 } from './candidate-evidence-assessment.js';
 import type { CommandContext } from './context.js';
+import {
+  readMcptoonActivationReceipt,
+  recordMcptoonActivationFinish,
+  recordMcptoonActivationStart,
+  type McptoonActivationWitnessState,
+} from './mcptoon-activation-witness.js';
 
 export type CandidateAwareTaskBenchmarkCaptureStartReport = TaskBenchmarkCaptureStartReport & {
   /** Experiment target only. This is not proof that the candidate was active. */
@@ -144,8 +151,51 @@ export function summarizeCandidateActivationEvidence(
   boundaries: readonly {
     start: GitNexusMcpRuntimeState | undefined;
     finish: GitNexusMcpRuntimeState | undefined;
+    mcptoon?: McptoonActivationWitnessState;
   }[],
 ): CandidateActivationEvidence {
+  if (candidateId === 'mcptoon') {
+    let verifiedPairs = 0;
+    let blockedPairs = 0;
+    let unknownPairs = 0;
+    for (const boundary of boundaries) {
+      if (boundary.mcptoon === 'verified') verifiedPairs += 1;
+      else if (boundary.mcptoon === 'blocked') blockedPairs += 1;
+      else unknownPairs += 1;
+    }
+    if (blockedPairs > 0) {
+      return {
+        candidateId,
+        state: 'blocked',
+        verifiedPairs,
+        blockedPairs,
+        unknownPairs,
+        reason: `${String(blockedPairs)} optimized pair(s) did not record successful mcptoon activity inside the task window`,
+      };
+    }
+    if (verifiedPairs > 0 && unknownPairs === 0) {
+      return {
+        candidateId,
+        state: 'verified',
+        verifiedPairs,
+        blockedPairs,
+        unknownPairs,
+        reason: `${String(verifiedPairs)} optimized pair(s) recorded successful mcptoon 0.7.10 tool activity inside the task window`,
+      };
+    }
+    return {
+      candidateId,
+      state: 'unreviewed',
+      verifiedPairs,
+      blockedPairs,
+      unknownPairs,
+      reason:
+        boundaries.length === 0
+          ? 'no completed optimized task has mcptoon activation evidence yet'
+          : 'one or more optimized tasks lack a complete mcptoon 0.7.10 usage witness',
+    };
+  }
+
   if (candidateId !== 'gitnexus') {
     return {
       candidateId,
@@ -559,16 +609,22 @@ async function buildCampaignReport(
   const activationBoundaries: Array<{
     start: GitNexusMcpRuntimeState | undefined;
     finish: GitNexusMcpRuntimeState | undefined;
+    mcptoon?: McptoonActivationWitnessState;
   }> = [];
   for (const slot of slots) {
     if (slot.state !== 'complete') continue;
     const optimizedReceipt = await readReceiptArtifact(context, slot.benchmarkId, 'optimized');
+    const mcptoonActivation =
+      definition.candidateId === 'mcptoon'
+        ? await readMcptoonActivationReceipt(context, slot.benchmarkId)
+        : null;
     activationBoundaries.push(
       optimizedReceipt === 'absent' || optimizedReceipt === 'invalid'
-        ? { start: undefined, finish: undefined }
+        ? { start: undefined, finish: undefined, mcptoon: mcptoonActivation?.state }
         : {
             start: optimizedReceipt.contextAtStart?.gitNexusMcpRuntimeState,
             finish: optimizedReceipt.contextAtFinish?.gitNexusMcpRuntimeState,
+            mcptoon: mcptoonActivation?.state,
           },
     );
   }
@@ -713,9 +769,9 @@ async function readTimingEvidence(
 }
 
 /**
- * Start the normal benchmark capture, then persist only candidate identity beside it.
- * The receipt schema and comparator remain unchanged. Candidate identity means experiment target,
- * not proof that the candidate was active in either run.
+ * Start the normal benchmark capture, persist candidate identity beside it, and capture a
+ * privacy-bounded mcptoon usage boundary for optimized mcptoon runs. Candidate identity by
+ * itself is still not activation proof.
  */
 export async function runCandidateBenchmarkStart(
   context: CommandContext,
@@ -752,47 +808,114 @@ export async function runCandidateBenchmarkStart(
   const result = await runBenchmarkStart(context);
   if (result.data === null || result.exitCode !== EXIT_CODES.ok) return result;
 
+  let candidateId: OptimizationCandidateId | null = null;
   if (
     existing !== 'absent' &&
     existing !== 'invalid' &&
     existing.benchmarkId === result.data.capture.benchmarkId &&
     existing.projectId === result.data.capture.projectId
   ) {
-    return {
-      ...result,
-      data: { ...result.data, candidateId: existing.candidateId },
-    };
+    candidateId = existing.candidateId;
+  } else if (requestedCandidate !== null) {
+    const written = await writeCandidateBenchmarkAttribution(context, {
+      schemaVersion: 1,
+      benchmarkId: result.data.capture.benchmarkId,
+      candidateId: requestedCandidate,
+      projectId: result.data.capture.projectId,
+    });
+    if (!written) {
+      return {
+        ...result,
+        diagnostics: [
+          ...result.diagnostics,
+          diagnostic({
+            severity: 'warning',
+            code: 'candidate-benchmark-attribution-write-failed',
+            message:
+              'The benchmark capture was created, but its optional candidate attribution could not be saved',
+            remediation:
+              'Keep the capture as ordinary benchmark evidence and use a new id for candidate-specific evidence',
+          }),
+        ],
+      };
+    }
+    candidateId = requestedCandidate;
   }
 
-  if (requestedCandidate === null) return result;
+  if (candidateId === null) return result;
 
-  const written = await writeCandidateBenchmarkAttribution(context, {
-    schemaVersion: 1,
-    benchmarkId: result.data.capture.benchmarkId,
-    candidateId: requestedCandidate,
-    projectId: result.data.capture.projectId,
-  });
-  if (written) {
-    return {
-      ...result,
-      data: { ...result.data, candidateId: requestedCandidate },
-    };
-  }
-
-  return {
+  const decorated: CommandResult<CandidateAwareTaskBenchmarkCaptureStartReport | null> = {
     ...result,
-    diagnostics: [
-      ...result.diagnostics,
-      diagnostic({
-        severity: 'warning',
-        code: 'candidate-benchmark-attribution-write-failed',
-        message:
-          'The benchmark capture was created, but its optional candidate attribution could not be saved',
-        remediation:
-          'Keep the capture as ordinary benchmark evidence and use a new id for candidate-specific evidence',
-      }),
-    ],
+    data: { ...result.data, candidateId },
   };
+  if (candidateId !== 'mcptoon' || result.data.capture.variant !== 'optimized') {
+    return decorated;
+  }
+
+  const witnessWritten = await recordMcptoonActivationStart(context, {
+    benchmarkId: result.data.capture.benchmarkId,
+    projectId: result.data.capture.projectId,
+    startedAt: result.data.capture.startedAt,
+  });
+  return witnessWritten
+    ? decorated
+    : {
+        ...decorated,
+        diagnostics: [
+          ...decorated.diagnostics,
+          diagnostic({
+            severity: 'warning',
+            code: 'mcptoon-activation-witness-start-unavailable',
+            message:
+              'The optimized benchmark started, but its passive mcptoon usage boundary could not be saved',
+            remediation:
+              'Keep this pair as selection evidence only; use a new pair for activation evidence',
+          }),
+        ],
+      };
+}
+
+/** Finish the ordinary receipt, then seal mcptoon activation evidence beside it when applicable. */
+export async function runCandidateBenchmarkFinish(
+  context: CommandContext,
+): Promise<CommandResult<TaskBenchmarkCaptureFinishReport | null>> {
+  const result = await runBenchmarkFinish(context);
+  if (result.data === null || result.exitCode !== EXIT_CODES.ok) return result;
+  if (result.data.receipt.variant !== 'optimized') return result;
+
+  const attribution = await readCandidateBenchmarkAttribution(
+    context,
+    result.data.receipt.benchmarkId,
+  );
+  if (
+    attribution === 'absent' ||
+    attribution === 'invalid' ||
+    attribution.candidateId !== 'mcptoon'
+  ) {
+    return result;
+  }
+
+  const witness = await recordMcptoonActivationFinish(context, {
+    benchmarkId: result.data.receipt.benchmarkId,
+    projectId: attribution.projectId,
+    completedAt: result.data.receipt.completedAt,
+  });
+  return witness !== null
+    ? result
+    : {
+        ...result,
+        diagnostics: [
+          ...result.diagnostics,
+          diagnostic({
+            severity: 'warning',
+            code: 'mcptoon-activation-witness-finish-unavailable',
+            message:
+              'The benchmark receipt is valid, but its mcptoon activation witness could not be finalized',
+            remediation:
+              'Keep this pair as selection evidence only; use a new pair for activation evidence',
+          }),
+        ],
+      };
 }
 
 /** Add candidate-specific summaries without changing the deterministic matrix verdicts. */

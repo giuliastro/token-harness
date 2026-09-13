@@ -128,7 +128,13 @@ describe('mcptoon activation witness', () => {
     const raw = JSON.stringify({
       total: 9,
       calls: [
-        { server: 'private-server-name', tool: 'secret_tool_name', ok: true, tokens: 0, ts: 1789293900 },
+        {
+          server: 'private-server-name',
+          tool: 'secret_tool_name',
+          ok: true,
+          tokens: 0,
+          ts: 1789293900,
+        },
       ],
     });
     const result = await readMcptoonUsageObservation(contextWithUsage(raw));

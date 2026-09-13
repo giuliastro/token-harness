@@ -1,7 +1,4 @@
-import {
-  MCPTOON_REVIEWED_INSTALL_VERSION,
-  parseMcptoonVersion,
-} from '@token-harness/adapters';
+import { MCPTOON_REVIEWED_INSTALL_VERSION, parseMcptoonVersion } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
 
@@ -91,7 +88,9 @@ async function writeJson(context: CommandContext, path: string, value: unknown):
 async function readJson(context: CommandContext, path: string): Promise<unknown | null> {
   if (context.adapters === null) return null;
   try {
-    return JSON.parse(new TextDecoder().decode(await context.adapters.fs.readFile(path))) as unknown;
+    return JSON.parse(
+      new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+    ) as unknown;
   } catch {
     return null;
   }
@@ -208,7 +207,12 @@ export async function readMcptoonUsageObservation(
       };
     }
     const call = value as Record<string, unknown>;
-    if (typeof call['ok'] !== 'boolean' || typeof call['ts'] !== 'number' || !Number.isFinite(call['ts']) || call['ts'] < 0) {
+    if (
+      typeof call['ok'] !== 'boolean' ||
+      typeof call['ts'] !== 'number' ||
+      !Number.isFinite(call['ts']) ||
+      call['ts'] < 0
+    ) {
       return {
         state: 'invalid',
         version,
@@ -240,20 +244,14 @@ function parseCapture(value: unknown): McptoonActivationCapture | null {
     row['variant'] !== 'optimized' ||
     typeof row['startedAt'] !== 'string' ||
     !Number.isFinite(Date.parse(row['startedAt'])) ||
-    !(
-      row['version'] === null ||
-      typeof row['version'] === 'string'
-    ) ||
+    !(row['version'] === null || typeof row['version'] === 'string') ||
     !(
       row['observationState'] === 'observed' ||
       row['observationState'] === 'unsupported-version' ||
       row['observationState'] === 'unavailable' ||
       row['observationState'] === 'invalid'
     ) ||
-    !(
-      row['totalCalls'] === null ||
-      finiteNonNegativeInteger(row['totalCalls']) !== null
-    )
+    !(row['totalCalls'] === null || finiteNonNegativeInteger(row['totalCalls']) !== null)
   ) {
     return null;
   }
@@ -329,7 +327,8 @@ export function evaluateMcptoonActivation(
       callDelta: null,
       callsDuringWindow: 0,
       successfulCallsDuringWindow: 0,
-      reason: 'mcptoon activation cannot be attributed because a reviewed boundary observation is missing',
+      reason:
+        'mcptoon activation cannot be attributed because a reviewed boundary observation is missing',
     };
   }
 
@@ -369,7 +368,8 @@ export function evaluateMcptoonActivation(
       callDelta,
       callsDuringWindow: 0,
       successfulCallsDuringWindow: 0,
-      reason: 'mcptoon usage increased, but the bounded call buffer cannot place a call inside the benchmark window',
+      reason:
+        'mcptoon usage increased, but the bounded call buffer cannot place a call inside the benchmark window',
     };
   }
 
@@ -390,7 +390,8 @@ export function evaluateMcptoonActivation(
     callDelta,
     callsDuringWindow: callsDuringWindow.length,
     successfulCallsDuringWindow,
-    reason: 'mcptoon 0.7.10 recorded successful local tool activity inside the optimized task window',
+    reason:
+      'mcptoon 0.7.10 recorded successful local tool activity inside the optimized task window',
   };
 }
 
