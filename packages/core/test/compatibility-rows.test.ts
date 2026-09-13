@@ -205,6 +205,42 @@ describe('admitManagedMutation', () => {
     assert.equal(windows.state, 'refused');
   });
 
+  it('ships the exact Linux Claude 2.1.269 / mcptoon 0.7.10 admission and nothing broader', () => {
+    const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('claude'),
+      harnessVersion: '2.1.269',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(exact.state, 'admitted');
+    if (exact.state === 'admitted') {
+      assert.equal(exact.row.configSchema, 'claude-skills-directory');
+      assert.equal(exact.row.fixture, 'tests/fixtures/rows/mcptoon-claude-linux-2.1.269-0.7.10');
+      assert.equal(exact.row.verificationTier, 'config-only');
+    }
+
+    for (const variant of [
+      { harnessVersion: '2.1.268', providerVersion: '0.7.10', os: 'linux', wsl: false },
+      { harnessVersion: '2.1.270', providerVersion: '0.7.10', os: 'linux', wsl: false },
+      { harnessVersion: '2.1.269', providerVersion: '0.7.11', os: 'linux', wsl: false },
+      { harnessVersion: '2.1.269', providerVersion: '0.7.10', os: 'linux', wsl: true },
+      { harnessVersion: '2.1.269', providerVersion: '0.7.10', os: 'windows', wsl: false },
+      { harnessVersion: '2.1.269', providerVersion: '0.7.10', os: 'macos', wsl: false },
+    ] as const) {
+      const outcome = admitManagedMutation(COMPATIBILITY_ROWS, {
+        provider: providerId('mcptoon'),
+        providerVersion: variant.providerVersion,
+        harness: harnessId('claude'),
+        harnessVersion: variant.harnessVersion,
+        os: variant.os,
+        wsl: variant.wsl,
+      });
+      assert.equal(outcome.state, 'refused');
+    }
+  });
+
   it('admits an exact provider × harness × version × platform match', () => {
     const outcome = admitManagedMutation([row()], combination());
     assert.equal(outcome.state, 'admitted');

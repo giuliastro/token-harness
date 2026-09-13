@@ -17,9 +17,10 @@ As reviewed on 2026-09-13:
   `harnesstrim capabilities` contract. The additional `digests` field is additive and does not
   invalidate Token Harness's semantic surface/write-set checks. A real Windows update to 0.3.0 via
   npm has been validated.
-- **mcptoon 0.7.10** is the reviewed managed-candidate lifecycle release. Token Harness now has one
-  exact RFC 0009 admission row for mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL, backed by a live
-  Ubuntu recording. mcptoon remains a candidate rather than a globally registered provider; this
+- **mcptoon 0.7.10** is the reviewed managed-candidate lifecycle release. Token Harness now has two
+  exact RFC 0009 admission rows on Linux non-WSL, backed by live Ubuntu recordings: Codex 0.152.1 and
+  Claude Code 2.1.269, both with mcptoon 0.7.10. mcptoon remains a candidate rather than a globally
+  registered provider; this
   exact compatibility evidence does not satisfy the other promotion-readiness gates by itself.
 
 ## Detection policy
@@ -47,9 +48,9 @@ reported as `unknown-newer` until the specific contract Token Harness consumes h
 
 For **mcptoon**, candidate detection and managed lifecycle are intentionally narrower than provider
 promotion. The reviewed lifecycle recognizes the exact managed surface around 0.7.10, but RFC 0009
-admits managed harness mutation only for the recorded Codex 0.152.1 × Linux non-WSL combination.
-Adjacent Codex versions, adjacent mcptoon versions, WSL and Windows remain refused until separately
-recorded and reviewed. No semver inference widens that row.
+admits managed harness mutation only for the two recorded Linux non-WSL combinations: Codex 0.152.1
+and Claude Code 2.1.269. Adjacent Claude/Codex versions, adjacent mcptoon versions, WSL, Windows and
+macOS remain refused until separately recorded and reviewed. No semver inference widens either row.
 
 ## Package updates are a separate gate
 
@@ -110,7 +111,7 @@ atomic rollback path, not a blanket semver allowance.
 ## What this policy does not claim
 
 A provider being version-compatible is not evidence that an RTK + HarnessTrim combination has been
-benchmarked together, nor that a passive receipt belongs to a particular harness. Likewise, one
-exact mcptoon compatibility row is not proof that mcptoon should join the managed provider registry.
+benchmarked together, nor that a passive receipt belongs to a particular harness. Likewise, two
+exact mcptoon compatibility rows are not proof that mcptoon should join the managed provider registry.
 Combined-stack review, harness-scoped runtime evidence and the candidate promotion-readiness gates
 remain separate decisions.

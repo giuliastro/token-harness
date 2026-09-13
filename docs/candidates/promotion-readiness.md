@@ -46,13 +46,14 @@ the formal `managed-lifecycle` gate is explicitly passed for **mcptoon 0.7.10**:
   instruction surface — normal `verify` does not run `manifest` or contact configured MCP servers;
 - live Ubuntu `pipx` smoke coverage for mcptoon 0.7.10 installation, inventory, uninstall and
   restoration of the absent state; and
-- an exact RFC 0009 recording for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**, captured on a
-  real Ubuntu runner with brownfield state, managed apply, user drift, verified rollback and surgical
-  uninstall.
+- exact RFC 0009 recordings for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL** and
+  **mcptoon 0.7.10 × Claude Code 2.1.269 × Linux non-WSL**, captured on real Ubuntu runners with
+  brownfield state, managed apply, user drift, verified rollback and surgical uninstall.
 
-Passing `managed-lifecycle` does **not** pass `compatibility-reversibility`. The exact row still admits
-only that recorded combination; Codex 0.152.2, mcptoon 0.7.11, WSL and Windows remain refused, and the
-intended promoted harness/platform surface still needs a separate compatibility decision.
+Passing `managed-lifecycle` does **not** pass `compatibility-reversibility`. The exact rows still admit
+only those recorded combinations; adjacent harness/provider versions, WSL, Windows and macOS remain
+refused, and the intended promoted harness/platform surface still needs a separate compatibility
+decision.
 
 ### mcptoon activation checkpoint
 
