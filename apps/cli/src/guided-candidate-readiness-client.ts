@@ -22,6 +22,21 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
     'context-owner-admission': 'context-owner admission',
   })[value] || value || 'none';
 
+  const integrationProgress = new Map([
+    ['mcptoon', {
+      label: 'Lifecycle + exact compatibility checkpoint',
+      detail: 'Token Harness already has reviewed install/activation/rollback mechanics plus one exact Codex/Linux compatibility row. Selection, real activation and combined-stack evidence still remain before promotion.',
+    }],
+    ['GitNexus', {
+      label: 'Transactional MCP checkpoint',
+      detail: 'Claude Code MCP registration/removal already has reviewed transactional ownership. Codex ownership, compatibility rows and real workload evidence are still incomplete.',
+    }],
+    ['Headroom', {
+      label: 'Benchmark capability reviewed',
+      detail: 'Headroom 0.37.0 wrapper capability for Claude Code and Codex is reviewed. Managed lifecycle, activation proof and broad context-owner admission are not yet complete.',
+    }],
+  ]);
+
   let queued = false;
   let observer;
 
@@ -55,6 +70,28 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
         const item = byName.get(name);
         const readiness = item?.promotionReadiness;
         if (!readiness) continue;
+
+        const subtitle = card.querySelector('.tool-head .caption');
+        if (subtitle?.textContent?.includes('Experimental')) {
+          subtitle.textContent = subtitle.textContent.replace('Experimental', 'Candidate');
+        }
+
+        const progress = integrationProgress.get(name);
+        const previousProgress = card.querySelector('.candidate-integration-progress');
+        previousProgress?.remove();
+        if (progress) {
+          const milestone = document.createElement('div');
+          milestone.className = 'candidate-integration-progress explain-box';
+          const milestoneLabel = document.createElement('strong');
+          milestoneLabel.textContent = progress.label;
+          const milestoneDetail = document.createElement('p');
+          milestoneDetail.textContent = progress.detail;
+          milestone.append(milestoneLabel, milestoneDetail);
+          const firstFacts = card.querySelector('.tool-facts');
+          if (firstFacts) firstFacts.insertAdjacentElement('afterend', milestone);
+          else card.append(milestone);
+        }
+
         const previous = card.querySelector('.candidate-readiness');
         if (previous?.dataset.generatedAt === generatedAt) continue;
         previous?.remove();
@@ -78,7 +115,7 @@ const GUIDE_CANDIDATE_READINESS_BASE_JS = String.raw`
         note.className = 'caption candidate-readiness-note';
         note.textContent = readiness.promotionEligible
           ? 'All reviewed promotion gates are satisfied.'
-          : 'Evaluation readiness is not promotion approval. Remaining lifecycle gates stay explicit.';
+          : 'Reviewed integration milestones are shown separately from formal promotion gates, which remain conservative until complete.';
         block.append(facts, note);
         const actions = card.querySelector('.inline-actions');
         if (actions) card.insertBefore(block, actions);

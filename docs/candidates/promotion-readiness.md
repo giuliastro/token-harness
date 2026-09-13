@@ -28,7 +28,9 @@ safety mechanism stays `blocked`.
 
 Candidate promotion remains closed by default. Observers may report local progress, and a candidate
 may acquire reviewed lifecycle primitives or exact compatibility rows before it is admitted to the
-global provider registry. Neither state is equivalent to promotion.
+global provider registry. Neither state is equivalent to promotion. The guided UI may surface those
+reviewed integration milestones so users can distinguish candidate maturity, but milestone labels do
+not alter gate state or make a candidate part of the managed stack.
 
 ### mcptoon lifecycle checkpoint
 
