@@ -52,7 +52,10 @@ describe('mcptoon manifest footprint campaign evidence', () => {
     assert.equal(result.latest?.jsonBytes, 22_000);
     assert.equal(result.latest?.compactBytes, 1_100);
     assert.notEqual(result.latest?.jsonBytes, 42_000);
-    assert.match(result.reason, /does not claim model-visible token, quota, or subscription savings/);
+    assert.match(
+      result.reason,
+      /does not claim model-visible token, quota, or subscription savings/,
+    );
   });
 
   it('counts missing or non-observed snapshots without converting them into zero savings', () => {
