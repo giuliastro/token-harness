@@ -1,5 +1,7 @@
 # Release checkpoint — 2026-09-13
 
-The next incremental stable release should be cut only after the mcptoon manifest-footprint PR is merged to `main` with all CI jobs green.
+Token Harness `0.1.11` is the next incremental stable release candidate.
 
-Release scope includes the accumulated post-0.1.10 work already present on `main` plus the final mcptoon footprint evidence hardening. Candidate-only components remain gated and are not promoted merely because lifecycle/evidence primitives exist.
+The mcptoon manifest-footprint work has merged to `main` after green Windows, macOS and Ubuntu CI. Release preparation now aligns the workspace, publishable CLI and embedded tool version at `0.1.11` and adds release notes for the accumulated post-0.1.10 work.
+
+Candidate-only components remain gated: mcptoon, GitNexus and Headroom are not promoted merely because lifecycle or evidence primitives exist. The release can proceed only after the `0.1.11` release-prep PR passes the full cross-platform CI and installed-package smoke gates.
