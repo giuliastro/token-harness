@@ -9,13 +9,18 @@ layers for provider detection, provider package replacement and managed harness 
 As reviewed on 2026-09-13:
 
 - **RTK 0.49.0** is the current reviewed RTK release. Its source still exposes the
-  `rtk gain --all --format json` analytics contract consumed by Token Harness. The existing live
-  Windows fixture remains 0.48.0, so 0.49.0 remains source-reviewed until the direct-release path is
-  exercised on a real Windows machine.
+  `rtk gain --all --format json` analytics contract consumed by Token Harness. The latest live
+  harness-mutation fixture on Windows remains 0.48.0, but the package-only direct GitHub release
+  fallback to 0.49.0 is exercised on native Windows with digest verification, version verification
+  and rollback. That package path does not widen any RFC 0009 harness-mutation row.
 - **HarnessTrim 0.3.0** is the current reviewed release. It continues to expose the machine-readable
   `harnesstrim capabilities` contract. The additional `digests` field is additive and does not
   invalidate Token Harness's semantic surface/write-set checks. A real Windows update to 0.3.0 via
   npm has been validated.
+- **mcptoon 0.7.10** is the reviewed managed-candidate lifecycle release. Token Harness now has one
+  exact RFC 0009 admission row for mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL, backed by a live
+  Ubuntu recording. mcptoon remains a candidate rather than a globally registered provider; this
+  exact compatibility evidence does not satisfy the other promotion-readiness gates by itself.
 
 ## Detection policy
 
@@ -39,6 +44,12 @@ For **RTK**, there is currently no equivalent machine-readable capability contra
 therefore promotes explicitly source-reviewed releases beyond the historical live fixture ceiling.
 RTK 0.49.0 is reviewed. A later RTK release remains detectable and usable for observation, but is
 reported as `unknown-newer` until the specific contract Token Harness consumes has been checked.
+
+For **mcptoon**, candidate detection and managed lifecycle are intentionally narrower than provider
+promotion. The reviewed lifecycle recognizes the exact managed surface around 0.7.10, but RFC 0009
+admits managed harness mutation only for the recorded Codex 0.152.1 × Linux non-WSL combination.
+Adjacent Codex versions, adjacent mcptoon versions, WSL and Windows remain refused until separately
+recorded and reviewed. No semver inference widens that row.
 
 ## Package updates are a separate gate
 
@@ -99,5 +110,7 @@ atomic rollback path, not a blanket semver allowance.
 ## What this policy does not claim
 
 A provider being version-compatible is not evidence that an RTK + HarnessTrim combination has been
-benchmarked together, nor that a passive receipt belongs to a particular harness. Combined-stack
-review and harness-scoped runtime evidence remain separate gates.
+benchmarked together, nor that a passive receipt belongs to a particular harness. Likewise, one
+exact mcptoon compatibility row is not proof that mcptoon should join the managed provider registry.
+Combined-stack review, harness-scoped runtime evidence and the candidate promotion-readiness gates
+remain separate decisions.
