@@ -18,10 +18,7 @@ describe('guided candidate readiness presentation', () => {
   });
 
   it('shows reviewed integration milestones separately for candidates at different maturity stages', () => {
-    assert.match(
-      GUIDE_CANDIDATE_READINESS_JS,
-      /Lifecycle \+ exact compatibility checkpoint/,
-    );
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Lifecycle \+ exact compatibility checkpoint/);
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /Transactional MCP checkpoint/);
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /Benchmark capability reviewed/);
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /replace\('Experimental', 'Candidate'\)/);
