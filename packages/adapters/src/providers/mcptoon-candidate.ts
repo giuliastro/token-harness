@@ -17,7 +17,12 @@ export interface McptoonCandidateObservation {
 }
 
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
-export const MCPTOON_MINIMUM_BENCHMARK_VERSION = '0.7.8';
+/**
+ * Backwards-compatible field name used by candidate observations. Benchmark admission is now exact:
+ * future or older mcptoon builds do not inherit evidence from the reviewed 0.7.10 contract.
+ */
+export const MCPTOON_REVIEWED_BENCHMARK_VERSION = '0.7.10';
+export const MCPTOON_MINIMUM_BENCHMARK_VERSION = MCPTOON_REVIEWED_BENCHMARK_VERSION;
 
 export function parseMcptoonVersion(text: string): string | null {
   return VERSION_PATTERN.exec(text)?.[1] ?? null;
@@ -58,8 +63,8 @@ export function parseMcptoonManifestCapabilities(text: string): {
  * Read-only candidate observation for MCP discovery/schema reduction.
  *
  * This never runs `mcptoon sync`, never writes agent MCP configuration, never starts `serve`, and
- * never enables result-side TOON compression. It only checks whether the local CLI exposes the two
- * global output surfaces Token Harness needs for a native-vs-compact benchmark.
+ * never enables result-side TOON compression. It only checks whether the exact reviewed build
+ * exposes the two global output surfaces Token Harness needs for a native-vs-compact benchmark.
  */
 export async function observeMcptoonCandidate(
   context: ProviderContext,
@@ -107,7 +112,7 @@ export async function observeMcptoonCandidate(
     };
   }
 
-  if (!mcptoonVersionAtLeast(version, MCPTOON_MINIMUM_BENCHMARK_VERSION)) {
+  if (version !== MCPTOON_REVIEWED_BENCHMARK_VERSION) {
     return {
       state: 'unsupported-version',
       version,
@@ -116,7 +121,7 @@ export async function observeMcptoonCandidate(
       supportsJsonManifest: false,
       minimumBenchmarkVersion: MCPTOON_MINIMUM_BENCHMARK_VERSION,
       reasons: [
-        `mcptoon ${version} predates the ${MCPTOON_MINIMUM_BENCHMARK_VERSION} benchmark baseline`,
+        `mcptoon ${version} is not the exact reviewed benchmark build ${MCPTOON_REVIEWED_BENCHMARK_VERSION}`,
       ],
     };
   }
@@ -141,7 +146,7 @@ export async function observeMcptoonCandidate(
       supportsJsonManifest: capabilities.json,
       minimumBenchmarkVersion: MCPTOON_MINIMUM_BENCHMARK_VERSION,
       reasons: [
-        'this mcptoon build does not advertise both explicit compact and JSON manifest surfaces',
+        'the reviewed mcptoon build does not advertise both explicit compact and JSON manifest surfaces',
       ],
     };
   }
