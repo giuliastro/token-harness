@@ -120,6 +120,32 @@ is also still young — the repository was created on 2026-07-27 — so youth re
 residual risk. A material change in upstream maintenance should trigger a new project-maturity review;
 this pass does not approve future mcptoon versions or widen any compatibility row.
 
+## Next gate: real selection evidence
+
+The next evidence gap cannot be closed by fixtures or CI. Run a paired campaign on one of the exact
+reviewed Linux harness surfaces while leaving the normal RTK + HarnessTrim production stack unchanged.
+The campaign planner uses two pairs per task class and tells the reviewer the next command after every
+step. For example:
+
+```bash
+token-harness benchmark-matrix --benchmark-id mcptoon-real-codex --candidate mcptoon --harness codex
+```
+
+Follow the emitted baseline/optimized start and finish commands and perform the same useful task for
+each pair. Baseline means the production stack without mcptoon; optimized means the same production
+stack with mcptoon 0.7.10 enabled through the reviewed workflow. Record the observed quality honestly
+rather than forcing `passed` when a task fails or needs retries.
+
+The selection gate passes only when the resulting campaign itself becomes decision-ready and
+promising under the existing candidate assessment rules. The activation witness must independently
+show successful mcptoon activity for the optimized windows. Manifest footprint remains contextual
+cached-schema mechanism evidence and is never substituted for token, quota, time or quality evidence.
+
+Do not change the production stack between paired runs merely to improve the result. If the exact
+RTK/HarnessTrim baseline changes version or configuration during the campaign, start a clean campaign
+rather than treating unlike environments as one experiment. A positive selection result is still not
+combined-stack approval; that is the next independent review.
+
 ## What remains before promotion
 
 The lifecycle, activation, footprint and maturity checkpoints close real evidence gaps, but they do
