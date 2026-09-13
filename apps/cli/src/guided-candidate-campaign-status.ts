@@ -10,6 +10,7 @@ import {
   assessCandidatePromotionReadiness,
   type CandidatePromotionReadiness,
 } from './commands/candidate-promotion-readiness.js';
+import { reviewedPromotionEvidenceForCandidate } from './commands/candidate-reviewed-promotion-evidence.js';
 import {
   createGuideCandidateCampaignActionRunner,
   type GuideCandidateCampaignActionRequest,
@@ -230,11 +231,15 @@ export function createGuideCandidateCampaignReader(
             reason: campaign.activation.reason,
           }
         : undefined;
+    const reviewedEvidence = reviewedPromotionEvidenceForCandidate(input.candidateId);
     const promotionReadiness = assessCandidatePromotionReadiness({
       candidateId: input.candidateId,
       assessment: campaign.assessment,
       observation: observationFor?.(input.candidateId) ?? null,
-      ...(activationVerification === undefined ? {} : { review: { activationVerification } }),
+      review:
+        activationVerification === undefined
+          ? reviewedEvidence
+          : { ...reviewedEvidence, activationVerification },
     });
     return {
       available: true,
@@ -271,7 +276,7 @@ export function createGuideCandidateCampaignReader(
       promotionEligible: false,
       promotionBlockers: [...campaign.assessment.promotionBlockers],
       promotionReadiness,
-      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus requires runtime MCP boundary evidence and mcptoon requires its reviewed local usage witness. Decision-ready does not mean promotion-ready.',
+      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus requires runtime MCP boundary evidence and mcptoon requires its reviewed local usage witness. Project maturity is supplied only by an explicit dated upstream review, never inferred from local semver. Decision-ready does not mean promotion-ready.',
     };
   };
 

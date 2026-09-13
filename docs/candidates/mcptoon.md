@@ -16,7 +16,7 @@ RFC 0009 compatibility row for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WS
 ## Passive activation witness
 
 Candidate attribution by itself is not proof that mcptoon was used. For an optimized mcptoon pair,
-`benchmark-start` now records a privacy-bounded boundary from mcptoon's own local usage record and
+`benchmark-start` records a privacy-bounded boundary from mcptoon's own local usage record and
 `benchmark-finish` seals the corresponding activation receipt.
 
 The reviewed 0.7.10 upstream contract stores local usage in `~/.cache/mcptoon/usage.json`. Token
@@ -49,13 +49,32 @@ optimized benchmark window; it does not prove which operating-system process ini
 The standard paired-campaign discipline and combined-stack validation remain required before a
 promotion decision.
 
+## Project maturity review
+
+The upstream project-maturity gate was explicitly reviewed on **2026-09-13**. This is project-level
+evidence and is deliberately not inferred from the installed semantic version.
+
+The review passes the gate because the inspected upstream repository is Apache-2.0 licensed, active
+and non-archived; stable releases span from **v0.3.0 on 2026-08-12** through **v0.7.10 on
+2026-09-12**; and recent releases document regression handling plus automated release/test
+discipline. In particular, v0.7.7 records a post-release version-consistency regression and a new
+regression test, v0.7.9 records an externally reported HTTP health regression with added coverage,
+and v0.7.10 is a correctness release whose notes report 813 tests passed, one skipped, and clean
+linting.
+
+Those upstream test counts are upstream release evidence, not Token Harness test results. The project
+is also still young — the repository was created on 2026-07-27 — so youth remains an explicit
+residual risk. A material change in upstream maintenance should trigger a new project-maturity review;
+this pass does not approve future mcptoon versions or widen any compatibility row.
+
 ## What remains before promotion
 
-This activation witness closes a real evidence gap, but it does not put mcptoon in
+The activation and maturity checkpoints close real evidence gaps, but they do not put mcptoon in
 `PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready selection evidence from
-repeated paired workloads, combined-stack validation with RTK and HarnessTrim, project-maturity
-review, and any additional exact harness/platform compatibility required by the intended managed
-surface.
+repeated paired workloads, combined-stack validation with RTK and HarnessTrim, and any additional
+exact harness/platform compatibility required by the intended managed surface. Lifecycle and
+compatibility/reversibility evidence also remain separate formal gates rather than being inferred
+from the maturity review.
 
 Upstream claims or fixture-only results are never copied into user savings. A positive promotion
 signal must come from Token Harness's own attributable campaign evidence while preserving quality.
