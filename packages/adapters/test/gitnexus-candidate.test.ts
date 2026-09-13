@@ -104,27 +104,29 @@ function context(options: RunnerOptions, requests: ProcessRequest[] = []): Provi
   };
 }
 
-const HELP = `Commands:\n  analyze [path]  Index a repository\n  status          Show index status\n  query [search]  Search the knowledge graph\n  context [name]  Show symbol context`;
+const HELP = `Commands:\n  analyze [path]  Index a repository\n  status          Show index status\n  query [search]  Search the knowledge graph\n  context [name]  Show symbol context\n  mcp             Start the MCP server`;
 const STATUS_HELP = `Usage: gitnexus status [options]\n\nOptions:\n  --json  Emit machine-readable status`;
 
 test('parses GitNexus semantic versions', () => {
-  assert.equal(parseGitNexusVersion('gitnexus 1.6.11'), '1.6.11');
+  assert.equal(parseGitNexusVersion('gitnexus 1.6.12'), '1.6.12');
   assert.equal(parseGitNexusVersion('1.7.0-rc.2'), '1.7.0-rc.2');
   assert.equal(parseGitNexusVersion('gitnexus dev'), null);
 });
 
-test('recognizes only the benchmark CLI surfaces', () => {
+test('recognizes benchmark and MCP CLI surfaces from passive help', () => {
   assert.deepEqual(parseGitNexusCliCapabilities(HELP, STATUS_HELP), {
     query: true,
     context: true,
     statusJson: true,
+    mcp: true,
   });
   assert.deepEqual(
-    parseGitNexusCliCapabilities(HELP.replace('context [name]', 'inspect [name]'), ''),
+    parseGitNexusCliCapabilities(HELP.replace('context [name]', 'inspect [name]').replace('mcp ', 'serve '), ''),
     {
       query: true,
       context: false,
       statusJson: false,
+      mcp: false,
     },
   );
 });
@@ -136,6 +138,7 @@ test('reports GitNexus absent without probing anything else', async () => {
   assert.equal(observation.state, 'absent');
   assert.equal(observation.version, null);
   assert.equal(observation.executable, null);
+  assert.equal(observation.supportsMcp, false);
   assert.deepEqual(
     requests.map((request) => request.args),
     [['--version']],
@@ -147,7 +150,7 @@ test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
   const observation = await observeGitNexusCandidate(
     context(
       {
-        version: 'gitnexus 1.6.11',
+        version: 'gitnexus 1.6.12',
         help: HELP.replace('context [name]', 'inspect [name]'),
         statusHelp: STATUS_HELP,
       },
@@ -159,6 +162,7 @@ test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
   assert.equal(observation.supportsQuery, true);
   assert.equal(observation.supportsContext, false);
   assert.equal(observation.supportsStatusJson, true);
+  assert.equal(observation.supportsMcp, true);
   assert.match(observation.reasons[0] ?? '', /context/);
 });
 
@@ -167,7 +171,7 @@ test('marks a capable local CLI benchmark-ready using only help/version probes',
   const observation = await observeGitNexusCandidate(
     context(
       {
-        version: 'gitnexus 1.6.11',
+        version: 'gitnexus 1.6.12',
         help: HELP,
         statusHelp: STATUS_HELP,
       },
@@ -176,11 +180,12 @@ test('marks a capable local CLI benchmark-ready using only help/version probes',
   );
 
   assert.equal(observation.state, 'benchmark-ready');
-  assert.equal(observation.version, '1.6.11');
+  assert.equal(observation.version, '1.6.12');
   assert.equal(observation.executable, '/usr/local/bin/gitnexus');
   assert.equal(observation.supportsQuery, true);
   assert.equal(observation.supportsContext, true);
   assert.equal(observation.supportsStatusJson, true);
+  assert.equal(observation.supportsMcp, true);
   assert.deepEqual(
     requests.map((request) => request.args),
     [['--version'], ['--help'], ['status', '--help']],
