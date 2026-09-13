@@ -48,13 +48,35 @@ The reviewed mcptoon slice now covers the lifecycle mechanics needed for a futur
   uninstall. The row admits only that exact combination; Codex 0.152.2, mcptoon 0.7.11, WSL and
   Windows remain refused.
 
-This does **not** make mcptoon promotion-eligible and does not put it in `PROVIDER_ADAPTERS`.
-Compatibility evidence now exists for one exact Codex/Linux combination, but selection evidence,
-activation evidence on a real optimized workload, combined-stack validation, project maturity and
-any additional harness/platform compatibility required by the intended promoted surface still have
-to pass independently. No semver inference substitutes for those gates. Repository CI exercises the
-row-admission and non-widening tests on every supported CI operating system even though the admitted
-compatibility row itself remains Linux-only.
+### mcptoon activation checkpoint
+
+Optimized mcptoon benchmark pairs now have a reviewed passive activation witness for the exact
+reviewed build, **mcptoon 0.7.10**. Token Harness snapshots mcptoon's local usage record at
+`benchmark-start` and seals the result at `benchmark-finish`; it never invokes an MCP tool merely to
+prove activation.
+
+The receipt deliberately keeps only the minimum evidence needed for the gate: reviewed version,
+monotonic call counters, bounded timestamps, successful-call count and the resulting witness state.
+Server and tool identities are discarded rather than copied into Token Harness state. A pair is
+verified only when the reviewed version is observed, the counter advances, and at least one successful
+mcptoon call is recorded inside the optimized task window. Missing or malformed usage data, counter
+resets, unsupported versions, insufficient bounded history, or no successful in-window activity fail
+closed as `unknown` or `blocked` rather than being credited as activation.
+
+This is intentionally a **local usage witness, not process lineage**. mcptoon's upstream usage file
+does not identify which agent process caused a call, so Token Harness does not claim that distinction.
+The evidence establishes that reviewed mcptoon activity occurred in the measured task window on that
+user environment. Candidate attribution and a browser acknowledgement remain insufficient on their
+own.
+
+These checkpoints do **not** make mcptoon promotion-eligible and do not put it in
+`PROVIDER_ADAPTERS`. One exact Codex/Linux compatibility row and the activation mechanism now exist,
+but a real candidate campaign still has to produce promising selection evidence and verified
+activation receipts. Combined-stack validation, project maturity, and any additional harness/platform
+compatibility required by the intended promoted surface also have to pass independently. No semver
+inference substitutes for those gates. Repository CI exercises the row-admission and non-widening
+tests on every supported CI operating system even though the admitted compatibility row itself
+remains Linux-only.
 
 ## Candidate categories
 
