@@ -30,10 +30,7 @@ function validReceipt(): McptoonManifestFootprintReceipt {
 describe('mcptoon manifest footprint receipt parser', () => {
   it('accepts a self-consistent exact-version observation', () => {
     const receipt = validReceipt();
-    assert.deepEqual(
-      parseMcptoonManifestFootprintReceipt(receipt, receipt.benchmarkId),
-      receipt,
-    );
+    assert.deepEqual(parseMcptoonManifestFootprintReceipt(receipt, receipt.benchmarkId), receipt);
   });
 
   it('rejects observed evidence whose reduction arithmetic was altered', () => {
@@ -57,17 +54,11 @@ describe('mcptoon manifest footprint receipt parser', () => {
   it('rejects observed evidence from an unreviewed version or with missing aggregates', () => {
     const receipt = validReceipt();
     assert.equal(
-      parseMcptoonManifestFootprintReceipt(
-        { ...receipt, version: '0.8.0' },
-        receipt.benchmarkId,
-      ),
+      parseMcptoonManifestFootprintReceipt({ ...receipt, version: '0.8.0' }, receipt.benchmarkId),
       null,
     );
     assert.equal(
-      parseMcptoonManifestFootprintReceipt(
-        { ...receipt, toolCount: null },
-        receipt.benchmarkId,
-      ),
+      parseMcptoonManifestFootprintReceipt({ ...receipt, toolCount: null }, receipt.benchmarkId),
       null,
     );
   });
