@@ -21,6 +21,17 @@ export {
   type GitNexusCandidateState,
 } from './gitnexus-candidate.js';
 export {
+  GITNEXUS_CLAUDE_MCP_POINTER,
+  GITNEXUS_MCP_SERVER,
+  GITNEXUS_REVIEWED_MCP_VERSION,
+  planGitNexusManagedMcpActivation,
+  planGitNexusManagedMcpRemoval,
+  verifyGitNexusManagedMcpActivation,
+  type GitNexusManagedMcpPlan,
+  type GitNexusManagedMcpVerification,
+  type GitNexusManagedMcpVerificationState,
+} from './gitnexus-managed.js';
+export {
   HEADROOM_MINIMUM_BENCHMARK_VERSION,
   headroomVersionAtLeast,
   observeHeadroomCandidate,
