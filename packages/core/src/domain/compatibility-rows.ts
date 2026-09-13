@@ -65,8 +65,9 @@ export interface CompatibilityRow {
  * admits it. Every other combination stays refused with the missing schema or fixture named — the
  * table is an admission set, not a list of things that probably work.
  *
- * Windows supplied the first reviewed rows. Linux now has exact Codex 0.152.1 rows for HarnessTrim
- * 0.2.1 and mcptoon 0.7.10, plus an exact Claude Code 2.1.269 row for mcptoon 0.7.10. The mcptoon
+ * Windows supplied the first reviewed rows. Linux now has an exact Codex 0.152.1 row for HarnessTrim
+ * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, plus an exact Claude Code
+ * 2.1.269 row for mcptoon 0.7.10. The mcptoon
  * recordings ran on Ubuntu 24.04.5 and exercised each owned instruction surface through managed apply,
  * user drift, verified rollback, and surgical uninstall while preserving unrelated user content.
  * Windows also has live isolated recordings for Claude
@@ -176,6 +177,19 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     // drift, verified rollback and surgical uninstall were exercised without touching MCP config.
     configSchema: 'codex-agents-md-marker-block',
     fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10',
+    verificationTier: 'config-only',
+  },
+  {
+    harness: 'codex' as HarnessId,
+    harnessVersion: { minimum: '0.153.0', maximum: '0.153.0' },
+    provider: 'mcptoon' as ProviderId,
+    providerVersion: '0.7.10',
+    platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+    // Separate real Ubuntu/Linux recording for Codex 0.153.0. Keep this as an exact point: the
+    // owned surface is still only the Token Harness AGENTS.md marker, with drift, rollback and
+    // surgical uninstall recorded independently for this harness version.
+    configSchema: 'codex-agents-md-marker-block',
+    fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.153.0-0.7.10',
     verificationTier: 'config-only',
   },
 ];

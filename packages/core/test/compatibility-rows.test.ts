@@ -205,6 +205,41 @@ describe('admitManagedMutation', () => {
     assert.equal(windows.state, 'refused');
   });
 
+  it('ships the exact Linux Codex 0.153.0 / mcptoon 0.7.10 admission without widening', () => {
+    const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('codex'),
+      harnessVersion: '0.153.0',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(exact.state, 'admitted');
+    if (exact.state === 'admitted') {
+      assert.equal(exact.row.configSchema, 'codex-agents-md-marker-block');
+      assert.equal(exact.row.fixture, 'tests/fixtures/rows/mcptoon-codex-linux-0.153.0-0.7.10');
+      assert.equal(exact.row.verificationTier, 'config-only');
+    }
+
+    for (const variant of [
+      { harnessVersion: '0.153.1', providerVersion: '0.7.10', os: 'linux', wsl: false },
+      { harnessVersion: '0.153.0', providerVersion: '0.7.11', os: 'linux', wsl: false },
+      { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'linux', wsl: true },
+      { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'windows', wsl: false },
+      { harnessVersion: '0.153.0', providerVersion: '0.7.10', os: 'macos', wsl: false },
+    ] as const) {
+      const outcome = admitManagedMutation(COMPATIBILITY_ROWS, {
+        provider: providerId('mcptoon'),
+        providerVersion: variant.providerVersion,
+        harness: harnessId('codex'),
+        harnessVersion: variant.harnessVersion,
+        os: variant.os,
+        wsl: variant.wsl,
+      });
+      assert.equal(outcome.state, 'refused');
+    }
+  });
+
   it('ships the exact Linux Claude 2.1.269 / mcptoon 0.7.10 admission and nothing broader', () => {
     const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
       provider: providerId('mcptoon'),
