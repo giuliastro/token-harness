@@ -109,7 +109,7 @@ describe('asking a channel what it has installed', () => {
   });
 
   it('reads a crate line out of cargo install --list', async () => {
-    const { runner: process } = runner({ stdout: 'rtk v0.42.0:\n    /usr/bin/bat\n' });
+    const { runner: process } = runner({ stdout: 'rtk v0.42.0:\n    /home/user/.cargo/bin/rtk\n' });
     const outcome = await queryPackageInventory({
       channel: 'cargo',
       packageName: 'rtk',
