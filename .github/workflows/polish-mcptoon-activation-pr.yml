@@ -23,6 +23,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           p = Path('apps/cli/src/run.ts')
           s = p.read_text()
           s = s.replace("import { runBenchmarkFinish } from './commands/benchmark-capture.js';\n", '', 1)
@@ -30,6 +31,10 @@ jobs:
 
           p = Path('apps/cli/src/commands/candidate-benchmark.ts')
           s = p.read_text()
+          s = s.replace(
+              '    mcptoon?: McptoonActivationWitnessState;\n',
+              '    mcptoon?: McptoonActivationWitnessState | undefined;\n',
+          )
           old = """      instruction: `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
           """
           new = """      instruction:
@@ -40,8 +45,23 @@ jobs:
           if old not in s:
               raise SystemExit('optimized instruction marker missing')
           p.write_text(s.replace(old, new, 1))
+
+          p = Path('apps/cli/src/commands/mcptoon-activation-witness.ts')
+          s = p.read_text()
+          old = """  const base = {
+              schemaVersion: MCPTOON_ACTIVATION_WITNESS_SCHEMA_VERSION,
+          """
+          new = """  const base: Omit<
+              McptoonActivationReceipt,
+              'state' | 'callDelta' | 'callsDuringWindow' | 'successfulCallsDuringWindow' | 'reason'
+            > = {
+              schemaVersion: MCPTOON_ACTIVATION_WITNESS_SCHEMA_VERSION,
+          """
+          if old not in s:
+              raise SystemExit('activation base marker missing')
+          p.write_text(s.replace(old, new, 1))
           PY
-      - run: pnpm exec prettier --write apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/candidate-activation-evidence.test.ts
+      - run: pnpm exec prettier --write apps/cli/src/commands/mcptoon-activation-witness.ts apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/mcptoon-activation-witness.test.ts apps/cli/test/candidate-activation-evidence.test.ts
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
@@ -51,6 +71,6 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/candidate-activation-evidence.test.ts .github/workflows/polish-mcptoon-activation-pr.yml
+          git add apps/cli/src/commands/mcptoon-activation-witness.ts apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/mcptoon-activation-witness.test.ts apps/cli/test/candidate-activation-evidence.test.ts .github/workflows/polish-mcptoon-activation-pr.yml
           git diff --cached --quiet || git commit -m "test: validate mcptoon activation campaign flow"
           git push origin HEAD:feat/mcptoon-usage-activation-witness
