@@ -127,7 +127,9 @@ function allowedMetadataUrl(url: URL): boolean {
 function allowedAssetUrl(url: URL, initial: boolean): boolean {
   if (url.protocol !== 'https:') return false;
   if (initial) {
-    return url.hostname === 'github.com' && url.pathname.startsWith('/rtk-ai/rtk/releases/download/');
+    return (
+      url.hostname === 'github.com' && url.pathname.startsWith('/rtk-ai/rtk/releases/download/')
+    );
   }
   return (
     url.hostname === 'github.com' ||
@@ -185,12 +187,14 @@ async function fetchBounded(input: {
         input.kind === 'metadata'
           ? allowedMetadataUrl(current)
           : allowedAssetUrl(current, redirect === 0);
-      if (!allowed) throw new Error(`refused release URL host/path ${current.origin}${current.pathname}`);
+      if (!allowed)
+        throw new Error(`refused release URL host/path ${current.origin}${current.pathname}`);
 
       const response = await input.fetchImpl(current.toString(), {
         method: 'GET',
         headers: {
-          Accept: input.kind === 'metadata' ? 'application/vnd.github+json' : 'application/octet-stream',
+          Accept:
+            input.kind === 'metadata' ? 'application/vnd.github+json' : 'application/octet-stream',
           'User-Agent': 'token-harness',
           'X-GitHub-Api-Version': '2022-11-28',
         },
@@ -205,7 +209,8 @@ async function fetchBounded(input: {
         current = new URL(location, current);
         continue;
       }
-      if (!response.ok) throw new Error(`release endpoint returned HTTP ${String(response.status)}`);
+      if (!response.ok)
+        throw new Error(`release endpoint returned HTTP ${String(response.status)}`);
       return await readBounded(response, input.maximumBytes);
     }
     throw new Error('release endpoint did not produce a response');
@@ -224,7 +229,8 @@ function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleas
     };
   }
   const assets = value['assets'];
-  if (!Array.isArray(assets)) return { status: 'invalid', message: 'release metadata has no asset list' };
+  if (!Array.isArray(assets))
+    return { status: 'invalid', message: 'release metadata has no asset list' };
   const matching = assets.filter(
     (asset) => isRecord(asset) && asset['name'] === RTK_WINDOWS_RELEASE_ASSET,
   );
@@ -257,7 +263,10 @@ function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleas
   try {
     parsedUrl = new URL(downloadUrl);
   } catch {
-    return { status: 'invalid', message: `${RTK_WINDOWS_RELEASE_ASSET} has an invalid download URL` };
+    return {
+      status: 'invalid',
+      message: `${RTK_WINDOWS_RELEASE_ASSET} has an invalid download URL`,
+    };
   }
   const expectedPrefix = `${RELEASE_DOWNLOAD_PREFIX}${tag}/`;
   if (!allowedAssetUrl(parsedUrl, true) || !downloadUrl.startsWith(expectedPrefix)) {
@@ -316,7 +325,12 @@ export function extractRtkExeFromVerifiedZip(bytes: Uint8Array): Uint8Array {
   if (disk !== 0 || centralDisk !== 0 || diskEntries !== entries) {
     throw new Error('multi-disk ZIP releases are not supported');
   }
-  if (entries === 0 || entries === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff) {
+  if (
+    entries === 0 ||
+    entries === 0xffff ||
+    centralSize === 0xffffffff ||
+    centralOffset === 0xffffffff
+  ) {
     throw new Error('ZIP64 or empty release archives are not supported');
   }
   if (entries > 1024) throw new Error('release ZIP contains too many entries');
@@ -327,7 +341,8 @@ export function extractRtkExeFromVerifiedZip(bytes: Uint8Array): Uint8Array {
   let cursor = centralOffset;
   let extracted: Uint8Array | null = null;
   for (let index = 0; index < entries; index += 1) {
-    if (u32(zip, cursor) !== ZIP_CENTRAL_SIGNATURE) throw new Error('ZIP central entry is malformed');
+    if (u32(zip, cursor) !== ZIP_CENTRAL_SIGNATURE)
+      throw new Error('ZIP central entry is malformed');
     const flags = u16(zip, cursor + 8);
     const method = u16(zip, cursor + 10);
     const compressedSize = u32(zip, cursor + 20);
@@ -345,21 +360,25 @@ export function extractRtkExeFromVerifiedZip(bytes: Uint8Array): Uint8Array {
     if (name !== 'rtk.exe') continue;
     if (extracted !== null) throw new Error('release ZIP contains more than one root rtk.exe');
     if ((flags & 0x1) !== 0) throw new Error('encrypted ZIP entries are not supported');
-    if (diskStart !== 0 || localOffset === 0xffffffff) throw new Error('ZIP64 entries are not supported');
+    if (diskStart !== 0 || localOffset === 0xffffffff)
+      throw new Error('ZIP64 entries are not supported');
     if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff) {
       throw new Error('ZIP64 entry sizes are not supported');
     }
     if (uncompressedSize <= 0 || uncompressedSize > MAX_EXECUTABLE_BYTES) {
       throw new Error('rtk.exe has an invalid or excessive uncompressed size');
     }
-    if (u32(zip, localOffset) !== ZIP_LOCAL_SIGNATURE) throw new Error('rtk.exe local ZIP header is missing');
+    if (u32(zip, localOffset) !== ZIP_LOCAL_SIGNATURE)
+      throw new Error('rtk.exe local ZIP header is missing');
     const localNameLength = u16(zip, localOffset + 26);
     const localExtraLength = u16(zip, localOffset + 28);
     const localNameStart = localOffset + 30;
     const dataStart = localNameStart + localNameLength + localExtraLength;
     const dataEnd = dataStart + compressedSize;
     if (dataEnd > zip.length) throw new Error('rtk.exe compressed data exceeds archive bounds');
-    const localName = zip.subarray(localNameStart, localNameStart + localNameLength).toString('utf8');
+    const localName = zip
+      .subarray(localNameStart, localNameStart + localNameLength)
+      .toString('utf8');
     if (localName !== name) throw new Error('rtk.exe local and central ZIP names disagree');
 
     const compressed = zip.subarray(dataStart, dataEnd);
@@ -370,7 +389,8 @@ export function extractRtkExeFromVerifiedZip(bytes: Uint8Array): Uint8Array {
     } else {
       throw new Error(`rtk.exe uses unsupported ZIP compression method ${String(method)}`);
     }
-    if (payload.byteLength !== uncompressedSize) throw new Error('rtk.exe uncompressed size does not match ZIP metadata');
+    if (payload.byteLength !== uncompressedSize)
+      throw new Error('rtk.exe uncompressed size does not match ZIP metadata');
     extracted = new Uint8Array(payload);
   }
 
@@ -437,7 +457,8 @@ export class NodeRtkWindowsReleaseRuntime {
       );
     }
     const digest = createHash('sha256').update(archive).digest('hex');
-    if (digest !== asset.sha256) throw new Error('downloaded RTK ZIP does not match GitHub published SHA-256');
+    if (digest !== asset.sha256)
+      throw new Error('downloaded RTK ZIP does not match GitHub published SHA-256');
     return archive;
   }
 
@@ -449,7 +470,9 @@ export class NodeRtkWindowsReleaseRuntime {
       timeoutMs: 5_000,
       maxOutputBytes: 4096,
     });
-    return processSucceeded(result) && versionAppears(`${result.stdout}\n${result.stderr}`, version);
+    return (
+      processSucceeded(result) && versionAppears(`${result.stdout}\n${result.stderr}`, version)
+    );
   }
 
   private async restoreFromBackup(
@@ -459,25 +482,38 @@ export class NodeRtkWindowsReleaseRuntime {
     try {
       const currentStat = await this.fs.stat(handle.targetPath);
       if (currentStat === null || currentStat.kind !== 'file') {
-        return { status: 'dirty', message: 'RTK target disappeared before rollback could restore it' };
+        return {
+          status: 'dirty',
+          message: 'RTK target disappeared before rollback could restore it',
+        };
       }
       const currentDigest = digestBytes(await this.fs.readFile(handle.targetPath));
       if (currentDigest !== handle.replacementDigest) {
         return {
           status: 'dirty',
-          message: 'RTK target changed after replacement, so automatic rollback refused to overwrite it',
+          message:
+            'RTK target changed after replacement, so automatic rollback refused to overwrite it',
         };
       }
       const backup = await this.fs.readFile(handle.backupPath);
       if (digestBytes(backup) !== handle.previousDigest) {
-        return { status: 'dirty', message: 'RTK rollback backup no longer matches its recorded digest' };
+        return {
+          status: 'dirty',
+          message: 'RTK rollback backup no longer matches its recorded digest',
+        };
       }
 
       const directory = this.fs.dirname(handle.targetPath);
-      const stage = this.fs.join(directory, `.rtk.token-harness.rollback-${handle.previousDigest.slice(-12)}.tmp`);
+      const stage = this.fs.join(
+        directory,
+        `.rtk.token-harness.rollback-${handle.previousDigest.slice(-12)}.tmp`,
+      );
       const displaced = this.fs.join(directory, '.rtk.token-harness.rollback-displaced.exe');
       if ((await this.fs.stat(displaced)) !== null) {
-        return { status: 'dirty', message: `RTK rollback staging path already exists: ${displaced}` };
+        return {
+          status: 'dirty',
+          message: `RTK rollback staging path already exists: ${displaced}`,
+        };
       }
       await this.fs.writeFile(stage, backup);
       await rename(handle.targetPath, displaced);
@@ -494,15 +530,24 @@ export class NodeRtkWindowsReleaseRuntime {
       await rm(displaced, { force: true });
       const restoredDigest = digestBytes(await this.fs.readFile(handle.targetPath));
       if (restoredDigest !== handle.previousDigest) {
-        return { status: 'dirty', message: 'RTK rollback completed but exact previous bytes were not restored' };
+        return {
+          status: 'dirty',
+          message: 'RTK rollback completed but exact previous bytes were not restored',
+        };
       }
       if (
         handle.previousVersion !== null &&
         !(await this.verifyExecutable(handle.targetPath, handle.previousVersion, cwd))
       ) {
-        return { status: 'dirty', message: 'RTK previous bytes were restored but the previous version no longer starts' };
+        return {
+          status: 'dirty',
+          message: 'RTK previous bytes were restored but the previous version no longer starts',
+        };
       }
-      return { status: 'rolled-back', message: 'RTK previous executable bytes and version were restored and verified' };
+      return {
+        status: 'rolled-back',
+        message: 'RTK previous executable bytes and version were restored and verified',
+      };
     } catch (error) {
       return {
         status: 'dirty',
@@ -569,7 +614,10 @@ export class NodeRtkWindowsReleaseRuntime {
     await this.fs.createDirectory(backupDirectory);
     const existingBackup = await this.fs.stat(backupPath);
     if (existingBackup === null) await this.fs.writeFile(backupPath, previous);
-    else if (existingBackup.kind !== 'file' || digestBytes(await this.fs.readFile(backupPath)) !== previousDigest) {
+    else if (
+      existingBackup.kind !== 'file' ||
+      digestBytes(await this.fs.readFile(backupPath)) !== previousDigest
+    ) {
       return {
         status: 'failed',
         code: 'rtk-release-backup-conflict',
@@ -585,7 +633,8 @@ export class NodeRtkWindowsReleaseRuntime {
       return {
         status: 'failed',
         code: 'rtk-release-staging-conflict',
-        message: 'An RTK release staging file already exists; refusing to overwrite possible recovery state',
+        message:
+          'An RTK release staging file already exists; refusing to overwrite possible recovery state',
         backupPath,
       };
     }
@@ -605,7 +654,11 @@ export class NodeRtkWindowsReleaseRuntime {
     } catch (error) {
       await rm(stage, { force: true }).catch(() => undefined);
       const live = await this.fs.stat(input.targetPath);
-      if (live !== null && live.kind === 'file' && digestBytes(await this.fs.readFile(input.targetPath)) === previousDigest) {
+      if (
+        live !== null &&
+        live.kind === 'file' &&
+        digestBytes(await this.fs.readFile(input.targetPath)) === previousDigest
+      ) {
         await rm(displaced, { force: true }).catch(() => undefined);
         return {
           status: 'rolled-back',
