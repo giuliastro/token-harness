@@ -1,0 +1,238 @@
+from pathlib import Path
+
+path = Path('apps/cli/src/commands/candidate-benchmark.ts')
+text = path.read_text()
+
+old = """import {
+  readMcptoonActivationReceipt,
+  recordMcptoonActivationFinish,
+  recordMcptoonActivationStart,
+  type McptoonActivationWitnessState,
+} from './mcptoon-activation-witness.js';
+"""
+new = old + """import {
+  readMcptoonManifestFootprintReceipt,
+  recordMcptoonManifestFootprint,
+  type McptoonManifestFootprintReceipt,
+} from './mcptoon-manifest-footprint.js';
+"""
+if old not in text:
+    raise SystemExit('mcptoon activation import anchor not found')
+text = text.replace(old, new, 1)
+
+old = """export interface CandidateBenchmarkCampaignReport {
+  campaignId: string;
+  candidateId: OptimizationCandidateId;
+  harnessId: HarnessId;
+  runsPerTask: number;
+  totalPairs: number;
+  completedPairs: number;
+  invalidPairs: number;
+  slots: CandidateBenchmarkCampaignSlot[];
+  nextCommand: string | null;
+  nextInstruction: string;
+  evidence: CandidateBenchmarkEvidence;
+  activation: CandidateActivationEvidence;
+  assessment: CandidateEvidenceAssessment;
+}
+"""
+new = """export interface McptoonManifestFootprintCampaignEvidence {
+  observedPairs: number;
+  nonObservedPairs: number;
+  latest: Pick<
+    McptoonManifestFootprintReceipt,
+    | 'measuredAt'
+    | 'serverCount'
+    | 'toolCount'
+    | 'jsonBytes'
+    | 'compactBytes'
+    | 'reductionBytes'
+    | 'reductionPercent'
+    | 'oldestCacheEntryAt'
+    | 'newestCacheEntryAt'
+  > | null;
+  reason: string;
+}
+
+export interface CandidateBenchmarkCampaignReport {
+  campaignId: string;
+  candidateId: OptimizationCandidateId;
+  harnessId: HarnessId;
+  runsPerTask: number;
+  totalPairs: number;
+  completedPairs: number;
+  invalidPairs: number;
+  slots: CandidateBenchmarkCampaignSlot[];
+  nextCommand: string | null;
+  nextInstruction: string;
+  evidence: CandidateBenchmarkEvidence;
+  activation: CandidateActivationEvidence;
+  manifestFootprint?: McptoonManifestFootprintCampaignEvidence;
+  assessment: CandidateEvidenceAssessment;
+}
+"""
+if old not in text:
+    raise SystemExit('campaign report anchor not found')
+text = text.replace(old, new, 1)
+
+anchor = """export function buildCandidateBenchmarkEvidence(
+  entries: ReadonlyMap<OptimizationCandidateId, readonly CandidateBenchmarkEvidenceEntry[]>,
+): CandidateBenchmarkEvidence[] {
+  return OPTIMIZATION_CANDIDATES.map((candidate) =>
+    summarizeCandidateBenchmarkEntries(candidate, entries.get(candidate) ?? []),
+  );
+}
+"""
+addition = anchor + """
+
+export function summarizeMcptoonManifestFootprintEvidence(
+  receipts: readonly (McptoonManifestFootprintReceipt | null)[],
+): McptoonManifestFootprintCampaignEvidence {
+  const observed = receipts.filter(
+    (receipt): receipt is McptoonManifestFootprintReceipt => receipt?.state === 'observed',
+  );
+  const latest = [...observed]
+    .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt))
+    .at(-1);
+  return {
+    observedPairs: observed.length,
+    nonObservedPairs: receipts.length - observed.length,
+    latest:
+      latest === undefined
+        ? null
+        : {
+            measuredAt: latest.measuredAt,
+            serverCount: latest.serverCount,
+            toolCount: latest.toolCount,
+            jsonBytes: latest.jsonBytes,
+            compactBytes: latest.compactBytes,
+            reductionBytes: latest.reductionBytes,
+            reductionPercent: latest.reductionPercent,
+            oldestCacheEntryAt: latest.oldestCacheEntryAt,
+            newestCacheEntryAt: latest.newestCacheEntryAt,
+          },
+    reason:
+      observed.length === 0
+        ? 'no completed optimized pair has an observed mcptoon manifest-cache footprint yet'
+        : 'local cached-schema footprint only; this does not claim model-visible token, quota, or subscription savings',
+  };
+}
+"""
+if anchor not in text:
+    raise SystemExit('candidate evidence anchor not found')
+text = text.replace(anchor, addition, 1)
+
+old = """  const activationBoundaries: Array<{
+    start: GitNexusMcpRuntimeState | undefined;
+    finish: GitNexusMcpRuntimeState | undefined;
+    mcptoon?: McptoonActivationWitnessState | undefined;
+  }> = [];
+"""
+new = old + """  const mcptoonFootprints: Array<McptoonManifestFootprintReceipt | null> = [];
+"""
+if old not in text:
+    raise SystemExit('activation boundaries anchor not found')
+text = text.replace(old, new, 1)
+
+old = """    const mcptoonActivation =
+      definition.candidateId === 'mcptoon'
+        ? await readMcptoonActivationReceipt(context, slot.benchmarkId)
+        : null;
+    activationBoundaries.push(
+"""
+new = """    const mcptoonActivation =
+      definition.candidateId === 'mcptoon'
+        ? await readMcptoonActivationReceipt(context, slot.benchmarkId)
+        : null;
+    if (definition.candidateId === 'mcptoon') {
+      mcptoonFootprints.push(
+        await readMcptoonManifestFootprintReceipt(context, slot.benchmarkId),
+      );
+    }
+    activationBoundaries.push(
+"""
+if old not in text:
+    raise SystemExit('mcptoon activation loop anchor not found')
+text = text.replace(old, new, 1)
+
+old = """    evidence,
+    activation,
+    assessment,
+"""
+new = """    evidence,
+    activation,
+    ...(definition.candidateId === 'mcptoon'
+      ? { manifestFootprint: summarizeMcptoonManifestFootprintEvidence(mcptoonFootprints) }
+      : {}),
+    assessment,
+"""
+if old not in text:
+    raise SystemExit('campaign return anchor not found')
+text = text.replace(old, new, 1)
+
+old = """  const witness = await recordMcptoonActivationFinish(context, {
+    benchmarkId: result.data.receipt.benchmarkId,
+    projectId: attribution.projectId,
+    completedAt: result.data.receipt.completedAt,
+  });
+  return witness !== null
+    ? result
+    : {
+        ...result,
+        diagnostics: [
+          ...result.diagnostics,
+          diagnostic({
+            severity: 'warning',
+            code: 'mcptoon-activation-witness-finish-unavailable',
+            message:
+              'The benchmark receipt is valid, but its mcptoon activation witness could not be finalized',
+            remediation:
+              'Keep this pair as selection evidence only; use a new pair for activation evidence',
+          }),
+        ],
+      };
+"""
+new = """  const witness = await recordMcptoonActivationFinish(context, {
+    benchmarkId: result.data.receipt.benchmarkId,
+    projectId: attribution.projectId,
+    completedAt: result.data.receipt.completedAt,
+  });
+  const footprint = await recordMcptoonManifestFootprint(context, {
+    benchmarkId: result.data.receipt.benchmarkId,
+    projectId: attribution.projectId,
+    measuredAt: result.data.receipt.completedAt,
+  });
+  if (witness !== null && footprint !== null) return result;
+
+  const diagnostics = [...result.diagnostics];
+  if (witness === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'mcptoon-activation-witness-finish-unavailable',
+        message:
+          'The benchmark receipt is valid, but its mcptoon activation witness could not be finalized',
+        remediation:
+          'Keep this pair as selection evidence only; use a new pair for activation evidence',
+      }),
+    );
+  }
+  if (footprint === null) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'mcptoon-manifest-footprint-write-unavailable',
+        message:
+          'The benchmark receipt is valid, but its passive mcptoon manifest footprint could not be saved',
+        remediation:
+          'Keep this pair as ordinary selection evidence; do not infer candidate-specific byte savings from it',
+      }),
+    );
+  }
+  return { ...result, diagnostics };
+"""
+if old not in text:
+    raise SystemExit('finish witness anchor not found')
+text = text.replace(old, new, 1)
+
+path.write_text(text)
