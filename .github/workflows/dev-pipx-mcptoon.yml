@@ -23,8 +23,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: python scripts/dev/patch-pipx-mcptoon.py
+      - run: python scripts/dev/patch-pipx-invariant.py
       - name: Format patched sources
-        run: pnpm exec prettier --write packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
+        run: pnpm exec prettier --write packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -45,7 +46,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
+          git add packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
           if ! git diff --cached --quiet; then
             git commit -m "feat: add reviewed pipx lifecycle for mcptoon"
             git push origin HEAD:codex/candidate-managed-lifecycle
