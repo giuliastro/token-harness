@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          corepack enable
+          npm install --global pnpm@10.33.4
           pnpm install --frozen-lockfile
           pnpm build
           npm install --global @anthropic-ai/claude-code@2.1.269
