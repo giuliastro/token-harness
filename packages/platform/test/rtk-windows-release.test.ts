@@ -79,7 +79,9 @@ function response(bytes: Uint8Array, status = 200, extraHeaders: Record<string, 
   let read = false;
   const headers = new Map<string, string>([
     ['content-length', String(bytes.byteLength)],
-    ...Object.entries(extraHeaders).map(([key, value]) => [key.toLowerCase(), value] as [string, string]),
+    ...Object.entries(extraHeaders).map(
+      ([key, value]) => [key.toLowerCase(), value] as [string, string],
+    ),
   ]);
   return {
     status,
@@ -171,8 +173,18 @@ describe('verified RTK Windows release artifact', () => {
     await fs.writeFile(target, previous);
 
     const runner = new FakeProcessRunner()
-      .expect({ executable: target, args: ['--version'], times: 1, respond: { stdout: 'rtk 0.49.0\n' } })
-      .expect({ executable: target, args: ['--version'], times: 1, respond: { stdout: 'rtk 0.48.0\n' } });
+      .expect({
+        executable: target,
+        args: ['--version'],
+        times: 1,
+        respond: { stdout: 'rtk 0.49.0\n' },
+      })
+      .expect({
+        executable: target,
+        args: ['--version'],
+        times: 1,
+        respond: { stdout: 'rtk 0.48.0\n' },
+      });
     const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
     const query = await runtime.query('0.49.0');
     assert.equal(query.status, 'found');
@@ -204,8 +216,18 @@ describe('verified RTK Windows release artifact', () => {
     await fs.writeFile(target, previous);
 
     const runner = new FakeProcessRunner()
-      .expect({ executable: target, args: ['--version'], times: 1, respond: { stdout: 'rtk 0.48.0\n' } })
-      .expect({ executable: target, args: ['--version'], times: 1, respond: { stdout: 'rtk 0.48.0\n' } });
+      .expect({
+        executable: target,
+        args: ['--version'],
+        times: 1,
+        respond: { stdout: 'rtk 0.48.0\n' },
+      })
+      .expect({
+        executable: target,
+        args: ['--version'],
+        times: 1,
+        respond: { stdout: 'rtk 0.48.0\n' },
+      });
     const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
     const query = await runtime.query('0.49.0');
     assert.equal(query.status, 'found');
