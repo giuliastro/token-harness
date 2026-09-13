@@ -9,9 +9,31 @@ turning one successful checkpoint into promotion approval.
 The managed lifecycle and activation witness are pinned to **mcptoon 0.7.10**. Newer versions do not
 inherit this evidence automatically.
 
-The reviewed lifecycle already includes exact-version `pipx` installation, inventory, restore and
-uninstall, brownfield-safe Claude Code/Codex instruction surfaces, passive verification, and an exact
-RFC 0009 compatibility row for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**.
+The reviewed lifecycle includes exact-version `pipx` installation, inventory, restore and uninstall,
+brownfield-safe Claude Code/Codex instruction surfaces, passive verification, and an exact RFC 0009
+compatibility row for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**.
+
+## Managed lifecycle review
+
+The formal `managed-lifecycle` promotion gate was reviewed on **2026-09-13** and passes for the
+already-landed mcptoon 0.7.10 lifecycle mechanics.
+
+The review covers:
+
+- exact `pipx` install planning for mcptoon 0.7.10 with package inventory used as rollback data;
+- prior-state restoration and uninstall through the generic transactional package lifecycle;
+- a Token Harness-owned Claude Code skill and a surgical Codex `AGENTS.md` marker block;
+- refusal to overwrite non-reviewed/user-owned activation surfaces;
+- refusal to install the package when the corresponding activation surface cannot be owned safely;
+- passive verification using version/help and the owned instruction surface, without contacting
+  configured MCP servers or executing an MCP tool merely to verify setup; and
+- repository tests covering clean planning, brownfield conflicts, missing `pipx`, already-present
+  guidance, and passive verification.
+
+This is intentionally a **lifecycle** pass, not a compatibility-breadth pass. It says Token Harness
+has reviewed mechanics for installing, owning, verifying and reversing the candidate integration. It
+does not make unrecorded harness/OS/version combinations compatible and does not satisfy the separate
+`compatibility-reversibility` or `combined-stack-validation` gates.
 
 ## Passive activation witness
 
@@ -69,12 +91,11 @@ this pass does not approve future mcptoon versions or widen any compatibility ro
 
 ## What remains before promotion
 
-The activation and maturity checkpoints close real evidence gaps, but they do not put mcptoon in
-`PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready selection evidence from
-repeated paired workloads, combined-stack validation with RTK and HarnessTrim, and any additional
-exact harness/platform compatibility required by the intended managed surface. Lifecycle and
-compatibility/reversibility evidence also remain separate formal gates rather than being inferred
-from the maturity review.
+The lifecycle, activation and maturity checkpoints close real evidence gaps, but they do not put
+mcptoon in `PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready selection
+evidence from repeated paired workloads, combined-stack validation with RTK and HarnessTrim, and a
+separate compatibility/reversibility decision for the intended promoted surface. Additional exact
+harness/platform compatibility may be required before that compatibility gate can pass.
 
 Upstream claims or fixture-only results are never copied into user savings. A positive promotion
 signal must come from Token Harness's own attributable campaign evidence while preserving quality.
