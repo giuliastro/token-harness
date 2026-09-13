@@ -1,5 +1,6 @@
 import {
   compareVersions,
+  diagnostic,
   digestText,
   parseSemanticVersion,
   type Diagnostic,
@@ -82,14 +83,14 @@ export async function planDirectRtkWindowsRelease(input: {
       plan: null,
       destinations: [RTK_RELEASE_METADATA_DESTINATION],
       diagnostics: [
-        {
+        diagnostic({
           severity: 'warning',
           code: 'rtk-release-fallback-unavailable',
+          subject: input.providerId,
           message: `RTK ${targetText} is reviewed but its verified Windows GitHub release could not be selected: ${queried.message}`,
-          path: null,
           remediation:
             'Token Harness will keep using the ordinary package channel; retry after checking GitHub connectivity or release metadata',
-        },
+        }),
       ],
     };
   }
