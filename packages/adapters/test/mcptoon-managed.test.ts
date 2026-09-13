@@ -16,6 +16,7 @@ import {
   MCPTOON_CLAUDE_SKILL,
   MCPTOON_MARKER_BEGIN,
   MCPTOON_MARKER_END,
+  MCPTOON_REVIEWED_INSTALL_VERSION,
   planMcptoonManagedActivation,
   verifyMcptoonManagedActivation,
   type ProviderContext,
@@ -100,7 +101,7 @@ function runner(): ProcessRunner {
     run: (request) => {
       if (request.args[0] === '--version')
         return Promise.resolve(outcome(request, 'mcptoon 0.7.8'));
-      if (request.args[0] === 'manifest' && request.args[1] === '--help') {
+      if (request.args[0] === '--help') {
         return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));
       }
       if (request.args[0] === 'manifest' && request.args[1] === '--compact') {
@@ -194,4 +195,70 @@ test('verifies reviewed Codex instructions and a live compact manifest read', as
   const verification = await verifyMcptoonManagedActivation(context(fs), harnessId('codex'));
   assert.equal(verification.state, 'verified');
   assert.equal(verification.target, '/work/demo/AGENTS.md');
+});
+
+test('plans reviewed pipx installation before Codex guidance when mcptoon is absent', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const absentRunner: ProcessRunner = {
+    run: (request) => {
+      const pipx = request.executable === 'pipx';
+      return Promise.resolve({
+        displayCommand: `${request.executable} ${request.args.join(' ')}`,
+        interpreter: 'direct',
+        executablePath: pipx ? '/usr/bin/pipx' : null,
+        exitCode: pipx ? 0 : null,
+        signal: null,
+        stdout: pipx ? '1.7.1' : '',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 1,
+        timedOut: false,
+        failure: pipx ? null : { reason: 'executable-not-found', message: 'mcptoon missing' },
+      });
+    },
+  };
+  const plan = await planMcptoonManagedActivation(
+    { ...base, runner: absentRunner },
+    harnessId('codex'),
+  );
+
+  assert.equal(plan.actions.length, 2);
+  const install = plan.actions[0];
+  assert.ok(install?.kind === 'package-manager-install');
+  assert.equal(install.packageManager, 'pipx');
+  assert.equal(install.packageName, 'mcptoon');
+  assert.equal(install.version, MCPTOON_REVIEWED_INSTALL_VERSION);
+  assert.equal(install.rollbackData, 'package-inventory');
+  assert.equal(plan.actions[1]?.kind, 'patch-marker-block');
+  assert.ok(plan.diagnostics.some((entry) => entry.code === 'mcptoon-managed-install-planned'));
+});
+
+test('refuses managed installation when pipx is unavailable', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const missingRunner: ProcessRunner = {
+    run: (request) =>
+      Promise.resolve({
+        displayCommand: `${request.executable} ${request.args.join(' ')}`,
+        interpreter: 'direct',
+        executablePath: null,
+        exitCode: null,
+        signal: null,
+        stdout: '',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 1,
+        timedOut: false,
+        failure: { reason: 'executable-not-found', message: `${request.executable} missing` },
+      }),
+  };
+  const plan = await planMcptoonManagedActivation(
+    { ...base, runner: missingRunner },
+    harnessId('codex'),
+  );
+  assert.deepEqual(plan.actions, []);
+  assert.ok(plan.diagnostics.some((entry) => entry.code === 'mcptoon-pipx-unavailable'));
 });

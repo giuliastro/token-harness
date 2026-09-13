@@ -74,7 +74,7 @@ function runner(options: RunnerOptions): ProcessRunner {
       let payload: string | null = null;
       if (request.args[0] === '--version') {
         payload = options.version ?? null;
-      } else if (request.args[0] === 'manifest' && request.args[1] === '--help') {
+      } else if (request.args[0] === '--help') {
         payload = options.manifestHelp ?? null;
       }
       return Promise.resolve(fakeOutcome(request, payload));

@@ -88,6 +88,17 @@ const INSTALL_COMMANDS: Readonly<
     ],
     verified: false,
   },
+  pipx: {
+    executable: 'pipx',
+    args: (packageName, version) => [
+      'install',
+      '--force',
+      '--output',
+      'json',
+      version === null ? packageName : `${packageName}==${version}`,
+    ],
+    verified: true,
+  },
 };
 
 export function knownPackageManagers(): string[] {
@@ -393,16 +404,42 @@ const INVENTORY_COMMANDS: Readonly<
   },
   pipx: {
     executable: 'pipx',
-    args: () => ['list'],
+    args: () => ['list', '--output', 'json'],
     parse: (stdout, packageName) => {
-      const pattern = new RegExp(`^\\s*${packageName}\\s+(\\S+)`, 'm');
-      const match = pattern.exec(stdout);
-      if (match === null) return { status: 'absent', version: null };
-      const candidate = match[1] ?? '';
-      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
-      return { status: 'captured', version: candidate };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stdout) as unknown;
+      } catch {
+        return { status: 'unknown', version: null };
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { status: 'unknown', version: null };
+      }
+      const venvs = (parsed as Record<string, unknown>)['venvs'];
+      if (typeof venvs !== 'object' || venvs === null || Array.isArray(venvs)) {
+        return { status: 'unknown', version: null };
+      }
+      const normalize = (value: string): string => value.toLowerCase().replace(/[-_.]+/g, '-');
+      const wanted = normalize(packageName);
+      for (const [environment, raw] of Object.entries(venvs as Record<string, unknown>)) {
+        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
+        const metadata = (raw as Record<string, unknown>)['metadata'];
+        if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) continue;
+        const main = (metadata as Record<string, unknown>)['main_package'];
+        if (typeof main !== 'object' || main === null || Array.isArray(main)) continue;
+        const record = main as Record<string, unknown>;
+        const observedName =
+          typeof record['package'] === 'string' ? record['package'] : environment;
+        if (normalize(observedName) !== wanted && normalize(environment) !== wanted) continue;
+        const candidate = record['package_version'];
+        if (typeof candidate !== 'string' || parseSemanticVersion(candidate) === null) {
+          return { status: 'unknown', version: null };
+        }
+        return { status: 'captured', version: candidate };
+      }
+      return { status: 'absent', version: null };
     },
-    verified: false,
+    verified: true,
   },
 };
 

@@ -17,6 +17,7 @@ import { observeMcptoonCandidate } from './mcptoon-candidate.js';
  * `mcptoon init`, `mcptoon add`, starts a server, or rewrites ~/.mcptoon/config.json.
  */
 export const MCPTOON_MANAGED_MINIMUM_VERSION = '0.7.8';
+export const MCPTOON_REVIEWED_INSTALL_VERSION = '0.7.10';
 export const MCPTOON_MARKER_BEGIN = 'TOKEN-HARNESS:MCPTOON:BEGIN';
 export const MCPTOON_MARKER_END = 'TOKEN-HARNESS:MCPTOON:END';
 
@@ -59,6 +60,25 @@ export interface McptoonManagedVerification {
 
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
+
+function mcptoonInstallAction(): PlannedAction {
+  return {
+    kind: 'package-manager-install',
+    id: `mcptoon:install:${MCPTOON_REVIEWED_INSTALL_VERSION}`,
+    riskClass: 'delegated',
+    requiresNetwork: true,
+    requiresElevation: false,
+    affectedPaths: [],
+    affectedProcesses: ['pipx'],
+    preconditions: ['pipx remains runnable and the reviewed mcptoon release remains installable'],
+    postconditions: [`mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} is installed through pipx`],
+    rollbackData: 'package-inventory',
+    explanation: `Install reviewed mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} in an isolated pipx environment`,
+    packageManager: 'pipx',
+    packageName: 'mcptoon',
+    version: MCPTOON_REVIEWED_INSTALL_VERSION,
+  };
+}
 
 function directoryAction(harness: HarnessId, path: string, index: number): PlannedAction {
   return {
@@ -270,9 +290,11 @@ async function planCodexActivation(
 }
 
 /**
- * Plan only the reversible agent-instruction activation. Package installation is deliberately not
- * hidden here: the current package executor does not yet implement pipx installation, so an absent
- * mcptoon CLI remains a blocked prerequisite rather than an action that would fail at apply time.
+ * Plan the reviewed mcptoon lifecycle slice without touching MCP configuration.
+ *
+ * A missing CLI is installed through the generic pipx package transaction first, then the narrow
+ * Claude/Codex instruction surface is applied. A runnable but incompatible third-party build stays
+ * user-owned rather than being silently replaced.
  */
 export async function planMcptoonManagedActivation(
   context: ProviderContext,
@@ -296,32 +318,69 @@ export async function planMcptoonManagedActivation(
   }
 
   const observation = await observeMcptoonCandidate(context);
-  if (observation.state !== 'benchmark-ready') {
+  const activation =
+    harness === 'claude'
+      ? await planClaudeActivation(context, harness)
+      : await planCodexActivation(context, harness);
+
+  if (observation.state === 'benchmark-ready') return activation;
+
+  if (observation.state === 'absent') {
+    const pipx = await context.runner.run({
+      executable: 'pipx',
+      args: ['--version'],
+      cwd: context.projectRoot,
+      timeoutMs: 20_000,
+    });
+    if (pipx.failure !== null || pipx.exitCode !== 0) {
+      return {
+        harness,
+        target: activation.target,
+        actions: [],
+        diagnostics: [
+          ...activation.diagnostics,
+          diagnostic({
+            severity: 'warning',
+            code: 'mcptoon-pipx-unavailable',
+            subject: harness,
+            message: 'mcptoon is absent and the isolated pipx installer is not available',
+            remediation:
+              'Install pipx, then refresh Token Harness; Token Harness will not bootstrap a Python package manager implicitly',
+          }),
+        ],
+      };
+    }
     return {
-      harness,
-      target: null,
-      actions: [],
+      ...activation,
+      actions: [mcptoonInstallAction(), ...activation.actions],
       diagnostics: [
+        ...activation.diagnostics,
         diagnostic({
-          severity: 'warning',
-          code: 'mcptoon-managed-prerequisite',
+          severity: 'info',
+          code: 'mcptoon-managed-install-planned',
           subject: harness,
-          message:
-            observation.state === 'absent'
-              ? 'mcptoon is not installed; managed activation waits for the reviewed pipx install primitive'
-              : `mcptoon ${observation.version ?? ''} is not on the reviewed managed-activation surface`.trim(),
-          remediation:
-            observation.state === 'absent'
-              ? 'Install mcptoon in an isolated environment for the current experiment, then refresh Token Harness'
-              : `Use mcptoon ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the reviewed manifest surfaces`,
+          message: `mcptoon is absent; install reviewed ${MCPTOON_REVIEWED_INSTALL_VERSION} through pipx before enabling agent guidance`,
+          remediation: null,
         }),
       ],
     };
   }
 
-  return harness === 'claude'
-    ? planClaudeActivation(context, harness)
-    : planCodexActivation(context, harness);
+  return {
+    harness,
+    target: null,
+    actions: [],
+    diagnostics: [
+      diagnostic({
+        severity: 'warning',
+        code: 'mcptoon-managed-prerequisite',
+        subject: harness,
+        message:
+          `mcptoon ${observation.version ?? ''} is runnable but not on the reviewed managed-activation surface`.trim(),
+        remediation: `Keep the existing installation user-owned, or move to mcptoon ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the reviewed manifest surfaces`,
+      }),
+    ],
+  };
 }
 
 export async function verifyMcptoonManagedActivation(

@@ -192,7 +192,7 @@ describe('asking a channel what version it has', () => {
      * install argv it cannot execute. npm and pnpm are both part of the executable/query sets;
      * HarnessTrim now deliberately prefers npm for global package replacement.
      */
-    assert.deepEqual(knownPackageManagers(), ['cargo', 'npm', 'pnpm', 'winget']);
+    assert.deepEqual(knownPackageManagers(), ['cargo', 'npm', 'pipx', 'pnpm', 'winget']);
     assert.deepEqual(knownVersionQueryChannels(), ['cargo', 'npm', 'pnpm', 'winget']);
   });
 });

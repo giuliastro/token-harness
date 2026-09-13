@@ -153,7 +153,7 @@ describe('asking a channel what it has installed', () => {
     assert.equal(outcome.status, 'absent');
   });
 
-  it('reads npm, homebrew, uv, and pipx in their documented shapes', async () => {
+  it('reads npm, homebrew, and uv in their documented shapes', async () => {
     const cases: { channel: string; packageName: string; stdout: string; version: string }[] = [
       {
         channel: 'npm',
@@ -163,7 +163,6 @@ describe('asking a channel what it has installed', () => {
       },
       { channel: 'homebrew', packageName: 'rtk', stdout: 'rtk 0.42.0', version: '0.42.0' },
       { channel: 'uv', packageName: 'rtk', stdout: 'rtk v0.42.0\n', version: '0.42.0' },
-      { channel: 'pipx', packageName: 'rtk', stdout: 'rtk 0.42.0\n', version: '0.42.0' },
     ];
     for (const entry of cases) {
       const { runner: process } = runner({ stdout: entry.stdout });
@@ -176,6 +175,45 @@ describe('asking a channel what it has installed', () => {
       assert.equal(outcome.status, 'captured', entry.channel);
       assert.equal(outcome.version, entry.version, entry.channel);
     }
+  });
+
+  it('reads pipx machine-readable inventory and distinguishes absence', async () => {
+    const stdout = JSON.stringify({
+      pipx_spec_version: '0.1',
+      venvs: {
+        mcptoon: {
+          metadata: {
+            main_package: { package: 'mcptoon', package_version: '0.7.10' },
+          },
+        },
+      },
+    });
+    const { commands, runner: process } = runner({ stdout });
+    const outcome = await queryPackageInventory({
+      channel: 'pipx',
+      packageName: 'mcptoon',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'captured');
+    assert.equal(outcome.version, '0.7.10');
+    assert.deepEqual(commands, ['pipx list --output json']);
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
+      false,
+    );
+
+    const { runner: absentProcess } = runner({
+      stdout: JSON.stringify({ pipx_spec_version: '0.1', venvs: {} }),
+    });
+    const absent = await queryPackageInventory({
+      channel: 'pipx',
+      packageName: 'mcptoon',
+      runner: absentProcess,
+      cwd: '/work',
+    });
+    assert.equal(absent.status, 'absent');
+    assert.equal(absent.version, null);
   });
 
   it('never turns an unreadable answer into "captured at nothing"', async () => {
