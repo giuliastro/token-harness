@@ -6,38 +6,68 @@ import process from 'node:process';
 import { test } from 'node:test';
 
 import {
+  createExecutableResolver,
+  detectPlatform,
   NodeFileSystem,
+  nodeExecutableProbe,
+  NodeProcessRunner,
   NodeRtkWindowsReleaseRuntime,
-  resolveHostEnvironment,
+  type SystemProbe,
 } from '../src/index.js';
 
 const LIVE_RELEASE_TEST =
-  process.platform === 'win32' &&
-  process.env['TOKEN_HARNESS_LIVE_RTK_RELEASE'] === '1';
+  process.platform === 'win32' && process.env['TOKEN_HARNESS_LIVE_RTK_RELEASE'] === '1';
+
+function liveWindowsProbe(root: string): SystemProbe {
+  return {
+    platform: 'win32',
+    arch: 'x64',
+    release: '10.0.26100',
+    version: 'Windows 11',
+    nodeVersion: process.versions.node,
+    env: {
+      SystemRoot: process.env['SystemRoot'],
+      windir: process.env['windir'],
+      COMSPEC: process.env['COMSPEC'],
+      Path: process.env['Path'] ?? process.env['PATH'],
+      PATHEXT: process.env['PATHEXT'],
+      TEMP: process.env['TEMP'],
+      TMP: process.env['TMP'],
+    },
+    homeDirectory: root,
+    temporaryDirectory: tmpdir(),
+    readTextFile: () => null,
+  };
+}
 
 test(
   'downloads, installs, starts and rolls back the reviewed RTK Windows release',
   { skip: !LIVE_RELEASE_TEST },
   async () => {
-    const host = resolveHostEnvironment();
-    assert.equal(
-      host.ok,
-      true,
-      'the Windows CI host must resolve a production platform environment',
-    );
-    if (!host.ok) return;
-
     const root = await mkdtemp(join(tmpdir(), 'th-rtk-release-live-'));
     try {
-      const fs = new NodeFileSystem(host.environment.facts);
+      const probe = liveWindowsProbe(root);
+      const detection = detectPlatform(probe);
+      assert.equal(detection.ok, true, 'the bounded Windows probe must resolve platform facts');
+      if (!detection.ok) return;
+
+      const fs = new NodeFileSystem(detection.facts);
+      const resolve = createExecutableResolver({
+        facts: detection.facts,
+        env: probe.env,
+        cwd: root,
+        probe: nodeExecutableProbe(),
+      });
+      const runner = new NodeProcessRunner({
+        facts: detection.facts,
+        env: probe.env,
+        resolve,
+      });
       const target = fs.join(root, 'rtk.exe');
       const previous = new TextEncoder().encode('token-harness previous RTK fixture');
       await fs.writeFile(target, previous);
 
-      const runtime = new NodeRtkWindowsReleaseRuntime({
-        fs,
-        runner: host.environment.runner,
-      });
+      const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner });
       const query = await runtime.query('0.49.0');
       assert.equal(
         query.status,
@@ -62,7 +92,7 @@ test(
       );
       if (installed.status !== 'installed') return;
 
-      const verification = await host.environment.runner.run({
+      const verification = await runner.run({
         executable: target,
         args: ['--version'],
         cwd: root,
