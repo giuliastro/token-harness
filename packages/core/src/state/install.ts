@@ -90,11 +90,11 @@ const INSTALL_COMMANDS: Readonly<
   },
   pipx: {
     executable: 'pipx',
+    // Keep installation compatible with distro-packaged pipx releases. The install path consumes
+    // only the exit status, so requesting newer machine-readable output adds no safety or value.
     args: (packageName, version) => [
       'install',
       '--force',
-      '--output',
-      'json',
       version === null ? packageName : `${packageName}==${version}`,
     ],
     verified: true,
@@ -419,7 +419,9 @@ const INVENTORY_COMMANDS: Readonly<
   },
   pipx: {
     executable: 'pipx',
-    args: () => ['list', '--output', 'json'],
+    // `--json` is the legacy machine-readable alias retained by pipx, so it works with older
+    // distro packages while preserving the exact inventory parser and rollback proof below.
+    args: () => ['list', '--json'],
     parse: (stdout, packageName) => {
       let parsed: unknown;
       try {

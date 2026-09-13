@@ -41,7 +41,7 @@ function runner(): { commands: string[]; runner: ProcessRunner } {
           executablePath: `/usr/bin/${request.executable}`,
           exitCode: 0,
           signal: null,
-          stdout: '{"status":"success"}',
+          stdout: '',
           stderr: '',
           stdoutTruncated: false,
           stderrTruncated: false,
@@ -55,7 +55,7 @@ function runner(): { commands: string[]; runner: ProcessRunner } {
 }
 
 describe('pipx package installation', () => {
-  it('uses an isolated exact-version package spec without a shell', async () => {
+  it('uses a distro-compatible isolated exact-version package spec without a shell', async () => {
     const process = runner();
     const result = await runPackageManagerInstall({
       action: action('0.7.10'),
@@ -63,7 +63,7 @@ describe('pipx package installation', () => {
       cwd: '/work',
     });
     assert.equal(result.status, 'installed');
-    assert.deepEqual(process.commands, ['pipx install --force --output json mcptoon==0.7.10']);
+    assert.deepEqual(process.commands, ['pipx install --force mcptoon==0.7.10']);
     assert.equal(knownPackageManagers().includes('pipx'), true);
     assert.equal(
       result.diagnostics.some((entry) => entry.code === 'install-channel-unverified'),

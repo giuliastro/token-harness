@@ -197,7 +197,7 @@ describe('asking a channel what it has installed', () => {
     });
     assert.equal(outcome.status, 'captured');
     assert.equal(outcome.version, '0.7.10');
-    assert.deepEqual(commands, ['pipx list --output json']);
+    assert.deepEqual(commands, ['pipx list --json']);
     assert.equal(
       outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
       false,
@@ -436,11 +436,7 @@ describe('restoring a captured inventory', () => {
     });
 
     assert.equal(outcome.restored, true);
-    assert.deepEqual(commands, [
-      'pipx list --output json',
-      'pipx uninstall mcptoon',
-      'pipx list --output json',
-    ]);
+    assert.deepEqual(commands, ['pipx list --json', 'pipx uninstall mcptoon', 'pipx list --json']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
   });
 
@@ -458,7 +454,7 @@ describe('restoring a captured inventory', () => {
     });
 
     assert.equal(outcome.restored, false);
-    assert.deepEqual(commands, ['pipx list --output json']);
+    assert.deepEqual(commands, ['pipx list --json']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-restore-failed'));
   });
 
