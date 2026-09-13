@@ -137,6 +137,103 @@ function timestampIso(seconds: number): string | null {
   }
 }
 
+function finiteNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function validIsoTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && value !== '' && Number.isFinite(Date.parse(value));
+}
+
+function footprintAggregatesAreNull(row: Record<string, unknown>): boolean {
+  return (
+    row['serverCount'] === null &&
+    row['toolCount'] === null &&
+    row['jsonBytes'] === null &&
+    row['compactBytes'] === null &&
+    row['reductionBytes'] === null &&
+    row['reductionPercent'] === null &&
+    row['oldestCacheEntryAt'] === null &&
+    row['newestCacheEntryAt'] === null
+  );
+}
+
+/**
+ * Validate persisted footprint evidence before campaign reporting.
+ *
+ * Receipts are deliberately self-checking: observed aggregates must be complete, exact-version,
+ * arithmetically consistent and time ordered. Non-observed receipts cannot carry partial footprint
+ * numbers. This prevents a malformed or edited sidecar from becoming candidate evidence.
+ */
+export function parseMcptoonManifestFootprintReceipt(
+  value: unknown,
+  benchmarkId: string,
+): McptoonManifestFootprintReceipt | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (
+    row['schemaVersion'] !== MCPTOON_MANIFEST_FOOTPRINT_SCHEMA_VERSION ||
+    row['benchmarkId'] !== benchmarkId ||
+    typeof row['projectId'] !== 'string' ||
+    row['projectId'] === '' ||
+    row['variant'] !== 'optimized' ||
+    !validIsoTimestamp(row['measuredAt']) ||
+    !(
+      row['state'] === 'observed' ||
+      row['state'] === 'unsupported-version' ||
+      row['state'] === 'unavailable' ||
+      row['state'] === 'invalid'
+    ) ||
+    !(row['version'] === null || typeof row['version'] === 'string') ||
+    typeof row['reason'] !== 'string'
+  ) {
+    return null;
+  }
+
+  if (row['state'] !== 'observed') {
+    return footprintAggregatesAreNull(row)
+      ? (row as unknown as McptoonManifestFootprintReceipt)
+      : null;
+  }
+
+  if (
+    row['version'] !== MCPTOON_REVIEWED_INSTALL_VERSION ||
+    !finiteNonNegativeInteger(row['serverCount']) ||
+    row['serverCount'] === 0 ||
+    !finiteNonNegativeInteger(row['toolCount']) ||
+    !finiteNonNegativeInteger(row['jsonBytes']) ||
+    row['jsonBytes'] === 0 ||
+    !finiteNonNegativeInteger(row['compactBytes']) ||
+    !finiteNonNegativeInteger(row['reductionBytes']) ||
+    typeof row['reductionPercent'] !== 'number' ||
+    !Number.isFinite(row['reductionPercent']) ||
+    row['reductionPercent'] < 0 ||
+    row['reductionPercent'] > 100 ||
+    !validIsoTimestamp(row['oldestCacheEntryAt']) ||
+    !validIsoTimestamp(row['newestCacheEntryAt'])
+  ) {
+    return null;
+  }
+
+  const reductionBytes = row['jsonBytes'] - row['compactBytes'];
+  const reductionPercent = percent(reductionBytes, row['jsonBytes']);
+  const measuredAt = Date.parse(row['measuredAt']);
+  const oldestAt = Date.parse(row['oldestCacheEntryAt']);
+  const newestAt = Date.parse(row['newestCacheEntryAt']);
+  if (
+    reductionBytes < 0 ||
+    row['reductionBytes'] !== reductionBytes ||
+    reductionPercent === null ||
+    row['reductionPercent'] !== reductionPercent ||
+    oldestAt > newestAt ||
+    newestAt > measuredAt
+  ) {
+    return null;
+  }
+
+  return row as unknown as McptoonManifestFootprintReceipt;
+}
+
 /**
  * Read the reviewed mcptoon 0.7.10 schema cache without contacting an MCP server.
  *
@@ -336,25 +433,5 @@ export async function readMcptoonManifestFootprintReceipt(
   if (path === null || context.adapters === null) return null;
   const stat = await context.adapters.fs.stat(path);
   if (stat === null || stat.kind !== 'file') return null;
-  const raw = await readJson(context, path);
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
-  const row = raw as Record<string, unknown>;
-  if (
-    row['schemaVersion'] !== MCPTOON_MANIFEST_FOOTPRINT_SCHEMA_VERSION ||
-    row['benchmarkId'] !== benchmarkId ||
-    typeof row['projectId'] !== 'string' ||
-    row['projectId'] === '' ||
-    row['variant'] !== 'optimized' ||
-    typeof row['measuredAt'] !== 'string' ||
-    !(
-      row['state'] === 'observed' ||
-      row['state'] === 'unsupported-version' ||
-      row['state'] === 'unavailable' ||
-      row['state'] === 'invalid'
-    ) ||
-    typeof row['reason'] !== 'string'
-  ) {
-    return null;
-  }
-  return row as unknown as McptoonManifestFootprintReceipt;
+  return parseMcptoonManifestFootprintReceipt(await readJson(context, path), benchmarkId);
 }
