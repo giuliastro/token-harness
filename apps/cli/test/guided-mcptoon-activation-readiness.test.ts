@@ -96,8 +96,9 @@ const observation = {
 
 describe('guided mcptoon activation readiness', () => {
   it('passes the formal activation-verification gate from verified usage evidence', async () => {
-    const status = await createGuideCandidateCampaignReader(callWith(report('verified')), () =>
-      observation,
+    const status = await createGuideCandidateCampaignReader(
+      callWith(report('verified')),
+      () => observation,
     )({
       candidateId: 'mcptoon',
       harnessId: 'codex',
@@ -113,8 +114,9 @@ describe('guided mcptoon activation readiness', () => {
   });
 
   it('keeps the formal activation-verification gate blocked when one pair is blocked', async () => {
-    const status = await createGuideCandidateCampaignReader(callWith(report('blocked')), () =>
-      observation,
+    const status = await createGuideCandidateCampaignReader(
+      callWith(report('blocked')),
+      () => observation,
     )({
       candidateId: 'mcptoon',
       harnessId: 'codex',
