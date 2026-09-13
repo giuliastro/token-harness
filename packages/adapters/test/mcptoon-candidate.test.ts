@@ -11,6 +11,7 @@ import type {
 
 import {
   MCPTOON_MINIMUM_BENCHMARK_VERSION,
+  MCPTOON_REVIEWED_BENCHMARK_VERSION,
   mcptoonVersionAtLeast,
   observeMcptoonCandidate,
   parseMcptoonManifestCapabilities,
@@ -102,14 +103,15 @@ function context(options: RunnerOptions): ProviderContext {
   };
 }
 
-test('parses mcptoon semantic versions and benchmark floor', () => {
-  assert.equal(parseMcptoonVersion('mcptoon 0.7.8'), '0.7.8');
+test('parses mcptoon semantic versions while benchmark admission stays exact', () => {
+  assert.equal(parseMcptoonVersion('mcptoon 0.7.10'), '0.7.10');
   assert.equal(parseMcptoonVersion('mcptoon version unknown'), null);
-  assert.equal(MCPTOON_MINIMUM_BENCHMARK_VERSION, '0.7.8');
-  assert.equal(mcptoonVersionAtLeast('0.7.8', '0.7.8'), true);
-  assert.equal(mcptoonVersionAtLeast('0.8.0', '0.7.8'), true);
-  assert.equal(mcptoonVersionAtLeast('0.7.7', '0.7.8'), false);
-  assert.equal(mcptoonVersionAtLeast('0.7.8-beta.1', '0.7.8'), false);
+  assert.equal(MCPTOON_REVIEWED_BENCHMARK_VERSION, '0.7.10');
+  assert.equal(MCPTOON_MINIMUM_BENCHMARK_VERSION, MCPTOON_REVIEWED_BENCHMARK_VERSION);
+  assert.equal(mcptoonVersionAtLeast('0.7.10', '0.7.10'), true);
+  assert.equal(mcptoonVersionAtLeast('0.8.0', '0.7.10'), true);
+  assert.equal(mcptoonVersionAtLeast('0.7.9', '0.7.10'), false);
+  assert.equal(mcptoonVersionAtLeast('0.7.10-beta.1', '0.7.10'), false);
 });
 
 test('recognizes explicit compact and JSON manifest surfaces', () => {
@@ -130,21 +132,35 @@ test('reports mcptoon absent without reading files', async () => {
   assert.equal(observation.executable, null);
 });
 
-test('rejects an older benchmark candidate', async () => {
+test('rejects an older benchmark candidate even when it exposes the expected flags', async () => {
   const observation = await observeMcptoonCandidate(
     context({
-      version: 'mcptoon 0.7.7',
+      version: 'mcptoon 0.7.9',
       manifestHelp: 'Options: --compact --json',
     }),
   );
   assert.equal(observation.state, 'unsupported-version');
-  assert.equal(observation.version, '0.7.7');
+  assert.equal(observation.version, '0.7.9');
+  assert.match(observation.reasons[0] ?? '', /exact reviewed benchmark build 0\.7\.10/);
 });
 
-test('requires both benchmark manifest surfaces', async () => {
+test('rejects a future benchmark candidate until that release is reviewed', async () => {
   const observation = await observeMcptoonCandidate(
     context({
-      version: 'mcptoon 0.7.8',
+      version: 'mcptoon 0.8.0',
+      manifestHelp: 'Options: --compact --json',
+    }),
+  );
+  assert.equal(observation.state, 'unsupported-version');
+  assert.equal(observation.version, '0.8.0');
+  assert.equal(observation.supportsCompactManifest, false);
+  assert.equal(observation.supportsJsonManifest, false);
+});
+
+test('requires both benchmark manifest surfaces on the reviewed build', async () => {
+  const observation = await observeMcptoonCandidate(
+    context({
+      version: 'mcptoon 0.7.10',
       manifestHelp: 'Options: --compact --full',
     }),
   );
@@ -153,15 +169,15 @@ test('requires both benchmark manifest surfaces', async () => {
   assert.equal(observation.supportsJsonManifest, false);
 });
 
-test('marks current mcptoon benchmark-ready without enabling it', async () => {
+test('marks only reviewed mcptoon benchmark-ready without enabling it', async () => {
   const observation = await observeMcptoonCandidate(
     context({
-      version: 'mcptoon 0.7.8',
+      version: 'mcptoon 0.7.10',
       manifestHelp: 'Options: --compact --json --full',
     }),
   );
   assert.equal(observation.state, 'benchmark-ready');
-  assert.equal(observation.version, '0.7.8');
+  assert.equal(observation.version, '0.7.10');
   assert.equal(observation.executable, '/usr/local/bin/mcptoon');
   assert.match(observation.reasons[0] ?? '', /no sync or compression policy/);
 });
