@@ -27,8 +27,8 @@ safety mechanism stays `blocked`.
    admission gate. This gate is not applicable to mcptoon or GitNexus.
 
 Candidate promotion remains closed by default. Observers may report local progress, and a candidate
-may acquire reviewed lifecycle primitives before it is admitted to the global provider registry.
-Neither state is equivalent to promotion.
+may acquire reviewed lifecycle primitives or exact compatibility rows before it is admitted to the
+global provider registry. Neither state is equivalent to promotion.
 
 ### mcptoon lifecycle checkpoint
 
@@ -42,12 +42,19 @@ The reviewed mcptoon slice now covers the lifecycle mechanics needed for a futur
 - passive verification through installed version, root CLI capability discovery and the owned
   instruction surface — normal `verify` does not run `manifest` or contact configured MCP servers;
 - live Ubuntu `pipx` smoke coverage for mcptoon 0.7.10 installation, inventory, uninstall and
-  restoration of the absent state.
+  restoration of the absent state;
+- an exact RFC 0009 recording for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**, captured on a
+  real Ubuntu runner with brownfield state, managed apply, user drift, verified rollback and surgical
+  uninstall. The row admits only that exact combination; Codex 0.152.2, mcptoon 0.7.11, WSL and
+  Windows remain refused.
 
-This does **not** make mcptoon promotion-eligible. The slice stays outside `PROVIDER_ADAPTERS` until
-RFC 0009 has an exact reviewed harness/provider/platform compatibility fixture. Selection evidence,
-activation evidence on a real optimized workload, combined-stack validation and the remaining
-promotion gates must still be satisfied independently; no semver inference substitutes for them.
+This does **not** make mcptoon promotion-eligible and does not put it in `PROVIDER_ADAPTERS`.
+Compatibility evidence now exists for one exact Codex/Linux combination, but selection evidence,
+activation evidence on a real optimized workload, combined-stack validation, project maturity and
+any additional harness/platform compatibility required by the intended promoted surface still have
+to pass independently. No semver inference substitutes for those gates. Repository CI exercises the
+row-admission and non-widening tests on every supported CI operating system even though the admitted
+compatibility row itself remains Linux-only.
 
 ## Candidate categories
 

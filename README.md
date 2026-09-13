@@ -214,18 +214,20 @@ algorithms into this repository.
 
 Provider compatibility is deliberately **not pinned forever to the first fixture version**. The
 current compatibility policy includes RTK **0.49.0** (source-contract reviewed; the latest live
-Windows fixture is 0.48.0) and HarnessTrim **0.3.0**. Newer HarnessTrim builds can be accepted
-without another hard-coded version bump when their executable version matches their machine-readable
-`capabilities` version and the semantic surface/write-set comparison reports no drift.
+Windows harness-mutation fixture is 0.48.0) and HarnessTrim **0.3.0**. Newer HarnessTrim builds can
+be accepted without another hard-coded version bump when their executable version matches their
+machine-readable `capabilities` version and the semantic surface/write-set comparison reports no
+drift.
 
 Provider **package updates are separate from harness configuration writes**. `token-harness update`
 can replace a reviewed provider target without requiring an exact historical Claude/Codex fixture
 for that package version; exact compatibility rows still gate any later managed agent-config
-mutation. HarnessTrim updates are executable through its pnpm channel and capture the previous global
-version for rollback. On Windows RTK still uses WinGet; as of 2026-09-12 the public WinGet package
-repository reaches 0.48.0, so it cannot yet deliver upstream RTK 0.49.0 until WinGet catches up or a
-managed upstream-release fallback is added. Token Harness reports what the selected channel actually
-offers rather than pretending it can install a release the channel does not contain.
+mutation. HarnessTrim updates use its reviewed npm channel and capture the previous global version
+for rollback. On native Windows RTK still prefers WinGet, but when that catalog is behind the
+reviewed 0.49.0 target Token Harness can fall back to the exact official GitHub Windows x64 release:
+it verifies GitHub's published SHA-256, replaces only the uniquely resolved `rtk.exe`, verifies the
+new version, and restores and re-verifies the previous bytes on failure. This package-only fallback
+does not widen RFC 0009 or grant permission to mutate agent configuration.
 
 RTK has no equivalent machine-readable capability endpoint, so releases newer than the explicitly
 reviewed RTK set remain visible as `unknown-newer` until their consumed contract is checked. See
@@ -412,9 +414,10 @@ token-harness update --yes
 ```
 
 `update` replaces only installed providers whose target is inside the reviewed provider-package
-policy. HarnessTrim uses pnpm and captures the previous global version for rollback. RTK uses the
-selected RTK installation channel; on Windows that is currently WinGet, so the newest RTK Token
-Harness can install through that path is the newest version WinGet actually publishes.
+policy. HarnessTrim uses npm and captures the previous global version for rollback. On native
+Windows RTK prefers WinGet; when WinGet cannot yet reach the reviewed target, Token Harness can use
+the verified official GitHub Windows x64 release fallback described above. That fallback verifies the
+published digest and post-update version and restores the previous executable on failure.
 
 Remove only Token Harness-owned integration entries:
 

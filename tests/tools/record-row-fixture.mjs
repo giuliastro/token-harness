@@ -13,9 +13,9 @@
  * are deliberately separate steps. This script records; the committed artifacts are what the suite
  * then exercises offline, on every platform in CI, forever.
  *
- * ## Why it records one stage per run rather than driving all six
+ * ## Why it records one stage per run rather than driving all seven
  *
- * Two of the six are human by definition. "A hand-configured brownfield installation" means a user
+ * Two of the seven are human by definition. "A hand-configured brownfield installation" means a user
  * configured it by hand, and "user drift after apply" means a user changed it afterwards — a script
  * that produced those would be recording its own idea of what a user does. So the operator moves the
  * machine between stages and runs this once per stage, and the stage name is an argument rather than
@@ -43,7 +43,7 @@
  *     --stage empty --harness claude --provider rtk \
  *     --project . --out tests/fixtures/rows/rtk-claude --reviewed
  *
- * Stages: empty, brownfield, post-apply, invalidating-update, drift, rollback.
+ * Stages: empty, brownfield, post-apply, invalidating-update, drift, rollback, uninstall.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -110,6 +110,7 @@ const HARNESS_CONFIG = {
 const PROVIDER_VERSION = {
   rtk: ['rtk', '--version'],
   harnesstrim: ['harnesstrim', '--version'],
+  mcptoon: ['mcptoon', '--version'],
 };
 
 /** Key names whose values get listed for review. Not a redaction list — a reading list. */
@@ -304,7 +305,7 @@ function main() {
   const missing = STAGES.filter((entry) => !fs.existsSync(path.join(directory, `${entry}.json`)));
   process.stdout.write(
     missing.length === 0
-      ? '\nAll six RFC 0009 stages are recorded here.\n'
+      ? '\nAll seven RFC 0009 stages are recorded here.\n'
       : `\nStill to record here: ${missing.join(', ')}\n`,
   );
 }

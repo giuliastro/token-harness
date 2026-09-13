@@ -65,22 +65,25 @@ export interface CompatibilityRow {
  * admits it. Every other combination stays refused with the missing schema or fixture named — the
  * table is an admission set, not a list of things that probably work.
  *
- * Windows supplied the first reviewed rows. Linux now has one exact HarnessTrim × Codex row recorded
- * on a real Zorin machine at Codex 0.152.1 / HarnessTrim 0.2.1. Windows also has live isolated
- * recordings for Claude Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised Bash and
- * PowerShell hook entries, drift, verified rollback, and surgical uninstall. None of those points
- * widens a neighbouring row by inference. macOS still has no reviewed mutation row.
+ * Windows supplied the first reviewed rows. Linux now has exact Codex 0.152.1 rows for HarnessTrim
+ * 0.2.1 and mcptoon 0.7.10. The mcptoon recording ran on Ubuntu 24.04.5 and exercised the owned
+ * AGENTS.md marker block through managed apply, user drift, verified rollback, and surgical uninstall
+ * while preserving unrelated user instructions. Windows also has live isolated recordings for Claude
+ * Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised Bash and PowerShell hook entries,
+ * drift, verified rollback, and surgical uninstall. None of those points widens a neighbouring row by
+ * inference. macOS still has no reviewed mutation row.
  *
  * ## What each row is standing on
  *
- * The harness ranges are points, not spans: one Claude Code version was observed in each fixture,
- * so one is claimed. A newer one reads `unknown-newer` and refuses, which is a true statement rather
- * than a guess that the next patch behaves the same way.
+ * The harness ranges are points, not spans: one Claude Code or Codex version was observed in each
+ * fixture, so one is claimed. A newer one reads `unknown-newer` and refuses, which is a true statement
+ * rather than a guess that the next patch behaves the same way.
  *
  * The tiers differ because the evidence does. RTK's row claims `canary`: its history database is a
- * per-harness receipt `verify` can read on the user's machine. HarnessTrim's claims `config-only`:
- * the skills-only install deliberately writes no hook, so nothing outside the configuration can
- * witness it. A row must not promise a tier `verify` cannot reach.
+ * per-harness receipt `verify` can read on the user's machine. HarnessTrim and mcptoon claim
+ * `config-only`: the former's skills-only install deliberately writes no hook, while the latter's
+ * reviewed integration owns only agent instructions. A row must not promise a tier `verify` cannot
+ * reach.
  */
 export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
   {
@@ -148,6 +151,18 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     // uninstall all preserved the user's own skill and AGENTS.md.
     configSchema: 'codex-skills-directory',
     fixture: 'tests/fixtures/rows/harnesstrim-codex-linux-0.152.1-0.2.1',
+    verificationTier: 'config-only',
+  },
+  {
+    harness: 'codex' as HarnessId,
+    harnessVersion: { minimum: '0.152.1', maximum: '0.152.1' },
+    provider: 'mcptoon' as ProviderId,
+    providerVersion: '0.7.10',
+    platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+    // Real Ubuntu/Linux recording: the Token Harness marker is the only owned AGENTS.md region;
+    // drift, verified rollback and surgical uninstall were exercised without touching MCP config.
+    configSchema: 'codex-agents-md-marker-block',
+    fixture: 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10',
     verificationTier: 'config-only',
   },
 ];

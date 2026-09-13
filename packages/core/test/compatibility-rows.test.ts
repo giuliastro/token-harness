@@ -44,8 +44,8 @@ describe('classification of a harness version against the row set', () => {
   it('ships no row whose fixture is not on disk (RFC 0009 item 5)', () => {
     /**
      * This asserted `deepEqual(COMPATIBILITY_ROWS, [])` while no fixture had been recorded, which
-     * held the right rule the only way it could at the time. Now that two recordings exist the rule
-     * has to be stated properly, or shipping the first row would have meant deleting the test that
+     * held the right rule the only way it could at the time. Now that recordings exist the rule has
+     * to be stated properly, or shipping the first row would have meant deleting the test that
      * guards them: RFC 0009 item 5 is "add matrix rows only after the relevant cross-platform
      * fixtures pass", so what must be true is that every row points at a recording that is there.
      *
@@ -146,6 +146,63 @@ describe('admitManagedMutation', () => {
       wsl: true,
     });
     assert.equal(wsl.state, 'refused');
+  });
+
+  it('ships the exact Linux Codex 0.152.1 / mcptoon 0.7.10 admission and nothing broader', () => {
+    const exact = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(exact.state, 'admitted');
+    if (exact.state === 'admitted') {
+      assert.equal(exact.row.configSchema, 'codex-agents-md-marker-block');
+      assert.equal(exact.row.fixture, 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10');
+      assert.equal(exact.row.verificationTier, 'config-only');
+    }
+
+    const newerHarness = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.2',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(newerHarness.state, 'refused');
+
+    const newerProvider = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.11',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: false,
+    });
+    assert.equal(newerProvider.state, 'refused');
+
+    const wsl = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'linux',
+      wsl: true,
+    });
+    assert.equal(wsl.state, 'refused');
+
+    const windows = admitManagedMutation(COMPATIBILITY_ROWS, {
+      provider: providerId('mcptoon'),
+      providerVersion: '0.7.10',
+      harness: harnessId('codex'),
+      harnessVersion: '0.152.1',
+      os: 'windows',
+      wsl: false,
+    });
+    assert.equal(windows.state, 'refused');
   });
 
   it('admits an exact provider × harness × version × platform match', () => {
