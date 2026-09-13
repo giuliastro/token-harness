@@ -26,8 +26,8 @@ import {
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runApply } from './commands/apply.js';
 import { runBenchmark } from './commands/benchmark.js';
-import { runBenchmarkFinish } from './commands/benchmark-capture.js';
 import {
+  runCandidateBenchmarkFinish,
   runCandidateBenchmarkMatrix,
   runCandidateBenchmarkStart,
 } from './commands/candidate-benchmark.js';
@@ -70,7 +70,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
   benchmark: runBenchmark,
   'benchmark-matrix': runCandidateBenchmarkMatrix,
-  'benchmark-finish': runBenchmarkFinish,
+  'benchmark-finish': runCandidateBenchmarkFinish,
   'benchmark-start': runCandidateBenchmarkStart,
   budget: runBudget,
   context: runContext,

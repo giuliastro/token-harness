@@ -206,7 +206,8 @@ describe('guided candidate campaign status', () => {
     assert.equal(status.promotionEligible, false);
     assert.match(status.note, /current local candidate observation/);
     assert.match(status.note, /do not prove activation/);
-    assert.match(status.note, /runtime MCP evidence/);
+    assert.match(status.note, /runtime MCP boundary evidence/);
+    assert.match(status.note, /reviewed local usage witness/);
     assert.match(status.note, /[Dd]ecision-ready does not mean promotion-ready/);
   });
 
