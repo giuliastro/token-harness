@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { harnessId, type PlatformFacts, type ProcessOutcome, type ProcessRequest } from '@token-harness/core';
+import {
+  harnessId,
+  type PlatformFacts,
+  type ProcessOutcome,
+  type ProcessRequest,
+} from '@token-harness/core';
 
 import { validateCandidateCampaignRuntimeSurface } from '../src/commands/candidate-campaign-surface.js';
 import type { CommandContext } from '../src/commands/context.js';
