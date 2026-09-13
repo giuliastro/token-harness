@@ -19,7 +19,11 @@ test(
   { skip: !LIVE_RELEASE_TEST },
   async () => {
     const host = resolveHostEnvironment();
-    assert.equal(host.ok, true, 'the Windows CI host must resolve a production platform environment');
+    assert.equal(
+      host.ok,
+      true,
+      'the Windows CI host must resolve a production platform environment',
+    );
     if (!host.ok) return;
 
     const root = await mkdtemp(join(tmpdir(), 'th-rtk-release-live-'));
@@ -66,7 +70,10 @@ test(
       });
       assert.equal(verification.failure, null);
       assert.equal(verification.exitCode, 0);
-      assert.match(`${verification.stdout}\n${verification.stderr}`, /(?:^|\s)v?0\.49\.0(?:\s|$)/m);
+      assert.match(
+        `${verification.stdout}\n${verification.stderr}`,
+        /(?:^|\s)v?0\.49\.0(?:\s|$)/m,
+      );
 
       const rollback = await runtime.rollback(installed.handle, root);
       assert.equal(rollback.status, 'rolled-back');
