@@ -24,8 +24,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: python scripts/dev/patch-pipx-mcptoon.py
       - run: python scripts/dev/patch-pipx-invariant.py
+      - run: python scripts/dev/patch-mcptoon-probe.py
       - name: Format patched sources
-        run: pnpm exec prettier --write packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
+        run: pnpm exec prettier --write packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-candidate.ts packages/adapters/test/mcptoon-candidate.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -38,7 +39,9 @@ jobs:
           mkdir -p "$PIPX_HOME" "$PIPX_BIN_DIR"
           pipx install --force --output json 'mcptoon==0.7.10'
           "$PIPX_BIN_DIR/mcptoon" --version
-          "$PIPX_BIN_DIR/mcptoon" manifest --help | grep -- '--compact'
+          "$PIPX_BIN_DIR/mcptoon" --help > "$RUNNER_TEMP/mcptoon-help.txt" 2>&1
+          grep -- '--compact' "$RUNNER_TEMP/mcptoon-help.txt"
+          grep -- '--json' "$RUNNER_TEMP/mcptoon-help.txt"
           pipx list --output json > "$RUNNER_TEMP/pipx.json"
           python -c "import json,os; d=json.load(open(os.environ['RUNNER_TEMP'] + '/pipx.json')); assert d['venvs']['mcptoon']['metadata']['main_package']['package_version'] == '0.7.10'"
       - name: Commit validated lifecycle changes
@@ -46,7 +49,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
+          git add packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-candidate.ts packages/adapters/test/mcptoon-candidate.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
           if ! git diff --cached --quiet; then
             git commit -m "feat: add reviewed pipx lifecycle for mcptoon"
             git push origin HEAD:codex/candidate-managed-lifecycle
