@@ -214,7 +214,7 @@ describe('context-cost command', () => {
         category: 'context-minimization',
         state: 'absent',
         version: null,
-        minimumBenchmarkVersion: '0.36.0',
+        minimumBenchmarkVersion: '0.37.0',
       },
     );
     assert.equal(headroomVersionCalls, 1, 'candidate observation must not be duplicated');
