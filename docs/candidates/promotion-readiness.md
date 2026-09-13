@@ -26,8 +26,27 @@ safety mechanism stays `blocked`.
 9. **Context-owner admission** — Headroom additionally has to pass the stricter broad-context-owner
    admission gate. This gate is not applicable to mcptoon or GitNexus.
 
-Current candidate support remains observation-only. The readiness model therefore exposes real local
-progress without silently converting candidate observers into active provider adapters.
+Candidate promotion remains closed by default. Observers may report local progress, and a candidate
+may acquire reviewed lifecycle primitives before it is admitted to the global provider registry.
+Neither state is equivalent to promotion.
+
+### mcptoon lifecycle checkpoint
+
+The reviewed mcptoon slice now covers the lifecycle mechanics needed for a future promotion decision:
+
+- exact-version installation through an already-present `pipx`, with machine-readable inventory and
+  prior-version restore support;
+- Claude Code guidance in a Token Harness-owned skill and Codex guidance in a surgical marker block;
+- brownfield conflict refusal, including refusal to install the package when the activation surface
+  cannot be owned safely;
+- passive verification through installed version, root CLI capability discovery and the owned
+  instruction surface — normal `verify` does not run `manifest` or contact configured MCP servers;
+- a live Ubuntu `pipx` smoke against mcptoon 0.7.10.
+
+This does **not** make mcptoon promotion-eligible. The slice stays outside `PROVIDER_ADAPTERS` until
+RFC 0009 has an exact reviewed harness/provider/platform compatibility fixture. Selection evidence,
+activation evidence on a real optimized workload, combined-stack validation and the remaining
+promotion gates must still be satisfied independently; no semver inference substitutes for them.
 
 ## Candidate categories
 
