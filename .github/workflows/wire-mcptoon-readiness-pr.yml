@@ -25,16 +25,10 @@ jobs:
           from pathlib import Path
           p = Path('apps/cli/src/guided-candidate-campaign-status.ts')
           s = p.read_text()
-          old = """    const activationVerification =
-              input.candidateId === 'gitnexus'
-                ? {
-          """
-          new = """    const activationVerification =
-              input.candidateId === 'gitnexus' || input.candidateId === 'mcptoon'
-                ? {
-          """
-          if old not in s:
-              raise SystemExit('activation readiness marker missing')
+          old = "input.candidateId === 'gitnexus'"
+          new = "input.candidateId === 'gitnexus' || input.candidateId === 'mcptoon'"
+          if s.count(old) != 1:
+              raise SystemExit(f'expected one activation readiness marker, found {s.count(old)}')
           s = s.replace(old, new, 1)
           old_note = "Candidate attribution and the browser acknowledgement do not prove activation; GitNexus can pass that gate only from runtime MCP evidence observed at task boundaries. Decision-ready does not mean promotion-ready."
           new_note = "Candidate attribution and the browser acknowledgement do not prove activation; GitNexus requires runtime MCP boundary evidence and mcptoon requires its reviewed local usage witness. Decision-ready does not mean promotion-ready."
