@@ -151,7 +151,7 @@ export function summarizeCandidateActivationEvidence(
   boundaries: readonly {
     start: GitNexusMcpRuntimeState | undefined;
     finish: GitNexusMcpRuntimeState | undefined;
-    mcptoon?: McptoonActivationWitnessState;
+    mcptoon?: McptoonActivationWitnessState | undefined;
   }[],
 ): CandidateActivationEvidence {
   if (candidateId === 'mcptoon') {
@@ -569,7 +569,10 @@ function campaignNextStep(
         `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
         `--candidate ${definition.candidateId} --variant optimized --task ${next.taskClass} ` +
         `--harness ${definition.harnessId}`,
-      instruction: `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
+      instruction:
+        definition.candidateId === 'mcptoon'
+          ? 'Enable mcptoon through its documented workflow first, then start the optimized capture. Token Harness will passively verify successful mcptoon 0.7.10 tool activity inside the task window.'
+          : `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
     };
   }
 
@@ -609,7 +612,7 @@ async function buildCampaignReport(
   const activationBoundaries: Array<{
     start: GitNexusMcpRuntimeState | undefined;
     finish: GitNexusMcpRuntimeState | undefined;
-    mcptoon?: McptoonActivationWitnessState;
+    mcptoon?: McptoonActivationWitnessState | undefined;
   }> = [];
   for (const slot of slots) {
     if (slot.state !== 'complete') continue;

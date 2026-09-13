@@ -296,7 +296,10 @@ export function evaluateMcptoonActivation(
 ): McptoonActivationReceipt | null {
   if (capture === null) return null;
 
-  const base = {
+  const base: Omit<
+    McptoonActivationReceipt,
+    'state' | 'callDelta' | 'callsDuringWindow' | 'successfulCallsDuringWindow' | 'reason'
+  > = {
     schemaVersion: MCPTOON_ACTIVATION_WITNESS_SCHEMA_VERSION,
     benchmarkId: capture.benchmarkId,
     projectId: capture.projectId,
