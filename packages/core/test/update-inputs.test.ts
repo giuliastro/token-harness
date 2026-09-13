@@ -189,11 +189,11 @@ describe('asking a channel what version it has', () => {
   it('can execute every provider update channel it knows how to query', () => {
     /**
      * `update` must never discover an actionable provider version through a channel whose exact
-     * install argv it cannot execute. pnpm is now part of both sides because HarnessTrim package
-     * replacement is an update responsibility, not a harness configuration mutation.
+     * install argv it cannot execute. npm and pnpm are both part of the executable/query sets;
+     * HarnessTrim now deliberately prefers npm for global package replacement.
      */
-    assert.deepEqual(knownPackageManagers(), ['cargo', 'pnpm', 'winget']);
-    assert.deepEqual(knownVersionQueryChannels(), ['cargo', 'pnpm', 'winget']);
+    assert.deepEqual(knownPackageManagers(), ['cargo', 'npm', 'pnpm', 'winget']);
+    assert.deepEqual(knownVersionQueryChannels(), ['cargo', 'npm', 'pnpm', 'winget']);
   });
 });
 

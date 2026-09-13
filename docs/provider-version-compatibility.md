@@ -53,18 +53,23 @@ Instead, package replacement has its own reviewed provider-target policy:
 - a target newer than the reviewed provider-package ceiling is reported as available but remains
   blocked for unattended update until that provider contract is reviewed.
 
-HarnessTrim updates use its declared `pnpm` channel. Token Harness now has an executable global
-exact-version recipe (`pnpm add --global harnesstrim@<version>`) and a machine-readable global
-inventory query. The inventory captures the previous version so transaction rollback can reinstall
-and re-read that exact version if a later transaction step fails. The pnpm mutation/inventory argv is
-currently documentation-reviewed rather than live-machine-observed, so the executor keeps emitting
-its existing unverified-channel diagnostic until a real run is captured.
+HarnessTrim package updates use **npm**, matching the upstream install contract. The updater queries
+`npm view harnesstrim version`, applies an exact global version with
+`npm install --global harnesstrim@<version>`, and can capture the prior global version for rollback.
+This also avoids making a working Windows update depend on a configured `PNPM_HOME`; the earlier
+pnpm-only channel failed on a real Windows machine even though HarnessTrim itself was healthy.
 
 RTK continues to use the provider's selected installation channel. On Windows the current manifest
-prefers WinGet. As of 2026-09-12 the public WinGet package repository contains RTK through 0.48.0,
-while upstream RTK is 0.49.0, so WinGet cannot yet deliver 0.49.0. Supporting the upstream Windows
-release ZIP as a managed fallback is a distinct installation-channel task; Token Harness must not
-pretend a stale channel supplied a release it does not contain.
+prefers WinGet. WinGet publishes RTK version strings with the common release-tag `v` prefix (for
+example `v0.48.0`), which Token Harness now accepts as the same semantic version as `0.48.0` while
+preserving the raw channel spelling for an exact install request.
+
+As of 2026-09-12 the public WinGet package repository contains RTK through **v0.48.0**, while
+upstream RTK is **0.49.0**, so WinGet cannot yet deliver 0.49.0. Supporting the upstream Windows
+release ZIP as a managed fallback is a distinct installation-channel task: it needs verified
+download, staging/replacement and rollback semantics. Until that exists, Token Harness reports and
+uses the newest version actually available through WinGet instead of pretending the channel can
+supply upstream 0.49.0.
 
 The exact compatibility matrix is still required when Token Harness wants to **mutate an agent
 integration**. This preserves the strict RFC 0009 safety boundary without turning historical fixture
