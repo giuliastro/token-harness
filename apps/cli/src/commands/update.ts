@@ -22,10 +22,7 @@ import {
 import { RTK_RELEASE_ASSET_DESTINATION } from '@token-harness/platform';
 
 import type { CommandContext } from './context.js';
-import {
-  runPackageChannelUpdate,
-  runPackageChannelUpdateCheck,
-} from './update-base.js';
+import { runPackageChannelUpdate, runPackageChannelUpdateCheck } from './update-base.js';
 import {
   planDirectRtkWindowsRelease,
   type DirectRtkWindowsReleasePlan,
@@ -164,11 +161,10 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
         receiptId: null,
       },
     };
-    return result(
-      EXIT_CODES['confirmation-required'],
-      null,
-      [...prepared.diagnostics, confirmationDiagnostic(report)],
-    );
+    return result(EXIT_CODES['confirmation-required'], null, [
+      ...prepared.diagnostics,
+      confirmationDiagnostic(report),
+    ]);
   }
 
   if (context.stateRoot === null) {
@@ -250,10 +246,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
         directPlan: prepared.plan,
         directStatus: 'rollback-failed',
         base: base.data?.execution ?? null,
-        unrestored: [
-          prepared.plan.targetPath,
-          ...(base.data?.execution?.unrestored ?? []),
-        ],
+        unrestored: [prepared.plan.targetPath, ...(base.data?.execution?.unrestored ?? [])],
       });
       return result(EXIT_CODES['apply-failed-dirty'], report, [
         ...combinedDiagnostics,
