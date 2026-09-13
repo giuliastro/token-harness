@@ -51,6 +51,7 @@ export {
 export {
   admitProviderPackageUpdate,
   applyProviderVersionCompatibility,
+  reviewedProviderPackageMaximum,
   withProviderVersionCompatibility,
   type ProviderPackageUpdateAdmission,
 } from './version-compatibility.js';
