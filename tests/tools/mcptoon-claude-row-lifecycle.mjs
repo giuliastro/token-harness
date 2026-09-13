@@ -65,7 +65,8 @@ const probe = {
 
 const resolution = resolveHostEnvironment({ probe });
 if (!resolution.ok) {
-  for (const entry of resolution.diagnostics) process.stderr.write(`${entry.code}: ${entry.message}\n`);
+  for (const entry of resolution.diagnostics)
+    process.stderr.write(`${entry.code}: ${entry.message}\n`);
   process.exit(9);
 }
 
@@ -107,7 +108,9 @@ function stores(id) {
     now,
   });
   if (!creation.ok) {
-    throw new Error(creation.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '));
+    throw new Error(
+      creation.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '),
+    );
   }
   return { snapshots: creation.store, journal: journalStore() };
 }
