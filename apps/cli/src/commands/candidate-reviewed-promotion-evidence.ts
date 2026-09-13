@@ -5,6 +5,16 @@ import type {
   CandidateReviewedGateResult,
 } from './candidate-promotion-readiness.js';
 
+export interface CandidateManagedLifecycleReviewRecord {
+  candidateId: OptimizationCandidateId;
+  reviewedAt: string;
+  reviewedVersion: string;
+  packageManager: string;
+  activationSurfaces: readonly string[];
+  residualScope: string;
+  result: CandidateReviewedGateResult;
+}
+
 export interface CandidateProjectMaturityReviewRecord {
   candidateId: OptimizationCandidateId;
   reviewedAt: string;
@@ -17,6 +27,25 @@ export interface CandidateProjectMaturityReviewRecord {
   residualRisk: string;
   result: CandidateReviewedGateResult;
 }
+
+/**
+ * Explicit lifecycle review of the already-landed mcptoon integration. It proves ownership and
+ * rollback mechanics only; it deliberately does not claim compatibility for unrecorded surfaces.
+ */
+export const MCPTOON_MANAGED_LIFECYCLE_REVIEW: CandidateManagedLifecycleReviewRecord = {
+  candidateId: 'mcptoon',
+  reviewedAt: '2026-09-13',
+  reviewedVersion: '0.7.10',
+  packageManager: 'pipx',
+  activationSurfaces: ['Claude Code owned skill', 'Codex surgical AGENTS.md marker block'],
+  residualScope:
+    'Lifecycle review does not widen the exact RFC 0009 compatibility evidence or prove combined-stack behavior.',
+  result: {
+    state: 'passed',
+    reason:
+      'Reviewed 2026-09-13 for mcptoon 0.7.10: exact pipx install/inventory, brownfield-safe Claude/Codex instruction ownership, passive verification, rollback/uninstall, prior-state restoration and conflict refusal are implemented and covered by repository lifecycle tests. Compatibility breadth remains a separate gate.',
+  },
+};
 
 /**
  * Explicit project-level review. This is deliberately independent from the installed candidate
@@ -40,12 +69,15 @@ export const MCPTOON_PROJECT_MATURITY_REVIEW: CandidateProjectMaturityReviewReco
   },
 };
 
-/** Return only evidence that has had an explicit project-level review. */
+/** Return only gates backed by explicit reviewed evidence. */
 export function reviewedPromotionEvidenceForCandidate(
   candidateId: OptimizationCandidateId,
 ): CandidatePromotionReview {
   if (candidateId === 'mcptoon') {
-    return { projectMaturity: MCPTOON_PROJECT_MATURITY_REVIEW.result };
+    return {
+      managedLifecycle: MCPTOON_MANAGED_LIFECYCLE_REVIEW.result,
+      projectMaturity: MCPTOON_PROJECT_MATURITY_REVIEW.result,
+    };
   }
   return {};
 }
