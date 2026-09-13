@@ -1,0 +1,15 @@
+{
+  "operation": "apply",
+  "transactionId": "mcptoon-claude-apply-2",
+  "outcome": "committed",
+  "exitCode": 0,
+  "ownership": [
+    {
+      "kind": "owned-file",
+      "path": "/home/runner/work/token-harness/token-harness/.mcptoon-claude-row-home/.claude/skills/mcptoon/SKILL.md",
+      "digest": "sha256:97ad3aa6fee47da9d705c3977d953f29ced281844eaf78e5ea04b55f6fe32434",
+      "mode": null
+    }
+  ],
+  "diagnostics": []
+}

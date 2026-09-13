@@ -66,9 +66,10 @@ export interface CompatibilityRow {
  * table is an admission set, not a list of things that probably work.
  *
  * Windows supplied the first reviewed rows. Linux now has exact Codex 0.152.1 rows for HarnessTrim
- * 0.2.1 and mcptoon 0.7.10. The mcptoon recording ran on Ubuntu 24.04.5 and exercised the owned
- * AGENTS.md marker block through managed apply, user drift, verified rollback, and surgical uninstall
- * while preserving unrelated user instructions. Windows also has live isolated recordings for Claude
+ * 0.2.1 and mcptoon 0.7.10, plus an exact Claude Code 2.1.269 row for mcptoon 0.7.10. The mcptoon
+ * recordings ran on Ubuntu 24.04.5 and exercised each owned instruction surface through managed apply,
+ * user drift, verified rollback, and surgical uninstall while preserving unrelated user content.
+ * Windows also has live isolated recordings for Claude
  * Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised Bash and PowerShell hook entries,
  * drift, verified rollback, and surgical uninstall. None of those points widens a neighbouring row by
  * inference. macOS still has no reviewed mutation row.
@@ -151,6 +152,18 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     // uninstall all preserved the user's own skill and AGENTS.md.
     configSchema: 'codex-skills-directory',
     fixture: 'tests/fixtures/rows/harnesstrim-codex-linux-0.152.1-0.2.1',
+    verificationTier: 'config-only',
+  },
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.269', maximum: '2.1.269' },
+    provider: 'mcptoon' as ProviderId,
+    providerVersion: '0.7.10',
+    platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+    // Real Ubuntu/Linux recording: Token Harness owns only the exact mcptoon SKILL.md. Drift
+    // refusal, verified rollback and surgical uninstall preserved unrelated Claude settings/skills.
+    configSchema: 'claude-skills-directory',
+    fixture: 'tests/fixtures/rows/mcptoon-claude-linux-2.1.269-0.7.10',
     verificationTier: 'config-only',
   },
   {

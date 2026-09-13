@@ -1,0 +1,8 @@
+{
+  "operation": "uninstall",
+  "transactionId": "mcptoon-claude-uninstall",
+  "outcome": "committed",
+  "exitCode": 0,
+  "ownership": [],
+  "diagnostics": []
+}

@@ -1,0 +1,21 @@
+{
+  "operation": "uninstall",
+  "transactionId": "mcptoon-claude-drift-uninstall",
+  "outcome": "rolled-back",
+  "exitCode": 6,
+  "ownership": [],
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "owned-artifact-modified",
+      "message": "This has been edited since Token Harness wrote it, so it will not be removed automatically",
+      "path": "/home/runner/work/token-harness/token-harness/.mcptoon-claude-row-home/.claude/skills/mcptoon/SKILL.md"
+    },
+    {
+      "severity": "info",
+      "code": "transaction-rolled-back",
+      "message": "Nothing was left behind: 0 snapshots were restored and verified",
+      "path": null
+    }
+  ]
+}

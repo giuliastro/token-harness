@@ -10,8 +10,9 @@ The managed lifecycle and activation witness are pinned to **mcptoon 0.7.10**. N
 inherit this evidence automatically.
 
 The reviewed lifecycle includes exact-version `pipx` installation, inventory, restore and uninstall,
-brownfield-safe Claude Code/Codex instruction surfaces, passive verification, and an exact RFC 0009
-compatibility row for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**.
+brownfield-safe Claude Code/Codex instruction surfaces, passive verification, and exact RFC 0009
+compatibility rows for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL** and
+**mcptoon 0.7.10 × Claude Code 2.1.269 × Linux non-WSL**.
 
 ## Managed lifecycle review
 
@@ -31,8 +32,10 @@ The review covers:
   guidance, and passive verification.
 
 This is intentionally a **lifecycle** pass, not a compatibility-breadth pass. It says Token Harness
-has reviewed mechanics for installing, owning, verifying and reversing the candidate integration. It
-does not make unrecorded harness/OS/version combinations compatible and does not satisfy the separate
+has reviewed mechanics for installing, owning, verifying and reversing the candidate integration. The
+second live Linux row additionally proves the exact Claude Code 2.1.269 skill surface, including drift
+refusal and preservation of unrelated post-apply user changes. It does not make unrecorded
+harness/OS/version combinations compatible and does not satisfy the separate
 `compatibility-reversibility` or `combined-stack-validation` gates.
 
 ## Passive activation witness
