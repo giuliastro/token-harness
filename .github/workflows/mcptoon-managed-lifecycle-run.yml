@@ -70,29 +70,14 @@ jobs:
               'path: verification.target ?? undefined,',
               'path: verification.target ?? null,',
           )
+          if candidate.count('journal: built.journal,') != 2:
+              raise SystemExit(
+                  f"expected two transaction journal sites, found {candidate.count('journal: built.journal,')}"
+              )
           candidate = candidate.replace(
-              'if (!creation.ok) return { fs, failure: creation.diagnostics } as const;',
-              'if (!creation.ok) return { ok: false as const, diagnostics: creation.diagnostics };',
+              'journal: built.journal,',
+              'journal: built.journal as FileJournalStore,',
           )
-          old_success = '''    return {
-              fs,
-              snapshots: creation.store,
-              journal: new FileJournalStore({'''
-          new_success = '''    return {
-              ok: true as const,
-              fs,
-              snapshots: creation.store,
-              journal: new FileJournalStore({'''
-          if old_success not in candidate:
-              raise SystemExit('candidate store success anchor not found')
-          candidate = candidate.replace(old_success, new_success, 1)
-          old_guard = '''if (built === null || !(\'snapshots\' in built)) {
-              diagnostics.push(...(built?.failure ?? []));'''
-          new_guard = '''if (built === null || !built.ok) {
-              diagnostics.push(...(built?.diagnostics ?? []));'''
-          if candidate.count(old_guard) != 2:
-              raise SystemExit(f'expected two candidate store guards, found {candidate.count(old_guard)}')
-          candidate = candidate.replace(old_guard, new_guard)
           candidate_path.write_text(candidate, encoding='utf-8')
           PY
 
