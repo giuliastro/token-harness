@@ -101,7 +101,7 @@ function runner(commands: string[] = []): ProcessRunner {
     run: (request) => {
       commands.push(`${request.executable} ${request.args.join(' ')}`);
       if (request.args[0] === '--version') {
-        return Promise.resolve(outcome(request, 'mcptoon 0.7.8'));
+        return Promise.resolve(outcome(request, 'mcptoon 0.7.10'));
       }
       if (request.args[0] === '--help') {
         return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));
