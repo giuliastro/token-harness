@@ -73,7 +73,11 @@ export async function validateCandidateCampaignRuntimeSurface(
   const harnessId = context.harness;
   if (candidateId !== 'mcptoon' || harnessId === null) return null;
 
-  const surfaceProblem = validateCandidateCampaignSurface(candidateId, harnessId, context.platform);
+  const surfaceProblem = validateCandidateCampaignSurface(
+    candidateId,
+    harnessId,
+    context.platform,
+  );
   if (surfaceProblem !== null) return surfaceProblem;
 
   if (context.adapters === null) {
@@ -82,7 +86,8 @@ export async function validateCandidateCampaignRuntimeSurface(
       code: 'candidate-benchmark-campaign-version-unavailable',
       subject: 'mcptoon',
       message: 'The exact harness version cannot be established for this mcptoon campaign',
-      remediation: 'Run the campaign from the normal CLI host so the reviewed compatibility row can be verified',
+      remediation:
+        'Run the campaign from the normal CLI host so the reviewed compatibility row can be verified',
     });
   }
 
