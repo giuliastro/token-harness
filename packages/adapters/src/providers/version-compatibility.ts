@@ -46,6 +46,16 @@ export type ProviderPackageUpdateAdmission =
   | { state: 'blocked'; reason: string };
 
 /**
+ * The newest package release Token Harness has source-reviewed for unattended replacement.
+ *
+ * This is deliberately only the provider-package ceiling. It grants no permission to mutate an
+ * agent integration; exact provider × harness × version × platform rows remain the gate for that.
+ */
+export function reviewedProviderPackageMaximum(provider: ProviderId): string | null {
+  return REVIEWED_PACKAGE_UPDATE_RANGES.get(provider)?.maximum ?? null;
+}
+
+/**
  * Decide whether a provider package may be upgraded to `targetVersion`.
  *
  * This is deliberately provider-only: harness versions, OS rows and managed ownership do not
