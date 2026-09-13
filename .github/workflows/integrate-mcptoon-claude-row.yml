@@ -1,0 +1,62 @@
+name: Integrate mcptoon Claude compatibility row
+
+on:
+  push:
+    branches:
+      - feat/mcptoon-claude-linux-2.1.269-row
+    paths:
+      - tests/tools/integrate-mcptoon-claude-row.mjs
+      - .github/workflows/integrate-mcptoon-claude-row.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/mcptoon-claude-linux-2.1.269-row
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+
+      - name: Apply exact row integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/tools/integrate-mcptoon-claude-row.mjs
+          npm install --global pnpm@10.33.4
+          pnpm install --frozen-lockfile
+          pnpm exec prettier --write \
+            packages/core/src/domain/compatibility-rows.ts \
+            packages/core/test/compatibility-rows.test.ts \
+            docs/provider-version-compatibility.md \
+            docs/candidates/mcptoon.md \
+            docs/candidates/promotion-readiness.md
+          pnpm typecheck
+          pnpm exec prettier --check \
+            packages/core/src/domain/compatibility-rows.ts \
+            packages/core/test/compatibility-rows.test.ts \
+            docs/provider-version-compatibility.md \
+            docs/candidates/mcptoon.md \
+            docs/candidates/promotion-readiness.md
+
+      - name: Commit integration to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            packages/core/src/domain/compatibility-rows.ts \
+            packages/core/test/compatibility-rows.test.ts \
+            docs/provider-version-compatibility.md \
+            docs/candidates/mcptoon.md \
+            docs/candidates/promotion-readiness.md
+          git commit -m 'feat: admit exact mcptoon Claude Linux compatibility row'
+          git push origin HEAD:feat/mcptoon-claude-linux-2.1.269-row
