@@ -17,7 +17,10 @@ export interface HeadroomCandidateObservation {
 }
 
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
-export const HEADROOM_MINIMUM_BENCHMARK_VERSION = '0.36.0';
+export const HEADROOM_REVIEWED_BENCHMARK_VERSION = '0.37.0';
+// Kept as a compatibility field for existing candidate-card consumers. Headroom admission is exact,
+// not an open semver range: newer builds must be reviewed before Token Harness marks them ready.
+export const HEADROOM_MINIMUM_BENCHMARK_VERSION = HEADROOM_REVIEWED_BENCHMARK_VERSION;
 
 export function parseHeadroomVersion(text: string): string | null {
   return VERSION_PATTERN.exec(text)?.[1] ?? null;
@@ -118,7 +121,10 @@ export async function observeHeadroomCandidate(
     };
   }
 
-  if (!headroomVersionAtLeast(version, HEADROOM_MINIMUM_BENCHMARK_VERSION)) {
+  if (version !== HEADROOM_REVIEWED_BENCHMARK_VERSION) {
+    const reason = headroomVersionAtLeast(version, HEADROOM_REVIEWED_BENCHMARK_VERSION)
+      ? `Headroom ${version} is newer than the reviewed ${HEADROOM_REVIEWED_BENCHMARK_VERSION} benchmark build; review it before benchmarking`
+      : `Headroom ${version} predates the reviewed ${HEADROOM_REVIEWED_BENCHMARK_VERSION} benchmark build`;
     return {
       state: 'unsupported-version',
       version,
@@ -126,9 +132,7 @@ export async function observeHeadroomCandidate(
       supportsClaudeWrap: targets.claude,
       supportsCodexWrap: targets.codex,
       minimumBenchmarkVersion: HEADROOM_MINIMUM_BENCHMARK_VERSION,
-      reasons: [
-        `Headroom ${version} predates the ${HEADROOM_MINIMUM_BENCHMARK_VERSION} benchmark baseline`,
-      ],
+      reasons: [reason],
     };
   }
 

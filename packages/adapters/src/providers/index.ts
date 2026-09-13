@@ -33,6 +33,7 @@ export {
 } from './gitnexus-managed.js';
 export {
   HEADROOM_MINIMUM_BENCHMARK_VERSION,
+  HEADROOM_REVIEWED_BENCHMARK_VERSION,
   headroomVersionAtLeast,
   observeHeadroomCandidate,
   parseHeadroomVersion,
