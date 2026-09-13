@@ -31,9 +31,7 @@ test(
     try {
       const fs = new NodeFileSystem(host.environment.facts);
       const target = fs.join(root, 'rtk.exe');
-      const previous = new TextEncoder().encode(
-        'token-harness previous RTK fixture',
-      );
+      const previous = new TextEncoder().encode('token-harness previous RTK fixture');
       await fs.writeFile(target, previous);
 
       const runtime = new NodeRtkWindowsReleaseRuntime({
@@ -44,9 +42,7 @@ test(
       assert.equal(
         query.status,
         'found',
-        query.status === 'found'
-          ? undefined
-          : `live release query failed: ${query.message}`,
+        query.status === 'found' ? undefined : `live release query failed: ${query.message}`,
       );
       if (query.status !== 'found') return;
 
@@ -75,10 +71,7 @@ test(
       });
       assert.equal(verification.failure, null);
       assert.equal(verification.exitCode, 0);
-      assert.match(
-        `${verification.stdout}\n${verification.stderr}`,
-        /(?:^|\s)v?0\.49\.0(?:\s|$)/m,
-      );
+      assert.match(`${verification.stdout}\n${verification.stderr}`, /(?:^|\s)v?0\.49\.0(?:\s|$)/m);
 
       const rollback = await runtime.rollback(installed.handle, root);
       assert.equal(rollback.status, 'rolled-back');
