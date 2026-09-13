@@ -34,14 +34,15 @@ Neither state is equivalent to promotion.
 
 The reviewed mcptoon slice now covers the lifecycle mechanics needed for a future promotion decision:
 
-- exact-version installation through an already-present `pipx`, with machine-readable inventory and
-  prior-version restore support;
+- exact-version installation through an already-present `pipx`, with machine-readable inventory,
+  prior-version restore, and verified uninstall when the pre-transaction state was package absence;
 - Claude Code guidance in a Token Harness-owned skill and Codex guidance in a surgical marker block;
 - brownfield conflict refusal, including refusal to install the package when the activation surface
   cannot be owned safely;
 - passive verification through installed version, root CLI capability discovery and the owned
   instruction surface — normal `verify` does not run `manifest` or contact configured MCP servers;
-- a live Ubuntu `pipx` smoke against mcptoon 0.7.10.
+- live Ubuntu `pipx` smoke coverage for mcptoon 0.7.10 installation, inventory, uninstall and
+  restoration of the absent state.
 
 This does **not** make mcptoon promotion-eligible. The slice stays outside `PROVIDER_ADAPTERS` until
 RFC 0009 has an exact reviewed harness/provider/platform compatibility fixture. Selection evidence,
