@@ -160,10 +160,7 @@ describe('admitManagedMutation', () => {
     assert.equal(exact.state, 'admitted');
     if (exact.state === 'admitted') {
       assert.equal(exact.row.configSchema, 'codex-agents-md-marker-block');
-      assert.equal(
-        exact.row.fixture,
-        'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10',
-      );
+      assert.equal(exact.row.fixture, 'tests/fixtures/rows/mcptoon-codex-linux-0.152.1-0.7.10');
       assert.equal(exact.row.verificationTier, 'config-only');
     }
 

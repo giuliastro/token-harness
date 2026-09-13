@@ -23,11 +23,7 @@ import {
   planMcptoonManagedActivation,
   verifyMcptoonManagedActivation,
 } from '@token-harness/adapters';
-import {
-  NodeFileSystem,
-  nodeSystemProbe,
-  resolveHostEnvironment,
-} from '@token-harness/platform';
+import { NodeFileSystem, nodeSystemProbe, resolveHostEnvironment } from '@token-harness/platform';
 
 function parseArgs(argv) {
   const args = {};
@@ -74,7 +70,8 @@ const probe = {
 
 const resolution = resolveHostEnvironment({ probe });
 if (!resolution.ok) {
-  for (const entry of resolution.diagnostics) process.stderr.write(`${entry.code}: ${entry.message}\n`);
+  for (const entry of resolution.diagnostics)
+    process.stderr.write(`${entry.code}: ${entry.message}\n`);
   process.exit(9);
 }
 
@@ -115,7 +112,9 @@ function stores(id) {
     now,
   });
   if (!creation.ok) {
-    throw new Error(creation.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '));
+    throw new Error(
+      creation.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '),
+    );
   }
   return { snapshots: creation.store, journal: journalStore() };
 }
@@ -225,7 +224,9 @@ async function uninstall() {
     requiresElevation: false,
     affectedPaths: [targetPath],
     affectedProcesses: [],
-    preconditions: ['The recorded mcptoon marker block still matches the committed ownership receipt'],
+    preconditions: [
+      'The recorded mcptoon marker block still matches the committed ownership receipt',
+    ],
     postconditions: ['Only the recorded mcptoon marker block is removed'],
     rollbackData: 'file-snapshot',
     explanation: 'Remove the exact mcptoon marker block owned by the fixture source transaction',
