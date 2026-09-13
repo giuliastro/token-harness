@@ -58,7 +58,6 @@ export interface McptoonManagedVerification {
   detail: string;
 }
 
-const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
 
 function mcptoonInstallAction(): PlannedAction {
@@ -326,6 +325,13 @@ export async function planMcptoonManagedActivation(
   if (observation.state === 'benchmark-ready') return activation;
 
   if (observation.state === 'absent') {
+    const activationSatisfied = activation.diagnostics.some(
+      (entry) => entry.code === 'mcptoon-guidance-already-present',
+    );
+    if (activation.actions.length === 0 && !activationSatisfied) {
+      return activation;
+    }
+
     const pipx = await context.runner.run({
       executable: 'pipx',
       args: ['--version'],
@@ -430,29 +436,10 @@ export async function verifyMcptoonManagedActivation(
     };
   }
 
-  const manifest = await context.runner.run({
-    executable: 'mcptoon',
-    args: ['manifest', '--compact'],
-    cwd: context.projectRoot,
-    timeoutMs: 20_000,
-  });
-  if (manifest.failure !== null || manifest.exitCode !== 0) {
-    return {
-      state: 'degraded',
-      target,
-      detail:
-        manifest.failure !== null
-          ? `mcptoon manifest --compact failed: ${manifest.failure.reason}`
-          : `mcptoon manifest --compact exited ${String(manifest.exitCode)}`,
-    };
-  }
-
   return {
     state: 'verified',
     target,
     detail:
-      'Reviewed agent instructions are present and mcptoon manifest --compact completed successfully',
+      'Reviewed agent instructions are present and mcptoon exposes the reviewed passive CLI capabilities',
   };
 }
-
-void ENCODER;
