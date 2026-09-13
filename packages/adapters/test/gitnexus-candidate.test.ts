@@ -121,7 +121,10 @@ test('recognizes benchmark and MCP CLI surfaces from passive help', () => {
     mcp: true,
   });
   assert.deepEqual(
-    parseGitNexusCliCapabilities(HELP.replace('context [name]', 'inspect [name]').replace('mcp ', 'serve '), ''),
+    parseGitNexusCliCapabilities(
+      HELP.replace('context [name]', 'inspect [name]').replace('mcp ', 'serve '),
+      '',
+    ),
     {
       query: true,
       context: false,

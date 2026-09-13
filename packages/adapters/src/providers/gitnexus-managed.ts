@@ -169,14 +169,18 @@ export async function planGitNexusManagedMcpActivation(
                 ? 'Claude user configuration contains comments that Token Harness cannot preserve with the reviewed JSON merge path'
                 : `Claude user configuration is malformed JSON: ${parsed.reason}`,
             path: target,
-            remediation: 'Keep this configuration user-owned or repair it before enabling managed GitNexus MCP',
+            remediation:
+              'Keep this configuration user-owned or repair it before enabling managed GitNexus MCP',
           }),
         ],
       };
     }
 
     const segments = parseJsonPointer(GITNEXUS_CLAUDE_MCP_POINTER);
-    const live = segments === null ? { found: false, value: undefined } : resolveJsonPointer(parsed.document, segments);
+    const live =
+      segments === null
+        ? { found: false, value: undefined }
+        : resolveJsonPointer(parsed.document, segments);
     if (live.found && live.value !== undefined) {
       if (jsonValueDigest(live.value) === jsonValueDigest(GITNEXUS_MCP_SERVER)) {
         return {
@@ -269,9 +273,11 @@ export function planGitNexusManagedMcpRemoval(
           severity: 'warning',
           code: 'gitnexus-mcp-ownership-mismatch',
           subject: harness,
-          message: 'The supplied ownership receipt does not identify the reviewed GitNexus MCP entry',
+          message:
+            'The supplied ownership receipt does not identify the reviewed GitNexus MCP entry',
           path: target,
-          remediation: 'Use the ownership receipt from the committed GitNexus MCP activation transaction',
+          remediation:
+            'Use the ownership receipt from the committed GitNexus MCP activation transaction',
         }),
       ],
     };
@@ -323,7 +329,8 @@ export async function verifyGitNexusManagedMcpActivation(
 
   const target = claudeTarget(context);
   const stat = await context.fs.stat(target);
-  if (stat === null) return { state: 'not-configured', target, detail: 'Claude user config is absent' };
+  if (stat === null)
+    return { state: 'not-configured', target, detail: 'Claude user config is absent' };
   if (stat.kind !== 'file') {
     return { state: 'degraded', target, detail: 'Claude user config is not a regular file' };
   }
@@ -340,13 +347,18 @@ export async function verifyGitNexusManagedMcpActivation(
     };
   }
   const segments = parseJsonPointer(GITNEXUS_CLAUDE_MCP_POINTER);
-  if (segments === null) return { state: 'degraded', target, detail: 'Internal MCP pointer is invalid' };
+  if (segments === null)
+    return { state: 'degraded', target, detail: 'Internal MCP pointer is invalid' };
   const live = resolveJsonPointer(parsed.document, segments);
   if (!live.found || live.value === undefined) {
     return { state: 'not-configured', target, detail: 'GitNexus MCP entry is absent' };
   }
   if (jsonValueDigest(live.value) !== jsonValueDigest(GITNEXUS_MCP_SERVER)) {
-    return { state: 'degraded', target, detail: 'GitNexus MCP entry differs from the reviewed command' };
+    return {
+      state: 'degraded',
+      target,
+      detail: 'GitNexus MCP entry differs from the reviewed command',
+    };
   }
   return {
     state: 'verified',

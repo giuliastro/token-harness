@@ -150,10 +150,7 @@ test('plans one owned Claude JSON entry and never invokes gitnexus setup or mcp'
   setJson(fs, { theme: 'dark', mcpServers: { existing: { command: 'other' } } });
   const commands: string[] = [];
 
-  const plan = await planGitNexusManagedMcpActivation(
-    context(fs, commands),
-    harnessId('claude'),
-  );
+  const plan = await planGitNexusManagedMcpActivation(context(fs, commands), harnessId('claude'));
 
   assert.equal(plan.target, '/home/dev/.claude.json');
   assert.equal(plan.actions.length, 1);
@@ -169,11 +166,7 @@ test('plans one owned Claude JSON entry and never invokes gitnexus setup or mcp'
   });
   assert.equal(action.rollbackData, 'file-snapshot');
   assert.equal(action.requiresNetwork, false);
-  assert.deepEqual(commands, [
-    'gitnexus --version',
-    'gitnexus --help',
-    'gitnexus status --help',
-  ]);
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help', 'gitnexus status --help']);
 });
 
 test('refuses to overwrite a brownfield GitNexus MCP entry', async () => {
@@ -217,12 +210,11 @@ test('verifies passively without starting MCP or indexing the repository', async
     harnessId('claude'),
   );
   assert.equal(verification.state, 'verified');
-  assert.deepEqual(commands, [
-    'gitnexus --version',
-    'gitnexus --help',
-    'gitnexus status --help',
-  ]);
-  assert.equal(commands.some((command) => /\b(setup|mcp|analyze)\b/.test(command)), false);
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help', 'gitnexus status --help']);
+  assert.equal(
+    commands.some((command) => /\b(setup|mcp|analyze)\b/.test(command)),
+    false,
+  );
 });
 
 test('builds surgical removal only from the exact owned JSON receipt', () => {
