@@ -9,9 +9,17 @@ describe('guided candidate readiness presentation', () => {
   it('shows promotion progress without claiming evaluation readiness is approval', () => {
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /Promotion review/);
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /Next gate/);
-    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Evaluation readiness is not promotion approval/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /formal promotion gates, which remain conservative until complete/);
     assert.match(GUIDE_CANDIDATE_READINESS_JS, /promotionReadiness/);
     assert.doesNotThrow(() => new Script(GUIDE_CANDIDATE_READINESS_JS));
+  });
+
+  it('shows reviewed integration milestones separately for candidates at different maturity stages', () => {
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Lifecycle \+ exact compatibility checkpoint/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Transactional MCP checkpoint/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /Benchmark capability reviewed/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /replace\('Experimental', 'Candidate'\)/);
+    assert.match(GUIDE_CANDIDATE_READINESS_JS, /candidate-integration-progress/);
   });
 
   it('keeps the comparison action as a compact full-width toolbar rather than a card-sized grid cell', () => {
