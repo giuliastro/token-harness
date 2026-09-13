@@ -109,7 +109,7 @@ describe('asking a channel what it has installed', () => {
   });
 
   it('reads a crate line out of cargo install --list', async () => {
-    const { runner: process } = runner({ stdout: 'rtk v0.42.0:\n    /home/user/.cargo/bin/rtk\n' });
+    const { runner: process } = runner({ stdout: 'rtk v0.42.0:\n    /usr/bin/bat\n' });
     const outcome = await queryPackageInventory({
       channel: 'cargo',
       packageName: 'rtk',
@@ -436,11 +436,7 @@ describe('restoring a captured inventory', () => {
     });
 
     assert.equal(outcome.restored, true);
-    assert.deepEqual(commands, [
-      'pipx list --json',
-      'pipx uninstall mcptoon',
-      'pipx list --json',
-    ]);
+    assert.deepEqual(commands, ['pipx list --json', 'pipx uninstall mcptoon', 'pipx list --json']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
   });
 
