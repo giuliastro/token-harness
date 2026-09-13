@@ -1,0 +1,56 @@
+name: Polish mcptoon activation PR
+on:
+  push:
+    branches:
+      - feat/mcptoon-usage-activation-witness
+permissions:
+  contents: write
+jobs:
+  polish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/mcptoon-usage-activation-witness
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Polish integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/cli/src/run.ts')
+          s = p.read_text()
+          s = s.replace("import { runBenchmarkFinish } from './commands/benchmark-capture.js';\n", '', 1)
+          p.write_text(s)
+
+          p = Path('apps/cli/src/commands/candidate-benchmark.ts')
+          s = p.read_text()
+          old = """      instruction: `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
+          """
+          new = """      instruction:
+                definition.candidateId === 'mcptoon'
+                  ? 'Enable mcptoon through its documented workflow first, then start the optimized capture. Token Harness will passively verify successful mcptoon 0.7.10 tool activity inside the task window.'
+                  : `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
+          """
+          if old not in s:
+              raise SystemExit('optimized instruction marker missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - run: pnpm exec prettier --write apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/candidate-activation-evidence.test.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: rm .github/workflows/polish-mcptoon-activation-pr.yml
+      - name: Commit validated patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/cli/src/commands/candidate-benchmark.ts apps/cli/src/run.ts apps/cli/test/candidate-activation-evidence.test.ts .github/workflows/polish-mcptoon-activation-pr.yml
+          git diff --cached --quiet || git commit -m "test: validate mcptoon activation campaign flow"
+          git push origin HEAD:feat/mcptoon-usage-activation-witness
