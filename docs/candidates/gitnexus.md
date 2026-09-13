@@ -52,6 +52,8 @@ from this checkpoint. Its native TOML transaction currently provides whole-file 
 surgical ownership receipt for one `mcp_servers` entry, so enabling it here would make uninstall less
 safe than Claude. That gap must be closed before Codex MCP registration is admitted.
 
+The lifecycle and brownfield-safety tests run in the repository's normal Ubuntu, macOS and Windows
+CI matrix even though this checkpoint currently admits only Claude's JSON configuration surface.
 This checkpoint closes part of the lifecycle/reversibility work only. It does not provide selection
 evidence, real optimized-workload activation evidence, combined-stack validation, project-maturity
 admission, or an RFC 0009 compatibility row, and therefore does not make GitNexus promotion-eligible.
