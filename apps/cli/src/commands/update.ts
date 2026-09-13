@@ -493,9 +493,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       message: rollback.message,
       remediation: null,
     });
-    await finishDirectJournal('rolled-back', 'failed', [rollbackDiagnostic]).catch(
-      () => undefined,
-    );
+    await finishDirectJournal('rolled-back', 'failed', [rollbackDiagnostic]).catch(() => undefined);
     report.execution = execution({
       transactionId,
       outcome: base.data?.execution?.outcome === 'dirty' ? 'dirty' : 'rolled-back',
@@ -549,11 +547,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     directStatus: directResult.results[0]?.status ?? 'applied',
     base: base.data?.execution ?? null,
   });
-  return result(EXIT_CODES.ok, report, [
-    ...combinedDiagnostics,
-    provenance,
-    committedDiagnostic,
-  ]);
+  return result(EXIT_CODES.ok, report, [...combinedDiagnostics, provenance, committedDiagnostic]);
 }
 
 /** Dashboard/read-only update observation, with the same RTK release preference but no mutation. */
