@@ -41,6 +41,7 @@ import {
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
+import { runCandidateUninstall } from './candidate-lifecycle.js';
 import { computePlan } from './plan.js';
 
 /**
@@ -313,6 +314,8 @@ export async function runRollback(context: CommandContext): Promise<CommandResul
  * `remove-owned-change` whose target no longer matches refuses rather than deleting.
  */
 export async function runUninstall(context: CommandContext): Promise<CommandResult<ApplyReport>> {
+  if ((context.optimizationCandidate ?? null) !== null) return runCandidateUninstall(context);
+
   const diagnostics: Diagnostic[] = [];
   const computed = await computePlan(context);
   /**

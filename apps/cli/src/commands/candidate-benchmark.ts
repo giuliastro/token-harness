@@ -599,12 +599,19 @@ function campaignNextStep(
   }
 
   if (next.state === 'baseline-not-started') {
+    const start =
+      `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
+      `--candidate ${definition.candidateId} --variant baseline --task ${next.taskClass} ` +
+      `--harness ${definition.harnessId}`;
     return {
       command:
-        `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
-        `--candidate ${definition.candidateId} --variant baseline --task ${next.taskClass} ` +
-        `--harness ${definition.harnessId}`,
-      instruction: `Start baseline ${String(next.run)} for ${next.taskClass} with the current production stack unchanged.`,
+        definition.candidateId === 'mcptoon'
+          ? `token-harness uninstall --candidate mcptoon --harness ${definition.harnessId} --yes && ${start}`
+          : start,
+      instruction:
+        definition.candidateId === 'mcptoon'
+          ? `Token Harness first deactivates only its own mcptoon guidance, then starts baseline ${String(next.run)} for ${next.taskClass}. The reviewed mcptoon binary may stay installed but is inactive for the baseline.`
+          : `Start baseline ${String(next.run)} for ${next.taskClass} with the current production stack unchanged.`,
     };
   }
 
@@ -619,24 +626,34 @@ function campaignNextStep(
   }
 
   if (next.state === 'optimized-not-started') {
+    const start =
+      `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
+      `--candidate ${definition.candidateId} --variant optimized --task ${next.taskClass} ` +
+      `--harness ${definition.harnessId}`;
     return {
       command:
-        `token-harness benchmark-start --benchmark-id ${next.benchmarkId} ` +
-        `--candidate ${definition.candidateId} --variant optimized --task ${next.taskClass} ` +
-        `--harness ${definition.harnessId}`,
+        definition.candidateId === 'mcptoon'
+          ? `token-harness apply --candidate mcptoon --harness ${definition.harnessId} --yes && ${start}`
+          : start,
       instruction:
         definition.candidateId === 'mcptoon'
-          ? 'Enable mcptoon through its documented workflow first, then start the optimized capture. Token Harness will passively verify successful mcptoon 0.7.10 tool activity inside the task window.'
+          ? 'Token Harness installs the exact reviewed mcptoon build when absent, activates only its owned guidance, then starts the optimized capture. Candidate activity is still verified independently inside the task window.'
           : `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
     };
   }
 
+  const finish =
+    `token-harness benchmark-finish --benchmark-id ${next.benchmarkId} --variant optimized ` +
+    '--quality passed --attempts 1 --failed-attempts 0';
   return {
     command:
-      `token-harness benchmark-finish --benchmark-id ${next.benchmarkId} --variant optimized ` +
-      '--quality passed --attempts 1 --failed-attempts 0',
+      definition.candidateId === 'mcptoon'
+        ? `${finish} && token-harness uninstall --candidate mcptoon --harness ${definition.harnessId} --yes`
+        : finish,
     instruction:
-      'Finish the optimized task. Change quality/attempt counts if the observed outcome differs from the default command.',
+      definition.candidateId === 'mcptoon'
+        ? 'Finish the optimized task, preserving its activation witness first, then let Token Harness remove only its owned mcptoon guidance. Change quality/attempt counts if the observed outcome differs from the default command.'
+        : 'Finish the optimized task. Change quality/attempt counts if the observed outcome differs from the default command.',
   };
 }
 
