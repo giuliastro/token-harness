@@ -40,14 +40,16 @@ jobs:
           npm install --global @anthropic-ai/claude-code@2.1.269
           python -m pip install --disable-pip-version-check pipx
           python -m pipx install 'mcptoon==0.7.10'
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/mcptoon" --version
+          PIPX_BIN_DIR="$(python -m pipx environment --value PIPX_BIN_DIR)"
+          echo "$PIPX_BIN_DIR" >> "$GITHUB_PATH"
+          echo "PIPX_BIN_DIR=$PIPX_BIN_DIR" >> "$GITHUB_ENV"
+          "$PIPX_BIN_DIR/mcptoon" --version
           claude --version
 
       - name: Record real lifecycle fixture
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          export PATH="$PIPX_BIN_DIR:$PATH"
           bash tests/tools/record-mcptoon-claude-row.sh
 
       - name: Commit recorded evidence to branch
