@@ -35,6 +35,28 @@ jobs:
               raise SystemExit('bootstrap patch block not found')
           block = source.split(start, 1)[1].split(end, 1)[0]
           script = textwrap.dedent(block)
+
+          old_replace = '''def replace(path, old, new):
+              p = root / path
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected patch anchor missing in {path}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')'''
+          new_replace = '''def replace(path, old, new):
+              import re
+              p = root / path
+              text = p.read_text(encoding='utf-8')
+              if old in text:
+                  p.write_text(text.replace(old, new, 1), encoding='utf-8')
+                  return
+              pattern = r'\\n'.join(r'[ \\t]*' + re.escape(line.strip()) for line in old.splitlines())
+              match = re.search(pattern, text)
+              if match is None:
+                  raise SystemExit(f'expected patch anchor missing in {path}: {old[:80]!r}')
+              p.write_text(text[:match.start()] + new + text[match.end():], encoding='utf-8')'''
+          if old_replace not in script:
+              raise SystemExit('replace helper anchor not found in bootstrap patch')
+          script = script.replace(old_replace, new_replace, 1)
           script = script.replace(
               "(root / '.github/workflows/mcptoon-managed-lifecycle-bootstrap.yml').unlink()",
               "pass  # temporary workflow is removed later by the GitHub connector",
