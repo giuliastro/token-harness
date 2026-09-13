@@ -48,14 +48,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Prettier diagnostic for live RTK smoke
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          cp packages/platform/test/rtk-windows-release.live.test.ts /tmp/rtk-live-before.ts
-          pnpm exec prettier --write packages/platform/test/rtk-windows-release.live.test.ts
-          diff -u /tmp/rtk-live-before.ts packages/platform/test/rtk-windows-release.live.test.ts || true
-
       - name: Format check
         run: pnpm format:check
 
