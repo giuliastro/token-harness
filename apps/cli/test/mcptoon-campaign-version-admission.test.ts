@@ -95,9 +95,17 @@ describe('mcptoon campaign exact-version admission', () => {
     assert.equal(diagnostic, null);
   });
 
-  it('rejects a newer unreviewed harness version', async () => {
+  it('admits the separately reviewed Codex 0.153.0 row', async () => {
     const diagnostic = await validateCandidateCampaignRuntimeSurface(
       context({ harness: 'codex', harnessVersion: '0.153.0' }),
+      false,
+    );
+    assert.equal(diagnostic, null);
+  });
+
+  it('still rejects an unreviewed harness version above the new row', async () => {
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(
+      context({ harness: 'codex', harnessVersion: '0.153.1' }),
       false,
     );
     assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-row-unreviewed');
@@ -105,7 +113,7 @@ describe('mcptoon campaign exact-version admission', () => {
 
   it('requires exact mcptoon 0.7.10 before an optimized start', async () => {
     const diagnostic = await validateCandidateCampaignRuntimeSurface(
-      context({ harness: 'codex', harnessVersion: '0.152.1', mcptoonVersion: '0.8.0' }),
+      context({ harness: 'codex', harnessVersion: '0.153.0', mcptoonVersion: '0.8.0' }),
       true,
     );
     assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-provider-version-unreviewed');
@@ -113,7 +121,7 @@ describe('mcptoon campaign exact-version admission', () => {
 
   it('admits optimized start only with the exact reviewed provider version', async () => {
     const diagnostic = await validateCandidateCampaignRuntimeSurface(
-      context({ harness: 'codex', harnessVersion: '0.152.1', mcptoonVersion: '0.7.10' }),
+      context({ harness: 'codex', harnessVersion: '0.153.0', mcptoonVersion: '0.7.10' }),
       true,
     );
     assert.equal(diagnostic, null);
