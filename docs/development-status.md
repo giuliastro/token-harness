@@ -8,5 +8,6 @@ Current focus: mcptoon candidate selection evidence after the successful Token H
 - mcptoon evidence is pinned to the exact reviewed 0.7.10 build and now includes benchmark capability, managed lifecycle, passive activation, privacy-bounded cached-schema manifest footprint evidence, project maturity, and exact Linux compatibility rows for the reviewed Codex and Claude Code versions.
 - The manifest-footprint reader is fail-closed on receipt shape, exact version, aggregate arithmetic and timestamp ordering; the campaign exposes only the latest cached-schema snapshot rather than cumulative savings.
 - Next mcptoon gate: decision-ready selection evidence from real paired campaigns against the unchanged production stack. Fixture-only or CI-generated savings do not close this gate.
+- Use a fresh campaign id if a real run contains ambiguous state or the production-stack configuration changes; do not repair selection evidence by overwriting an unlike pair.
 - If selection evidence is promising, continue with combined-stack validation against the exact RTK + HarnessTrim baseline, then make a separate compatibility/reversibility decision for the intended promoted surface.
 - Do not add mcptoon to `PROVIDER_ADAPTERS` until those independent gates are closed.
