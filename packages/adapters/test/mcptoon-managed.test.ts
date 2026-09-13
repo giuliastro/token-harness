@@ -98,7 +98,8 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
 function runner(): ProcessRunner {
   return {
     run: (request) => {
-      if (request.args[0] === '--version') return Promise.resolve(outcome(request, 'mcptoon 0.7.8'));
+      if (request.args[0] === '--version')
+        return Promise.resolve(outcome(request, 'mcptoon 0.7.8'));
       if (request.args[0] === 'manifest' && request.args[1] === '--help') {
         return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));
       }
@@ -142,7 +143,10 @@ test('plans a Token Harness-owned Claude skill without touching mcptoon config',
   assert.ok(write?.kind === 'write-owned-file');
   assert.equal(write.content, MCPTOON_CLAUDE_SKILL);
   assert.equal(write.expectedDigest, null);
-  assert.equal(plan.actions.some((action) => action.affectedPaths.includes('/home/dev/.mcptoon/config.json')), false);
+  assert.equal(
+    plan.actions.some((action) => action.affectedPaths.includes('/home/dev/.mcptoon/config.json')),
+    false,
+  );
 });
 
 test('plans a surgical Codex AGENTS marker block', async () => {

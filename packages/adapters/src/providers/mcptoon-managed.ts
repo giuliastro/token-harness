@@ -343,7 +343,8 @@ export async function verifyMcptoonManagedActivation(
     target = context.fs.join(context.paths.home, '.claude', 'skills', 'mcptoon', 'SKILL.md');
     const stat = await context.fs.stat(target);
     configured =
-      stat?.kind === 'file' && DECODER.decode(await context.fs.readFile(target)) === MCPTOON_CLAUDE_SKILL;
+      stat?.kind === 'file' &&
+      DECODER.decode(await context.fs.readFile(target)) === MCPTOON_CLAUDE_SKILL;
   } else if (harness === 'codex') {
     target = context.fs.join(context.projectRoot, 'AGENTS.md');
     const stat = await context.fs.stat(target);
