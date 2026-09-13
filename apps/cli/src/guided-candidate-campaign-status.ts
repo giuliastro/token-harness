@@ -223,7 +223,7 @@ export function createGuideCandidateCampaignReader(
 
     const totalPairs = campaign.totalPairs;
     const activationVerification =
-      input.candidateId === 'gitnexus'
+      input.candidateId === 'gitnexus' || input.candidateId === 'mcptoon'
         ? {
             state:
               campaign.activation.state === 'verified' ? ('passed' as const) : ('blocked' as const),
@@ -271,7 +271,7 @@ export function createGuideCandidateCampaignReader(
       promotionEligible: false,
       promotionBlockers: [...campaign.assessment.promotionBlockers],
       promotionReadiness,
-      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus can pass that gate only from runtime MCP evidence observed at task boundaries. Decision-ready does not mean promotion-ready.',
+      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus requires runtime MCP boundary evidence and mcptoon requires its reviewed local usage witness. Decision-ready does not mean promotion-ready.',
     };
   };
 
