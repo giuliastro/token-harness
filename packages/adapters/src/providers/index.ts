@@ -38,6 +38,19 @@ export {
   type McptoonCandidateObservation,
   type McptoonCandidateState,
 } from './mcptoon-candidate.js';
+export {
+  MCPTOON_AGENT_INSTRUCTIONS,
+  MCPTOON_CLAUDE_SKILL,
+  MCPTOON_MANAGED_MINIMUM_VERSION,
+  MCPTOON_REVIEWED_INSTALL_VERSION,
+  MCPTOON_MARKER_BEGIN,
+  MCPTOON_MARKER_END,
+  planMcptoonManagedActivation,
+  verifyMcptoonManagedActivation,
+  type McptoonManagedActivationPlan,
+  type McptoonManagedVerification,
+  type McptoonManagedVerificationState,
+} from './mcptoon-managed.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
 export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
