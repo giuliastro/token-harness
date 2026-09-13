@@ -104,6 +104,12 @@ managed_path.write_text(managed)
 
 managed_test_path = Path('packages/adapters/test/mcptoon-managed.test.ts')
 managed_test = managed_test_path.read_text()
+managed_test = replace_once(
+    managed_test,
+    "      if (request.args[0] === 'manifest' && request.args[1] === '--help') {\n        return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));\n      }",
+    "      if (request.args[0] === '--help') {\n        return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));\n      }",
+    'managed test root help runner',
+)
 old_runner = """  const absentRunner: ProcessRunner = {
     run: (request) =>
       Promise.resolve({
