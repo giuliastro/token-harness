@@ -12,7 +12,8 @@ import {
 } from '../src/index.js';
 
 const LIVE_RELEASE_TEST =
-  process.platform === 'win32' && process.env['TOKEN_HARNESS_LIVE_RTK_RELEASE'] === '1';
+  process.platform === 'win32' &&
+  process.env['TOKEN_HARNESS_LIVE_RTK_RELEASE'] === '1';
 
 test(
   'downloads, installs, starts and rolls back the reviewed RTK Windows release',
@@ -30,7 +31,9 @@ test(
     try {
       const fs = new NodeFileSystem(host.environment.facts);
       const target = fs.join(root, 'rtk.exe');
-      const previous = new TextEncoder().encode('token-harness previous RTK fixture');
+      const previous = new TextEncoder().encode(
+        'token-harness previous RTK fixture',
+      );
       await fs.writeFile(target, previous);
 
       const runtime = new NodeRtkWindowsReleaseRuntime({
@@ -41,7 +44,9 @@ test(
       assert.equal(
         query.status,
         'found',
-        query.status === 'found' ? undefined : `live release query failed: ${query.message}`,
+        query.status === 'found'
+          ? undefined
+          : `live release query failed: ${query.message}`,
       );
       if (query.status !== 'found') return;
 
