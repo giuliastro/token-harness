@@ -52,7 +52,9 @@ This does **not** make mcptoon promotion-eligible and does not put it in `PROVID
 Compatibility evidence now exists for one exact Codex/Linux combination, but selection evidence,
 activation evidence on a real optimized workload, combined-stack validation, project maturity and
 any additional harness/platform compatibility required by the intended promoted surface still have
-to pass independently. No semver inference substitutes for those gates.
+to pass independently. No semver inference substitutes for those gates. Repository CI exercises the
+row-admission and non-widening tests on every supported CI operating system even though the admitted
+compatibility row itself remains Linux-only.
 
 ## Candidate categories
 
