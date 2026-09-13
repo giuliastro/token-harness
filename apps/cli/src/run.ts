@@ -31,6 +31,7 @@ import {
   runCandidateBenchmarkMatrix,
   runCandidateBenchmarkStart,
 } from './commands/candidate-benchmark.js';
+import { validateCandidateCampaignRuntimeSurface } from './commands/candidate-campaign-surface.js';
 import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
@@ -431,6 +432,29 @@ export async function run(options: RunOptions): Promise<number> {
     metrics: options.metrics ?? null,
     compatibilityRows: options.compatibilityRows ?? null,
   };
+
+  if (
+    (invocation.command === 'benchmark-matrix' || invocation.command === 'benchmark-start') &&
+    context.optimizationCandidate !== null &&
+    context.harness !== null
+  ) {
+    const surfaceProblem = await validateCandidateCampaignRuntimeSurface(
+      context,
+      invocation.command === 'benchmark-start' && context.benchmarkVariant === 'optimized',
+    );
+    if (surfaceProblem !== null) {
+      return emit(
+        commandResult({
+          command: invocation.command,
+          exitCode: EXIT_CODES['unsupported-environment'],
+          diagnostics: [surfaceProblem],
+        }),
+        options,
+        renderContext,
+        json,
+      );
+    }
+  }
 
   const table = options.commands ?? DEFAULT_COMMANDS;
   let result: CommandResult<unknown>;
