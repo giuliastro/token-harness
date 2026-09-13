@@ -1,0 +1,33 @@
+name: Format mcptoon footprint receipt test
+
+on:
+  push:
+    branches:
+      - codex/mcptoon-manifest-footprint
+    paths:
+      - .github/workflows/format-mcptoon-footprint.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/mcptoon-manifest-footprint
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write apps/cli/test/mcptoon-manifest-footprint-receipt.test.ts
+      - name: Commit formatting and remove one-shot workflow
+        run: |
+          rm .github/workflows/format-mcptoon-footprint.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/cli/test/mcptoon-manifest-footprint-receipt.test.ts .github/workflows/format-mcptoon-footprint.yml
+          git commit -m "style(mcptoon): format footprint receipt tests"
+          git push origin HEAD:codex/mcptoon-manifest-footprint
