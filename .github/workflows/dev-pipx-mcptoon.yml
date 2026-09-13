@@ -25,6 +25,7 @@ jobs:
       - run: python scripts/dev/patch-pipx-mcptoon.py
       - run: python scripts/dev/patch-pipx-invariant.py
       - run: python scripts/dev/patch-mcptoon-probe.py
+      - run: python scripts/dev/patch-mcptoon-managed-runner.py
       - name: Format patched sources
         run: pnpm exec prettier --write packages/core/src/state/install.ts packages/core/test/package-inventory.test.ts packages/core/test/pipx-install.test.ts packages/core/test/update-inputs.test.ts packages/adapters/src/providers/mcptoon-candidate.ts packages/adapters/test/mcptoon-candidate.test.ts packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
       - run: pnpm typecheck
