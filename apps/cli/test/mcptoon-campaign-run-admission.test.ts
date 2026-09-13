@@ -49,7 +49,6 @@ describe('mcptoon campaign CLI admission', () => {
     assert.equal(result.exitCode, 9);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /mcptoon/);
-    assert.match(result.stderr, /native Linux/);
     assert.doesNotMatch(result.stderr, /Start baseline/);
   });
 
@@ -71,6 +70,26 @@ describe('mcptoon campaign CLI admission', () => {
     assert.equal(result.exitCode, 9);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /mcptoon/);
-    assert.match(result.stderr, /native Linux/);
+  });
+
+  it('keeps the complete fail-closed reason machine-readable under --json', async () => {
+    const result = await runWindows([
+      'benchmark-matrix',
+      '--benchmark-id',
+      'mcptoon-real-codex',
+      '--candidate',
+      'mcptoon',
+      '--harness',
+      'codex',
+      '--json',
+    ]);
+
+    assert.equal(result.exitCode, 9);
+    assert.equal(result.stderr, '');
+    const envelope = JSON.parse(result.stdout) as {
+      diagnostics: Array<{ code: string; message: string }>;
+    };
+    assert.equal(envelope.diagnostics[0]?.code, 'candidate-benchmark-campaign-surface-unreviewed');
+    assert.match(envelope.diagnostics[0]?.message ?? '', /native Linux/);
   });
 });
