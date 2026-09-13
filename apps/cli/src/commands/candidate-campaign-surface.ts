@@ -73,11 +73,7 @@ export async function validateCandidateCampaignRuntimeSurface(
   const harnessId = context.harness;
   if (candidateId !== 'mcptoon' || harnessId === null) return null;
 
-  const surfaceProblem = validateCandidateCampaignSurface(
-    candidateId,
-    harnessId,
-    context.platform,
-  );
+  const surfaceProblem = validateCandidateCampaignSurface(candidateId, harnessId, context.platform);
   if (surfaceProblem !== null) return surfaceProblem;
 
   if (context.adapters === null) {
