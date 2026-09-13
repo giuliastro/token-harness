@@ -1,0 +1,38 @@
+name: Format mcptoon candidate
+
+on:
+  push:
+    branches:
+      - codex/candidate-managed-lifecycle
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/candidate-managed-lifecycle
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm exec prettier --write
+          packages/adapters/src/providers/mcptoon-managed.ts
+          packages/adapters/src/providers/index.ts
+          packages/adapters/test/mcptoon-managed.test.ts
+      - name: Commit formatted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/adapters/src/providers/mcptoon-managed.ts packages/adapters/src/providers/index.ts packages/adapters/test/mcptoon-managed.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "style: format mcptoon managed slice"
+            git push origin HEAD:codex/candidate-managed-lifecycle
+          fi
