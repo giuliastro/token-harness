@@ -76,6 +76,32 @@ optimized benchmark window; it does not prove which operating-system process ini
 The standard paired-campaign discipline and combined-stack validation remain required before a
 promotion decision.
 
+## Passive manifest footprint evidence
+
+A second sidecar records a candidate-specific **mechanism footprint** without contacting an MCP
+server. At the end of an optimized mcptoon benchmark, Token Harness reads the existing reviewed
+0.7.10 cache at `~/.cache/mcptoon/schema_cache.json` and compares two representations of the same
+cached tool inventory:
+
+- the complete pretty-printed JSON schema manifest; and
+- the full names-only compact index used for schema-light discovery.
+
+The receipt persists only aggregate facts: mcptoon version, server count, tool count, JSON bytes,
+compact bytes, byte reduction, reduction percentage, and oldest/newest cache timestamps. Server
+names, tool names, schemas, descriptions, prompts, MCP arguments/results, credentials and source code
+are discarded before the receipt is written.
+
+This measurement is deliberately **not** added to Token Harness's token, quota, time or subscription
+savings totals. It establishes how much smaller mcptoon's compact discovery representation is for the
+local cached MCP inventory; it does not prove that the full JSON representation would otherwise have
+entered the model context on that task. Campaign reports therefore show the latest observed snapshot
+plus observed/non-observed pair counts instead of summing repeated inventory snapshots into a fake
+cumulative saving.
+
+An absent cache stays `unavailable`, malformed cache data stays `invalid`, and any build other than
+exact mcptoon 0.7.10 stays `unsupported-version`. Activation evidence and repeated paired task quality
+and usage evidence remain separate requirements.
+
 ## Project maturity review
 
 The upstream project-maturity gate was explicitly reviewed on **2026-09-13**. This is project-level
@@ -96,11 +122,12 @@ this pass does not approve future mcptoon versions or widen any compatibility ro
 
 ## What remains before promotion
 
-The lifecycle, activation and maturity checkpoints close real evidence gaps, but they do not put
-mcptoon in `PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready selection
-evidence from repeated paired workloads, combined-stack validation with RTK and HarnessTrim, and a
-separate compatibility/reversibility decision for the intended promoted surface. Additional exact
-harness/platform compatibility may be required before that compatibility gate can pass.
+The lifecycle, activation, footprint and maturity checkpoints close real evidence gaps, but they do
+not put mcptoon in `PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready
+selection evidence from repeated paired workloads, combined-stack validation with RTK and
+HarnessTrim, and a separate compatibility/reversibility decision for the intended promoted surface.
+Additional exact harness/platform compatibility may be required before that compatibility gate can
+pass.
 
 Upstream claims or fixture-only results are never copied into user savings. A positive promotion
 signal must come from Token Harness's own attributable campaign evidence while preserving quality.
