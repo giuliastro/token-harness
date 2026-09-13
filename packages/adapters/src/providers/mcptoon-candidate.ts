@@ -59,7 +59,7 @@ export function parseMcptoonManifestCapabilities(text: string): {
  *
  * This never runs `mcptoon sync`, never writes agent MCP configuration, never starts `serve`, and
  * never enables result-side TOON compression. It only checks whether the local CLI exposes the two
- * explicit manifest surfaces Token Harness needs for a native-vs-compact benchmark.
+ * global output surfaces Token Harness needs for a native-vs-compact benchmark.
  */
 export async function observeMcptoonCandidate(
   context: ProviderContext,
@@ -121,15 +121,15 @@ export async function observeMcptoonCandidate(
     };
   }
 
-  const manifestOutcome = await context.runner.run({
+  const helpOutcome = await context.runner.run({
     executable: 'mcptoon',
-    args: ['manifest', '--help'],
+    args: ['--help'],
     cwd: context.projectRoot,
     timeoutMs: 20_000,
   });
   const capabilities =
-    manifestOutcome.failure === null && manifestOutcome.exitCode === 0
-      ? parseMcptoonManifestCapabilities(`${manifestOutcome.stdout}\n${manifestOutcome.stderr}`)
+    helpOutcome.failure === null && helpOutcome.exitCode === 0
+      ? parseMcptoonManifestCapabilities(`${helpOutcome.stdout}\n${helpOutcome.stderr}`)
       : { compact: false, json: false };
 
   if (!capabilities.compact || !capabilities.json) {
