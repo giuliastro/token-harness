@@ -410,7 +410,8 @@ export async function runPackageChannelUpdateCheck(
     { ...context, confirmed: false },
     { preserveConfirmationReport: true },
   );
-  if (result.exitCode !== EXIT_CODES['confirmation-required'] || result.data === null) return result;
+  if (result.exitCode !== EXIT_CODES['confirmation-required'] || result.data === null)
+    return result;
   return commandResult<UpdateReport>({
     command: 'update',
     exitCode: EXIT_CODES.ok,
