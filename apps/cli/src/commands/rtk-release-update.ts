@@ -41,11 +41,15 @@ export interface DirectRtkWindowsReleasePlanningResult {
  *
  * This is package replacement policy, not harness mutation policy. The target still has to pass the
  * provider-only package admission gate; nothing here authorizes a Claude/Codex/OpenCode write.
+ *
+ * The direct replacement is deliberately stricter than normal command discovery: exactly one
+ * `rtk.exe` may resolve. `--yes` can explicitly adopt one existing binary for this transaction, but
+ * it must never mean "pick the first of several PATH entries and overwrite it".
  */
 export async function planDirectRtkWindowsRelease(input: {
   providerId: ProviderId;
   installedVersion: string | null;
-  executablePath: string | null;
+  executablePaths: readonly string[];
   channelAvailableVersion: string | null;
   platform: PlatformFacts;
   fs: FileSystemPort;
@@ -58,7 +62,7 @@ export async function planDirectRtkWindowsRelease(input: {
   });
   if (input.providerId !== 'rtk') return empty();
   if (input.platform.os !== 'windows' || input.platform.isWsl) return empty();
-  if (input.installedVersion === null || input.executablePath === null) return empty();
+  if (input.installedVersion === null) return empty();
 
   const installed = parseSemanticVersion(input.installedVersion);
   const targetText = reviewedProviderPackageMaximum(input.providerId);
@@ -74,6 +78,29 @@ export async function planDirectRtkWindowsRelease(input: {
 
   const admission = admitProviderPackageUpdate(input.providerId, targetText);
   if (admission.state !== 'admitted') return empty();
+
+  if (input.executablePaths.length !== 1) {
+    const detail =
+      input.executablePaths.length === 0
+        ? 'no concrete rtk.exe path could be resolved'
+        : `${String(input.executablePaths.length)} different rtk.exe paths resolve: ${input.executablePaths.join(', ')}`;
+    return {
+      plan: null,
+      destinations: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'rtk-release-target-ambiguous',
+          subject: input.providerId,
+          message: `The verified GitHub release fallback was not planned because ${detail}`,
+          remediation:
+            'Make exactly one intended RTK executable resolve on PATH, then re-run update; Token Harness will not choose an arbitrary binary to overwrite',
+        }),
+      ],
+    };
+  }
+  const executablePath = input.executablePaths[0];
+  if (executablePath === undefined) return empty();
 
   const runtime = rtkWindowsReleaseRuntimeFor(input.fs, input.runner);
   if (runtime === null) return empty();
@@ -96,7 +123,7 @@ export async function planDirectRtkWindowsRelease(input: {
   }
 
   const digest = digestText(
-    `${input.providerId} github-release ${input.installedVersion} ${targetText} ${input.executablePath}`,
+    `${input.providerId} github-release ${input.installedVersion} ${targetText} ${executablePath}`,
   );
   return {
     plan: {
@@ -104,7 +131,7 @@ export async function planDirectRtkWindowsRelease(input: {
       providerId: input.providerId,
       installed: input.installedVersion,
       target: targetText,
-      targetPath: input.executablePath,
+      targetPath: executablePath,
       asset: queried.asset,
       runtime,
     },
