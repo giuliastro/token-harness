@@ -1,0 +1,52 @@
+{
+  "stage": "rollback",
+  "harness": "claude",
+  "provider": "mcptoon",
+  "observed": {
+    "harnessVersion": "2.1.269",
+    "providerVersion": "0.7.10",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.1"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"theme\": \"dark\",\n  \"userOwnedFixture\": true\n}\n"
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": true,
+      "kind": "directory",
+      "entries": [
+        {
+          "name": "user-owned",
+          "kind": "directory"
+        }
+      ]
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    },
+    "~/.claude/skills/mcptoon/SKILL.md": {
+      "present": false
+    },
+    "~/.claude/skills/user-owned/SKILL.md": {
+      "present": true,
+      "kind": "file",
+      "contents": "---\nname: user-owned\ndescription: Fixture content owned by the user, never by Token Harness.\n---\n\n# User-owned skill\nKeep this content byte-for-byte.\n"
+    }
+  }
+}

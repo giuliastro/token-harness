@@ -1,0 +1,15 @@
+{
+  "operation": "rollback",
+  "transactionId": "mcptoon-claude-apply-1",
+  "outcome": "rolled-back",
+  "exitCode": 0,
+  "ownership": [],
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "transaction-rolled-back",
+      "message": "Transaction mcptoon-claude-apply-1 was reversed: 2 files were restored and verified",
+      "path": null
+    }
+  ]
+}
