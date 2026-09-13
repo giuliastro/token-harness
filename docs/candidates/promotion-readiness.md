@@ -34,7 +34,8 @@ not alter gate state or make a candidate part of the managed stack.
 
 ### mcptoon lifecycle checkpoint
 
-The reviewed mcptoon slice now covers the lifecycle mechanics needed for a future promotion decision:
+The reviewed mcptoon slice covers the lifecycle mechanics needed for a future promotion decision, and
+the formal `managed-lifecycle` gate is explicitly passed for **mcptoon 0.7.10**:
 
 - exact-version installation through an already-present `pipx`, with machine-readable inventory,
   prior-version restore, and verified uninstall when the pre-transaction state was package absence;
@@ -44,18 +45,20 @@ The reviewed mcptoon slice now covers the lifecycle mechanics needed for a futur
 - passive verification through installed version, root CLI capability discovery and the owned
   instruction surface — normal `verify` does not run `manifest` or contact configured MCP servers;
 - live Ubuntu `pipx` smoke coverage for mcptoon 0.7.10 installation, inventory, uninstall and
-  restoration of the absent state;
+  restoration of the absent state; and
 - an exact RFC 0009 recording for **mcptoon 0.7.10 × Codex 0.152.1 × Linux non-WSL**, captured on a
   real Ubuntu runner with brownfield state, managed apply, user drift, verified rollback and surgical
-  uninstall. The row admits only that exact combination; Codex 0.152.2, mcptoon 0.7.11, WSL and
-  Windows remain refused.
+  uninstall.
+
+Passing `managed-lifecycle` does **not** pass `compatibility-reversibility`. The exact row still admits
+only that recorded combination; Codex 0.152.2, mcptoon 0.7.11, WSL and Windows remain refused, and the
+intended promoted harness/platform surface still needs a separate compatibility decision.
 
 ### mcptoon activation checkpoint
 
-Optimized mcptoon benchmark pairs now have a reviewed passive activation witness for the exact
-reviewed build, **mcptoon 0.7.10**. Token Harness snapshots mcptoon's local usage record at
-`benchmark-start` and seals the result at `benchmark-finish`; it never invokes an MCP tool merely to
-prove activation.
+Optimized mcptoon benchmark pairs have a reviewed passive activation witness for the exact reviewed
+build, **mcptoon 0.7.10**. Token Harness snapshots mcptoon's local usage record at `benchmark-start`
+and seals the result at `benchmark-finish`; it never invokes an MCP tool merely to prove activation.
 
 The receipt deliberately keeps only the minimum evidence needed for the gate: reviewed version,
 monotonic call counters, bounded timestamps, successful-call count and the resulting witness state.
@@ -71,14 +74,18 @@ The evidence establishes that reviewed mcptoon activity occurred in the measured
 user environment. Candidate attribution and a browser acknowledgement remain insufficient on their
 own.
 
+### mcptoon project maturity checkpoint
+
+The formal `project-maturity` gate is also backed by an explicit review dated **2026-09-13**. The
+Apache-2.0 upstream is active and non-archived, stable releases span 2026-08-12 through 2026-09-12,
+and recent releases document regression fixes plus release/test discipline. The repository is still
+young, so that remains explicit residual risk and future versions do not inherit the review.
+
 These checkpoints do **not** make mcptoon promotion-eligible and do not put it in
-`PROVIDER_ADAPTERS`. One exact Codex/Linux compatibility row and the activation mechanism now exist,
-but a real candidate campaign still has to produce promising selection evidence and verified
-activation receipts. Combined-stack validation, project maturity, and any additional harness/platform
-compatibility required by the intended promoted surface also have to pass independently. No semver
-inference substitutes for those gates. Repository CI exercises the row-admission and non-widening
-tests on every supported CI operating system even though the admitted compatibility row itself
-remains Linux-only.
+`PROVIDER_ADAPTERS`. A real candidate campaign still has to produce promising selection evidence and
+verified activation receipts. Combined-stack validation and the separate compatibility/reversibility
+decision for the intended promoted surface also have to pass independently. No semver inference
+substitutes for those gates.
 
 ## Candidate categories
 
