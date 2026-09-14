@@ -130,7 +130,7 @@ describe('progressive human rendering', () => {
       verbose: true,
     }).report;
 
-    assert.atch(output, /^Token Harness 0\.1\.6/);
+    assert.match(output, /^Token Harness 0\.1\.6/);
     assert.doesNotMatch(output, /^TOKEN HARNESS -/);
   });
 });

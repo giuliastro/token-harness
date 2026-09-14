@@ -119,7 +119,9 @@ export interface ProviderUpdateRow {
     | 'unavailable'
     /** Nothing to update: `update` does not install what was never there. */
     | 'not-installed'
-     /**
+    /** The provider declares no channel for this platform. */
+    | 'no-channel'
+    /**
      * A newer version exists, but this provider is managed by Token Harness on at least one
      * harness and no compatibility row admits that target version there.
      */
