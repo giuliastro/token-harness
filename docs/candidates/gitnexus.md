@@ -53,10 +53,17 @@ surgical ownership receipt for one `mcp_servers` entry, so enabling it here woul
 safe than Claude. That gap must be closed before Codex MCP registration is admitted.
 
 The lifecycle and brownfield-safety tests run in the repository's normal Ubuntu, macOS and Windows
-CI matrix even though this checkpoint currently admits only Claude's JSON configuration surface.
-This checkpoint closes part of the lifecycle/reversibility work only. It does not provide selection
-evidence, real optimized-workload activation evidence, combined-stack validation, project-maturity
-admission, or an RFC 0009 compatibility row, and therefore does not make GitNexus promotion-eligible.
+CI matrix. In addition, a real Ubuntu 24.04 recording now backs one exact RFC 0009 row:
+**Claude Code 2.1.269 × GitNexus 1.6.12 × Linux non-WSL**. The recording used an isolated home and
+project, exercised the production planner and transaction ownership, refused removal after drift,
+verified rollback, and surgically removed only `mcpServers.gitnexus` while preserving unrelated
+pre-existing and post-apply user MCP entries/settings. Verification remained `config-only` and did
+not start the MCP server. This evidence does not widen to adjacent Claude/GitNexus versions, WSL,
+Windows, macOS or Codex.
+
+This checkpoint closes only one exact compatibility/reversibility point. It does not provide
+selection evidence, real optimized-workload activation evidence, combined-stack validation, broad
+compatibility, or project/license admission, and therefore does not make GitNexus promotion-eligible.
 
 ## 2026-09-14 selection and licensing checkpoint
 
@@ -94,22 +101,17 @@ GitNexus may be promoted only after a paired, reproducible benchmark against the
 
 `native Claude Code/Codex + active RTK + active HarnessTrim`
 
-The benchmark workflow supports `--candidate gitnexus`, but **new GitNexus campaign starts are not
-currently admitted by the production compatibility table**. Before either a baseline or optimized
-capture can start, RFC 0009 must contain a reviewed row matching the exact harness version, platform,
-non-WSL state and GitNexus `1.6.12`. No such production row is shipped yet. This is intentional:
-repository lifecycle tests prove the narrow transaction mechanics, but they are not a substitute for
-a real harness/platform compatibility recording. Matrix/report reads remain passive even without a
-row. Tests may inject a synthetic row to exercise the gate, but that test-only fixture is not support
-evidence and is never added to `COMPATIBILITY_ROWS`.
+The benchmark workflow supports `--candidate gitnexus`. New campaign starts first pass RFC 0009
+admission and then passively confirm exact GitNexus `1.6.12`. The production table currently admits
+**only Claude Code 2.1.269 on native Linux (non-WSL)** for GitNexus. Adjacent Claude versions,
+Windows, macOS, WSL and Codex remain refused until separately recorded and reviewed. Matrix/report
+reads remain passive even outside an admitted row.
 
-Once a real row is reviewed, a new campaign start must first match that row and then passively confirm
-the exact GitNexus `1.6.12` CLI. The baseline remains a production-stack-only run: witnessing the
-installed binary version does not activate GitNexus. New `candidate.json` sidecars persist that exact
-`candidateVersion`, and only sidecars carrying reviewed `1.6.12` provenance may contribute GitNexus
-candidate matrix/campaign evidence. Legacy or mismatched sidecars remain readable historical data but
-fail closed for the GitNexus candidate gate; Token Harness does not rewrite historical benchmark
-receipts to retrofit provenance.
+The baseline remains a production-stack-only run: witnessing the installed binary version does not
+activate GitNexus. New `candidate.json` sidecars persist exact `candidateVersion: 1.6.12`, and only
+sidecars carrying that reviewed provenance may contribute GitNexus candidate matrix/campaign evidence.
+Legacy or mismatched sidecars remain readable historical data but fail closed for the GitNexus
+candidate gate; Token Harness does not rewrite historical benchmark receipts to retrofit provenance.
 
 For new receipts, Token Harness records a bounded GitNexus MCP runtime witness from the harness-native
 MCP inventory at benchmark start and finish. A GitNexus baseline is candidate evidence only when that
