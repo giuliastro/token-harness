@@ -245,6 +245,15 @@ describe('GitNexus benchmark version provenance', () => {
     assert.notEqual(read, 'absent');
   });
 
+  it('treats sentinel-like corrupt receipt JSON as invalid instead of falling back to capture', async () => {
+    const world = fixture();
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture());
+    assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), true);
+
+    world.put(BASELINE_RECEIPT_PATH, 'absent');
+    assert.equal(await readCandidateBenchmarkAttribution(world.context, BENCHMARK_ID), 'invalid');
+  });
+
   it('does not write candidate attribution for an unreviewed GitNexus build', async () => {
     const world = fixture('1.6.13-rc.1');
     world.put(BASELINE_CAPTURE_PATH, baselineCapture());
