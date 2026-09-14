@@ -9,8 +9,8 @@ import type {
   ProcessRunner,
 } from '@token-harness/core';
 
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '../src/providers/gitnexus-candidate.js';
 import {
-  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
   observeGitNexusCandidate,
   parseGitNexusCliCapabilities,
   parseGitNexusVersion,
