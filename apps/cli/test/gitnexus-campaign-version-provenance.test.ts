@@ -4,9 +4,13 @@ import { describe, it } from 'node:test';
 import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '@token-harness/adapters';
 import {
   harnessId,
+  type GitNexusMcpRuntimeState,
   type PlatformFacts,
   type ProcessOutcome,
   type ProcessRequest,
+  type TaskBenchmarkCapture,
+  type TaskBenchmarkContextSnapshot,
+  type TaskBenchmarkReceipt,
 } from '@token-harness/core';
 
 import {
@@ -25,7 +29,10 @@ const LINUX: PlatformFacts = {
   isWsl: false,
 };
 const BENCHMARK_ID = 'gitnexus-standard-1';
-const ATTRIBUTION_PATH = `/state/benchmarks/${BENCHMARK_ID}/candidate.json`;
+const BENCHMARK_ROOT = `/state/benchmarks/${BENCHMARK_ID}`;
+const ATTRIBUTION_PATH = `${BENCHMARK_ROOT}/candidate.json`;
+const BASELINE_CAPTURE_PATH = `${BENCHMARK_ROOT}/baseline.capture.json`;
+const BASELINE_RECEIPT_PATH = `${BENCHMARK_ROOT}/baseline.json`;
 
 function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
   return {
@@ -41,6 +48,68 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
     durationMs: 1,
     timedOut: false,
     failure: null,
+  };
+}
+
+function contextSnapshot(state: GitNexusMcpRuntimeState): TaskBenchmarkContextSnapshot {
+  return {
+    observationState: 'observed',
+    rawMcpServerCount: state === 'absent' ? 0 : 1,
+    rawKnownMcpToolCount: state === 'absent' ? 0 : 1,
+    unknownMcpToolServerCount: 0,
+    mcpInventoryTruncated: false,
+    effectiveStaticMcpServerCount: state === 'absent' ? 0 : 1,
+    effectiveStaticMcpToolCount: state === 'absent' ? 0 : 1,
+    toolDeferralState: null,
+    toolDeferralMechanism: null,
+    gitNexusMcpRuntimeState: state,
+  };
+}
+
+function baselineCapture(state: GitNexusMcpRuntimeState = 'absent'): TaskBenchmarkCapture {
+  return {
+    schemaVersion: 1,
+    benchmarkId: BENCHMARK_ID,
+    variant: 'baseline',
+    taskClass: 'standard',
+    harnessId: harnessId('codex'),
+    projectId: 'p_test',
+    model: null,
+    reasoningEffort: null,
+    verbosity: null,
+    startedAt: '2026-09-14T14:00:00.000Z',
+    usageBefore: [],
+    contextAtStart: contextSnapshot(state),
+    localSessionsBefore: null,
+  };
+}
+
+function baselineReceipt(
+  start: GitNexusMcpRuntimeState = 'absent',
+  finish: GitNexusMcpRuntimeState = 'absent',
+): TaskBenchmarkReceipt {
+  return {
+    schemaVersion: 1,
+    benchmarkId: BENCHMARK_ID,
+    variant: 'baseline',
+    taskClass: 'standard',
+    harnessId: harnessId('codex'),
+    model: null,
+    reasoningEffort: null,
+    verbosity: null,
+    startedAt: '2026-09-14T14:00:00.000Z',
+    completedAt: '2026-09-14T14:10:00.000Z',
+    usageBefore: [],
+    usageAfter: [],
+    contextAtStart: contextSnapshot(start),
+    contextAtFinish: contextSnapshot(finish),
+    localUsage: null,
+    outcome: {
+      qualityGate: 'passed',
+      attempts: 1,
+      failedAttempts: 0,
+      errorCodes: [],
+    },
   };
 }
 
@@ -99,7 +168,12 @@ function fixture(version = GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
       projectIdFor: () => 'p_test',
     } as unknown as CommandContext['adapters'],
   };
-  return { context, files, probes };
+
+  const put = (path: string, value: unknown) => {
+    files.set(path, new TextEncoder().encode(JSON.stringify(value)));
+  };
+
+  return { context, files, probes, put };
 }
 
 function attribution() {
@@ -116,14 +190,15 @@ describe('GitNexus benchmark version provenance', () => {
     const world = fixture();
     const legacy = attribution();
     assert.deepEqual(parseCandidateBenchmarkAttribution(legacy), legacy);
-    world.files.set(ATTRIBUTION_PATH, new TextEncoder().encode(JSON.stringify(legacy)));
+    world.put(ATTRIBUTION_PATH, legacy);
 
     assert.equal(await readCandidateBenchmarkAttribution(world.context, BENCHMARK_ID), 'invalid');
     assert.deepEqual(world.probes, []);
   });
 
-  it('persists and accepts the exact reviewed GitNexus build', async () => {
+  it('persists and accepts the exact reviewed build only for a clean baseline capture', async () => {
     const world = fixture();
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture());
     assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), true);
 
     const persisted = JSON.parse(new TextDecoder().decode(world.files.get(ATTRIBUTION_PATH))) as {
@@ -140,8 +215,39 @@ describe('GitNexus benchmark version provenance', () => {
     assert.deepEqual(world.probes, ['gitnexus --version']);
   });
 
+  it('does not write candidate attribution when GitNexus is present at baseline start', async () => {
+    const world = fixture();
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture('usable'));
+
+    assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), false);
+    assert.equal(world.files.has(ATTRIBUTION_PATH), false);
+    assert.deepEqual(world.probes, ['gitnexus --version']);
+  });
+
+  it('invalidates candidate evidence if GitNexus appears before the baseline finishes', async () => {
+    const world = fixture();
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture());
+    assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), true);
+
+    world.put(BASELINE_RECEIPT_PATH, baselineReceipt('absent', 'usable'));
+    assert.equal(await readCandidateBenchmarkAttribution(world.context, BENCHMARK_ID), 'invalid');
+    assert.deepEqual(world.probes, ['gitnexus --version']);
+  });
+
+  it('keeps completed baseline evidence only when GitNexus is absent at both boundaries', async () => {
+    const world = fixture();
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture());
+    assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), true);
+
+    world.put(BASELINE_RECEIPT_PATH, baselineReceipt());
+    const read = await readCandidateBenchmarkAttribution(world.context, BENCHMARK_ID);
+    assert.notEqual(read, 'invalid');
+    assert.notEqual(read, 'absent');
+  });
+
   it('does not write candidate attribution for an unreviewed GitNexus build', async () => {
     const world = fixture('1.6.13-rc.1');
+    world.put(BASELINE_CAPTURE_PATH, baselineCapture());
     assert.equal(await writeCandidateBenchmarkAttribution(world.context, attribution()), false);
     assert.equal(world.files.has(ATTRIBUTION_PATH), false);
     assert.deepEqual(world.probes, ['gitnexus --version']);
