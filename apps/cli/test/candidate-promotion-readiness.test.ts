@@ -139,6 +139,27 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.promotionEligible, false);
   });
 
+  it('describes GitNexus unsupported versions as an exact reviewed-build mismatch', () => {
+    const result = assessCandidatePromotionReadiness({
+      candidateId: 'gitnexus',
+      assessment: evidence('gitnexus'),
+      observation: observation('gitnexus', {
+        state: 'unsupported-version',
+        version: '1.6.13-rc.1',
+        minimumBenchmarkVersion: '1.6.12',
+      }),
+      review: PASS,
+    });
+
+    const capability = result.gates.find((gate) => gate.id === 'benchmark-capability');
+    assert.equal(capability?.state, 'blocked');
+    assert.match(
+      capability?.reason ?? '',
+      /does not match exact reviewed benchmark build 1\.6\.12/,
+    );
+    assert.equal(capability?.reason.includes('below the reviewed benchmark baseline'), false);
+  });
+
   it('can become eligible only when every required reviewed gate passes', () => {
     const result = assessCandidatePromotionReadiness({
       candidateId: 'gitnexus',

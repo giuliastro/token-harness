@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '@token-harness/adapters';
 import type {
   FileSystemPort,
   PlatformFacts,
@@ -56,11 +57,28 @@ function missingOutcome(request: ProcessRequest): ProcessOutcome {
   };
 }
 
+function successOutcome(request: ProcessRequest, stdout: string): ProcessOutcome {
+  return {
+    displayCommand: `${request.executable} ${request.args.join(' ')}`,
+    interpreter: 'direct',
+    executablePath: `/usr/bin/${request.executable}`,
+    exitCode: 0,
+    signal: null,
+    stdout,
+    stderr: '',
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    durationMs: 1,
+    timedOut: false,
+    failure: null,
+  };
+}
+
 const RUNNER: ProcessRunner = {
   run: (request) => Promise.resolve(missingOutcome(request)),
 };
 
-function context(): CommandContext {
+function context(runner: ProcessRunner = RUNNER): CommandContext {
   return {
     platform: FACTS,
     projectRoot: '/work/demo',
@@ -91,7 +109,7 @@ function context(): CommandContext {
     metrics: null,
     adapters: {
       fs: NO_FILESYSTEM,
-      runner: RUNNER,
+      runner,
       paths: {
         home: '/home/dev',
         config: '/home/dev/.config/token-harness',
@@ -117,10 +135,36 @@ test('projects all read-only optimization candidates into the shared context sna
   const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
   assert.equal(gitnexus?.state, 'absent');
   assert.equal(gitnexus?.category, 'repository-exploration');
-  assert.equal(gitnexus?.minimumBenchmarkVersion, 'capability-gated');
+  assert.equal(gitnexus?.minimumBenchmarkVersion, GITNEXUS_REVIEWED_BENCHMARK_VERSION);
   assert.ok(
     snapshot.diagnostics.some(
       (item) => item.subject === 'gitnexus' && item.code === 'context-optimizer-gitnexus-absent',
     ),
   );
+});
+
+test('rejects unreviewed GitNexus versions before capability probes', async () => {
+  const gitNexusProbes: string[] = [];
+  const runner: ProcessRunner = {
+    run: (request) => {
+      if (request.executable !== 'gitnexus') return Promise.resolve(missingOutcome(request));
+      gitNexusProbes.push(request.args.join(' '));
+      if (request.args.length === 1 && request.args[0] === '--version') {
+        return Promise.resolve(successOutcome(request, 'gitnexus 1.6.13-rc.1\n'));
+      }
+      return Promise.reject(new Error(`unexpected GitNexus probe: ${request.args.join(' ')}`));
+    },
+  };
+
+  const snapshot = await observeContextOptimizationCandidates(context(runner));
+  const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
+  const diagnostic = snapshot.diagnostics.find((item) => item.subject === 'gitnexus');
+
+  assert.equal(gitnexus?.state, 'unsupported-version');
+  assert.equal(gitnexus?.version, '1.6.13-rc.1');
+  assert.equal(gitnexus?.minimumBenchmarkVersion, GITNEXUS_REVIEWED_BENCHMARK_VERSION);
+  assert.equal(diagnostic?.code, 'context-optimizer-gitnexus-version');
+  assert.equal(diagnostic?.severity, 'warning');
+  assert.match(diagnostic?.message ?? '', /not the reviewed benchmark build 1\.6\.12/);
+  assert.deepEqual(gitNexusProbes, ['--version']);
 });

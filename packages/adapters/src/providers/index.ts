@@ -14,6 +14,7 @@ import { withProviderVersionCompatibility } from './version-compatibility.js';
 
 export * from './contract.js';
 export {
+  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
   observeGitNexusCandidate,
   parseGitNexusCliCapabilities,
   parseGitNexusVersion,
