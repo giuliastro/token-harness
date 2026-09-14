@@ -58,6 +58,36 @@ This checkpoint closes part of the lifecycle/reversibility work only. It does no
 evidence, real optimized-workload activation evidence, combined-stack validation, project-maturity
 admission, or an RFC 0009 compatibility row, and therefore does not make GitNexus promotion-eligible.
 
+## 2026-09-14 selection and licensing checkpoint
+
+GitNexus is the next candidate to evaluate before Headroom. The reason is mechanism fit, not upstream
+benchmark marketing: GitNexus can supply repository graph/code-intelligence queries that may replace
+repeated repository exploration, while RTK and HarnessTrim already focus on tool/output efficiency.
+Headroom's broad proxy and context-rewriting surface overlaps more directly with existing optimization
+ownership and would make marginal attribution and rollback harder.
+
+The exact upstream tuple reviewed for this checkpoint is GitNexus `1.6.12`. Upstream maintenance is
+active: stable `1.6.11` was published on 2026-09-04, stable `1.6.12` on 2026-09-12, and
+`1.6.13-rc.1` followed on 2026-09-14. The release candidate does not inherit the reviewed `1.6.12`
+lifecycle evidence and must not widen the pin automatically.
+
+Licensing is a separate gate from technical maintenance. The exact `1.6.12` npm package and upstream
+LICENSE declare **PolyForm Noncommercial 1.0.0**. Token Harness therefore records the narrow Claude
+MCP lifecycle as reviewed technical evidence but keeps the project/license promotion gate **blocked**
+for generic managed commercial-production use. This is not a determination of any particular user's
+legal rights; promotion requires suitable license terms or an appropriate license review for the
+intended deployment.
+
+Consequences for Token Harness:
+
+- do not auto-install GitNexus or a package manager;
+- do not add GitNexus to `PROVIDER_ADAPTERS`;
+- do not convert upstream benchmark claims into Token Harness savings;
+- do not widen the lifecycle to Codex or arbitrary GitNexus versions/platform assumptions;
+- keep setup/analyze/index creation, skills and hooks outside the managed candidate lifecycle;
+- keep compatibility/reversibility, selection evidence, runtime activation and combined-stack
+  validation as independent gates.
+
 ## Admission benchmark
 
 GitNexus may be promoted only after a paired, reproducible benchmark against the actual baseline:
