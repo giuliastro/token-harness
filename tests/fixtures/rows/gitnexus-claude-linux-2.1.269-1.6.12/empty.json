@@ -1,0 +1,38 @@
+{
+  "stage": "empty",
+  "harness": "claude",
+  "provider": "gitnexus",
+  "observed": {
+    "harnessVersion": "2.1.269",
+    "providerVersion": "1.6.12",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.1"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": false
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    },
+    "~/.claude.json": {
+      "present": false
+    }
+  }
+}

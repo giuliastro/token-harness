@@ -66,14 +66,15 @@ export interface CompatibilityRow {
  * table is an admission set, not a list of things that probably work.
  *
  * Windows supplied the first reviewed rows. Linux now has an exact Codex 0.152.1 row for HarnessTrim
- * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, plus an exact Claude Code
- * 2.1.269 row for mcptoon 0.7.10. The mcptoon
- * recordings ran on Ubuntu 24.04.5 and exercised each owned instruction surface through managed apply,
- * user drift, verified rollback, and surgical uninstall while preserving unrelated user content.
- * Windows also has live isolated recordings for Claude
- * Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised Bash and PowerShell hook entries,
- * drift, verified rollback, and surgical uninstall. None of those points widens a neighbouring row by
- * inference. macOS still has no reviewed mutation row.
+ * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, an exact Claude Code 2.1.269 row
+ * for mcptoon 0.7.10, and an exact Claude Code 2.1.269 row for GitNexus 1.6.12. The mcptoon
+ * recordings exercised each owned instruction surface through managed apply, user drift, verified
+ * rollback, and surgical uninstall while preserving unrelated user content. The GitNexus recording
+ * exercised only the Claude user `mcpServers.gitnexus` JSON entry through the same ownership and
+ * rollback machinery; it did not run setup, indexing, or the MCP server. Windows also has live
+ * isolated recordings for Claude Code 2.1.251 with RTK 0.44.0 and 0.48.0; both recordings exercised
+ * Bash and PowerShell hook entries, drift, verified rollback, and surgical uninstall. None of those
+ * points widens a neighbouring row by inference. macOS still has no reviewed mutation row.
  *
  * ## What each row is standing on
  *
@@ -82,10 +83,10 @@ export interface CompatibilityRow {
  * rather than a guess that the next patch behaves the same way.
  *
  * The tiers differ because the evidence does. RTK's row claims `canary`: its history database is a
- * per-harness receipt `verify` can read on the user's machine. HarnessTrim and mcptoon claim
- * `config-only`: the former's skills-only install deliberately writes no hook, while the latter's
- * reviewed integration owns only agent instructions. A row must not promise a tier `verify` cannot
- * reach.
+ * per-harness receipt `verify` can read on the user's machine. HarnessTrim, mcptoon and GitNexus claim
+ * `config-only`: HarnessTrim's skills-only install deliberately writes no hook, mcptoon's reviewed
+ * integration owns only agent instructions, and GitNexus verification confirms the exact owned JSON
+ * entry without starting the MCP server. A row must not promise a tier `verify` cannot reach.
  */
 export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
   {
@@ -165,6 +166,19 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
     // refusal, verified rollback and surgical uninstall preserved unrelated Claude settings/skills.
     configSchema: 'claude-skills-directory',
     fixture: 'tests/fixtures/rows/mcptoon-claude-linux-2.1.269-0.7.10',
+    verificationTier: 'config-only',
+  },
+  {
+    harness: 'claude' as HarnessId,
+    harnessVersion: { minimum: '2.1.269', maximum: '2.1.269' },
+    provider: 'gitnexus' as ProviderId,
+    providerVersion: '1.6.12',
+    platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+    // Real Ubuntu/Linux recording: Token Harness owns only `mcpServers.gitnexus` in the Claude user
+    // JSON config. Drift refusal, verified rollback and surgical uninstall preserved unrelated MCP
+    // entries and user settings; passive verification did not start the MCP server.
+    configSchema: 'claude-user-json-mcp-entry',
+    fixture: 'tests/fixtures/rows/gitnexus-claude-linux-2.1.269-1.6.12',
     verificationTier: 'config-only',
   },
   {

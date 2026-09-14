@@ -70,9 +70,9 @@ export const MCPTOON_PROJECT_MATURITY_REVIEW: CandidateProjectMaturityReviewReco
 };
 
 /**
- * Review of the narrow GitNexus lifecycle already merged in #265. This is intentionally limited to
- * the exact 1.6.12 CLI and Claude Code user MCP JSON entry. Token Harness does not install GitNexus,
- * run setup/analyze, create an index, or infer Codex support from this record.
+ * Review of the narrow GitNexus lifecycle already merged in #265 and its exact RFC 0009 recording.
+ * This remains limited to the exact 1.6.12 CLI and Claude Code user MCP JSON entry. Token Harness
+ * does not install GitNexus, run setup/analyze, create an index, or infer Codex support from it.
  */
 export const GITNEXUS_MANAGED_LIFECYCLE_REVIEW: CandidateManagedLifecycleReviewRecord = {
   candidateId: 'gitnexus',
@@ -81,11 +81,11 @@ export const GITNEXUS_MANAGED_LIFECYCLE_REVIEW: CandidateManagedLifecycleReviewR
   packageManager: 'user-installed npm CLI; Token Harness does not install it',
   activationSurfaces: ['Claude Code user MCP entry mcpServers.gitnexus'],
   residualScope:
-    'Lifecycle evidence is Claude JSON configuration only. Codex surgical TOML ownership, RFC 0009 compatibility, indexing/setup ownership and combined-stack behavior remain unreviewed.',
+    'Lifecycle evidence is Claude JSON configuration only. One exact RFC 0009 row covers Claude Code 2.1.269 on native Linux; Codex surgical TOML ownership, compatibility breadth, indexing/setup ownership and combined-stack behavior remain unreviewed.',
   result: {
     state: 'passed',
     reason:
-      'Reviewed 2026-09-14 for GitNexus 1.6.12: the already-landed Claude MCP primitive uses snapshot-backed merge-json ownership, preserves brownfield user ownership, passively verifies the exact entry, removes only the recorded owned entry, and fails closed on drift. It does not install GitNexus or run setup/analyze/indexing.',
+      'Reviewed 2026-09-14 for GitNexus 1.6.12: the Claude MCP primitive uses snapshot-backed merge-json ownership, preserves brownfield user ownership, passively verifies the exact entry, removes only the recorded owned entry, and fails closed on drift. A real Ubuntu recording proves those mechanics for exact Claude Code 2.1.269 on native Linux only. It does not install GitNexus or run setup/analyze/indexing.',
   },
 };
 

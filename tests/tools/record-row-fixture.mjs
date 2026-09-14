@@ -111,6 +111,7 @@ const PROVIDER_VERSION = {
   rtk: ['rtk', '--version'],
   harnesstrim: ['harnesstrim', '--version'],
   mcptoon: ['mcptoon', '--version'],
+  gitnexus: ['gitnexus', '--version'],
 };
 
 /** Key names whose values get listed for review. Not a redaction list — a reading list. */

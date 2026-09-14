@@ -1,0 +1,15 @@
+{
+  "operation": "rollback",
+  "transactionId": "gitnexus-claude-apply-1",
+  "outcome": "rolled-back",
+  "exitCode": 0,
+  "ownership": [],
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "transaction-rolled-back",
+      "message": "Transaction gitnexus-claude-apply-1 was reversed: 1 file was restored and verified",
+      "path": null
+    }
+  ]
+}

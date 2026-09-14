@@ -1,0 +1,8 @@
+{
+  "operation": "uninstall",
+  "transactionId": "gitnexus-claude-uninstall",
+  "outcome": "committed",
+  "exitCode": 0,
+  "ownership": [],
+  "diagnostics": []
+}

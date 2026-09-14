@@ -1,0 +1,23 @@
+{
+  "operation": "apply",
+  "transactionId": "gitnexus-claude-apply-2",
+  "outcome": "committed",
+  "exitCode": 0,
+  "ownership": [
+    {
+      "kind": "owned-json-entry",
+      "path": "/home/runner/work/token-harness/token-harness/.gitnexus-claude-row-home/.claude.json",
+      "pointer": "mcpServers.gitnexus",
+      "placement": "value",
+      "valueDigest": "sha256:bdd286d9b7fc3ad40469dfc9d14b18502d2813c52ec97f9c7f668c5301204693"
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "json-formatting-not-preserved",
+      "message": "Editing this document reformats parts of it that Token Harness cannot reproduce exactly, such as an object written on a single line",
+      "path": "/home/runner/work/token-harness/token-harness/.gitnexus-claude-row-home/.claude.json"
+    }
+  ]
+}
