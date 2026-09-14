@@ -1,0 +1,42 @@
+{
+  "stage": "uninstall",
+  "harness": "claude",
+  "provider": "gitnexus",
+  "observed": {
+    "harnessVersion": "2.1.269",
+    "providerVersion": "1.6.12",
+    "platform": {
+      "os": "linux",
+      "wsl": false,
+      "arch": "x64",
+      "nodeVersion": "22.13.1"
+    }
+  },
+  "configuration": {
+    "~/.claude/settings.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"userOwnedFixture\": true,\n  \"permissions\": {\n    \"allow\": [\"Read\"]\n  }\n}\n"
+    },
+    "~/.claude/settings.local.json": {
+      "present": false
+    },
+    "~/.claude/skills": {
+      "present": false
+    },
+    "<project>/.claude/settings.json": {
+      "present": false
+    },
+    "<project>/CLAUDE.md": {
+      "present": false
+    },
+    "<project>/.claude/skills": {
+      "present": false
+    },
+    "~/.claude.json": {
+      "present": true,
+      "kind": "file",
+      "contents": "{\n  \"theme\": \"dark\",\n  \"mcpServers\": {\n    \"userOwned\": {\n      \"command\": \"user-mcp\",\n      \"args\": [\n        \"--keep\"\n      ]\n    },\n    \"postApplyUserOwned\": {\n      \"command\": \"post-apply-user-mcp\",\n      \"args\": [\n        \"--keep-too\"\n      ]\n    }\n  },\n  \"changedAfterApply\": true\n}\n"
+    }
+  }
+}
