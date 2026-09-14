@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { COMPATIBILITY_ROWS, admitManagedMutation, harnessId, providerId } from '../src/index.js';
+import {
+  COMPATIBILITY_ROWS,
+  admitManagedMutation,
+  harnessId,
+  providerId,
+} from '../src/index.js';
 
 describe('GitNexus RFC 0009 compatibility row', () => {
   it('admits only the exact recorded Claude 2.1.269 × GitNexus 1.6.12 × Linux tuple', () => {
