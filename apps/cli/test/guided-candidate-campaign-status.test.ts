@@ -190,11 +190,12 @@ describe('guided candidate campaign status', () => {
       'the standard benchmark campaign is not complete',
       'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
     ]);
-    assert.equal(status.promotionReadiness?.passedGateCount, 3);
+    assert.equal(status.promotionReadiness?.passedGateCount, 4);
     assert.equal(status.promotionReadiness?.requiredGateCount, 8);
     assert.equal(status.promotionReadiness?.nextGate, 'selection-evidence');
     assert.equal(status.promotionReadiness?.state, 'blocked');
     assert.equal(status.promotionReadiness?.promotionEligible, false);
+    assert.ok(status.promotionReadiness?.blockedGateIds.includes('project-maturity'));
     assert.deepEqual(status.nextStep, {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
@@ -225,9 +226,10 @@ describe('guided candidate campaign status', () => {
       campaignId: 'gitnexus-codex-eval-m123abc',
     });
 
-    assert.equal(status.promotionReadiness?.passedGateCount, 1);
+    assert.equal(status.promotionReadiness?.passedGateCount, 2);
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('benchmark-capability'));
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('category-fit'));
+    assert.ok(status.promotionReadiness?.blockedGateIds.includes('project-maturity'));
     assert.equal(status.promotionReadiness?.promotionEligible, false);
   });
 });
