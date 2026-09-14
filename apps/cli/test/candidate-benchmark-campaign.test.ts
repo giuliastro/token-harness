@@ -9,6 +9,7 @@ import {
   type ProcessOutcome,
   type ProcessRequest,
   type TaskBenchmarkCapture,
+  type TaskBenchmarkContextSnapshot,
   type TaskBenchmarkReceipt,
   type TaskClass,
 } from '@token-harness/core';
@@ -31,6 +32,21 @@ const CODEX = harnessId('codex');
 const STATE = '/state';
 const ROOT = `${STATE}/benchmarks`;
 
+function cleanGitNexusBaselineContext(): TaskBenchmarkContextSnapshot {
+  return {
+    observationState: 'observed',
+    rawMcpServerCount: 0,
+    rawKnownMcpToolCount: 0,
+    unknownMcpToolServerCount: 0,
+    mcpInventoryTruncated: false,
+    effectiveStaticMcpServerCount: 0,
+    effectiveStaticMcpToolCount: 0,
+    toolDeferralState: null,
+    toolDeferralMechanism: null,
+    gitNexusMcpRuntimeState: 'absent',
+  };
+}
+
 function capture(
   benchmarkId: string,
   variant: 'baseline' | 'optimized',
@@ -48,6 +64,7 @@ function capture(
     verbosity: 'low',
     startedAt: variant === 'baseline' ? '2026-09-11T10:00:00.000Z' : '2026-09-11T11:00:00.000Z',
     usageBefore: [],
+    ...(variant === 'baseline' ? { contextAtStart: cleanGitNexusBaselineContext() } : {}),
     localSessionsBefore: null,
   };
 }
@@ -70,6 +87,12 @@ function receipt(
     completedAt: variant === 'baseline' ? '2026-09-11T10:20:00.000Z' : '2026-09-11T11:15:00.000Z',
     usageBefore: [],
     usageAfter: [],
+    ...(variant === 'baseline'
+      ? {
+          contextAtStart: cleanGitNexusBaselineContext(),
+          contextAtFinish: cleanGitNexusBaselineContext(),
+        }
+      : {}),
     localUsage: {
       inputTokens: variant === 'baseline' ? 1000 : 650,
       cacheCreationTokens: 0,
