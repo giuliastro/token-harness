@@ -27,14 +27,19 @@ jobs:
           path = Path('apps/cli/src/commands/gitnexus-candidate-lifecycle.ts')
           text = path.read_text()
 
-          assert text.count('context.harness,') == 2
+          assert text.count('context.harness,') == 1
           assert text.count('planGitNexusManagedMcpActivation(provider, context.harness)') == 1
+          assert text.count('verifyGitNexusManagedMcpActivation(provider, context.harness);') == 1
           assert text.count('journal: built.journal,') == 2
 
           text = text.replace('context.harness,', 'context.harness!,')
           text = text.replace(
               'planGitNexusManagedMcpActivation(provider, context.harness)',
               'planGitNexusManagedMcpActivation(provider, context.harness!)',
+          )
+          text = text.replace(
+              'verifyGitNexusManagedMcpActivation(provider, context.harness);',
+              'verifyGitNexusManagedMcpActivation(provider, context.harness!);',
           )
           text = text.replace('journal: built.journal,', 'journal: built.journal as FileJournalStore,')
           path.write_text(text)
