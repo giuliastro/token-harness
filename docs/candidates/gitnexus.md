@@ -94,21 +94,30 @@ GitNexus may be promoted only after a paired, reproducible benchmark against the
 
 `native Claude Code/Codex + active RTK + active HarnessTrim`
 
-Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This
-only labels benchmark evidence; it does not activate GitNexus. New GitNexus benchmark starts also
-passively require the exact reviewed `1.6.12` CLI before either the baseline or optimized capture is
-created. The baseline remains a production-stack-only run: witnessing the installed binary version
-does not activate GitNexus. New `candidate.json` sidecars persist that exact `candidateVersion`, and
-only sidecars carrying reviewed `1.6.12` provenance may contribute GitNexus candidate matrix/campaign
-evidence. Legacy or mismatched sidecars remain readable historical data but fail closed for the
-GitNexus candidate gate; Token Harness does not rewrite historical benchmark receipts to retrofit
-provenance. Matrix/report reads remain passive and do not require GitNexus to still be installed.
+The benchmark workflow supports `--candidate gitnexus`, but **new GitNexus campaign starts are not
+currently admitted by the production compatibility table**. Before either a baseline or optimized
+capture can start, RFC 0009 must contain a reviewed row matching the exact harness version, platform,
+non-WSL state and GitNexus `1.6.12`. No such production row is shipped yet. This is intentional:
+repository lifecycle tests prove the narrow transaction mechanics, but they are not a substitute for
+a real harness/platform compatibility recording. Matrix/report reads remain passive even without a
+row. Tests may inject a synthetic row to exercise the gate, but that test-only fixture is not support
+evidence and is never added to `COMPATIBILITY_ROWS`.
 
-For new receipts, Token Harness also records a bounded GitNexus MCP runtime witness from the
-harness-native MCP inventory at benchmark start and finish. The activation gate can pass only when
-the optimized task observes exactly one GitNexus MCP server as usable at both boundaries. Truncated,
-ambiguous, absent, unusable, or legacy missing evidence fails closed. No MCP arguments, tool names,
-paths, credentials, or config contents are persisted in that witness.
+Once a real row is reviewed, a new campaign start must first match that row and then passively confirm
+the exact GitNexus `1.6.12` CLI. The baseline remains a production-stack-only run: witnessing the
+installed binary version does not activate GitNexus. New `candidate.json` sidecars persist that exact
+`candidateVersion`, and only sidecars carrying reviewed `1.6.12` provenance may contribute GitNexus
+candidate matrix/campaign evidence. Legacy or mismatched sidecars remain readable historical data but
+fail closed for the GitNexus candidate gate; Token Harness does not rewrite historical benchmark
+receipts to retrofit provenance.
+
+For new receipts, Token Harness records a bounded GitNexus MCP runtime witness from the harness-native
+MCP inventory at benchmark start and finish. A GitNexus baseline is candidate evidence only when that
+witness is exactly `absent` at both boundaries; `usable`, `unusable`, `unknown`, truncated/legacy
+missing evidence, or a malformed baseline fails closed while leaving the ordinary benchmark receipt
+readable. The optimized activation gate is independent and can pass only when exactly one GitNexus
+MCP server is usable at both optimized boundaries. No MCP arguments, tool names, paths, credentials,
+or config contents are persisted in that witness.
 
 The evaluation must include both Claude Code and Codex where supported and measure at least:
 

@@ -4,6 +4,8 @@ import { describe, it } from 'node:test';
 import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '@token-harness/adapters';
 import {
   harnessId,
+  providerId,
+  type CompatibilityRow,
   type GitNexusMcpRuntimeState,
   type PlatformFacts,
   type ProcessOutcome,
@@ -27,6 +29,17 @@ const LINUX: PlatformFacts = {
   arch: 'x64',
   nodeVersion: '22.13.0',
   isWsl: false,
+};
+const TEST_HARNESS_VERSION = '9.9.9';
+const TEST_GITNEXUS_ROW: CompatibilityRow = {
+  harness: harnessId('codex'),
+  harnessVersion: { minimum: TEST_HARNESS_VERSION, maximum: TEST_HARNESS_VERSION },
+  provider: providerId('gitnexus'),
+  providerVersion: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+  platform: { os: 'linux', wsl: false, supported: true, limitation: null },
+  configSchema: 'test-only-gitnexus-campaign-row',
+  fixture: 'test-only/gitnexus-campaign-row',
+  verificationTier: 'config-only',
 };
 const BENCHMARK_ID = 'gitnexus-standard-1';
 const BENCHMARK_ROOT = `/state/benchmarks/${BENCHMARK_ID}`;
@@ -113,7 +126,11 @@ function baselineReceipt(
   };
 }
 
-function fixture(version = GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
+function fixture(
+  version = GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+  harnessVersion = TEST_HARNESS_VERSION,
+  compatibilityRows: readonly CompatibilityRow[] | null = [TEST_GITNEXUS_ROW],
+) {
   const files = new Map<string, Uint8Array>();
   const probes: string[] = [];
   const context: CommandContext = {
@@ -136,7 +153,7 @@ function fixture(version = GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
     planId: null,
     confirmed: false,
     metrics: null,
-    compatibilityRows: null,
+    compatibilityRows,
     now: () => '2026-09-14T14:00:00.000Z',
     adapters: {
       fs: {
@@ -159,10 +176,12 @@ function fixture(version = GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
       runner: {
         run: async (request: ProcessRequest) => {
           probes.push(`${request.executable} ${request.args.join(' ')}`);
-          if (request.executable !== 'gitnexus' || request.args.join(' ') !== '--version') {
+          if (request.args.join(' ') !== '--version') {
             throw new Error(`unexpected probe ${request.executable} ${request.args.join(' ')}`);
           }
-          return outcome(request, `gitnexus ${version}`);
+          if (request.executable === 'gitnexus') return outcome(request, `gitnexus ${version}`);
+          if (request.executable === 'codex') return outcome(request, `codex ${harnessVersion}`);
+          throw new Error(`unexpected executable ${request.executable}`);
         },
       },
       projectIdFor: () => 'p_test',
@@ -262,7 +281,22 @@ describe('GitNexus benchmark version provenance', () => {
     assert.deepEqual(world.probes, ['gitnexus --version']);
   });
 
-  it('requires the exact reviewed build before baseline or optimized starts', async () => {
+  it('requires an exact reviewed campaign row before probing the GitNexus build', async () => {
+    const world = fixture(GITNEXUS_REVIEWED_BENCHMARK_VERSION, TEST_HARNESS_VERSION, []);
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(world.context, false);
+    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-row-unreviewed');
+    assert.equal(diagnostic?.subject, 'gitnexus');
+    assert.deepEqual(world.probes, ['codex --version']);
+  });
+
+  it('fails closed when the installed harness version is outside the injected reviewed row', async () => {
+    const world = fixture(GITNEXUS_REVIEWED_BENCHMARK_VERSION, '9.9.10');
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(world.context, false);
+    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-row-unreviewed');
+    assert.deepEqual(world.probes, ['codex --version']);
+  });
+
+  it('requires the exact reviewed build before baseline or optimized starts on an admitted row', async () => {
     for (const variant of ['baseline', 'optimized'] as const) {
       const world = fixture();
       world.context.benchmarkVariant = variant;
@@ -271,7 +305,7 @@ describe('GitNexus benchmark version provenance', () => {
         variant === 'optimized',
       );
       assert.equal(diagnostic, null);
-      assert.deepEqual(world.probes, ['gitnexus --version']);
+      assert.deepEqual(world.probes, ['codex --version', 'gitnexus --version']);
     }
   });
 
@@ -280,9 +314,9 @@ describe('GitNexus benchmark version provenance', () => {
     const diagnostic = await validateCandidateCampaignRuntimeSurface(mismatched.context, false);
     assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-provider-version-unreviewed');
     assert.equal(diagnostic?.subject, 'gitnexus');
-    assert.deepEqual(mismatched.probes, ['gitnexus --version']);
+    assert.deepEqual(mismatched.probes, ['codex --version', 'gitnexus --version']);
 
-    const matrix = fixture('1.6.13-rc.1');
+    const matrix = fixture('1.6.13-rc.1', TEST_HARNESS_VERSION, []);
     matrix.context.benchmarkVariant = null;
     assert.equal(await validateCandidateCampaignRuntimeSurface(matrix.context, false), null);
     assert.deepEqual(matrix.probes, []);
