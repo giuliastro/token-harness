@@ -1,4 +1,5 @@
 import {
+  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
   observeGitNexusCandidate,
   observeHeadroomCandidate,
   observeMcptoonCandidate,
@@ -164,6 +165,18 @@ function gitNexusDiagnostics(
     ];
   }
 
+  if (observation.state === 'unsupported-version') {
+    return [
+      diagnostic({
+        severity: 'warning',
+        code: 'context-optimizer-gitnexus-version',
+        subject: 'gitnexus',
+        message: `GitNexus${version} is not the reviewed benchmark build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}`,
+        remediation: `Keep this candidate disabled; benchmark evidence is pinned to exact GitNexus ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}`,
+      }),
+    ];
+  }
+
   if (observation.state === 'installed') {
     return [
       diagnostic({
@@ -223,7 +236,7 @@ export async function observeContextOptimizationCandidates(
         category: OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID.gitnexus,
         state: gitnexus.state,
         version: gitnexus.version,
-        minimumBenchmarkVersion: 'capability-gated',
+        minimumBenchmarkVersion: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
       },
     ],
     diagnostics: [
