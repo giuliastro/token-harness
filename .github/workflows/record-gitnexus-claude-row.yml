@@ -1,0 +1,238 @@
+name: Record GitNexus Claude compatibility row
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-claude-linux-recording
+    paths:
+      - .github/workflows/record-gitnexus-claude-row.yml
+      - tests/tools/gitnexus-claude-row-lifecycle.mjs
+      - tests/tools/record-row-fixture.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-claude-linux-recording
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+
+      - name: Install workspace and exact reviewed tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm build
+          npm install --global @anthropic-ai/claude-code@2.1.269
+          GITNEXUS_SKIP_OPTIONAL_GRAMMARS=1 npm install --global gitnexus@1.6.12
+          claude --version | grep -F '2.1.269'
+          gitnexus --version | grep -F '1.6.12'
+
+      - name: Record real lifecycle fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/tests/fixtures/rows/gitnexus-claude-linux-2.1.269-1.6.12"
+          REC_HOME="$GITHUB_WORKSPACE/.gitnexus-claude-row-home"
+          PROJECT="$GITHUB_WORKSPACE/.gitnexus-claude-row-project"
+          rm -rf "$OUT" "$REC_HOME" "$PROJECT"
+          mkdir -p "$OUT" "$REC_HOME" "$PROJECT"
+
+          record_stage() {
+            local stage="$1"
+            node tests/tools/record-row-fixture.mjs \
+              --stage "$stage" \
+              --harness claude \
+              --provider gitnexus \
+              --project "$PROJECT" \
+              --home "$REC_HOME" \
+              --out "$OUT" \
+              --reviewed
+            node --input-type=module - "$OUT/$stage.json" "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const [file, claudeUserConfig] = process.argv.slice(2);
+          const record = JSON.parse(fs.readFileSync(file, 'utf8'));
+          record.configuration['~/.claude.json'] = fs.existsSync(claudeUserConfig)
+            ? { present: true, kind: 'file', contents: fs.readFileSync(claudeUserConfig, 'utf8') }
+            : { present: false };
+          fs.writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+          NODE
+          }
+
+          assert_user_owned_state() {
+            node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const file = process.argv[2];
+          const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (value.theme !== 'dark') throw new Error('user-owned theme was not preserved');
+          if (value.mcpServers?.userOwned?.command !== 'user-mcp') {
+            throw new Error('user-owned MCP entry was not preserved');
+          }
+          NODE
+            grep -q 'userOwnedFixture' "$REC_HOME/.claude/settings.json"
+          }
+
+          record_stage empty
+
+          mkdir -p "$REC_HOME/.claude"
+          cat > "$REC_HOME/.claude.json" <<'EOF'
+          {
+            "theme": "dark",
+            "mcpServers": {
+              "userOwned": {
+                "command": "user-mcp",
+                "args": ["--keep"]
+              }
+            }
+          }
+          EOF
+          cat > "$REC_HOME/.claude/settings.json" <<'EOF'
+          {
+            "userOwnedFixture": true,
+            "permissions": {
+              "allow": ["Read"]
+            }
+          }
+          EOF
+          record_stage brownfield
+
+          node tests/tools/gitnexus-claude-row-lifecycle.mjs \
+            --operation apply --project "$PROJECT" --home "$REC_HOME" \
+            --transaction-id gitnexus-claude-apply-1 > "$OUT/apply-transaction.json"
+          assert_user_owned_state
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const file = process.argv[2];
+          const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const entry = value.mcpServers?.gitnexus;
+          if (entry?.command !== 'gitnexus' || JSON.stringify(entry.args) !== JSON.stringify(['mcp'])) {
+            throw new Error('reviewed GitNexus MCP entry is missing after apply');
+          }
+          NODE
+          record_stage post-apply
+
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const file = process.argv[2];
+          const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+          value.mcpServers.gitnexus.args = ['mcp', '--user-drift'];
+          fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+          NODE
+          set +e
+          node tests/tools/gitnexus-claude-row-lifecycle.mjs \
+            --operation uninstall --project "$PROJECT" --home "$REC_HOME" \
+            --transaction-id gitnexus-claude-drift-uninstall \
+            --source-transaction-id gitnexus-claude-apply-1 > "$OUT/drift-refusal-transaction.json"
+          drift_status=$?
+          set -e
+          if [ "$drift_status" -eq 0 ]; then
+            echo 'Expected modified owned GitNexus MCP entry uninstall to be refused' >&2
+            exit 1
+          fi
+          assert_user_owned_state
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (value.mcpServers?.gitnexus?.args?.[1] !== '--user-drift') {
+            throw new Error('drifted GitNexus MCP entry was unexpectedly changed');
+          }
+          NODE
+          record_stage drift
+
+          node tests/tools/gitnexus-claude-row-lifecycle.mjs \
+            --operation rollback --project "$PROJECT" --home "$REC_HOME" \
+            --transaction-id gitnexus-claude-apply-1 > "$OUT/rollback-transaction.json"
+          assert_user_owned_state
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (value.mcpServers?.gitnexus !== undefined) {
+            throw new Error('rollback did not restore the pre-apply GitNexus absence');
+          }
+          NODE
+          record_stage rollback
+
+          node tests/tools/gitnexus-claude-row-lifecycle.mjs \
+            --operation apply --project "$PROJECT" --home "$REC_HOME" \
+            --transaction-id gitnexus-claude-apply-2 > "$OUT/reapply-transaction.json"
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const file = process.argv[2];
+          const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+          value.changedAfterApply = true;
+          value.mcpServers.postApplyUserOwned = {
+            command: 'post-apply-user-mcp',
+            args: ['--keep-too'],
+          };
+          fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+          NODE
+          node tests/tools/gitnexus-claude-row-lifecycle.mjs \
+            --operation uninstall --project "$PROJECT" --home "$REC_HOME" \
+            --transaction-id gitnexus-claude-uninstall \
+            --source-transaction-id gitnexus-claude-apply-2 > "$OUT/uninstall-transaction.json"
+          assert_user_owned_state
+          node --input-type=module - "$REC_HOME/.claude.json" <<'NODE'
+          import fs from 'node:fs';
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (value.mcpServers?.gitnexus !== undefined) {
+            throw new Error('surgical uninstall left the owned GitNexus MCP entry behind');
+          }
+          if (value.changedAfterApply !== true) throw new Error('post-apply user change was lost');
+          if (value.mcpServers?.postApplyUserOwned?.command !== 'post-apply-user-mcp') {
+            throw new Error('post-apply user-owned MCP entry was lost');
+          }
+          NODE
+          record_stage uninstall
+
+          cat > "$OUT/README.md" <<EOF
+          # GitNexus × Claude Code × Linux RFC 0009 recording
+
+          Recorded on $(date -u +%Y-%m-%d) by GitHub Actions run ${GITHUB_RUN_ID} on an Ubuntu 24.04 Linux x64 hosted runner.
+
+          Exact observed combination:
+
+          - Claude Code: **2.1.269**
+          - GitNexus: **1.6.12**
+          - platform: **Linux, non-WSL, x64**
+          - Node.js: **22.13.1**
+          - verification tier: **config-only**
+
+          The recording used an isolated home and project. The exact third-party CLIs were installed only as GitHub Actions fixture prerequisites; Token Harness did not install GitNexus. GitNexus optional language grammars were skipped during CI installation because this row covers only the Claude user MCP JSON lifecycle, not indexing or language parsing.
+
+          Brownfield state contained unrelated user-owned Claude settings plus a separate user-owned MCP server in ~/.claude.json. Managed apply used the production GitNexus planner and generic merge-json transaction to add only mcpServers.gitnexus = { command: gitnexus, args: [mcp] }, with a real owned-json-entry receipt. Verification remained passive and did not start the MCP server.
+
+          The drift stage edited only the Token Harness-owned GitNexus entry. Surgical removal was refused and left the user edit untouched. Verified rollback restored the complete pre-apply brownfield state. A second clean apply followed by surgical uninstall removed only the owned GitNexus entry while preserving both pre-existing user configuration and unrelated changes made after apply.
+
+          No gitnexus setup, analyze, indexing, hooks, skills installation, MCP server execution, or Codex configuration occurred. invalidating-update.json is intentionally absent: no second real GitNexus or Claude Code version was installed merely to manufacture an invalidation state. Any compatibility row admitted from this fixture must remain exact.
+          EOF
+
+          (
+            cd "$OUT"
+            sha256sum *.json > SHA256SUMS
+          )
+
+      - name: Commit recorded evidence to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/fixtures/rows/gitnexus-claude-linux-2.1.269-1.6.12
+          if git diff --cached --quiet; then
+            echo 'No fixture changes to commit' >&2
+            exit 1
+          fi
+          git commit -m 'test: record GitNexus Claude Linux compatibility fixture'
+          git push origin HEAD:codex/gitnexus-claude-linux-recording
