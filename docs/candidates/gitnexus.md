@@ -18,15 +18,15 @@ servers, hooks, skills installation, package installation, indexing or repositor
 configuration as part of candidate discovery. Root help may advertise the `mcp` command; observing
 that capability does not execute it.
 
-`benchmark-ready` means only that a locally installed CLI reports a semantic version and advertises
-`query`, `context`, and machine-readable `status --json` surfaces. It does **not** mean that GitNexus
-is installed correctly for an agent, that a repository is indexed, or that GitNexus has been
-selected for the managed stack.
+`benchmark-ready` means only that the **exact reviewed GitNexus `1.6.12` build** is locally installed
+and advertises `query`, `context`, and machine-readable `status --json` surfaces. Other semantic
+versions, including `1.6.13-rc.1`, return `unsupported-version` after the passive version probe and do
+not inherit `1.6.12` benchmark evidence. It still does **not** mean that GitNexus is installed
+correctly for an agent, that a repository is indexed, or that GitNexus has been selected for the
+managed stack.
 
-GitNexus now participates in the same bounded candidate projection returned by `token-harness
-context` as Headroom and mcptoon. Its `minimumBenchmarkVersion` is reported as `capability-gated`:
-readiness is based on the reviewed CLI surfaces above rather than on an invented semantic-version
-floor. The projection never includes the executable path or raw command output.
+GitNexus participates in the same bounded candidate projection returned by `token-harness context`
+as Headroom and mcptoon. The projection never includes the executable path or raw command output.
 
 ## Transactional MCP checkpoint
 
@@ -69,7 +69,7 @@ ownership and would make marginal attribution and rollback harder.
 The exact upstream tuple reviewed for this checkpoint is GitNexus `1.6.12`. Upstream maintenance is
 active: stable `1.6.11` was published on 2026-09-04, stable `1.6.12` on 2026-09-12, and
 `1.6.13-rc.1` followed on 2026-09-14. The release candidate does not inherit the reviewed `1.6.12`
-lifecycle evidence and must not widen the pin automatically.
+lifecycle or benchmark-readiness evidence and must not widen the pin automatically.
 
 Licensing is a separate gate from technical maintenance. The exact `1.6.12` npm package and upstream
 LICENSE declare **PolyForm Noncommercial 1.0.0**. Token Harness therefore records the narrow Claude
@@ -83,7 +83,7 @@ Consequences for Token Harness:
 - do not auto-install GitNexus or a package manager;
 - do not add GitNexus to `PROVIDER_ADAPTERS`;
 - do not convert upstream benchmark claims into Token Harness savings;
-- do not widen the lifecycle to Codex or arbitrary GitNexus versions/platform assumptions;
+- do not widen the lifecycle or benchmark evidence to Codex or arbitrary GitNexus versions/platform assumptions;
 - keep setup/analyze/index creation, skills and hooks outside the managed candidate lifecycle;
 - keep compatibility/reversibility, selection evidence, runtime activation and combined-stack
   validation as independent gates.
