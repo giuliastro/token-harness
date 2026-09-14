@@ -1,0 +1,39 @@
+name: Format GitNexus row branch once
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-claude-linux-recording
+    paths:
+      - .github/workflows/format-gitnexus-row-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-claude-linux-recording
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Repository already formatted'
+            exit 0
+          fi
+          git commit -m 'style: apply repository formatter'
+          git push origin HEAD:codex/gitnexus-claude-linux-recording
