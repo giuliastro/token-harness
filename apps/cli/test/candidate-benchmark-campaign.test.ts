@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '@token-harness/adapters';
 import {
   harnessId,
   type FileStat,
@@ -104,7 +105,15 @@ function fixture() {
     const dir = ensureBenchmark(benchmarkId);
     files.set(
       `${dir}/candidate.json`,
-      JSON.stringify({ schemaVersion: 1, benchmarkId, candidateId, projectId: 'p_test' }),
+      JSON.stringify({
+        schemaVersion: 1,
+        benchmarkId,
+        candidateId,
+        projectId: 'p_test',
+        ...(candidateId === 'gitnexus'
+          ? { candidateVersion: GITNEXUS_REVIEWED_BENCHMARK_VERSION }
+          : {}),
+      }),
     );
   }
 
