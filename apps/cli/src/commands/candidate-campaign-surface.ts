@@ -66,17 +66,39 @@ async function readExecutableVersion(
 }
 
 async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {
-  // Matrix/report reads must remain possible even when GitNexus is no longer installed. New
-  // baseline and optimized captures, however, need an exact build witness before evidence exists.
+  // Matrix/report reads must remain possible even when the exact campaign environment is no longer
+  // installed. New captures, however, need both an RFC 0009 compatibility row and the exact reviewed
+  // GitNexus build. The production row table intentionally contains no GitNexus row until a real
+  // harness/platform lifecycle recording has been reviewed.
   if (context.benchmarkVariant === null) return null;
-  if (context.adapters === null) {
+  const harnessId = context.harness;
+  if (context.adapters === null || harnessId === null) {
     return diagnostic({
       severity: 'error',
       code: 'candidate-benchmark-campaign-version-unavailable',
       subject: 'gitnexus',
-      message: 'The exact GitNexus build cannot be established before this benchmark start',
+      message: 'The exact harness and GitNexus versions cannot be established before this benchmark start',
       remediation:
-        'Run the campaign from the normal CLI host with the exact reviewed GitNexus build available',
+        'Run the campaign from the normal CLI host with an explicit harness after its exact GitNexus compatibility row has been reviewed',
+    });
+  }
+
+  const harnessVersion = await readExecutableVersion(context, harnessId);
+  const admission = admitManagedMutation(context.compatibilityRows ?? COMPATIBILITY_ROWS, {
+    provider: providerId('gitnexus'),
+    providerVersion: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+    harness: harnessId,
+    harnessVersion,
+    os: context.platform.os,
+    wsl: context.platform.isWsl,
+  });
+  if (admission.state !== 'admitted') {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-row-unreviewed',
+      subject: 'gitnexus',
+      message: `The installed ${harnessId} version ${harnessVersion ?? 'unknown'} is outside any exact reviewed GitNexus campaign compatibility row`,
+      remediation: admission.missing,
     });
   }
 
@@ -106,8 +128,9 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
 /**
  * Require the exact reviewed runtime surface before creating candidate selection evidence.
  * mcptoon requires its exact harness row and the provider build only for optimized starts.
- * GitNexus requires its exact reviewed build for both baseline and optimized starts so the pair
- * carries deterministic version provenance without implying that the baseline activates GitNexus.
+ * GitNexus requires an exact RFC 0009 harness/platform row plus its reviewed build for both
+ * baseline and optimized starts. This keeps compatibility evidence independent from version
+ * discovery and does not imply that the baseline activates GitNexus.
  */
 export async function validateCandidateCampaignRuntimeSurface(
   context: CommandContext,
