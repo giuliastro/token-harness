@@ -69,6 +69,50 @@ export const MCPTOON_PROJECT_MATURITY_REVIEW: CandidateProjectMaturityReviewReco
   },
 };
 
+/**
+ * Review of the narrow GitNexus lifecycle already merged in #265. This is intentionally limited to
+ * the exact 1.6.12 CLI and Claude Code user MCP JSON entry. Token Harness does not install GitNexus,
+ * run setup/analyze, create an index, or infer Codex support from this record.
+ */
+export const GITNEXUS_MANAGED_LIFECYCLE_REVIEW: CandidateManagedLifecycleReviewRecord = {
+  candidateId: 'gitnexus',
+  reviewedAt: '2026-09-14',
+  reviewedVersion: '1.6.12',
+  packageManager: 'user-installed npm CLI; Token Harness does not install it',
+  activationSurfaces: ['Claude Code user MCP entry mcpServers.gitnexus'],
+  residualScope:
+    'Lifecycle evidence is Claude JSON configuration only. Codex surgical TOML ownership, RFC 0009 compatibility, indexing/setup ownership and combined-stack behavior remain unreviewed.',
+  result: {
+    state: 'passed',
+    reason:
+      'Reviewed 2026-09-14 for GitNexus 1.6.12: the already-landed Claude MCP primitive uses snapshot-backed merge-json ownership, preserves brownfield user ownership, passively verifies the exact entry, removes only the recorded owned entry, and fails closed on drift. It does not install GitNexus or run setup/analyze/indexing.',
+  },
+};
+
+/**
+ * Upstream maintenance is active, but the exact reviewed package is licensed under PolyForm
+ * Noncommercial 1.0.0. The project-maturity gate explicitly includes licensing, so generic managed
+ * production promotion stays blocked unless separate terms or an appropriate license review admit
+ * the intended deployment. This is not a conclusion about any particular user's legal rights.
+ */
+export const GITNEXUS_PROJECT_MATURITY_REVIEW: CandidateProjectMaturityReviewRecord = {
+  candidateId: 'gitnexus',
+  reviewedAt: '2026-09-14',
+  repository: 'abhigyanpatwari/GitNexus',
+  repositoryCreatedAt: '2025-08-02T23:20:31Z',
+  earliestReviewedStableReleaseAt: '2026-09-04T19:28:22Z',
+  latestReviewedStableReleaseAt: '2026-09-12T21:40:04Z',
+  latestReviewedRelease: '1.6.12',
+  license: 'PolyForm-Noncommercial-1.0.0',
+  residualRisk:
+    'Technical maintenance is active, but the reviewed license permits noncommercial purposes rather than generic commercial production use. Keep promotion blocked until the intended deployment has suitable license terms or an appropriate license review.',
+  result: {
+    state: 'blocked',
+    reason:
+      'Reviewed 2026-09-14: upstream is active and non-archived, stable 1.6.11 and 1.6.12 releases landed on 2026-09-04 and 2026-09-12, and a 1.6.13 release candidate followed on 2026-09-14. However GitNexus 1.6.12 declares PolyForm-Noncommercial-1.0.0, so Token Harness must not treat generic commercial production promotion as licensed by this review.',
+  },
+};
+
 /** Return only gates backed by explicit reviewed evidence. */
 export function reviewedPromotionEvidenceForCandidate(
   candidateId: OptimizationCandidateId,
@@ -77,6 +121,12 @@ export function reviewedPromotionEvidenceForCandidate(
     return {
       managedLifecycle: MCPTOON_MANAGED_LIFECYCLE_REVIEW.result,
       projectMaturity: MCPTOON_PROJECT_MATURITY_REVIEW.result,
+    };
+  }
+  if (candidateId === 'gitnexus') {
+    return {
+      managedLifecycle: GITNEXUS_MANAGED_LIFECYCLE_REVIEW.result,
+      projectMaturity: GITNEXUS_PROJECT_MATURITY_REVIEW.result,
     };
   }
   return {};
