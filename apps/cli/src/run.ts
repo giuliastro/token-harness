@@ -31,7 +31,10 @@ import {
   runCandidateBenchmarkMatrix,
   runCandidateBenchmarkStart,
 } from './commands/candidate-benchmark.js';
-import { validateCandidateCampaignRuntimeSurface } from './commands/candidate-campaign-surface.js';
+import {
+  validateCandidateCampaignRuntimeSurface,
+  validateCandidateEvidenceCaptureAdmission,
+} from './commands/candidate-campaign-surface.js';
 import { runBudget } from './commands/budget.js';
 import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
@@ -290,7 +293,7 @@ function emitHelpOrVersion(invocation: Invocation, options: RunOptions): ExitCod
           commandResult({ command: 'help', exitCode: EXIT_CODES.ok, data: { usage: text } }),
           toolVersion,
         ),
-      ),
+      );
     );
   } else {
     options.streams.out(`${text}\n`);
@@ -432,6 +435,22 @@ export async function run(options: RunOptions): Promise<number> {
     metrics: options.metrics ?? null,
     compatibilityRows: options.compatibilityRows ?? null,
   };
+
+  if (invocation.command === 'benchmark-start') {
+    const captureProblem = validateCandidateEvidenceCaptureAdmission(context.optimizationCandidate);
+    if (captureProblem !== null) {
+      return emit(
+        commandResult({
+          command: invocation.command,
+          exitCode: EXIT_CODES['unsupported-environment'],
+          diagnostics: [captureProblem],
+        }),
+        options,
+        renderContext,
+        json,
+      );
+    }
+  }
 
   if (
     (invocation.command === 'benchmark-matrix' || invocation.command === 'benchmark-start') &&
