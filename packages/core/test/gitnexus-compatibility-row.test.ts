@@ -29,13 +29,48 @@ describe('GitNexus RFC 0009 compatibility row', () => {
     }
 
     for (const variant of [
-      { harnessVersion: '2.1.268', providerVersion: '1.6.12', os: 'linux', wsl: false },
-      { harnessVersion: '2.1.270', providerVersion: '1.6.12', os: 'linux', wsl: false },
-      { harnessVersion: '2.1.269', providerVersion: '1.6.11', os: 'linux', wsl: false },
-      { harnessVersion: '2.1.269', providerVersion: '1.6.13', os: 'linux', wsl: false },
-      { harnessVersion: '2.1.269', providerVersion: '1.6.12', os: 'linux', wsl: true },
-      { harnessVersion: '2.1.269', providerVersion: '1.6.12', os: 'windows', wsl: false },
-      { harnessVersion: '2.1.269', providerVersion: '1.6.12', os: 'macos', wsl: false },
+      {
+        harnessVersion: '2.1.268',
+        providerVersion: '1.6.12',
+        os: 'linux',
+        wsl: false,
+      },
+      {
+        harnessVersion: '2.1.270',
+        providerVersion: '1.6.12',
+        os: 'linux',
+        wsl: false,
+      },
+      {
+        harnessVersion: '2.1.269',
+        providerVersion: '1.6.11',
+        os: 'linux',
+        wsl: false,
+      },
+      {
+        harnessVersion: '2.1.269',
+        providerVersion: '1.6.13',
+        os: 'linux',
+        wsl: false,
+      },
+      {
+        harnessVersion: '2.1.269',
+        providerVersion: '1.6.12',
+        os: 'linux',
+        wsl: true,
+      },
+      {
+        harnessVersion: '2.1.269',
+        providerVersion: '1.6.12',
+        os: 'windows',
+        wsl: false,
+      },
+      {
+        harnessVersion: '2.1.269',
+        providerVersion: '1.6.12',
+        os: 'macos',
+        wsl: false,
+      },
     ] as const) {
       const outcome = admitManagedMutation(COMPATIBILITY_ROWS, {
         provider: providerId('gitnexus'),
