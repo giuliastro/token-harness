@@ -143,31 +143,40 @@ test('projects all read-only optimization candidates into the shared context sna
   );
 });
 
-test('reports an unreviewed GitNexus build as unsupported without probing benchmark surfaces', async () => {
-  const gitNexusProbes: string[] = [];
-  const runner: ProcessRunner = {
-    run: (request) => {
-      if (request.executable !== 'gitnexus') return Promise.resolve(missingOutcome(request));
-      gitNexusProbes.push(request.args.join(' '));
-      if (request.args.length === 1 && request.args[0] === '--version') {
-        return Promise.resolve(successOutcome(request, 'gitnexus 1.6.13-rc.1\n'));
-      }
-      return Promise.reject(new Error(`unexpected GitNexus probe: ${request.args.join(' ')}`));
-    },
-  };
+test(
+  'reports an unreviewed GitNexus build as unsupported without probing benchmark surfaces',
+  async () => {
+    const gitNexusProbes: string[] = [];
+    const runner: ProcessRunner = {
+      run: (request) => {
+        if (request.executable !== 'gitnexus') {
+          return Promise.resolve(missingOutcome(request));
+        }
+        const argv = request.args.join(' ');
+        gitNexusProbes.push(argv);
+        if (request.args.length === 1 && request.args[0] === '--version') {
+          return Promise.resolve(successOutcome(request, 'gitnexus 1.6.13-rc.1\n'));
+        }
+        throw new Error(`unexpected GitNexus probe: ${argv}`);
+      },
+    };
 
-  const snapshot = await observeContextOptimizationCandidates(context(runner));
-  const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
-  const diagnostic = snapshot.diagnostics.find((item) => item.subject === 'gitnexus');
+    const snapshot = await observeContextOptimizationCandidates(context(runner));
+    const gitnexus = snapshot.candidates.find((candidate) => candidate.id === 'gitnexus');
+    const diagnostic = snapshot.diagnostics.find((item) => item.subject === 'gitnexus');
 
-  assert.equal(gitnexus?.state, 'unsupported-version');
-  assert.equal(gitnexus?.version, '1.6.13-rc.1');
-  assert.equal(gitnexus?.minimumBenchmarkVersion, GITNEXUS_REVIEWED_BENCHMARK_VERSION);
-  assert.equal(diagnostic?.code, 'context-optimizer-gitnexus-version');
-  assert.equal(diagnostic?.severity, 'warning');
-  assert.match(
-    diagnostic?.message ?? '',
-    new RegExp(`not the reviewed benchmark build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION.replaceAll('.', '\\.')}`),
-  );
-  assert.deepEqual(gitNexusProbes, ['--version']);
-});
+    assert.equal(gitnexus?.state, 'unsupported-version');
+    assert.equal(gitnexus?.version, '1.6.13-rc.1');
+    assert.equal(
+      gitnexus?.minimumBenchmarkVersion,
+      GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+    );
+    assert.equal(diagnostic?.code, 'context-optimizer-gitnexus-version');
+    assert.equal(diagnostic?.severity, 'warning');
+    assert.equal(
+      diagnostic?.message,
+      `GitNexus 1.6.13-rc.1 is not the reviewed benchmark build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}`,
+    );
+    assert.deepEqual(gitNexusProbes, ['--version']);
+  },
+);
