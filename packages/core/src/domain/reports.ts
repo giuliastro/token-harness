@@ -119,9 +119,7 @@ export interface ProviderUpdateRow {
     | 'unavailable'
     /** Nothing to update: `update` does not install what was never there. */
     | 'not-installed'
-    /** The provider declares no channel for this platform. */
-    | 'no-channel'
-    /**
+     /**
      * A newer version exists, but this provider is managed by Token Harness on at least one
      * harness and no compatibility row admits that target version there.
      */
@@ -184,4 +182,9 @@ export interface ApplyReport {
   unrestored: string[];
   /** The receipt written to the state directory, when one was. */
   receiptId: string | null;
+  /**
+   * True only when this command directly verified the requested resulting state before returning.
+   * Omitted when a separate integration `verify` remains useful.
+   */
+  requestedStateVerified?: boolean;
 }

@@ -28,7 +28,7 @@ import type { CommandContext } from './context.js';
 
 type CandidateMutationCommand = 'apply' | 'uninstall';
 
-function emptyReport(outcome: ApplyReport['outcome']): ApplyReport {
+function emptyReport(outcome: ApplyReport['outcome'], requestedStateVerified = false): ApplyReport {
   return {
     planId: null,
     transactionId: null,
@@ -37,6 +37,7 @@ function emptyReport(outcome: ApplyReport['outcome']): ApplyReport {
     results: [],
     unrestored: [],
     receiptId: null,
+    ...(requestedStateVerified ? { requestedStateVerified: true } : {}),
   };
 }
 
@@ -161,6 +162,7 @@ function reportFromTransaction(
     })),
     unrestored: transaction.unrestored,
     receiptId: null,
+    ...(transaction.journal.outcome === 'committed' ? { requestedStateVerified: true } : {}),
   };
 }
 
@@ -218,7 +220,7 @@ export async function runCandidateApply(
           remediation: null,
         }),
       );
-      return finish('apply', EXIT_CODES.ok, emptyReport('nothing-to-do'), diagnostics);
+      return finish('apply', EXIT_CODES.ok, emptyReport('nothing-to-do', true), diagnostics);
     }
     diagnostics.push(
       diagnostic({
@@ -379,7 +381,7 @@ export async function runCandidateUninstall(
         remediation: null,
       }),
     );
-    return finish('uninstall', EXIT_CODES.ok, emptyReport('nothing-to-do'), diagnostics);
+    return finish('uninstall', EXIT_CODES.ok, emptyReport('nothing-to-do', true), diagnostics);
   }
 
   const journals = new FileJournalStore({
