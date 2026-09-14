@@ -460,20 +460,25 @@ export function renderSimpleApply(report: ApplyReport, command: string): string 
     command === 'apply' && report.planId !== null
       ? `token-harness apply --plan ${report.planId} --yes`
       : `token-harness ${command} --yes`;
+  const requestedStateVerified = okay && report.requestedStateVerified === true;
   lines.push(
     ...next(
-      okay
-        ? 'token-harness verify'
-        : report.outcome === 'confirmation-required'
-          ? confirmationCommand
-          : command === 'apply' && report.planId !== null
-            ? `token-harness apply --plan ${report.planId} --verbose`
-            : `token-harness ${command} --verbose`,
-      okay
-        ? 'Check that the integration works; a successful verify is the end of setup.'
-        : report.outcome === 'confirmation-required'
-          ? 'Apply the reviewed change.'
-          : 'Review the technical result.',
+      requestedStateVerified
+        ? null
+        : okay
+          ? 'token-harness verify'
+          : report.outcome === 'confirmation-required'
+            ? confirmationCommand
+            : command === 'apply' && report.planId !== null
+              ? `token-harness apply --plan ${report.planId} --verbose`
+              : `token-harness ${command} --verbose`,
+      requestedStateVerified
+        ? 'The requested state is already verified; continue with your workflow.'
+        : okay
+          ? 'Check that the integration works; a successful verify is the end of setup.'
+          : report.outcome === 'confirmation-required'
+            ? 'Apply the reviewed change.'
+            : 'Review the technical result.',
     ),
   );
   return document(lines);

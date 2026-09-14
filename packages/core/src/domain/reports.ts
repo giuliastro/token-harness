@@ -184,4 +184,9 @@ export interface ApplyReport {
   unrestored: string[];
   /** The receipt written to the state directory, when one was. */
   receiptId: string | null;
+  /**
+   * True only when this command directly verified the requested resulting state before returning.
+   * Omitted when a separate integration `verify` remains useful.
+   */
+  requestedStateVerified?: boolean;
 }

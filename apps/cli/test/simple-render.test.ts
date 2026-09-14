@@ -62,6 +62,65 @@ describe('progressive human rendering', () => {
     assert.doesNotMatch(output, /--yes/);
   });
 
+  it('does not ask for a redundant verify when apply already verified the requested state', () => {
+    const report: ApplyReport = {
+      planId: null,
+      transactionId: 'candidate-apply',
+      fromStoredPlan: false,
+      outcome: 'committed',
+      results: [{ actionId: 'candidate', kind: 'managed-change', status: 'applied', path: null }],
+      unrestored: [],
+      receiptId: null,
+      requestedStateVerified: true,
+    };
+    const output = renderHuman(
+      commandResult({ command: 'apply', exitCode: EXIT_CODES.ok, data: report }),
+      { toolVersion: '0.1.11', home: '/home/dev', decorate: false },
+    ).report;
+
+    assert.equal(output.match(/NEXT STEP/g)?.length, 1);
+    assert.doesNotMatch(output, /token-harness verify/);
+    assert.match(output, /requested state is already verified/i);
+  });
+
+  it('does not ask for a redundant verify when uninstall already verified the requested state', () => {
+    const report: ApplyReport = {
+      planId: null,
+      transactionId: 'candidate-uninstall',
+      fromStoredPlan: false,
+      outcome: 'committed',
+      results: [{ actionId: 'candidate', kind: 'managed-change', status: 'applied', path: null }],
+      unrestored: [],
+      receiptId: null,
+      requestedStateVerified: true,
+    };
+    const output = renderHuman(
+      commandResult({ command: 'uninstall', exitCode: EXIT_CODES.ok, data: report }),
+      { toolVersion: '0.1.11', home: '/home/dev', decorate: false },
+    ).report;
+
+    assert.doesNotMatch(output, /token-harness verify/);
+    assert.match(output, /requested state is already verified/i);
+  });
+
+  it('keeps verify as the next step when successful apply did not verify integration state', () => {
+    const report: ApplyReport = {
+      planId: 'verified-later',
+      transactionId: 'normal-apply',
+      fromStoredPlan: true,
+      outcome: 'committed',
+      results: [{ actionId: 'provider', kind: 'managed-change', status: 'applied', path: null }],
+      unrestored: [],
+      receiptId: 'normal-apply',
+    };
+    const output = renderHuman(
+      commandResult({ command: 'apply', exitCode: EXIT_CODES.ok, data: report }),
+      { toolVersion: '0.1.11', home: '/home/dev', decorate: false },
+    ).report;
+
+    assert.match(output, /token-harness verify/);
+  });
+
   it('keeps the established technical report behind --verbose', () => {
     const result = commandResult({ command: 'doctor', exitCode: EXIT_CODES.ok, data: REPORT });
     const output = renderHuman(result, {

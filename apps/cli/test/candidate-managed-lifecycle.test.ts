@@ -8,9 +8,15 @@ import {
   type ProcessOutcome,
   type ProcessRequest,
 } from '@token-harness/core';
+import {
+  MCPTOON_AGENT_INSTRUCTIONS,
+  MCPTOON_MARKER_BEGIN,
+  MCPTOON_MARKER_END,
+} from '@token-harness/adapters';
 
 import { runApply } from '../src/commands/apply.js';
 import type { CommandContext } from '../src/commands/context.js';
+import { runUninstall } from '../src/commands/rollback.js';
 
 const PLATFORM: PlatformFacts = {
   os: 'linux',
@@ -37,8 +43,20 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
   };
 }
 
-function context(candidate: 'mcptoon' | 'headroom' = 'mcptoon'): CommandContext {
+function context(
+  candidate: 'mcptoon' | 'headroom' = 'mcptoon',
+  managedState: 'absent' | 'active' = 'absent',
+): CommandContext {
   let writes = 0;
+  const reviewedInstructions = new TextEncoder().encode(
+    [
+      '# Existing user instructions',
+      `<!-- ${MCPTOON_MARKER_BEGIN} -->`,
+      MCPTOON_AGENT_INSTRUCTIONS.trimEnd(),
+      `<!-- ${MCPTOON_MARKER_END} -->`,
+      '',
+    ].join('\n'),
+  );
   const ctx: CommandContext = {
     platform: PLATFORM,
     projectRoot: '/project',
@@ -74,8 +92,16 @@ function context(candidate: 'mcptoon' | 'headroom' = 'mcptoon'): CommandContext 
         dirname: (path) => path.split('/').slice(0, -1).join('/') || '/',
         basename: (path) => path.split('/').at(-1) ?? path,
         isInside: (candidatePath, parent) => candidatePath.startsWith(parent),
-        stat: async (): Promise<FileStat | null> => null,
-        readFile: async () => new Uint8Array(),
+        stat: async (path): Promise<FileStat | null> =>
+          managedState === 'active' && path === '/project/AGENTS.md'
+            ? { kind: 'file', byteLength: reviewedInstructions.byteLength, mode: null }
+            : null,
+        readFile: async (path) => {
+          if (managedState === 'active' && path === '/project/AGENTS.md') {
+            return reviewedInstructions;
+          }
+          return new Uint8Array();
+        },
         writeFile: async () => {
           writes += 1;
         },
@@ -95,6 +121,12 @@ function context(candidate: 'mcptoon' | 'headroom' = 'mcptoon'): CommandContext 
           if (request.executable === 'codex') return outcome(request, 'codex-cli 0.153.0');
           if (request.executable === 'pipx') return outcome(request, '1.4.3');
           if (request.executable === 'mcptoon') {
+            if (managedState === 'active') {
+              if (request.args[0] === '--version') return outcome(request, 'mcptoon 0.7.10');
+              if (request.args[0] === '--help') {
+                return outcome(request, 'Options: --compact --json --toon');
+              }
+            }
             return {
               ...outcome(request, ''),
               executablePath: null,
@@ -139,5 +171,19 @@ describe('managed candidate lifecycle', () => {
       result.diagnostics.some((entry) => entry.code === 'candidate-managed-lifecycle-unavailable'),
       true,
     );
+  });
+
+  it('marks an already-active managed candidate as already verified', async () => {
+    const result = await runApply(context('mcptoon', 'active'));
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.data?.outcome, 'nothing-to-do');
+    assert.equal(result.data?.requestedStateVerified, true);
+  });
+
+  it('marks an already-inactive managed candidate as already verified after uninstall', async () => {
+    const result = await runUninstall(context());
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.data?.outcome, 'nothing-to-do');
+    assert.equal(result.data?.requestedStateVerified, true);
   });
 });
