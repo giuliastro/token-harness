@@ -9,6 +9,7 @@ import type {
   ProcessRunner,
 } from '@token-harness/core';
 
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '../src/providers/gitnexus-candidate.js';
 import {
   observeGitNexusCandidate,
   parseGitNexusCliCapabilities,
@@ -148,6 +149,33 @@ test('reports GitNexus absent without probing anything else', async () => {
   );
 });
 
+test('fails closed on an unreviewed GitNexus version before capability probes', async () => {
+  const requests: ProcessRequest[] = [];
+  const observation = await observeGitNexusCandidate(
+    context(
+      {
+        version: 'gitnexus 1.6.13-rc.1',
+        help: HELP,
+        statusHelp: STATUS_HELP,
+      },
+      requests,
+    ),
+  );
+
+  assert.equal(GITNEXUS_REVIEWED_BENCHMARK_VERSION, '1.6.12');
+  assert.equal(observation.state, 'unsupported-version');
+  assert.equal(observation.version, '1.6.13-rc.1');
+  assert.equal(observation.supportsQuery, false);
+  assert.equal(observation.supportsContext, false);
+  assert.equal(observation.supportsStatusJson, false);
+  assert.equal(observation.supportsMcp, false);
+  assert.match(observation.reasons[0] ?? '', /exact reviewed benchmark build 1\.6\.12/);
+  assert.deepEqual(
+    requests.map((request) => request.args),
+    [['--version']],
+  );
+});
+
 test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
   const requests: ProcessRequest[] = [];
   const observation = await observeGitNexusCandidate(
@@ -169,7 +197,7 @@ test('keeps an incomplete CLI installed but not benchmark-ready', async () => {
   assert.match(observation.reasons[0] ?? '', /context/);
 });
 
-test('marks a capable local CLI benchmark-ready using only help/version probes', async () => {
+test('marks the exact reviewed capable CLI benchmark-ready using only help/version probes', async () => {
   const requests: ProcessRequest[] = [];
   const observation = await observeGitNexusCandidate(
     context(
