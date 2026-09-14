@@ -1,8 +1,5 @@
 /** Shared candidate-benchmark attribution sidecar helpers. */
-import {
-  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
-  parseGitNexusVersion,
-} from '@token-harness/adapters';
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION, parseGitNexusVersion } from '@token-harness/adapters';
 import type { OptimizationCandidateId } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
