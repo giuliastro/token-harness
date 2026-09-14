@@ -77,7 +77,8 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
       severity: 'error',
       code: 'candidate-benchmark-campaign-version-unavailable',
       subject: 'gitnexus',
-      message: 'The exact harness and GitNexus versions cannot be established before this benchmark start',
+      message:
+        'The exact harness and GitNexus versions cannot be established before this benchmark start',
       remediation:
         'Run the campaign from the normal CLI host with an explicit harness after its exact GitNexus compatibility row has been reviewed',
     });
