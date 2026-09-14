@@ -41,6 +41,31 @@ export function validateCandidateCampaignSurface(
   });
 }
 
+/**
+ * New candidate-attributed evidence must not be created before the candidate has at least one exact
+ * reviewed compatibility/reversibility tuple. Historical evidence remains readable so an admission
+ * change never hides or rewrites prior receipts.
+ *
+ * GitNexus has a reviewed 1.6.12 Claude JSON ownership primitive, but no RFC 0009 compatibility row
+ * yet. Until one exact harness/platform tuple is recorded, all new GitNexus candidate captures fail
+ * closed rather than silently inheriting support from capability discovery or the lifecycle review.
+ */
+export function validateCandidateEvidenceCaptureAdmission(
+  candidateId: OptimizationCandidateId | null,
+): Diagnostic | null {
+  if (candidateId !== 'gitnexus') return null;
+
+  return diagnostic({
+    severity: 'error',
+    code: 'candidate-benchmark-capture-row-unreviewed',
+    subject: 'gitnexus',
+    message:
+      'GitNexus candidate evidence cannot be recorded yet because no exact reviewed harness/platform compatibility row exists',
+    remediation:
+      'Record and review one exact GitNexus 1.6.12 compatibility/reversibility tuple before starting new candidate-attributed captures; existing benchmark evidence remains readable',
+  });
+}
+
 function parseObservedVersion(output: string): string | null {
   return output.match(/(?:^|\D)(\d+\.\d+\.\d+)(?:\D|$)/)?.[1] ?? null;
 }
