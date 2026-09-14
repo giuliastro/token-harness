@@ -8,7 +8,12 @@ import {
   type OptimizationCandidateId,
   type PlatformFacts,
 } from '@token-harness/core';
-import { MCPTOON_REVIEWED_INSTALL_VERSION, parseMcptoonVersion } from '@token-harness/adapters';
+import {
+  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+  MCPTOON_REVIEWED_INSTALL_VERSION,
+  parseGitNexusVersion,
+  parseMcptoonVersion,
+} from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
 
@@ -60,10 +65,49 @@ async function readExecutableVersion(
   return parseObservedVersion(`${outcome.stdout}\n${outcome.stderr}`);
 }
 
+async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {
+  // Matrix/report reads must remain possible even when GitNexus is no longer installed. New
+  // baseline and optimized captures, however, need an exact build witness before evidence exists.
+  if (context.benchmarkVariant === null) return null;
+  if (context.adapters === null) {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-version-unavailable',
+      subject: 'gitnexus',
+      message: 'The exact GitNexus build cannot be established before this benchmark start',
+      remediation:
+        'Run the campaign from the normal CLI host with the exact reviewed GitNexus build available',
+    });
+  }
+
+  const outcome = await context.adapters.runner.run({
+    executable: 'gitnexus',
+    args: ['--version'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+  const version =
+    outcome.failure === null && outcome.exitCode === 0
+      ? parseGitNexusVersion(`${outcome.stdout}\n${outcome.stderr}`)
+      : null;
+  if (version !== GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-provider-version-unreviewed',
+      subject: 'gitnexus',
+      message: `GitNexus benchmark starts require exact reviewed build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}; observed ${version ?? 'unavailable'}`,
+      remediation: `Install or select GitNexus ${GITNEXUS_REVIEWED_BENCHMARK_VERSION} before starting this pair; Token Harness does not install GitNexus automatically`,
+    });
+  }
+
+  return null;
+}
+
 /**
- * Require the exact reviewed harness row before creating or guiding mcptoon selection evidence.
- * The provider binary is required only for an optimized start: a baseline is allowed before
- * mcptoon is enabled, but it still has to run on the exact reviewed harness/platform row.
+ * Require the exact reviewed runtime surface before creating candidate selection evidence.
+ * mcptoon requires its exact harness row and the provider build only for optimized starts.
+ * GitNexus requires its exact reviewed build for both baseline and optimized starts so the pair
+ * carries deterministic version provenance without implying that the baseline activates GitNexus.
  */
 export async function validateCandidateCampaignRuntimeSurface(
   context: CommandContext,
@@ -71,6 +115,10 @@ export async function validateCandidateCampaignRuntimeSurface(
 ): Promise<Diagnostic | null> {
   const candidateId = context.optimizationCandidate ?? null;
   const harnessId = context.harness;
+
+  if (candidateId === 'gitnexus') {
+    return validateGitNexusBenchmarkStart(context);
+  }
   if (candidateId !== 'mcptoon' || harnessId === null) return null;
 
   const surfaceProblem = validateCandidateCampaignSurface(candidateId, harnessId, context.platform);
