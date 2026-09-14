@@ -120,40 +120,53 @@ is also still young — the repository was created on 2026-07-27 — so youth re
 residual risk. A material change in upstream maintenance should trigger a new project-maturity review;
 this pass does not approve future mcptoon versions or widen any compatibility row.
 
-## Next gate: real selection evidence
+## Real selection campaign: keep experimental
 
-The next evidence gap cannot be closed by fixtures or CI. Run a paired campaign on one of the exact
-reviewed Linux harness surfaces while leaving the normal RTK + HarnessTrim production stack unchanged.
-The campaign planner uses two pairs per task class and tells the reviewer the next command after every
-step. For example:
+The real Codex campaign `mcptoon-real-codex` completed on **2026-09-14** against the unchanged RTK +
+HarnessTrim production baseline on the exact reviewed native-Linux surface (`mcptoon 0.7.10`, Codex
+`0.153.0`). It completed 8/8 pairs across mechanical, standard, hard and critical classes. All 16 task
+runs passed quality on the first attempt and every completed pair had quota-backed evidence.
 
-```bash
-token-harness benchmark-matrix --benchmark-id mcptoon-real-codex --candidate mcptoon --harness codex
-```
+The evidence classes are intentionally kept separate:
 
-Follow the emitted baseline/optimized start and finish commands and perform the same useful task for
-each pair. Baseline means the production stack without mcptoon; optimized means the same production
-stack with mcptoon 0.7.10 enabled through the reviewed workflow. Record the observed quality honestly
-rather than forcing `passed` when a task fails or needs retries.
+- **compatibility/reversibility:** positive for the exact reviewed lifecycle tuple only; managed
+  apply/deactivation remained reversible and brownfield-safe;
+- **quota:** 4 pairs were equivalent, 2 optimized-better and 2 baseline-better, so there is no
+  consistent quota-saving signal;
+- **local usage:** unavailable/ambiguous, so there is no local-token saving claim;
+- **context:** no reduction was demonstrated; 7 pairs were unchanged and one critical pair is
+  `unknown` because its optimized capture changed from 155 to 165 static MCP tools during the task;
+- **timing:** cumulative optimized wall clock was about 5.6% slower. This is one observed campaign
+  result, not a statistical performance conclusion; and
+- **activation attribution:** the passive witness did not record successful mcptoon activity inside
+  the optimized task windows, so quota or timing differences are not attributable to candidate
+  execution merely because the optimized variant was selected.
 
-The selection gate passes only when the resulting campaign itself becomes decision-ready and
-promising under the existing candidate assessment rules. The activation witness must independently
-show successful mcptoon activity for the optimized windows. Manifest footprint remains contextual
-cached-schema mechanism evidence and is never substituted for token, quota, time or quality evidence.
+### Context anomaly: 155 -> 165
 
-Do not change the production stack between paired runs merely to improve the result. If the exact
-RTK/HarnessTrim baseline changes version or configuration during the campaign, start a clean campaign
-rather than treating unlike environments as one experiment. A positive selection result is still not
-combined-stack approval; that is the next independent review.
+The first critical optimized receipt started with 155 known/static MCP tools and finished with 165.
+The next critical **baseline** receipt then started at 165 and remained at 165; its optimized partner
+also remained at 165. The change therefore persisted across the candidate deactivation boundary.
+Token Harness's managed mcptoon lifecycle does not register another MCP server, and the snapshots keep
+only bounded aggregate inventory counts rather than tool identities. The available evidence therefore
+supports only **persistent Codex/MCP surface drift, not attributable to mcptoon**. It does not identify
+which ten tools appeared or what external/runtime event caused the change, so no stronger cause is
+recorded and the receipts remain untouched.
+
+### Decision
+
+The campaign is decision-ready but its selection signal is **mixed**. The reviewed decision is
+**KEEP EXPERIMENTAL**. mcptoon remains candidate-only, is not added to `PROVIDER_ADAPTERS`, and is not
+part of the RTK + HarnessTrim production stack. Token Harness must not claim token/quota savings,
+context reduction or a timing improvement from this campaign.
 
 ## What remains before promotion
 
-The lifecycle, activation, footprint and maturity checkpoints close real evidence gaps, but they do
-not put mcptoon in `PROVIDER_ADAPTERS`. Promotion still requires independent, decision-ready
-selection evidence from repeated paired workloads, combined-stack validation with RTK and
-HarnessTrim, and a separate compatibility/reversibility decision for the intended promoted surface.
-Additional exact harness/platform compatibility may be required before that compatibility gate can
-pass.
+The lifecycle, footprint and maturity checkpoints close real evidence gaps, but they do not put
+mcptoon in `PROVIDER_ADAPTERS`. The completed real campaign did not produce a promising selection
+signal and its activation witness did not attribute successful candidate activity to the optimized
+windows. A future promotion attempt would therefore need new, independently attributable evidence
+before combined-stack or broader compatibility work would be justified.
 
 Upstream claims or fixture-only results are never copied into user savings. A positive promotion
 signal must come from Token Harness's own attributable campaign evidence while preserving quality.
