@@ -94,13 +94,21 @@ GitNexus may be promoted only after a paired, reproducible benchmark against the
 
 `native Claude Code/Codex + active RTK + active HarnessTrim`
 
-Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This
-only labels benchmark evidence; it does not activate GitNexus. For new receipts, Token Harness also
-records a bounded GitNexus MCP runtime witness from the harness-native MCP inventory at benchmark
-start and finish. The activation gate can pass only when the optimized task observes exactly one
-GitNexus MCP server as usable at both boundaries. Truncated, ambiguous, absent, unusable, or legacy
-missing evidence fails closed. No MCP arguments, tool names, paths, credentials, or config contents
-are persisted in that witness.
+The benchmark framework can retain and display existing GitNexus-attributed receipts, but **new
+GitNexus candidate-attributed captures are fail-closed until an exact reviewed RFC 0009
+harness/platform compatibility tuple exists**. `benchmark-start --candidate gitnexus` therefore
+stops before the benchmark command handler can create capture state. `benchmark-matrix --candidate
+gitnexus` remains read-only and can continue to inspect historical evidence. Capability discovery,
+the reviewed Claude JSON ownership primitive, or a newer upstream release must never be treated as a
+substitute for that compatibility record.
+
+Once an exact tuple is reviewed and explicitly admitted, candidate attribution can use the existing
+benchmark workflow with `--candidate gitnexus`. Attribution only labels benchmark evidence; it does
+not activate GitNexus. For new admissible receipts, Token Harness also records a bounded GitNexus MCP
+runtime witness from the harness-native MCP inventory at benchmark start and finish. The activation
+gate can pass only when the optimized task observes exactly one GitNexus MCP server as usable at both
+boundaries. Truncated, ambiguous, absent, unusable, or legacy missing evidence fails closed. No MCP
+arguments, tool names, paths, credentials, or config contents are persisted in that witness.
 
 The evaluation must include both Claude Code and Codex where supported and measure at least:
 
