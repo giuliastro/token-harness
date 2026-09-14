@@ -167,10 +167,7 @@ test(
 
     assert.equal(gitnexus?.state, 'unsupported-version');
     assert.equal(gitnexus?.version, '1.6.13-rc.1');
-    assert.equal(
-      gitnexus?.minimumBenchmarkVersion,
-      GITNEXUS_REVIEWED_BENCHMARK_VERSION,
-    );
+    assert.equal(gitnexus?.minimumBenchmarkVersion, GITNEXUS_REVIEWED_BENCHMARK_VERSION);
     assert.equal(diagnostic?.code, 'context-optimizer-gitnexus-version');
     assert.equal(diagnostic?.severity, 'warning');
     assert.equal(
