@@ -153,8 +153,14 @@ describe('candidate promotion readiness', () => {
 
     const capability = result.gates.find((gate) => gate.id === 'benchmark-capability');
     assert.equal(capability?.state, 'blocked');
-    assert.match(capability?.reason ?? '', /does not match exact reviewed benchmark build 1\.6\.12/);
-    assert.equal(capability?.reason.includes('below the reviewed benchmark baseline'), false);
+    assert.match(
+      capability?.reason ?? '',
+      /does not match exact reviewed benchmark build 1\.6\.12/,
+    );
+    assert.equal(
+      capability?.reason.includes('below the reviewed benchmark baseline'),
+      false,
+    );
   });
 
   it('can become eligible only when every required reviewed gate passes', () => {
