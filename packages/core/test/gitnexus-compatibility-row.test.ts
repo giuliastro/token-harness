@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import {
-  COMPATIBILITY_ROWS,
-  admitManagedMutation,
-  harnessId,
-  providerId,
-} from '../src/index.js';
+import { COMPATIBILITY_ROWS, admitManagedMutation, harnessId, providerId } from '../src/index.js';
 
 describe('GitNexus RFC 0009 compatibility row', () => {
   it('admits only the exact recorded Claude 2.1.269 × GitNexus 1.6.12 × Linux tuple', () => {
@@ -21,10 +16,7 @@ describe('GitNexus RFC 0009 compatibility row', () => {
     assert.equal(exact.state, 'admitted');
     if (exact.state === 'admitted') {
       assert.equal(exact.row.configSchema, 'claude-user-json-mcp-entry');
-      assert.equal(
-        exact.row.fixture,
-        'tests/fixtures/rows/gitnexus-claude-linux-2.1.269-1.6.12',
-      );
+      assert.equal(exact.row.fixture, 'tests/fixtures/rows/gitnexus-claude-linux-2.1.269-1.6.12');
       assert.equal(exact.row.verificationTier, 'config-only');
     }
 
