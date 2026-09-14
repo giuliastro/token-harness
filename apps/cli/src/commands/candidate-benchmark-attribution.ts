@@ -1,6 +1,10 @@
 /** Shared candidate-benchmark attribution sidecar helpers. */
 import { GITNEXUS_REVIEWED_BENCHMARK_VERSION, parseGitNexusVersion } from '@token-harness/adapters';
-import type { OptimizationCandidateId } from '@token-harness/core';
+import {
+  parseTaskBenchmarkCapture,
+  parseTaskBenchmarkReceipt,
+  type OptimizationCandidateId,
+} from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
 
@@ -12,6 +16,12 @@ export const OPTIMIZATION_CANDIDATES: readonly OptimizationCandidateId[] = [
 ];
 
 const CANDIDATE_SET = new Set<string>(OPTIMIZATION_CANDIDATES);
+
+type GitNexusBaselinePurity = 'clean' | 'absent' | 'invalid';
+type JsonArtifactRead =
+  | { state: 'absent' }
+  | { state: 'invalid' }
+  | { state: 'present'; value: unknown };
 
 export interface CandidateBenchmarkAttribution {
   schemaVersion: typeof CANDIDATE_BENCHMARK_ATTRIBUTION_SCHEMA_VERSION;
@@ -28,6 +38,15 @@ export function candidateBenchmarkAttributionPath(
 ): string | null {
   if (context.adapters === null || context.stateRoot === null) return null;
   return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, 'candidate.json');
+}
+
+function benchmarkArtifactPath(
+  context: CommandContext,
+  benchmarkId: string,
+  filename: string,
+): string | null {
+  if (context.adapters === null || context.stateRoot === null) return null;
+  return context.adapters.fs.join(context.stateRoot, 'benchmarks', benchmarkId, filename);
 }
 
 export function parseCandidateBenchmarkAttribution(
@@ -71,6 +90,68 @@ async function observedReviewedGitNexusVersion(context: CommandContext): Promise
   return version === GITNEXUS_REVIEWED_BENCHMARK_VERSION ? version : null;
 }
 
+async function readJsonArtifact(context: CommandContext, path: string): Promise<JsonArtifactRead> {
+  if (context.adapters === null) return { state: 'absent' };
+  const stat = await context.adapters.fs.stat(path);
+  if (stat === null) return { state: 'absent' };
+  if (stat.kind !== 'file') return { state: 'invalid' };
+  try {
+    return {
+      state: 'present',
+      value: JSON.parse(
+        new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+      ) as unknown,
+    };
+  } catch {
+    return { state: 'invalid' };
+  }
+}
+
+/**
+ * GitNexus selection evidence needs a production-stack-only baseline. The binary may be installed
+ * so its exact version can be witnessed, but the harness-native MCP inventory must report GitNexus
+ * absent at both task boundaries. A running capture can prove only the start boundary; a completed
+ * receipt must prove both. Missing/legacy/ambiguous witness data fails closed without rewriting it.
+ */
+async function gitNexusBaselinePurity(
+  context: CommandContext,
+  benchmarkId: string,
+): Promise<GitNexusBaselinePurity> {
+  const receiptPath = benchmarkArtifactPath(context, benchmarkId, 'baseline.json');
+  const capturePath = benchmarkArtifactPath(context, benchmarkId, 'baseline.capture.json');
+  if (receiptPath === null || capturePath === null) return 'absent';
+
+  const rawReceipt = await readJsonArtifact(context, receiptPath);
+  if (rawReceipt.state !== 'absent') {
+    if (rawReceipt.state === 'invalid') return 'invalid';
+    const parsed = parseTaskBenchmarkReceipt(rawReceipt.value);
+    if (
+      !parsed.ok ||
+      parsed.receipt.benchmarkId !== benchmarkId ||
+      parsed.receipt.variant !== 'baseline'
+    ) {
+      return 'invalid';
+    }
+    return parsed.receipt.contextAtStart?.gitNexusMcpRuntimeState === 'absent' &&
+      parsed.receipt.contextAtFinish?.gitNexusMcpRuntimeState === 'absent'
+      ? 'clean'
+      : 'invalid';
+  }
+
+  const rawCapture = await readJsonArtifact(context, capturePath);
+  if (rawCapture.state === 'absent') return 'absent';
+  if (rawCapture.state === 'invalid') return 'invalid';
+  const parsed = parseTaskBenchmarkCapture(rawCapture.value);
+  if (
+    !parsed.ok ||
+    parsed.capture.benchmarkId !== benchmarkId ||
+    parsed.capture.variant !== 'baseline'
+  ) {
+    return 'invalid';
+  }
+  return parsed.capture.contextAtStart?.gitNexusMcpRuntimeState === 'absent' ? 'clean' : 'invalid';
+}
+
 export async function readCandidateBenchmarkAttribution(
   context: CommandContext,
   benchmarkId: string,
@@ -88,12 +169,11 @@ export async function readCandidateBenchmarkAttribution(
     const parsed = parseCandidateBenchmarkAttribution(raw);
     if (parsed === null) return 'invalid';
     // Legacy GitNexus sidecars stay parseable for inspection, but without the exact reviewed build
-    // they cannot close a candidate evidence gate. Historical receipts are never rewritten.
-    if (
-      parsed.candidateId === 'gitnexus' &&
-      parsed.candidateVersion !== GITNEXUS_REVIEWED_BENCHMARK_VERSION
-    ) {
-      return 'invalid';
+    // and a clean native-MCP baseline they cannot close a candidate evidence gate. Historical
+    // receipts are never rewritten.
+    if (parsed.candidateId === 'gitnexus') {
+      if (parsed.candidateVersion !== GITNEXUS_REVIEWED_BENCHMARK_VERSION) return 'invalid';
+      if ((await gitNexusBaselinePurity(context, benchmarkId)) !== 'clean') return 'invalid';
     }
     return parsed;
   } catch {
@@ -112,6 +192,7 @@ export async function writeCandidateBenchmarkAttribution(
   if (value.candidateId === 'gitnexus') {
     const candidateVersion = await observedReviewedGitNexusVersion(context);
     if (candidateVersion === null) return false;
+    if ((await gitNexusBaselinePurity(context, value.benchmarkId)) !== 'clean') return false;
     persisted = { ...value, candidateVersion };
   }
 
