@@ -302,7 +302,7 @@ export async function runGitNexusCandidateApply(
     }
     const verification = await verifyGitNexusManagedMcpActivation(
       providerContext(context)!,
-      context.harness,
+      context.harness!,
     );
     if (verification.state !== 'verified') {
       return finish('apply', EXIT_CODES['unsupported-environment'], emptyReport('rejected'), [
@@ -342,7 +342,7 @@ export async function runGitNexusCandidateApply(
   }
 
   const provider = providerContext(context)!;
-  const plan = await planGitNexusManagedMcpActivation(provider, context.harness);
+  const plan = await planGitNexusManagedMcpActivation(provider, context.harness!);
   diagnostics.push(...plan.diagnostics);
   if (plan.actions.length === 0) {
     diagnostics.push(
@@ -398,11 +398,11 @@ export async function runGitNexusCandidateApply(
     actions: plan.actions,
     fs: built.fs,
     snapshots: built.snapshots,
-    journal: built.journal,
+    journal: built.journal as FileJournalStore,
     runner: context.adapters.runner,
     now: context.now,
     verifyPostconditions: async () => {
-      const verification = await verifyGitNexusManagedMcpActivation(provider, context.harness);
+      const verification = await verifyGitNexusManagedMcpActivation(provider, context.harness!);
       return verification.state === 'verified'
         ? []
         : [
@@ -536,7 +536,7 @@ export async function runGitNexusCandidateUninstall(
     actions: plan.actions,
     fs: built.fs,
     snapshots: built.snapshots,
-    journal: built.journal,
+    journal: built.journal as FileJournalStore,
     runner: context.adapters.runner,
     now: context.now,
     verifyPostconditions: async () => {
