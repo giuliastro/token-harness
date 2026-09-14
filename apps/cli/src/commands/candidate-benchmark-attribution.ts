@@ -18,6 +18,10 @@ export const OPTIMIZATION_CANDIDATES: readonly OptimizationCandidateId[] = [
 const CANDIDATE_SET = new Set<string>(OPTIMIZATION_CANDIDATES);
 
 type GitNexusBaselinePurity = 'clean' | 'absent' | 'invalid';
+type JsonArtifactRead =
+  | { state: 'absent' }
+  | { state: 'invalid' }
+  | { state: 'present'; value: unknown };
 
 export interface CandidateBenchmarkAttribution {
   schemaVersion: typeof CANDIDATE_BENCHMARK_ATTRIBUTION_SCHEMA_VERSION;
@@ -86,18 +90,20 @@ async function observedReviewedGitNexusVersion(context: CommandContext): Promise
   return version === GITNEXUS_REVIEWED_BENCHMARK_VERSION ? version : null;
 }
 
-async function readJsonArtifact(
-  context: CommandContext,
-  path: string,
-): Promise<'absent' | 'invalid' | unknown> {
-  if (context.adapters === null) return 'absent';
+async function readJsonArtifact(context: CommandContext, path: string): Promise<JsonArtifactRead> {
+  if (context.adapters === null) return { state: 'absent' };
   const stat = await context.adapters.fs.stat(path);
-  if (stat === null) return 'absent';
-  if (stat.kind !== 'file') return 'invalid';
+  if (stat === null) return { state: 'absent' };
+  if (stat.kind !== 'file') return { state: 'invalid' };
   try {
-    return JSON.parse(new TextDecoder().decode(await context.adapters.fs.readFile(path))) as unknown;
+    return {
+      state: 'present',
+      value: JSON.parse(
+        new TextDecoder().decode(await context.adapters.fs.readFile(path)),
+      ) as unknown,
+    };
   } catch {
-    return 'invalid';
+    return { state: 'invalid' };
   }
 }
 
@@ -116,9 +122,9 @@ async function gitNexusBaselinePurity(
   if (receiptPath === null || capturePath === null) return 'absent';
 
   const rawReceipt = await readJsonArtifact(context, receiptPath);
-  if (rawReceipt !== 'absent') {
-    if (rawReceipt === 'invalid') return 'invalid';
-    const parsed = parseTaskBenchmarkReceipt(rawReceipt);
+  if (rawReceipt.state !== 'absent') {
+    if (rawReceipt.state === 'invalid') return 'invalid';
+    const parsed = parseTaskBenchmarkReceipt(rawReceipt.value);
     if (
       !parsed.ok ||
       parsed.receipt.benchmarkId !== benchmarkId ||
@@ -133,9 +139,9 @@ async function gitNexusBaselinePurity(
   }
 
   const rawCapture = await readJsonArtifact(context, capturePath);
-  if (rawCapture === 'absent') return 'absent';
-  if (rawCapture === 'invalid') return 'invalid';
-  const parsed = parseTaskBenchmarkCapture(rawCapture);
+  if (rawCapture.state === 'absent') return 'absent';
+  if (rawCapture.state === 'invalid') return 'invalid';
+  const parsed = parseTaskBenchmarkCapture(rawCapture.value);
   if (
     !parsed.ok ||
     parsed.capture.benchmarkId !== benchmarkId ||
