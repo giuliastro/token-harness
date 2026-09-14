@@ -157,10 +157,7 @@ describe('candidate promotion readiness', () => {
       capability?.reason ?? '',
       /does not match exact reviewed benchmark build 1\.6\.12/,
     );
-    assert.equal(
-      capability?.reason.includes('below the reviewed benchmark baseline'),
-      false,
-    );
+    assert.equal(capability?.reason.includes('below the reviewed benchmark baseline'), false);
   });
 
   it('can become eligible only when every required reviewed gate passes', () => {
