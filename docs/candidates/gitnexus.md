@@ -95,12 +95,20 @@ GitNexus may be promoted only after a paired, reproducible benchmark against the
 `native Claude Code/Codex + active RTK + active HarnessTrim`
 
 Candidate attribution can use the existing benchmark workflow with `--candidate gitnexus`. This
-only labels benchmark evidence; it does not activate GitNexus. For new receipts, Token Harness also
-records a bounded GitNexus MCP runtime witness from the harness-native MCP inventory at benchmark
-start and finish. The activation gate can pass only when the optimized task observes exactly one
-GitNexus MCP server as usable at both boundaries. Truncated, ambiguous, absent, unusable, or legacy
-missing evidence fails closed. No MCP arguments, tool names, paths, credentials, or config contents
-are persisted in that witness.
+only labels benchmark evidence; it does not activate GitNexus. New GitNexus benchmark starts also
+passively require the exact reviewed `1.6.12` CLI before either the baseline or optimized capture is
+created. The baseline remains a production-stack-only run: witnessing the installed binary version
+does not activate GitNexus. New `candidate.json` sidecars persist that exact `candidateVersion`, and
+only sidecars carrying reviewed `1.6.12` provenance may contribute GitNexus candidate matrix/campaign
+evidence. Legacy or mismatched sidecars remain readable historical data but fail closed for the
+GitNexus candidate gate; Token Harness does not rewrite historical benchmark receipts to retrofit
+provenance. Matrix/report reads remain passive and do not require GitNexus to still be installed.
+
+For new receipts, Token Harness also records a bounded GitNexus MCP runtime witness from the
+harness-native MCP inventory at benchmark start and finish. The activation gate can pass only when
+the optimized task observes exactly one GitNexus MCP server as usable at both boundaries. Truncated,
+ambiguous, absent, unusable, or legacy missing evidence fails closed. No MCP arguments, tool names,
+paths, credentials, or config contents are persisted in that witness.
 
 The evaluation must include both Claude Code and Codex where supported and measure at least:
 
