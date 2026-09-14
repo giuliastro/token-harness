@@ -98,7 +98,9 @@ function observedBenchmarkCapability(
       observation.state === 'absent'
         ? `${observation.displayName} is not installed, so local benchmark capability is not available`
         : observation.state === 'unsupported-version'
-          ? `${observation.displayName}${version} is below the reviewed benchmark baseline`
+          ? candidateId === 'gitnexus'
+            ? `${observation.displayName}${version} does not match exact reviewed benchmark build ${observation.minimumBenchmarkVersion}`
+            : `${observation.displayName}${version} is below the reviewed benchmark baseline`
           : `${observation.displayName}${version} is installed but does not expose every reviewed benchmark surface`,
   };
 }
