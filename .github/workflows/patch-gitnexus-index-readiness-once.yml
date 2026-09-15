@@ -1,0 +1,240 @@
+name: Patch GitNexus index readiness gate once
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-index-readiness-gate
+    paths:
+      - .github/workflows/patch-gitnexus-index-readiness-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-index-readiness-gate
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Add fail-closed index readiness preflight
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          src = Path('apps/cli/src/commands/candidate-campaign-surface.ts')
+          text = src.read_text()
+          marker = '''async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {'''
+          assert text.count(marker) == 1
+          helper = '''type GitNexusIndexReadiness =
+            | { state: 'up-to-date'; detail: null }
+            | { state: 'not-ready'; detail: string | null }
+            | { state: 'invalid'; detail: null };
+
+          function safeGitNexusStatusLabel(value: unknown): string | null {
+            return typeof value === 'string' && /^[a-z0-9-]{1,64}$/.test(value) ? value : null;
+          }
+
+          function parseGitNexusIndexReadiness(output: string): GitNexusIndexReadiness {
+            try {
+              const parsed = JSON.parse(output) as unknown;
+              if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                return { state: 'invalid', detail: null };
+              }
+              const receipt = parsed as Record<string, unknown>;
+              if (receipt.schemaVersion !== 1) return { state: 'invalid', detail: null };
+
+              const status = safeGitNexusStatusLabel(receipt.status);
+              const error = safeGitNexusStatusLabel(receipt.error);
+              if (status === 'up-to-date' && receipt.error === undefined) {
+                return { state: 'up-to-date', detail: null };
+              }
+              if (receipt.error !== undefined) {
+                return { state: 'not-ready', detail: error };
+              }
+              if (receipt.status !== undefined) {
+                return { state: 'not-ready', detail: status };
+              }
+              return { state: 'invalid', detail: null };
+            } catch {
+              return { state: 'invalid', detail: null };
+            }
+          }
+
+          '''
+          text = text.replace(marker, helper + marker)
+
+          old = '''  if (version !== GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
+            return diagnostic({
+              severity: 'error',
+              code: 'candidate-benchmark-campaign-provider-version-unreviewed',
+              subject: 'gitnexus',
+              message: `GitNexus benchmark starts require exact reviewed build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}; observed ${version ?? 'unavailable'}`,
+              remediation: `Install or select GitNexus ${GITNEXUS_REVIEWED_BENCHMARK_VERSION} before starting this pair; Token Harness does not install GitNexus automatically`,
+            });
+          }
+
+          return null;'''
+          assert text.count(old) == 1
+          new = '''  if (version !== GITNEXUS_REVIEWED_BENCHMARK_VERSION) {
+            return diagnostic({
+              severity: 'error',
+              code: 'candidate-benchmark-campaign-provider-version-unreviewed',
+              subject: 'gitnexus',
+              message: `GitNexus benchmark starts require exact reviewed build ${GITNEXUS_REVIEWED_BENCHMARK_VERSION}; observed ${version ?? 'unavailable'}`,
+              remediation: `Install or select GitNexus ${GITNEXUS_REVIEWED_BENCHMARK_VERSION} before starting this pair; Token Harness does not install GitNexus automatically`,
+            });
+          }
+
+          const statusOutcome = await context.adapters.runner.run({
+            executable: 'gitnexus',
+            args: ['status', '--json'],
+            cwd: context.projectRoot,
+            timeoutMs: 30_000,
+          });
+          if (
+            statusOutcome.failure !== null ||
+            statusOutcome.exitCode !== 0 ||
+            statusOutcome.stdoutTruncated
+          ) {
+            return diagnostic({
+              severity: 'error',
+              code: 'candidate-benchmark-campaign-index-status-unavailable',
+              subject: 'gitnexus',
+              message: 'GitNexus index readiness could not be established before this benchmark start',
+              remediation:
+                'Run gitnexus status --json from this repository. If needed, prepare the index with gitnexus analyze --index-only, then retry. Token Harness does not create or refresh GitNexus indexes automatically.',
+            });
+          }
+
+          const readiness = parseGitNexusIndexReadiness(statusOutcome.stdout);
+          if (readiness.state === 'invalid') {
+            return diagnostic({
+              severity: 'error',
+              code: 'candidate-benchmark-campaign-index-status-unavailable',
+              subject: 'gitnexus',
+              message: 'GitNexus returned an invalid machine-readable index status before this benchmark start',
+              remediation:
+                'Run gitnexus status --json from this repository. If needed, prepare the index with gitnexus analyze --index-only, then retry. Token Harness does not create or refresh GitNexus indexes automatically.',
+            });
+          }
+          if (readiness.state === 'not-ready') {
+            return diagnostic({
+              severity: 'error',
+              code: 'candidate-benchmark-campaign-index-not-ready',
+              subject: 'gitnexus',
+              message: `GitNexus index is not ready for candidate benchmarking${readiness.detail === null ? '' : ` (${readiness.detail})`}`,
+              remediation:
+                'Run gitnexus analyze --index-only from this repository, confirm gitnexus status --json reports up-to-date, then retry. Token Harness does not create or refresh the index automatically.',
+            });
+          }
+
+          return null;'''
+          text = text.replace(old, new)
+          src.write_text(text)
+
+          prod = Path('apps/cli/test/gitnexus-campaign-production-row.test.ts')
+          text = prod.read_text()
+          text = text.replace(
+              'function world(claudeVersion: string) {',
+              "function world(\n  claudeVersion: string,\n  indexStatus = JSON.stringify({ schemaVersion: 1, status: 'up-to-date' }),\n) {",
+          )
+          marker = '''          if (request.executable === 'gitnexus' && request.args.join(' ') === '--version') {
+            return outcome(request, 'gitnexus 1.6.12');
+          }'''
+          assert text.count(marker) == 1
+          text = text.replace(
+              marker,
+              marker + '''
+          if (request.executable === 'gitnexus' && request.args.join(' ') === 'status --json') {
+            return outcome(request, indexStatus);
+          }''',
+          )
+          text = text.replace(
+              "assert.deepEqual(exact.probes, ['claude --version', 'gitnexus --version']);",
+              "assert.deepEqual(exact.probes, [\n      'claude --version',\n      'gitnexus --version',\n      'gitnexus status --json',\n    ]);",
+          )
+          insert_before = '''  it('refuses an adjacent Claude version before probing GitNexus', async () => {'''
+          assert text.count(insert_before) == 1
+          tests = '''  it('fails closed when the repository has no usable GitNexus index', async () => {
+            const unindexed = world(
+              '2.1.269 (Claude Code)',
+              JSON.stringify({ schemaVersion: 1, error: 'not-indexed' }),
+            );
+            const diagnostic = await validateCandidateCampaignRuntimeSurface(unindexed.context, false);
+            assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-not-ready');
+            assert.match(diagnostic?.remediation ?? '', /gitnexus analyze --index-only/);
+            assert.deepEqual(unindexed.probes, [
+              'claude --version',
+              'gitnexus --version',
+              'gitnexus status --json',
+            ]);
+          });
+
+          it('fails closed when the GitNexus index is stale', async () => {
+            const stale = world(
+              '2.1.269 (Claude Code)',
+              JSON.stringify({ schemaVersion: 1, status: 'stale' }),
+            );
+            const diagnostic = await validateCandidateCampaignRuntimeSurface(stale.context, false);
+            assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-not-ready');
+            assert.match(diagnostic?.message ?? '', /stale/);
+          });
+
+          it('fails closed on malformed GitNexus status JSON', async () => {
+            const malformed = world('2.1.269 (Claude Code)', '{not-json');
+            const diagnostic = await validateCandidateCampaignRuntimeSurface(malformed.context, false);
+            assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-status-unavailable');
+          });
+
+          it('keeps matrix/report reads passive and does not inspect the index', async () => {
+            const passive = world('2.1.269 (Claude Code)');
+            passive.context.benchmarkVariant = null;
+            assert.equal(await validateCandidateCampaignRuntimeSurface(passive.context, false), null);
+            assert.deepEqual(passive.probes, []);
+          });
+
+          '''
+          text = text.replace(insert_before, tests + insert_before)
+          prod.write_text(text)
+
+          provenance = Path('apps/cli/test/gitnexus-campaign-version-provenance.test.ts')
+          text = provenance.read_text()
+          marker = '''          probes.push(`${request.executable} ${request.args.join(' ')}`);
+          if (request.args.join(' ') !== '--version') {
+            throw new Error(`unexpected probe ${request.executable} ${request.args.join(' ')}`);
+          }'''
+          assert text.count(marker) == 1
+          replacement = '''          probes.push(`${request.executable} ${request.args.join(' ')}`);
+          if (request.executable === 'gitnexus' && request.args.join(' ') === 'status --json') {
+            return outcome(request, JSON.stringify({ schemaVersion: 1, status: 'up-to-date' }));
+          }
+          if (request.args.join(' ') !== '--version') {
+            throw new Error(`unexpected probe ${request.executable} ${request.args.join(' ')}`);
+          }'''
+          text = text.replace(marker, replacement)
+          old = "assert.deepEqual(world.probes, ['codex --version', 'gitnexus --version']);"
+          assert text.count(old) == 1
+          text = text.replace(
+              old,
+              "assert.deepEqual(world.probes, [\n        'codex --version',\n        'gitnexus --version',\n        'gitnexus status --json',\n      ]);",
+          )
+          provenance.write_text(text)
+          PY
+      - run: pnpm exec prettier --write apps/cli/src/commands/candidate-campaign-surface.ts apps/cli/test/gitnexus-campaign-production-row.test.ts apps/cli/test/gitnexus-campaign-version-provenance.test.ts
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/commands/candidate-campaign-surface.ts apps/cli/test/gitnexus-campaign-production-row.test.ts apps/cli/test/gitnexus-campaign-version-provenance.test.ts
+          git diff --cached --check
+          git commit -m "fix(gitnexus): require ready index before campaign starts"
+          git push origin HEAD:codex/gitnexus-index-readiness-gate
