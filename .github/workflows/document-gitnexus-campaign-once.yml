@@ -1,0 +1,62 @@
+name: Document GitNexus campaign orchestration once
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-managed-campaign-orchestration
+    paths:
+      - .github/workflows/document-gitnexus-campaign-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  document:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-managed-campaign-orchestration
+      - name: Update candidate docs and handoff
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/candidates/gitnexus.md')
+          text = path.read_text()
+          marker = '''Windows, macOS, WSL and Codex remain refused until separately recorded and reviewed. Matrix/report
+          reads remain passive even outside an admitted row.
+          '''
+          assert text.count(marker) == 1
+          addition = marker + '''
+          On that exact reviewed Claude surface, the campaign planner now composes the already-reviewed
+          candidate lifecycle around each pair: remove only the Token Harness-owned GitNexus MCP entry
+          before a baseline, register only that owned entry before an optimized capture, and finish the
+          optimized capture before removing the entry so the boundary witness is persisted first. These
+          are `nextCommand` instructions for the operator; Token Harness does not execute benchmark tasks
+          automatically, install GitNexus, or create an index. GitNexus + Codex deliberately keeps the
+          external/manual activation instruction until surgical Codex ownership and an exact compatibility
+          row are separately reviewed.
+          '''
+          path.write_text(text.replace(marker, addition))
+
+          path = Path('docs/development-status.md')
+          lines = path.read_text().splitlines()
+          hits = [i for i, line in enumerate(lines) if line.startswith('- 2026-09-15: PR #291 merged ')]
+          assert len(hits) == 1, hits
+          lines.insert(
+              hits[0] + 1,
+              '- 2026-09-15: PR #293 wires the GitNexus campaign planner to that reviewed Claude lifecycle only. The planner now emits owned deactivate → baseline start, owned activate → optimized start, and optimized finish → owned cleanup commands for GitNexus + Claude; it still does not execute benchmark workloads automatically, install/index GitNexus, widen compatibility, configure Codex, or promote the candidate. Existing GitNexus + Codex behavior remains the external/manual activation path, and existing mcptoon orchestration is unchanged. Pre-documentation PR CI run `34925297388` was green on Ubuntu, macOS and Windows, including the Windows RTK live smoke; final CI is required again after this documentation update.',
+          )
+          path.write_text('\n'.join(lines) + '\n')
+          PY
+      - name: Commit docs
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/candidates/gitnexus.md docs/development-status.md
+          git diff --cached --check
+          git commit -m "docs(gitnexus): record managed campaign orchestration"
+          git push origin HEAD:codex/gitnexus-managed-campaign-orchestration
