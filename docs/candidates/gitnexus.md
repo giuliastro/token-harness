@@ -46,6 +46,15 @@ It is intentionally narrower than upstream `gitnexus setup`:
 - removal is generated only from the exact ownership receipt and reuses `remove-owned-change`, so a
   user edit to the owned entry blocks automatic deletion and rollback remains snapshot-backed.
 
+The reviewed primitive is now exposed through the candidate CLI lifecycle for the exact recorded
+surface. `token-harness apply --candidate gitnexus --harness claude --yes` may register the
+**already-installed** reviewed GitNexus CLI only when the exact Claude Code `2.1.269` × GitNexus
+`1.6.12` × native-Linux non-WSL compatibility row is admitted. It does not install GitNexus or run
+setup/analyze/indexing. `token-harness uninstall --candidate gitnexus --harness claude --yes` removes
+only an actively owned `mcpServers.gitnexus` entry and deliberately does not require the GitNexus
+binary to remain installed. A later committed removal invalidates older activation ownership, so an
+entry recreated by the user cannot be deleted using a stale receipt.
+
 A byte-identical GitNexus entry that predates Token Harness is treated as already configured but
 **remains user-owned**; Token Harness does not retroactively claim it. Codex is deliberately excluded
 from this checkpoint. Its native TOML transaction currently provides whole-file rollback but not a
