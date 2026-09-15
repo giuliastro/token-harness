@@ -116,6 +116,15 @@ admission and then passively confirm exact GitNexus `1.6.12`. The production tab
 Windows, macOS, WSL and Codex remain refused until separately recorded and reviewed. Matrix/report
 reads remain passive even outside an admitted row.
 
+On that exact reviewed Claude surface, the campaign planner now composes the already-reviewed
+candidate lifecycle around each pair: remove only the Token Harness-owned GitNexus MCP entry
+before a baseline, register only that owned entry before an optimized capture, and finish the
+optimized capture before removing the entry so the boundary witness is persisted first. These
+are `nextCommand` instructions for the operator; Token Harness does not execute benchmark tasks
+automatically, install GitNexus, or create an index. GitNexus + Codex deliberately keeps the
+external/manual activation instruction until surgical Codex ownership and an exact compatibility
+row are separately reviewed.
+
 The baseline remains a production-stack-only run: witnessing the installed binary version does not
 activate GitNexus. New `candidate.json` sidecars persist exact `candidateVersion: 1.6.12`, and only
 sidecars carrying that reviewed provenance may contribute GitNexus candidate matrix/campaign evidence.
