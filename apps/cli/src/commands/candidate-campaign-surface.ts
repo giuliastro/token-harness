@@ -81,15 +81,15 @@ function parseGitNexusIndexReadiness(output: string): GitNexusIndexReadiness {
       return { state: 'invalid', detail: null };
     }
     const receipt = parsed as Record<string, unknown>;
-    if (receipt.schemaVersion !== 1) return { state: 'invalid', detail: null };
+    if (receipt['schemaVersion'] !== 1) return { state: 'invalid', detail: null };
 
-    const status = safeGitNexusStatusLabel(receipt.status);
-    const error = safeGitNexusStatusLabel(receipt.error);
-    if (status === 'up-to-date' && receipt.error === undefined) {
+    const status = safeGitNexusStatusLabel(receipt['status']);
+    const error = safeGitNexusStatusLabel(receipt['error']);
+    if (status === 'up-to-date' && receipt['error'] === undefined) {
       return { state: 'up-to-date', detail: null };
     }
-    if (receipt.error !== undefined) return { state: 'not-ready', detail: error };
-    if (receipt.status !== undefined) return { state: 'not-ready', detail: status };
+    if (receipt['error'] !== undefined) return { state: 'not-ready', detail: error };
+    if (receipt['status'] !== undefined) return { state: 'not-ready', detail: status };
     return { state: 'invalid', detail: null };
   } catch {
     return { state: 'invalid', detail: null };
