@@ -1,4 +1,4 @@
-name: Scope GitNexus index gate to campaigns once
+name: Scope GitNexus index gate once
 
 on:
   push:
@@ -23,67 +23,7 @@ jobs:
           node-version: '22.13.0'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Keep index readiness specific to benchmark starts
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          surface = Path('apps/cli/src/commands/candidate-campaign-surface.ts')
-          text = surface.read_text()
-          old = '''async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {'''
-          new = '''async function validateGitNexusBenchmarkStart(
-            context: CommandContext,
-            requireIndexReadiness: boolean,
-          ): Promise<Diagnostic | null> {'''
-          assert text.count(old) == 1
-          text = text.replace(old, new)
-
-          marker = '''  const statusOutcome = await context.adapters.runner.run({
-            executable: 'gitnexus','''
-          assert text.count(marker) == 1
-          text = text.replace(marker, '''  if (!requireIndexReadiness) return null;
-
-  const statusOutcome = await context.adapters.runner.run({
-    executable: 'gitnexus',''')
-
-          old = '''export async function validateCandidateCampaignRuntimeSurface(
-            context: CommandContext,
-            requireProviderVersion: boolean,
-          ): Promise<Diagnostic | null> {'''
-          new = '''export async function validateCandidateCampaignRuntimeSurface(
-            context: CommandContext,
-            requireProviderVersion: boolean,
-            requireGitNexusIndexReadiness = true,
-          ): Promise<Diagnostic | null> {'''
-          assert text.count(old) == 1
-          text = text.replace(old, new)
-
-          old = '''  if (candidateId === 'gitnexus') {
-            return validateGitNexusBenchmarkStart(context);
-          }'''
-          new = '''  if (candidateId === 'gitnexus') {
-            return validateGitNexusBenchmarkStart(context, requireGitNexusIndexReadiness);
-          }'''
-          assert text.count(old) == 1
-          text = text.replace(old, new)
-          surface.write_text(text)
-
-          lifecycle = Path('apps/cli/src/commands/gitnexus-candidate-lifecycle.ts')
-          text = lifecycle.read_text()
-          old = '''  return validateCandidateCampaignRuntimeSurface(
-            { ...context, benchmarkVariant: 'optimized' },
-            true,
-          );'''
-          new = '''  return validateCandidateCampaignRuntimeSurface(
-            { ...context, benchmarkVariant: 'optimized' },
-            true,
-            false,
-          );'''
-          assert text.count(old) == 1
-          text = text.replace(old, new)
-          lifecycle.write_text(text)
-          PY
+      - run: node .github/scripts/scope-gitnexus-index-gate-once.mjs
       - run: pnpm exec prettier --write apps/cli/src/commands/candidate-campaign-surface.ts apps/cli/src/commands/gitnexus-candidate-lifecycle.ts
       - run: pnpm typecheck
       - run: pnpm test
