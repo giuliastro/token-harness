@@ -96,7 +96,10 @@ function parseGitNexusIndexReadiness(output: string): GitNexusIndexReadiness {
   }
 }
 
-async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {
+async function validateGitNexusBenchmarkStart(
+  context: CommandContext,
+  requireIndexReadiness: boolean,
+): Promise<Diagnostic | null> {
   // Matrix/report reads must remain possible even when the exact campaign environment is no longer
   // installed. New captures, however, need both an RFC 0009 compatibility row and the exact reviewed
   // GitNexus build. The production row table intentionally contains no GitNexus row until a real
@@ -153,6 +156,8 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
       remediation: `Install or select GitNexus ${GITNEXUS_REVIEWED_BENCHMARK_VERSION} before starting this pair; Token Harness does not install GitNexus automatically`,
     });
   }
+
+  if (!requireIndexReadiness) return null;
 
   const statusOutcome = await context.adapters.runner.run({
     executable: 'gitnexus',
@@ -211,12 +216,13 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
 export async function validateCandidateCampaignRuntimeSurface(
   context: CommandContext,
   requireProviderVersion: boolean,
+  requireGitNexusIndexReadiness = true,
 ): Promise<Diagnostic | null> {
   const candidateId = context.optimizationCandidate ?? null;
   const harnessId = context.harness;
 
   if (candidateId === 'gitnexus') {
-    return validateGitNexusBenchmarkStart(context);
+    return validateGitNexusBenchmarkStart(context, requireGitNexusIndexReadiness);
   }
   if (candidateId !== 'mcptoon' || harnessId === null) return null;
 

@@ -260,6 +260,7 @@ async function exactRuntimeProblem(context: CommandContext): Promise<Diagnostic 
   return validateCandidateCampaignRuntimeSurface(
     { ...context, benchmarkVariant: 'optimized' },
     true,
+    false,
   );
 }
 
