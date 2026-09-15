@@ -1,0 +1,52 @@
+name: Fix GitNexus index type access once
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-index-readiness-gate
+    paths:
+      - .github/workflows/fix-gitnexus-index-types-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-index-readiness-gate
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Use index-signature-safe property access
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('apps/cli/src/commands/candidate-campaign-surface.ts')
+          text = path.read_text()
+          for old, new in [
+              ('receipt.schemaVersion', "receipt['schemaVersion']"),
+              ('receipt.status', "receipt['status']"),
+              ('receipt.error', "receipt['error']"),
+          ]:
+              assert old in text
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+      - run: pnpm exec prettier --write apps/cli/src/commands/candidate-campaign-surface.ts
+      - run: pnpm typecheck
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/commands/candidate-campaign-surface.ts
+          git diff --cached --check
+          git commit -m "fix(gitnexus): satisfy index signature checks"
+          git push origin HEAD:codex/gitnexus-index-readiness-gate
