@@ -238,7 +238,10 @@ describe('GitNexus managed candidate lifecycle', () => {
     const result = await runApply(world.context(false));
 
     assert.equal(result.exitCode, 8);
-    assert.equal(result.diagnostics.some((entry) => entry.code === 'confirmation-required'), true);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'confirmation-required'),
+      true,
+    );
     assert.equal(world.writes(), 0);
     assert.deepEqual(world.probes, [
       'claude --version',
@@ -254,7 +257,9 @@ describe('GitNexus managed candidate lifecycle', () => {
     const result = await runApply(world.context(false));
 
     assert.equal(
-      result.diagnostics.some((entry) => entry.code === 'candidate-benchmark-campaign-row-unreviewed'),
+      result.diagnostics.some(
+        (entry) => entry.code === 'candidate-benchmark-campaign-row-unreviewed',
+      ),
       true,
     );
     assert.equal(world.writes(), 0);
@@ -304,7 +309,10 @@ describe('GitNexus managed candidate lifecycle', () => {
 
     const result = await runUninstall(world.context(false));
     assert.equal(result.exitCode, 8);
-    assert.equal(result.diagnostics.some((entry) => entry.code === 'confirmation-required'), true);
+    assert.equal(
+      result.diagnostics.some((entry) => entry.code === 'confirmation-required'),
+      true,
+    );
     assert.equal(world.writes(), 0);
     assert.deepEqual(world.probes, []);
   });

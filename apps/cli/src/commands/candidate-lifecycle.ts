@@ -17,7 +17,9 @@ export function runCandidateApply(context: CommandContext): Promise<CommandResul
     : runMcptoonCandidateApply(context);
 }
 
-export function runCandidateUninstall(context: CommandContext): Promise<CommandResult<ApplyReport>> {
+export function runCandidateUninstall(
+  context: CommandContext,
+): Promise<CommandResult<ApplyReport>> {
   return context.optimizationCandidate === 'gitnexus'
     ? runGitNexusCandidateUninstall(context)
     : runMcptoonCandidateUninstall(context);

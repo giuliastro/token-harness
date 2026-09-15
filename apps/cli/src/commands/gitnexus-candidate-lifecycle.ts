@@ -204,10 +204,17 @@ async function inspectConfig(context: CommandContext): Promise<ConfigInspection>
   }
   return jsonValueDigest(live.value) === REVIEWED_VALUE_DIGEST
     ? { state: 'reviewed', target, detail: 'GitNexus MCP entry matches the reviewed command' }
-    : { state: 'different', target, detail: 'GitNexus MCP entry differs from the reviewed command' };
+    : {
+        state: 'different',
+        target,
+        detail: 'GitNexus MCP entry differs from the reviewed command',
+      };
 }
 
-function matchingOwnership(artifacts: readonly OwnedArtifact[], target: string): OwnedArtifact | null {
+function matchingOwnership(
+  artifacts: readonly OwnedArtifact[],
+  target: string,
+): OwnedArtifact | null {
   return (
     artifacts.find(
       (artifact) =>
@@ -250,7 +257,10 @@ async function activeOwnership(
 async function exactRuntimeProblem(context: CommandContext): Promise<Diagnostic | null> {
   // The shared campaign gate is the canonical exact-row/version check. A managed activation is an
   // optimized-like boundary, so force the otherwise read-only matrix context through that gate.
-  return validateCandidateCampaignRuntimeSurface({ ...context, benchmarkVariant: 'optimized' }, true);
+  return validateCandidateCampaignRuntimeSurface(
+    { ...context, benchmarkVariant: 'optimized' },
+    true,
+  );
 }
 
 export async function runGitNexusCandidateApply(
@@ -267,7 +277,8 @@ export async function runGitNexusCandidateApply(
         severity: 'error',
         code: 'state-directory-unavailable',
         subject: 'gitnexus',
-        message: 'No transactional state directory is available, so GitNexus cannot be managed safely',
+        message:
+          'No transactional state directory is available, so GitNexus cannot be managed safely',
         remediation: null,
       }),
     ]);
@@ -275,12 +286,9 @@ export async function runGitNexusCandidateApply(
 
   const surfaceProblem = await exactRuntimeProblem(context);
   if (surfaceProblem !== null) {
-    return finish(
-      'apply',
-      EXIT_CODES['unsupported-environment'],
-      emptyReport('rejected'),
-      [surfaceProblem],
-    );
+    return finish('apply', EXIT_CODES['unsupported-environment'], emptyReport('rejected'), [
+      surfaceProblem,
+    ]);
   }
 
   const inspection = await inspectConfig(context);
@@ -352,7 +360,8 @@ export async function runGitNexusCandidateApply(
         subject: 'gitnexus',
         message: 'Token Harness could not produce the reviewed GitNexus MCP activation action',
         path: plan.target ?? target,
-        remediation: 'Keep GitNexus user-owned and inspect the reported prerequisite before retrying',
+        remediation:
+          'Keep GitNexus user-owned and inspect the reported prerequisite before retrying',
       }),
     );
     return finish('apply', EXIT_CODES['blocked-by-conflict'], emptyReport('rejected'), diagnostics);
@@ -483,9 +492,11 @@ export async function runGitNexusCandidateUninstall(
         severity: 'error',
         code: 'candidate-managed-guidance-not-owned',
         subject: 'gitnexus',
-        message: 'GitNexus MCP registration is present, but no active Token Harness transaction owns it',
+        message:
+          'GitNexus MCP registration is present, but no active Token Harness transaction owns it',
         path: target,
-        remediation: 'Leave the user-owned entry untouched or remove it explicitly outside Token Harness',
+        remediation:
+          'Leave the user-owned entry untouched or remove it explicitly outside Token Harness',
       }),
     ]);
   }
@@ -494,7 +505,12 @@ export async function runGitNexusCandidateUninstall(
   const plan = planGitNexusManagedMcpRemoval(provider, ownership.artifact);
   diagnostics.push(...plan.diagnostics);
   if (plan.actions.length !== 1) {
-    return finish('uninstall', EXIT_CODES['blocked-by-conflict'], emptyReport('rejected'), diagnostics);
+    return finish(
+      'uninstall',
+      EXIT_CODES['blocked-by-conflict'],
+      emptyReport('rejected'),
+      diagnostics,
+    );
   }
 
   if (!context.confirmed) {
@@ -503,7 +519,8 @@ export async function runGitNexusCandidateUninstall(
         severity: 'error',
         code: 'confirmation-required',
         subject: 'gitnexus',
-        message: 'Token Harness will remove only the GitNexus Claude MCP entry it recorded as its own',
+        message:
+          'Token Harness will remove only the GitNexus Claude MCP entry it recorded as its own',
         path: target,
         remediation: 'Re-run with --yes to deactivate GitNexus before the baseline',
       }),
