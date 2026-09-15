@@ -1,0 +1,45 @@
+name: Format GitNexus lifecycle once
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-managed-campaign-lifecycle
+    paths:
+      - .github/workflows/format-gitnexus-lifecycle-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-managed-campaign-lifecycle
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format exact lifecycle files
+        run: >-
+          pnpm exec prettier --write
+          apps/cli/src/commands/candidate-lifecycle.ts
+          apps/cli/src/commands/gitnexus-candidate-lifecycle.ts
+          apps/cli/test/gitnexus-managed-candidate-lifecycle.test.ts
+
+      - name: Commit formatting
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/src/commands/candidate-lifecycle.ts apps/cli/src/commands/gitnexus-candidate-lifecycle.ts apps/cli/test/gitnexus-managed-candidate-lifecycle.test.ts
+          git diff --cached --check
+          git commit -m "style(gitnexus): format managed lifecycle"
+          git push origin HEAD:codex/gitnexus-managed-campaign-lifecycle
