@@ -316,22 +316,25 @@ capture**, run the requested task in the selected coding agent, then choose **Re
 enter the quality/attempt values you actually observed. Normal use no longer requires copying
 `benchmark-start` or `benchmark-finish` commands into a terminal.
 
-The equivalent advanced CLI flow starts by asking the campaign engine for its current state:
+The equivalent advanced CLI flow starts by asking the campaign engine for its current state. This
+GitNexus example intentionally uses the only currently reviewed campaign row:
 
 ```sh
 token-harness benchmark-matrix \
-  --benchmark-id gitnexus-codex-eval-1 \
+  --benchmark-id gitnexus-claude-eval-1 \
   --candidate gitnexus \
-  --harness codex
+  --harness claude
 ```
 
 Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
 same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
 documented workflow. Token Harness records the experiment target but does not treat attribution—or
-the browser acknowledgement—as proof that the candidate was active. For GitNexus, new benchmark
-receipts can additionally verify activation from the harness-native MCP inventory when the GitNexus
-server is observed usable at both task boundaries; missing or ambiguous runtime evidence stays
-unverified.
+the browser acknowledgement—as proof that the candidate was active. For GitNexus on the reviewed
+Claude Code `2.1.269` × GitNexus `1.6.12` × native-Linux row, the harness-native MCP inventory can
+prove only that the GitNexus server was available at both task boundaries. That is not proof Claude
+actually called a GitNexus tool, so the activation-verification promotion gate remains blocked
+without a separate reviewed usage witness. See
+[`docs/candidates/gitnexus-real-campaign.md`](docs/candidates/gitnexus-real-campaign.md).
 
 The selection assessment can become decision-ready after enough evidence across task classes, but it
 still cannot promote a candidate by itself. The remaining lifecycle and combined-stack gates must be
