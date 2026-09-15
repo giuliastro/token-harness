@@ -198,7 +198,8 @@ describe('guided candidate campaign status', () => {
     assert.ok(status.promotionReadiness?.blockedGateIds.includes('activation-verification'));
     assert.ok(status.promotionReadiness?.blockedGateIds.includes('project-maturity'));
     assert.match(
-      status.promotionReadiness?.gates.find((gate) => gate.id === 'activation-verification')?.reason ?? '',
+      status.promotionReadiness?.gates.find((gate) => gate.id === 'activation-verification')
+        ?.reason ?? '',
       /no reviewed proof.*active during an optimized task/i,
     );
     assert.deepEqual(status.nextStep, {
