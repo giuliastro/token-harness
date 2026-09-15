@@ -224,7 +224,7 @@ export function createGuideCandidateCampaignReader(
 
     const totalPairs = campaign.totalPairs;
     const activationVerification =
-      input.candidateId === 'gitnexus' || input.candidateId === 'mcptoon'
+      input.candidateId === 'mcptoon'
         ? {
             state:
               campaign.activation.state === 'verified' ? ('passed' as const) : ('blocked' as const),
@@ -276,7 +276,10 @@ export function createGuideCandidateCampaignReader(
       promotionEligible: false,
       promotionBlockers: [...campaign.assessment.promotionBlockers],
       promotionReadiness,
-      note: 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; GitNexus requires runtime MCP boundary evidence and mcptoon requires its reviewed local usage witness. Project maturity is supplied only by an explicit dated upstream review, never inferred from local semver. Decision-ready does not mean promotion-ready.',
+      note:
+        input.candidateId === 'gitnexus'
+          ? 'Campaign evidence and the current local candidate observation are evaluated through conservative promotion gates. GitNexus runtime MCP boundary evidence proves only that the server was available at task boundaries; it does not prove a GitNexus tool call or task usage and therefore cannot pass the activation-verification promotion gate. Candidate attribution and the browser acknowledgement do not prove usage either. Project maturity is supplied only by an explicit dated upstream review, never inferred from local semver. Decision-ready does not mean promotion-ready.'
+          : 'Campaign evidence and the current local candidate observation are evaluated through the same conservative promotion gates. Candidate attribution and the browser acknowledgement do not prove activation; mcptoon requires its reviewed local usage witness. Project maturity is supplied only by an explicit dated upstream review, never inferred from local semver. Decision-ready does not mean promotion-ready.',
     };
   };
 
