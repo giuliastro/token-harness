@@ -5,6 +5,7 @@ import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from '@token-harness/adapters';
 import {
   harnessId,
   type FileStat,
+  type HarnessId,
   type PlatformFacts,
   type ProcessOutcome,
   type ProcessRequest,
@@ -29,6 +30,7 @@ const PLATFORM: PlatformFacts = {
   isWsl: false,
 };
 const CODEX = harnessId('codex');
+const CLAUDE = harnessId('claude');
 const STATE = '/state';
 const ROOT = `${STATE}/benchmarks`;
 
@@ -51,13 +53,14 @@ function capture(
   benchmarkId: string,
   variant: 'baseline' | 'optimized',
   taskClass: TaskClass,
+  harness: HarnessId = CODEX,
 ): TaskBenchmarkCapture {
   return {
     schemaVersion: 1,
     benchmarkId,
     variant,
     taskClass,
-    harnessId: CODEX,
+    harnessId: harness,
     projectId: 'p_test',
     model: 'gpt-test',
     reasoningEffort: 'medium',
@@ -73,13 +76,14 @@ function receipt(
   benchmarkId: string,
   variant: 'baseline' | 'optimized',
   taskClass: TaskClass,
+  harness: HarnessId = CODEX,
 ): TaskBenchmarkReceipt {
   return {
     schemaVersion: 1,
     benchmarkId,
     variant,
     taskClass,
-    harnessId: CODEX,
+    harnessId: harness,
     model: 'gpt-test',
     reasoningEffort: 'medium',
     verbosity: 'low',
@@ -109,7 +113,7 @@ function receipt(
   };
 }
 
-function fixture() {
+function fixture(harness: HarnessId = CODEX) {
   const files = new Map<string, string>();
   const directories = new Set<string>();
   const children = new Map<string, string[]>();
@@ -144,21 +148,26 @@ function fixture() {
     const dir = ensureBenchmark(benchmarkId);
     files.set(
       `${dir}/baseline.capture.json`,
-      JSON.stringify(capture(benchmarkId, 'baseline', taskClass)),
+      JSON.stringify(capture(benchmarkId, 'baseline', taskClass, harness)),
     );
-    files.set(`${dir}/baseline.json`, JSON.stringify(receipt(benchmarkId, 'baseline', taskClass)));
+    files.set(`${dir}/baseline.json`, JSON.stringify(receipt(benchmarkId, 'baseline', taskClass, harness)));
     attribute(benchmarkId, candidateId);
+  }
+
+  function addOptimizedCapture(benchmarkId: string, taskClass: TaskClass): void {
+    const dir = ensureBenchmark(benchmarkId);
+    files.set(
+      `${dir}/optimized.capture.json`,
+      JSON.stringify(capture(benchmarkId, 'optimized', taskClass, harness)),
+    );
   }
 
   function addOptimized(benchmarkId: string, taskClass: TaskClass): void {
     const dir = ensureBenchmark(benchmarkId);
-    files.set(
-      `${dir}/optimized.capture.json`,
-      JSON.stringify(capture(benchmarkId, 'optimized', taskClass)),
-    );
+    addOptimizedCapture(benchmarkId, taskClass);
     files.set(
       `${dir}/optimized.json`,
-      JSON.stringify(receipt(benchmarkId, 'optimized', taskClass)),
+      JSON.stringify(receipt(benchmarkId, 'optimized', taskClass, harness)),
     );
   }
 
@@ -167,7 +176,7 @@ function fixture() {
     projectRoot: '/project',
     home: '/home/dev',
     stateRoot: STATE,
-    harness: CODEX,
+    harness,
     provider: null,
     baselineReceipt: null,
     optimizedReceipt: null,
@@ -248,7 +257,7 @@ function fixture() {
     },
   });
 
-  return { addBaseline, addOptimized, attribute, context };
+  return { addBaseline, addOptimized, addOptimizedCapture, attribute, context };
 }
 
 describe('candidate benchmark campaign', () => {
@@ -287,6 +296,52 @@ describe('candidate benchmark campaign', () => {
     assert.match(result.data.campaign.nextCommand ?? '', /gitnexus-eval-m-1/);
     assert.match(result.data.campaign.nextCommand ?? '', /--variant baseline/);
     assert.match(result.data.campaign.nextCommand ?? '', /--candidate gitnexus/);
+  });
+
+  it('deactivates owned GitNexus before a Claude baseline', async () => {
+    const world = fixture(CLAUDE);
+    const result = await runCandidateBenchmarkMatrix(world.context());
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data?.campaign);
+    assert.match(
+      result.data.campaign.nextCommand ?? '',
+      /token-harness uninstall --candidate gitnexus --harness claude --yes && token-harness benchmark-start/,
+    );
+    assert.match(result.data.campaign.nextCommand ?? '', /--variant baseline/);
+    assert.match(result.data.campaign.nextInstruction, /owned GitNexus Claude MCP entry/);
+  });
+
+  it('uses Token Harness itself to activate GitNexus before a Claude optimized pair', async () => {
+    const world = fixture(CLAUDE);
+    world.addBaseline('gitnexus-eval-m-1', 'mechanical');
+
+    const result = await runCandidateBenchmarkMatrix(world.context());
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data?.campaign);
+    assert.equal(result.data.campaign.slots[0]?.state, 'optimized-not-started');
+    assert.match(
+      result.data.campaign.nextCommand ?? '',
+      /token-harness apply --candidate gitnexus --harness claude --yes && token-harness benchmark-start/,
+    );
+    assert.match(result.data.campaign.nextCommand ?? '', /--variant optimized/);
+    assert.doesNotMatch(result.data.campaign.nextInstruction, /documented workflow first/);
+    assert.match(result.data.campaign.nextInstruction, /does not install or index anything/);
+  });
+
+  it('finishes a Claude optimized capture before removing only owned GitNexus state', async () => {
+    const world = fixture(CLAUDE);
+    world.addBaseline('gitnexus-eval-m-1', 'mechanical');
+    world.addOptimizedCapture('gitnexus-eval-m-1', 'mechanical');
+
+    const result = await runCandidateBenchmarkMatrix(world.context());
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.data?.campaign);
+    assert.equal(result.data.campaign.slots[0]?.state, 'optimized-running');
+    assert.match(
+      result.data.campaign.nextCommand ?? '',
+      /benchmark-finish.*--variant optimized.*&& token-harness uninstall --candidate gitnexus --harness claude --yes/,
+    );
+    assert.match(result.data.campaign.nextInstruction, /boundary witness is preserved/);
   });
 
   it('resumes after a completed baseline and requires external activation before optimized', async () => {

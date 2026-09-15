@@ -607,11 +607,15 @@ function campaignNextStep(
       command:
         definition.candidateId === 'mcptoon'
           ? `token-harness uninstall --candidate mcptoon --harness ${definition.harnessId} --yes && ${start}`
-          : start,
+          : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+            ? `token-harness uninstall --candidate gitnexus --harness claude --yes && ${start}`
+            : start,
       instruction:
         definition.candidateId === 'mcptoon'
           ? `Token Harness first deactivates only its own mcptoon guidance, then starts baseline ${String(next.run)} for ${next.taskClass}. The reviewed mcptoon binary may stay installed but is inactive for the baseline.`
-          : `Start baseline ${String(next.run)} for ${next.taskClass} with the current production stack unchanged.`,
+          : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+            ? `Token Harness first removes only its owned GitNexus Claude MCP entry, then starts baseline ${String(next.run)} for ${next.taskClass}. The reviewed GitNexus binary stays user-installed but is inactive for the baseline.`
+            : `Start baseline ${String(next.run)} for ${next.taskClass} with the current production stack unchanged.`,
     };
   }
 
@@ -634,11 +638,15 @@ function campaignNextStep(
       command:
         definition.candidateId === 'mcptoon'
           ? `token-harness apply --candidate mcptoon --harness ${definition.harnessId} --yes && ${start}`
-          : start,
+          : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+            ? `token-harness apply --candidate gitnexus --harness claude --yes && ${start}`
+            : start,
       instruction:
         definition.candidateId === 'mcptoon'
           ? 'Token Harness installs the exact reviewed mcptoon build when absent, activates only its owned guidance, then starts the optimized capture. Candidate activity is still verified independently inside the task window.'
-          : `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
+          : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+            ? 'Token Harness registers only its owned Claude MCP entry for the already-installed exact reviewed GitNexus build, then starts the optimized capture. It does not install or index anything; runtime activation is still verified independently at task boundaries.'
+            : `Enable ${definition.candidateId} through its own documented workflow first, then start the optimized capture. Token Harness does not claim activation itself.`,
     };
   }
 
@@ -649,11 +657,15 @@ function campaignNextStep(
     command:
       definition.candidateId === 'mcptoon'
         ? `${finish} && token-harness uninstall --candidate mcptoon --harness ${definition.harnessId} --yes`
-        : finish,
+        : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+          ? `${finish} && token-harness uninstall --candidate gitnexus --harness claude --yes`
+          : finish,
     instruction:
       definition.candidateId === 'mcptoon'
         ? 'Finish the optimized task, preserving its activation witness first, then let Token Harness remove only its owned mcptoon guidance. Change quality/attempt counts if the observed outcome differs from the default command.'
-        : 'Finish the optimized task. Change quality/attempt counts if the observed outcome differs from the default command.',
+        : definition.candidateId === 'gitnexus' && definition.harnessId === 'claude'
+          ? 'Finish the optimized task first so its GitNexus boundary witness is preserved, then let Token Harness remove only its owned Claude MCP entry. Change quality/attempt counts if the observed outcome differs from the default command.'
+          : 'Finish the optimized task. Change quality/attempt counts if the observed outcome differs from the default command.',
   };
 }
 
