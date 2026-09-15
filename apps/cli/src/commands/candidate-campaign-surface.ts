@@ -65,7 +65,41 @@ async function readExecutableVersion(
   return parseObservedVersion(`${outcome.stdout}\n${outcome.stderr}`);
 }
 
-async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<Diagnostic | null> {
+type GitNexusIndexReadiness =
+  | { state: 'up-to-date'; detail: null }
+  | { state: 'not-ready'; detail: string | null }
+  | { state: 'invalid'; detail: null };
+
+function safeGitNexusStatusLabel(value: unknown): string | null {
+  return typeof value === 'string' && /^[a-z0-9-]{1,64}$/.test(value) ? value : null;
+}
+
+function parseGitNexusIndexReadiness(output: string): GitNexusIndexReadiness {
+  try {
+    const parsed = JSON.parse(output) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { state: 'invalid', detail: null };
+    }
+    const receipt = parsed as Record<string, unknown>;
+    if (receipt['schemaVersion'] !== 1) return { state: 'invalid', detail: null };
+
+    const status = safeGitNexusStatusLabel(receipt['status']);
+    const error = safeGitNexusStatusLabel(receipt['error']);
+    if (status === 'up-to-date' && receipt['error'] === undefined) {
+      return { state: 'up-to-date', detail: null };
+    }
+    if (receipt['error'] !== undefined) return { state: 'not-ready', detail: error };
+    if (receipt['status'] !== undefined) return { state: 'not-ready', detail: status };
+    return { state: 'invalid', detail: null };
+  } catch {
+    return { state: 'invalid', detail: null };
+  }
+}
+
+async function validateGitNexusBenchmarkStart(
+  context: CommandContext,
+  requireIndexReadiness: boolean,
+): Promise<Diagnostic | null> {
   // Matrix/report reads must remain possible even when the exact campaign environment is no longer
   // installed. New captures, however, need both an RFC 0009 compatibility row and the exact reviewed
   // GitNexus build. The production row table intentionally contains no GitNexus row until a real
@@ -123,6 +157,52 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
     });
   }
 
+  if (!requireIndexReadiness) return null;
+
+  const statusOutcome = await context.adapters.runner.run({
+    executable: 'gitnexus',
+    args: ['status', '--json'],
+    cwd: context.projectRoot,
+    timeoutMs: 30_000,
+  });
+  if (
+    statusOutcome.failure !== null ||
+    statusOutcome.exitCode !== 0 ||
+    statusOutcome.stdoutTruncated
+  ) {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-index-status-unavailable',
+      subject: 'gitnexus',
+      message: 'GitNexus index readiness could not be established before this benchmark start',
+      remediation:
+        'Run gitnexus status --json from this repository. If needed, prepare the index with gitnexus analyze --index-only, then retry. Token Harness does not create or refresh GitNexus indexes automatically.',
+    });
+  }
+
+  const readiness = parseGitNexusIndexReadiness(statusOutcome.stdout);
+  if (readiness.state === 'invalid') {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-index-status-unavailable',
+      subject: 'gitnexus',
+      message:
+        'GitNexus returned an invalid machine-readable index status before this benchmark start',
+      remediation:
+        'Run gitnexus status --json from this repository. If needed, prepare the index with gitnexus analyze --index-only, then retry. Token Harness does not create or refresh GitNexus indexes automatically.',
+    });
+  }
+  if (readiness.state === 'not-ready') {
+    return diagnostic({
+      severity: 'error',
+      code: 'candidate-benchmark-campaign-index-not-ready',
+      subject: 'gitnexus',
+      message: `GitNexus index is not ready for candidate benchmarking${readiness.detail === null ? '' : ` (${readiness.detail})`}`,
+      remediation:
+        'Run gitnexus analyze --index-only from this repository, confirm gitnexus status --json reports up-to-date, then retry. Token Harness does not create or refresh the index automatically.',
+    });
+  }
+
   return null;
 }
 
@@ -136,12 +216,13 @@ async function validateGitNexusBenchmarkStart(context: CommandContext): Promise<
 export async function validateCandidateCampaignRuntimeSurface(
   context: CommandContext,
   requireProviderVersion: boolean,
+  requireGitNexusIndexReadiness = true,
 ): Promise<Diagnostic | null> {
   const candidateId = context.optimizationCandidate ?? null;
   const harnessId = context.harness;
 
   if (candidateId === 'gitnexus') {
-    return validateGitNexusBenchmarkStart(context);
+    return validateGitNexusBenchmarkStart(context, requireGitNexusIndexReadiness);
   }
   if (candidateId !== 'mcptoon' || harnessId === null) return null;
 

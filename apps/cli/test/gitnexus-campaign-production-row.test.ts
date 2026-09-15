@@ -36,7 +36,10 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
   };
 }
 
-function world(claudeVersion: string) {
+function world(
+  claudeVersion: string,
+  indexStatus = JSON.stringify({ schemaVersion: 1, status: 'up-to-date' }),
+) {
   const probes: string[] = [];
   const context: CommandContext = {
     platform: LINUX,
@@ -70,6 +73,9 @@ function world(claudeVersion: string) {
           if (request.executable === 'gitnexus' && request.args.join(' ') === '--version') {
             return outcome(request, 'gitnexus 1.6.12');
           }
+          if (request.executable === 'gitnexus' && request.args.join(' ') === 'status --json') {
+            return outcome(request, indexStatus);
+          }
           throw new Error(`unexpected probe ${request.executable} ${request.args.join(' ')}`);
         },
       },
@@ -82,7 +88,49 @@ describe('GitNexus production campaign row', () => {
   it('admits the exact recorded Claude 2.1.269 × Linux row before probing GitNexus 1.6.12', async () => {
     const exact = world('2.1.269 (Claude Code)');
     assert.equal(await validateCandidateCampaignRuntimeSurface(exact.context, false), null);
-    assert.deepEqual(exact.probes, ['claude --version', 'gitnexus --version']);
+    assert.deepEqual(exact.probes, [
+      'claude --version',
+      'gitnexus --version',
+      'gitnexus status --json',
+    ]);
+  });
+
+  it('fails closed when the repository has no usable GitNexus index', async () => {
+    const unindexed = world(
+      '2.1.269 (Claude Code)',
+      JSON.stringify({ schemaVersion: 1, error: 'not-indexed' }),
+    );
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(unindexed.context, false);
+    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-not-ready');
+    assert.match(diagnostic?.remediation ?? '', /gitnexus analyze --index-only/);
+    assert.deepEqual(unindexed.probes, [
+      'claude --version',
+      'gitnexus --version',
+      'gitnexus status --json',
+    ]);
+  });
+
+  it('fails closed when the GitNexus index is stale', async () => {
+    const stale = world(
+      '2.1.269 (Claude Code)',
+      JSON.stringify({ schemaVersion: 1, status: 'stale' }),
+    );
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(stale.context, false);
+    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-not-ready');
+    assert.match(diagnostic?.message ?? '', /stale/);
+  });
+
+  it('fails closed on malformed GitNexus status JSON', async () => {
+    const malformed = world('2.1.269 (Claude Code)', '{not-json');
+    const diagnostic = await validateCandidateCampaignRuntimeSurface(malformed.context, false);
+    assert.equal(diagnostic?.code, 'candidate-benchmark-campaign-index-status-unavailable');
+  });
+
+  it('keeps matrix/report reads passive and does not inspect the index', async () => {
+    const passive = world('2.1.269 (Claude Code)');
+    passive.context.benchmarkVariant = null;
+    assert.equal(await validateCandidateCampaignRuntimeSurface(passive.context, false), null);
+    assert.deepEqual(passive.probes, []);
   });
 
   it('refuses an adjacent Claude version before probing GitNexus', async () => {

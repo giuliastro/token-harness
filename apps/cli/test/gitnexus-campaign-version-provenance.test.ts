@@ -176,6 +176,9 @@ function fixture(
       runner: {
         run: async (request: ProcessRequest) => {
           probes.push(`${request.executable} ${request.args.join(' ')}`);
+          if (request.executable === 'gitnexus' && request.args.join(' ') === 'status --json') {
+            return outcome(request, JSON.stringify({ schemaVersion: 1, status: 'up-to-date' }));
+          }
           if (request.args.join(' ') !== '--version') {
             throw new Error(`unexpected probe ${request.executable} ${request.args.join(' ')}`);
           }
@@ -305,7 +308,11 @@ describe('GitNexus benchmark version provenance', () => {
         variant === 'optimized',
       );
       assert.equal(diagnostic, null);
-      assert.deepEqual(world.probes, ['codex --version', 'gitnexus --version']);
+      assert.deepEqual(world.probes, [
+        'codex --version',
+        'gitnexus --version',
+        'gitnexus status --json',
+      ]);
     }
   });
 
