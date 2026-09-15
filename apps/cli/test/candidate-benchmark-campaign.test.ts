@@ -150,7 +150,10 @@ function fixture(harness: HarnessId = CODEX) {
       `${dir}/baseline.capture.json`,
       JSON.stringify(capture(benchmarkId, 'baseline', taskClass, harness)),
     );
-    files.set(`${dir}/baseline.json`, JSON.stringify(receipt(benchmarkId, 'baseline', taskClass, harness)));
+    files.set(
+      `${dir}/baseline.json`,
+      JSON.stringify(receipt(benchmarkId, 'baseline', taskClass, harness)),
+    );
     attribute(benchmarkId, candidateId);
   }
 
