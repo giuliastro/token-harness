@@ -190,12 +190,18 @@ describe('guided candidate campaign status', () => {
       'the standard benchmark campaign is not complete',
       'managed install/configure, verification, compatibility and rollback are not proven by benchmark evidence',
     ]);
-    assert.equal(status.promotionReadiness?.passedGateCount, 4);
+    assert.equal(status.promotionReadiness?.passedGateCount, 3);
     assert.equal(status.promotionReadiness?.requiredGateCount, 8);
     assert.equal(status.promotionReadiness?.nextGate, 'selection-evidence');
     assert.equal(status.promotionReadiness?.state, 'blocked');
     assert.equal(status.promotionReadiness?.promotionEligible, false);
+    assert.ok(status.promotionReadiness?.blockedGateIds.includes('activation-verification'));
     assert.ok(status.promotionReadiness?.blockedGateIds.includes('project-maturity'));
+    assert.match(
+      status.promotionReadiness?.gates.find((gate) => gate.id === 'activation-verification')
+        ?.reason ?? '',
+      /no reviewed proof.*active during an optimized task/i,
+    );
     assert.deepEqual(status.nextStep, {
       kind: 'start-baseline',
       benchmarkId: 'gitnexus-codex-eval-m123abc-h-1',
@@ -206,9 +212,9 @@ describe('guided candidate campaign status', () => {
     assert.match(status.nextCommand ?? '', /--variant baseline/);
     assert.equal(status.promotionEligible, false);
     assert.match(status.note, /current local candidate observation/);
-    assert.match(status.note, /do not prove activation/);
-    assert.match(status.note, /runtime MCP boundary evidence/);
-    assert.match(status.note, /reviewed local usage witness/);
+    assert.match(status.note, /proves only.*available at task boundaries/i);
+    assert.match(status.note, /does not prove a GitNexus tool call or task usage/);
+    assert.match(status.note, /cannot pass the activation-verification promotion gate/);
     assert.match(status.note, /[Dd]ecision-ready does not mean promotion-ready/);
   });
 
@@ -226,9 +232,10 @@ describe('guided candidate campaign status', () => {
       campaignId: 'gitnexus-codex-eval-m123abc',
     });
 
-    assert.equal(status.promotionReadiness?.passedGateCount, 2);
+    assert.equal(status.promotionReadiness?.passedGateCount, 1);
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('benchmark-capability'));
     assert.ok(status.promotionReadiness?.unreviewedGateIds.includes('category-fit'));
+    assert.ok(status.promotionReadiness?.blockedGateIds.includes('activation-verification'));
     assert.ok(status.promotionReadiness?.blockedGateIds.includes('project-maturity'));
     assert.equal(status.promotionReadiness?.promotionEligible, false);
   });
