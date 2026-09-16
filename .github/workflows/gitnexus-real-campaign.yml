@@ -1,0 +1,84 @@
+name: GitNexus real Claude campaign
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gitnexus-real-campaign.yml'
+      - 'scripts/evaluation/gitnexus-real-campaign.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitnexus-real-campaign-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  campaign:
+    name: Claude 2.1.269 + GitNexus 1.6.12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CAMPAIGN_HOME: ${{ runner.temp }}/gitnexus-campaign-home
+      CAMPAIGN_TOOLS: ${{ runner.temp }}/gitnexus-campaign-tools
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install Token Harness dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Token Harness
+        run: pnpm build
+
+      - name: Install exact evaluation tools without sudo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$CAMPAIGN_HOME" "$CAMPAIGN_TOOLS"
+          npm install --global --prefix "$CAMPAIGN_TOOLS" \
+            @anthropic-ai/claude-code@2.1.269 \
+            gitnexus@1.6.12
+          echo "$CAMPAIGN_TOOLS/bin" >> "$GITHUB_PATH"
+
+      - name: Run paired real campaign
+        id: campaign
+        continue-on-error: true
+        shell: bash
+        env:
+          HOME: ${{ env.CAMPAIGN_HOME }}
+        run: |
+          set -euo pipefail
+          node scripts/evaluation/gitnexus-real-campaign.mjs
+
+      - name: Upload sanitized campaign evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gitnexus-real-campaign-${{ github.sha }}
+          path: artifacts/gitnexus-real-campaign
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce campaign result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.campaign.outcome }}" != "success" ]; then
+            echo "GitNexus real campaign failed or stopped at a fail-closed precondition." >&2
+            exit 1
+          fi
