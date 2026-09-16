@@ -25,10 +25,12 @@ production stack itself remains RTK + HarnessTrim; this campaign does not change
 ## Autonomous GitHub Actions path
 
 `.github/workflows/gitnexus-real-campaign.yml` is an **evaluation-only** runner for this exact row. It
-runs on Ubuntu 24.04, installs Claude Code `2.1.269` and GitNexus `1.6.12` into a runner-temporary npm
-prefix without sudo, uses a runner-temporary HOME, builds the current Token Harness checkout, and
-executes the normal candidate `apply`/`uninstall` plus `benchmark-start`/`benchmark-finish` evidence
-pipeline around real Claude Code headless tasks.
+runs on Ubuntu 24.04 with Node `22.18.0`, the minimum Node 22 line admitted by GitNexus `1.6.12`,
+installs Claude Code `2.1.269` and GitNexus `1.6.12` into a runner-temporary npm prefix without sudo,
+uses a runner-temporary HOME, builds the current Token Harness checkout, and executes the normal
+candidate `apply`/`uninstall` plus `benchmark-start`/`benchmark-finish` evidence pipeline around real
+Claude Code headless tasks. This evaluation-only Node selection does not change Token Harness's
+ordinary CI/runtime floor, which remains Node `22.13.0`.
 
 The workflow accepts either of the standard Claude Code CI credentials as repository secrets:
 `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. Missing authentication fails closed before any model
