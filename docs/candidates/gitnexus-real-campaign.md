@@ -36,10 +36,18 @@ The workflow accepts either of the standard Claude Code CI credentials as reposi
 `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. Missing authentication fails closed before any model
 call. Secrets are never printed or persisted in campaign artifacts.
 
-The workflow is deliberately not part of ordinary pull-request CI. It runs from trusted `main` when
-the evaluation workflow/runner itself changes, and can also be started explicitly with
-`workflow_dispatch`. Ordinary CI runs only `node scripts/evaluation/gitnexus-real-campaign.mjs
---self-test`, which uses synthetic stream events and spends no model quota.
+Configure exactly one credential. For API-key runs the runner keeps the dollar budget guard. For
+subscription OAuth runs it omits `--max-budget-usd`: Claude Code reports list-price accounting there,
+which can terminate a valid subscription-backed task even when no paid overage is in use. OAuth runs
+are instead bounded by explicit manual dispatch, eight fixed pairs, six turns per session and the
+selected one-or-two-attempt ceiling.
+
+The workflow is deliberately not part of ordinary pull-request CI and no longer runs automatically
+on pushes to `main`. A real campaign starts only through `workflow_dispatch`, so repository maintenance
+cannot silently spend Claude quota. The dispatch defaults to `haiku` and one attempt per variant; the
+full eight-pair campaign therefore has a fixed default ceiling of 16 Claude sessions with no automatic
+retry. Ordinary CI runs only `node scripts/evaluation/gitnexus-real-campaign.mjs --self-test`, which
+uses synthetic stream events and spends no model quota.
 
 For real tasks Claude is restricted to built-in `Read`, `Glob` and `Grep` tools; shell/edit/write/web
 and subagent tools are unavailable. GitNexus MCP tools remain available only through the reviewed
@@ -189,3 +197,14 @@ Stop and do not repair evidence in place if any of these changes during the camp
 - repository/task/model conditions cannot be kept equivalent.
 
 Start a fresh campaign after correcting the environment rather than rewriting historical receipts.
+
+### 2026-09-16 frugal OAuth smoke
+
+A branch-only Haiku smoke verified the external boundary before any full campaign was allowed. Claude
+Code `2.1.269` authenticated with `CLAUDE_CODE_OAUTH_TOKEN`, reported subscription quota as allowed and
+paid overage as rejected/not in use. A clean baseline completed before the optimized variant; the
+optimized session exposed GitNexus `1.6.12` as connected, emitted real `mcp__gitnexus__context` and
+`mcp__gitnexus__query` calls, and found the expected repository fact. The smoke intentionally remains
+non-selection evidence. Its final CLI failure was the artificial low `--max-budget-usd` guard firing
+after correct structured output, which is why OAuth campaigns no longer use that API-dollar guard.
+No full eight-pair campaign was started from this smoke.
