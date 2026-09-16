@@ -21,8 +21,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      CAMPAIGN_HOME: ${{ runner.temp }}/gitnexus-campaign-home
-      CAMPAIGN_TOOLS: ${{ runner.temp }}/gitnexus-campaign-tools
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign
@@ -49,25 +47,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$CAMPAIGN_HOME" "$CAMPAIGN_TOOLS"
-          npm install --global --prefix "$CAMPAIGN_TOOLS" \
+          campaign_home="$RUNNER_TEMP/gitnexus-campaign-home"
+          campaign_tools="$RUNNER_TEMP/gitnexus-campaign-tools"
+          mkdir -p "$campaign_home" "$campaign_tools"
+          npm install --global --prefix "$campaign_tools" \
             @anthropic-ai/claude-code@2.1.269 \
             gitnexus@1.6.12
-          echo "$CAMPAIGN_TOOLS/bin" >> "$GITHUB_PATH"
+          echo "$campaign_tools/bin" >> "$GITHUB_PATH"
 
       - name: Run paired real campaign
         id: campaign
         continue-on-error: true
         shell: bash
         env:
-          HOME: ${{ env.CAMPAIGN_HOME }}
+          HOME: ${{ runner.temp }}/gitnexus-campaign-home
         run: |
           set -euo pipefail
           node scripts/evaluation/gitnexus-real-campaign.mjs
 
       - name: Upload sanitized campaign evidence
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: gitnexus-real-campaign-${{ github.sha }}
           path: artifacts/gitnexus-real-campaign
