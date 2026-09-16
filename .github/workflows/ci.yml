@@ -57,6 +57,11 @@ jobs:
       - name: GitNexus real-campaign runner self-test
         run: node scripts/evaluation/gitnexus-real-campaign.mjs --self-test
 
+      - name: Windows production-stack evidence collector self-test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/evaluation/windows-production-stack-evidence.ps1 -SelfTest
+
       # The normal suite keeps release-network tests opt-in. This Windows-only gate closes
       # the RTK updater's real-world admission requirement: production code downloads the exact
       # reviewed release, verifies GitHub's digest, replaces a real NTFS target, starts the PE,
