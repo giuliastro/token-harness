@@ -10,12 +10,17 @@ Run the campaign only on the exact reviewed tuple:
 - GitNexus `1.6.12`;
 - native Linux, non-WSL;
 - Claude user config `~/.claude.json`;
-- Token Harness ownership limited to `mcpServers.gitnexus`;
-- production optimization stack kept at RTK + HarnessTrim.
+- Token Harness ownership limited to `mcpServers.gitnexus`.
 
 Do not reuse this campaign as evidence for adjacent Claude/GitNexus versions, macOS, Windows, WSL or
 Codex. GitNexus remains a candidate and its PolyForm Noncommercial 1.0.0 licensing review continues
 to block generic commercial-production promotion independently of technical results.
+
+This autonomous row is intentionally **GitNexus-selection-only**. It does not install or activate RTK
+or HarnessTrim and therefore does not validate the combined production stack. At this checkpoint the
+reviewed RTK/HarnessTrim Claude compatibility rows do not include Claude Code `2.1.269`, so a separate
+reviewed compatibility row is required before any combined-stack claim can be made. The managed
+production stack itself remains RTK + HarnessTrim; this campaign does not change it.
 
 ## Autonomous GitHub Actions path
 
@@ -119,10 +124,13 @@ For every baseline/optimized pair keep the following equivalent:
 - repository and repository commit;
 - task wording and acceptance criteria;
 - Claude Code version and model/settings;
-- RTK and HarnessTrim versions/configuration;
 - starting files and working-tree state;
 - task-class assignment;
 - quality scoring rule and retry policy.
+
+RTK and HarnessTrim are outside this evaluation row rather than silently treated as validated. If a
+future combined-stack campaign is run, its RTK/HarnessTrim versions and Claude compatibility must be
+reviewed separately and then held equivalent across every pair.
 
 Do not let the optimized run inherit files or conclusions produced by the baseline. Restore the same
 starting repository state before each variant. If a task itself intentionally modifies files, retain
@@ -161,7 +169,9 @@ For every pair retain the normal Token Harness benchmark evidence and evaluate a
 
 Repository indexing cost should be recorded separately as setup/maintenance overhead, not hidden in a
 savings claim. The campaign must not claim token, quota, subscription-time or money savings unless the
-corresponding Token Harness evidence supports that exact claim.
+corresponding Token Harness evidence supports that exact claim. It must also retain the machine-readable
+`combinedProductionStackEvidence: not-collected` boundary so GitNexus selection evidence cannot be
+misread as RTK + HarnessTrim compatibility evidence.
 
 ## Stop conditions
 
@@ -174,6 +184,6 @@ Stop and do not repair evidence in place if any of these changes during the camp
 - baseline exposes GitNexus to Claude;
 - optimized GitNexus MCP is not uniquely usable;
 - another GitNexus skill/hook/MCP surface contaminates either variant;
-- repository/task/model/production-stack conditions cannot be kept equivalent.
+- repository/task/model conditions cannot be kept equivalent.
 
 Start a fresh campaign after correcting the environment rather than rewriting historical receipts.
