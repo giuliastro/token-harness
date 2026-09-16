@@ -177,7 +177,8 @@ function collectToolNames(value, names = []) {
 
 function summarizeClaudeStream(text) {
   const events = parseJsonLines(text);
-  const init = events.find((event) => event?.type === 'system' && event?.subtype === 'init') ?? null;
+  const init =
+    events.find((event) => event?.type === 'system' && event?.subtype === 'init') ?? null;
   const result = [...events].reverse().find((event) => event?.type === 'result') ?? null;
   const toolNames = [...new Set(collectToolNames(events))];
   const mcpServers = Array.isArray(init?.mcp_servers)
@@ -340,9 +341,18 @@ async function runClaudeAttempt(repo, task, variant, attempt, logDir) {
   const execution = await run('claude', args, { cwd: repo, allowFailure: true });
   const safeStdout = sanitize(execution.stdout);
   const safeStderr = sanitize(execution.stderr);
-  await writeFile(join(logDir, `${task.taskClass}-${String(task.run)}-${variant}-${String(attempt)}.jsonl`), safeStdout);
+  await writeFile(
+    join(logDir, `${task.taskClass}-${String(task.run)}-${variant}-${String(attempt)}.jsonl`),
+    safeStdout,
+  );
   if (safeStderr.trim() !== '') {
-    await writeFile(join(logDir, `${task.taskClass}-${String(task.run)}-${variant}-${String(attempt)}.stderr.txt`), safeStderr);
+    await writeFile(
+      join(
+        logDir,
+        `${task.taskClass}-${String(task.run)}-${variant}-${String(attempt)}.stderr.txt`,
+      ),
+      safeStderr,
+    );
   }
 
   let summary = null;
@@ -421,7 +431,9 @@ async function ensureIndexReady(repo) {
   }
   const after = await readStatus();
   if (!after.ready) {
-    throw new Error(`GitNexus index is not ready after preparation: ${JSON.stringify(after.status)}`);
+    throw new Error(
+      `GitNexus index is not ready after preparation: ${JSON.stringify(after.status)}`,
+    );
   }
   await assertTrackedTreeClean(repo);
   return { indexed, indexWallClockMs, before: before.status, after: after.status };
@@ -477,7 +489,10 @@ async function writeSummary(report) {
 async function selfTest() {
   const baselineFixture = [
     JSON.stringify({ type: 'system', subtype: 'init', model: 'fixture-model', mcp_servers: [] }),
-    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read' }] } }),
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name: 'Read' }] },
+    }),
     JSON.stringify({
       type: 'result',
       structured_output: {
@@ -599,7 +614,9 @@ async function main() {
       await lifecycle(repo, 'uninstall');
       await benchmarkStart(repo, benchmarkId, 'baseline', task.taskClass);
       const baseline = await runVariant(repo, task, 'baseline', logDir);
-      if (baseline.attempts.some((attempt) => attempt.gitnexusServer !== null || attempt.gitnexusUsed)) {
+      if (
+        baseline.attempts.some((attempt) => attempt.gitnexusServer !== null || attempt.gitnexusUsed)
+      ) {
         throw new Error(`baseline contamination detected in ${benchmarkId}`);
       }
       await benchmarkFinish(
@@ -615,7 +632,9 @@ async function main() {
       await benchmarkStart(repo, benchmarkId, 'optimized', task.taskClass);
       const optimized = await runVariant(repo, task, 'optimized', logDir);
       if (optimized.attempts.some((attempt) => attempt.gitnexusServer === null)) {
-        throw new Error(`optimized GitNexus MCP server missing from Claude system/init in ${benchmarkId}`);
+        throw new Error(
+          `optimized GitNexus MCP server missing from Claude system/init in ${benchmarkId}`,
+        );
       }
       await benchmarkFinish(
         repo,
@@ -650,7 +669,9 @@ async function main() {
     try {
       await lifecycle(repo, 'uninstall');
     } catch (error) {
-      process.stderr.write(`warning: final GitNexus lifecycle cleanup failed: ${sanitize(error)}\n`);
+      process.stderr.write(
+        `warning: final GitNexus lifecycle cleanup failed: ${sanitize(error)}\n`,
+      );
     }
   }
 
@@ -675,8 +696,7 @@ async function main() {
     actualUseWitness: {
       optimizedPairsWithGitNexusUse: pairs.filter((pair) => pair.optimized.gitnexusUsed).length,
       totalOptimizedPairs: pairs.length,
-      note:
-        'Actual use requires an observed mcp__gitnexus__* tool_use event. MCP server presence alone is not counted.',
+      note: 'Actual use requires an observed mcp__gitnexus__* tool_use event. MCP server presence alone is not counted.',
     },
     tokenHarnessMatrix: matrix,
     interpretationBoundary:
@@ -688,7 +708,8 @@ async function main() {
     `${JSON.stringify({
       campaignId: CAMPAIGN_ID,
       pairs: pairs.length,
-      qualityPassedPairs: pairs.filter((pair) => pair.baseline.passed && pair.optimized.passed).length,
+      qualityPassedPairs: pairs.filter((pair) => pair.baseline.passed && pair.optimized.passed)
+        .length,
       optimizedPairsWithGitNexusUse: report.actualUseWitness.optimizedPairsWithGitNexusUse,
       observedModel,
       report: join(artifactRoot, 'report.json'),
