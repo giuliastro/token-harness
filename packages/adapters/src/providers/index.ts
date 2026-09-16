@@ -9,6 +9,11 @@ import type { ProviderId } from '@token-harness/core';
 
 import { harnesstrimAdapter as baseHarnessTrimAdapter } from './harnesstrim.js';
 import { rtkAdapter as baseRtkAdapter } from './rtk.js';
+import {
+  gitnexusAdapter,
+  headroomAdapter,
+  mcptoonAdapter,
+} from './managed-optimization-tools.js';
 import type { ProviderAdapter } from './contract.js';
 import { withProviderVersionCompatibility } from './version-compatibility.js';
 
@@ -65,6 +70,7 @@ export {
   type McptoonManagedVerification,
   type McptoonManagedVerificationState,
 } from './mcptoon-managed.js';
+export { gitnexusAdapter, headroomAdapter, mcptoonAdapter } from './managed-optimization-tools.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
 export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
@@ -143,14 +149,21 @@ const cliHarnessTrimAdapter: ProviderAdapter = {
 };
 
 /**
- * RTK first, HarnessTrim second.
+ * First-class provider registry. RTK and HarnessTrim remain the production baseline, while the
+ * reviewed managed surfaces for mcptoon and GitNexus now participate in ordinary lifecycle
+ * detection/planning. Headroom participates in detection/verification immediately; its installer
+ * remains fail-closed until the uv + Python 3.13 transaction recipe is implemented.
  *
- * Order is not arbitrary: RFC 0003's compatibility table gives RTK `shell.output.reduce` when both
- * claim it, and the resolver reads a `compatible` rule's provider order to pick the owner. The
- * conflict between these two is the one the shipped rule table names, so the order here is the
- * order that rule assumes.
+ * RTK stays first because the RFC 0003 compatibility rule gives it shell-output ownership where it
+ * overlaps HarnessTrim. The additional providers claim no exclusive shell interception scope.
  */
-const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [rtkAdapter, cliHarnessTrimAdapter];
+const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [
+  rtkAdapter,
+  cliHarnessTrimAdapter,
+  mcptoonAdapter,
+  gitnexusAdapter,
+  headroomAdapter,
+];
 
 export function listProviderAdapters(): readonly ProviderAdapter[] {
   return PROVIDER_ADAPTERS;
