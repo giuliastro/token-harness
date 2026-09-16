@@ -198,7 +198,6 @@ Stop and do not repair evidence in place if any of these changes during the camp
 
 Start a fresh campaign after correcting the environment rather than rewriting historical receipts.
 
-
 ### 2026-09-16 frugal OAuth smoke
 
 A branch-only Haiku smoke verified the external boundary before any full campaign was allowed. Claude
