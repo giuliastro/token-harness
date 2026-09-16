@@ -1,5 +1,6 @@
 # Development status
 
+- 2026-09-16: branch-only frugal OAuth smoke confirmed Claude Code `2.1.269` subscription OAuth, Haiku, GitNexus `1.6.12` MCP connectivity and real `mcp__gitnexus__context`/`query` tool use without paid overage. The smoke is not selection evidence and no full campaign was launched. Follow-up hardening makes the real campaign manual-dispatch-only, defaults to Haiku + one attempt per variant, applies `--max-budget-usd` only to API-key runs, and fails closed if an optimized pair lacks an actual GitNexus tool-use witness.
 Current focus: rerun the autonomous GitNexus selection campaign on the exact reviewed Claude/Linux tuple after the evaluation runner is on a GitNexus-supported Node runtime and a real Claude credential is available.
 
 - Current `main`: `1526976b91f9a84f05cf39885f5469012c2dd57e` after PR #299. Final PR CI run `35059397663` and post-merge `main` CI run `35059542858` were fully green on Ubuntu, macOS and Windows, including the GitNexus collector self-test on every platform, Windows RTK live, build, bundle/package and install smoke.

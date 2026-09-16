@@ -8,10 +8,10 @@ import process from 'node:process';
 const CLAUDE_VERSION = '2.1.269';
 const GITNEXUS_VERSION = '1.6.12';
 const CAMPAIGN_ID = 'gitnexus-claude-eval-real1';
-const MAX_ATTEMPTS = 2;
+const MAX_ATTEMPTS = process.env.GITNEXUS_CAMPAIGN_MAX_ATTEMPTS === '2' ? 2 : 1;
 const MAX_TURNS = '6';
 const MAX_BUDGET_USD = '0.50';
-const MODEL = process.env.GITNEXUS_CAMPAIGN_MODEL?.trim() || 'sonnet';
+const MODEL = process.env.GITNEXUS_CAMPAIGN_MODEL?.trim() || 'haiku';
 const COMBINED_STACK_BOUNDARY = Object.freeze({
   state: 'not-collected',
   providers: ['rtk', 'harnesstrim'],
@@ -335,12 +335,9 @@ async function runClaudeAttempt(repo, task, variant, attempt, logDir) {
     'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task',
     '--permission-mode',
     'dontAsk',
-    '--permission-prompts',
-    'none',
     '--max-turns',
     MAX_TURNS,
-    '--max-budget-usd',
-    MAX_BUDGET_USD,
+    ...(process.env.ANTHROPIC_API_KEY ? ['--max-budget-usd', MAX_BUDGET_USD] : []),
     '--json-schema',
     RESPONSE_SCHEMA,
   ];
@@ -590,9 +587,9 @@ async function main() {
   if (process.env.WSL_DISTRO_NAME || /microsoft/i.test(procVersion)) {
     throw new Error('real GitNexus campaign refuses WSL; reviewed row is native Linux only');
   }
-  if (secretValues().length === 0) {
+  if (secretValues().length !== 1) {
     throw new Error(
-      'Claude authentication is missing. Configure repository secret ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.',
+      'Configure exactly one Claude credential: ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.',
     );
   }
 
@@ -645,6 +642,9 @@ async function main() {
         throw new Error(
           `optimized GitNexus MCP server missing from Claude system/init in ${benchmarkId}`,
         );
+      }
+      if (!optimized.gitnexusUsed) {
+        throw new Error(`optimized GitNexus actual-use witness missing in ${benchmarkId}`);
       }
       await benchmarkFinish(
         repo,
@@ -699,6 +699,8 @@ async function main() {
       modelSetting: MODEL,
       observedModel,
       authentication: process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'subscription-oauth' : 'api-key',
+      maxAttemptsPerVariant: MAX_ATTEMPTS,
+      apiBudgetGuardUsd: process.env.ANTHROPIC_API_KEY ? Number(MAX_BUDGET_USD) : null,
     },
     combinedProductionStackEvidence: COMBINED_STACK_BOUNDARY,
     index,
@@ -710,7 +712,7 @@ async function main() {
     },
     tokenHarnessMatrix: matrix,
     interpretationBoundary:
-      'Headless/API usage and cost are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings. This run does not validate the combined RTK + HarnessTrim production stack on Claude Code 2.1.269.',
+      'Headless usage and list-price cost fields are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings or billed API spend. The dollar budget guard is used only with ANTHROPIC_API_KEY; subscription OAuth is bounded by manual dispatch, task count, turn count, and attempt count. This run does not validate the combined RTK + HarnessTrim production stack on Claude Code 2.1.269.',
   };
   await writeFile(join(artifactRoot, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   await writeSummary(report);
