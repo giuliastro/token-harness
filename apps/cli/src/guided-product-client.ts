@@ -509,7 +509,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       await ensureSession();
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return;
-      $('modal-title').textContent = result.ok ? 'Setup completed' : 'Setup needs attention';
+      $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
       $('modal-content').replaceChildren(messageBox(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'));
       $('modal-content').append(node('p', 'The dashboard is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
       $('stale-state').hidden = false;
@@ -601,6 +601,79 @@ export const GUIDE_PRODUCT_JS = String.raw`
     $('modal-actions').append(modalClose('Done'));
   }
 
+  function candidateLifecycleHarnesses(candidate) {
+    if (candidate.id === 'mcptoon') return ['claude', 'codex'];
+    if (candidate.id === 'gitnexus') return ['claude'];
+    return [];
+  }
+
+  function reviewCandidateLifecycle(candidate, harness, action) {
+    if (busy) return;
+    const removing = action === 'candidate-remove';
+    const run = modal((removing ? 'Review removal · ' : 'Review setup · ') + candidate.name + ' · ' + agentName(harness));
+    $('modal-content').append(
+      messageBox('Experimental stays experimental', candidate.name + ' remains outside the RTK + HarnessTrim production stack. This review uses only its existing candidate lifecycle and exact compatibility gates.'),
+      progress(removing ? 'Checking owned candidate setup' : 'Checking reviewed candidate setup', 'Nothing changes until a concrete preview is shown and you approve it.'),
+    );
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    ensureSession()
+      .then(() => request('/api/preview', { action, candidate: candidate.id, harness }))
+      .then(data => {
+        if (run !== modalRun || !$('modal').open) return;
+        $('modal-content').replaceChildren();
+        if (!(data.changes || []).length)
+          $('modal-content').append(messageBox('No experimental change proposed', (data.notices || []).join(' ') || 'The candidate is already in the requested state or this machine is outside the exact reviewed lifecycle.'));
+        for (const change of data.changes || []) {
+          const item = node('article', undefined, 'preview-change');
+          item.append(node('h3', change.title), node('p', change.description));
+          $('modal-content').append(item);
+        }
+        for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
+        $('modal-content').append(messageBox('Safety boundary', 'Candidate setup never promotes the tool. Compatibility, ownership and drift checks are re-run when Apply is pressed; unsupported state is refused rather than forced.', 'safe'));
+        $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
+        if (data.ticket)
+          $('modal-actions').append(actionButton(removing ? 'Remove reviewed experimental setup' : 'Apply reviewed experimental setup', () => applyTicket(data.ticket)));
+      })
+      .catch(error => {
+        if (run !== modalRun) return;
+        $('modal-error').textContent = error.message;
+        $('modal-error').hidden = false;
+      })
+      .finally(() => {
+        if (run === modalRun) setBusy(false, false);
+      });
+  }
+
+  function candidateLifecycleGuide(candidate) {
+    const supported = candidateLifecycleHarnesses(candidate);
+    modal('Managed evaluation setup · ' + candidate.name);
+    $('modal-content').append(
+      messageBox('Optional candidate lifecycle', 'This is an explicit evaluation setup, not production-stack setup. Token Harness does not silently install or activate candidates.'),
+    );
+    if (candidate.id === 'mcptoon')
+      $('modal-content').append(messageBox('Prerequisites stay yours', 'An approved setup may install the exact reviewed mcptoon build only through an already-installed pipx. Token Harness does not install Python, pipx or administrator prerequisites.'));
+    if (candidate.id === 'gitnexus')
+      $('modal-content').append(messageBox('Index stays yours', 'GitNexus must already be installed on the exact reviewed row. Token Harness can register only the reviewed Claude MCP entry; it never creates or refreshes the repository index.'));
+    const agents = activeAgents().filter(agent => supported.includes(agent.id));
+    if (!agents.length) {
+      $('modal-content').append(messageBox('No reviewed agent available', 'This candidate lifecycle needs a compatible detected coding agent. Install or start the supported agent, then choose Refresh.', 'warn'));
+    }
+    for (const agent of agents) {
+      const item = node('article', undefined, 'preview-change');
+      item.append(node('h3', agent.name), node('p', 'Review setup or removal for this agent. Preview is read-only; Apply appears only if the candidate lifecycle returns a concrete safe change.'));
+      const actions = node('div', undefined, 'inline-actions');
+      actions.append(
+        actionButton('Review setup', () => reviewCandidateLifecycle(candidate, agent.id, 'candidate-setup')),
+        actionButton('Review removal', () => reviewCandidateLifecycle(candidate, agent.id, 'candidate-remove'), 'secondary'),
+      );
+      item.append(actions);
+      $('modal-content').append(item);
+    }
+    $('modal-content').append(messageBox('Removal is surgical', 'Removal targets only Token Harness-owned candidate integration state. Candidate packages, GitNexus index data and unrelated user configuration remain untouched.'));
+    $('modal-actions').append(modalClose('Done'));
+  }
+
   function renderExperimental() {
     const root = $('experimental-tools');
     root.replaceChildren();
@@ -626,6 +699,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       else
         actions.append(actionButton('Installation guide', () => candidateInstallGuide(candidate), 'secondary'));
       actions.append(actionButton('How to evaluate', () => candidateEvaluateGuide(candidate), 'secondary'));
+      if (candidateLifecycleHarnesses(candidate).length > 0)
+        actions.append(actionButton('Managed evaluation setup', () => candidateLifecycleGuide(candidate), 'secondary'));
       card.append(actions);
       root.append(card);
     }
