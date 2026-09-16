@@ -1,0 +1,39 @@
+name: Temporary managed-tools formatter
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm exec prettier --write
+          packages/adapters/src/providers/index.ts
+          packages/adapters/src/providers/managed-optimization-tools.ts
+          packages/adapters/src/providers/mcptoon-provider.ts
+          packages/adapters/src/providers/gitnexus-provider.ts
+          packages/adapters/test/managed-provider-lifecycle.test.ts
+          packages/core/src/metrics/optimization-stack.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: managed-tools-formatted
+          path: |
+            packages/adapters/src/providers/index.ts
+            packages/adapters/src/providers/managed-optimization-tools.ts
+            packages/adapters/src/providers/mcptoon-provider.ts
+            packages/adapters/src/providers/gitnexus-provider.ts
+            packages/adapters/test/managed-provider-lifecycle.test.ts
+            packages/core/src/metrics/optimization-stack.ts
