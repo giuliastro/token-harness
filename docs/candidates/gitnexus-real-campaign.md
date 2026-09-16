@@ -17,6 +17,41 @@ Do not reuse this campaign as evidence for adjacent Claude/GitNexus versions, ma
 Codex. GitNexus remains a candidate and its PolyForm Noncommercial 1.0.0 licensing review continues
 to block generic commercial-production promotion independently of technical results.
 
+## Autonomous GitHub Actions path
+
+`.github/workflows/gitnexus-real-campaign.yml` is an **evaluation-only** runner for this exact row. It
+runs on Ubuntu 24.04, installs Claude Code `2.1.269` and GitNexus `1.6.12` into a runner-temporary npm
+prefix without sudo, uses a runner-temporary HOME, builds the current Token Harness checkout, and
+executes the normal candidate `apply`/`uninstall` plus `benchmark-start`/`benchmark-finish` evidence
+pipeline around real Claude Code headless tasks.
+
+The workflow accepts either of the standard Claude Code CI credentials as repository secrets:
+`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. Missing authentication fails closed before any model
+call. Secrets are never printed or persisted in campaign artifacts.
+
+The workflow is deliberately not part of ordinary pull-request CI. It runs from trusted `main` when
+the evaluation workflow/runner itself changes, and can also be started explicitly with
+`workflow_dispatch`. Ordinary CI runs only `node scripts/evaluation/gitnexus-real-campaign.mjs
+--self-test`, which uses synthetic stream events and spends no model quota.
+
+For real tasks Claude is restricted to built-in `Read`, `Glob` and `Grep` tools; shell/edit/write/web
+and subagent tools are unavailable. GitNexus MCP tools remain available only through the reviewed
+Claude MCP registration. The same prompt is used for each baseline/optimized pair and asks Claude to
+call a GitNexus MCP tool when one is exposed. Claude Code `stream-json` output provides two separate
+witnesses:
+
+- `system/init.mcp_servers` records whether the GitNexus MCP server is present for the session;
+- an observed `tool_use` whose name begins `mcp__gitnexus__` records actual GitNexus use.
+
+The second witness is the only one counted as actual candidate use. Availability alone never closes
+the promotion `activation-verification` gate.
+
+The runner uses two attempts at most per variant, records quality against deterministic answers and
+source-file evidence, keeps Claude's effective model identical across the campaign, checks that the
+tracked repository stays unchanged after every attempt, and stores sanitized stream logs plus one
+schema-1 report artifact. Headless/API cost and usage fields are evaluation evidence only; they must
+not be relabelled as Claude Pro five-hour or seven-day subscription-quota savings.
+
 ## One-time repository preparation
 
 Use a repository that will remain at the same commit for the entire paired campaign. Before starting
@@ -35,15 +70,19 @@ The GitNexus status must be machine-readable schema 1 with:
 ```
 
 Other fields may be present. If the repository is not indexed or the index is stale, prepare it
-manually in this isolated evaluation environment:
+manually in an isolated evaluation environment:
 
 ```sh
 gitnexus analyze --index-only
 ```
 
-Then rerun `gitnexus status --json` and require `status: "up-to-date"` before starting a benchmark
-capture. Token Harness must never run `analyze`, create or refresh the index, install GitNexus, run
+The autonomous evaluation workflow may perform that same one-time preparation inside its disposable
+runner and records the indexing wall-clock cost separately. The shipped Token Harness product and
+candidate lifecycle must never run `analyze`, create or refresh the index, install GitNexus, run
 `setup`, or install hooks/skills automatically.
+
+Then rerun `gitnexus status --json` and require `status: "up-to-date"` before starting a benchmark
+capture.
 
 The index may exist on disk during both variants. What matters for the paired experiment is that the
 **baseline agent has no GitNexus access** while the optimized agent has exactly the reviewed MCP
@@ -87,7 +126,8 @@ For every baseline/optimized pair keep the following equivalent:
 
 Do not let the optimized run inherit files or conclusions produced by the baseline. Restore the same
 starting repository state before each variant. If a task itself intentionally modifies files, retain
-the result only as evidence and reset before the paired variant.
+the result only as evidence and reset before the paired variant. The autonomous runner uses read-only
+tasks and fails immediately if tracked repository content changes.
 
 ## What the witnesses prove
 
@@ -97,8 +137,12 @@ evidence.
 
 For optimized runs, a witness of `usable` at both boundaries proves only **MCP availability**. It does
 not prove that Claude called a GitNexus tool or that GitNexus contributed to the answer. Boundary
-availability therefore must not pass the promotion `activation-verification` gate. A future positive
-activation claim requires a separate bounded witness of real candidate use.
+availability therefore must not pass the promotion `activation-verification` gate.
+
+The autonomous runner additionally inspects Claude Code's real headless event stream. An optimized
+variant has a positive actual-use witness only when at least one emitted `tool_use` is named
+`mcp__gitnexus__...`. This evidence is stored separately from Token Harness's existing bounded MCP
+boundary witness so configuration/availability cannot be confused with use.
 
 Do not infer use from configuration, candidate attribution, the browser acknowledgement, or a good
 benchmark result.
@@ -113,7 +157,7 @@ For every pair retain the normal Token Harness benchmark evidence and evaluate a
 - wall-clock timing when comparable;
 - selection verdict and decision-readiness;
 - baseline MCP absence and optimized MCP availability;
-- any independently attributable real GitNexus-use witness, if one becomes available.
+- the separate `mcp__gitnexus__...` real tool-use witness when observed.
 
 Repository indexing cost should be recorded separately as setup/maintenance overhead, not hidden in a
 savings claim. The campaign must not claim token, quota, subscription-time or money savings unless the
