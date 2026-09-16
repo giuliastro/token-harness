@@ -24,7 +24,12 @@ function Protect-LocalPath {
   $protected = $Value
   foreach ($candidate in @($env:USERPROFILE, [Environment]::GetFolderPath('UserProfile'))) {
     if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-      $protected = $protected.Replace($candidate, '<USERPROFILE>')
+      $protected = [regex]::Replace(
+        $protected,
+        [regex]::Escape($candidate),
+        '<USERPROFILE>',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+      )
     }
   }
   return $protected
@@ -42,14 +47,15 @@ function Invoke-CapturedCommand {
   $outputFile = "$Name.txt"
   $outputPath = Join-Path $DestinationDirectory $outputFile
   $command = Get-Command $Executable -ErrorAction SilentlyContinue
+  $sanitizedArguments = @($Arguments | ForEach-Object { Protect-LocalPath ([string]$_) })
 
   if ($null -eq $command) {
     "Command not found: $Executable" | Set-Content -Encoding utf8 $outputPath
     return [pscustomobject]@{
       name = $Name
-      executable = $Executable
+      executable = Protect-LocalPath $Executable
       executablePath = $null
-      arguments = $Arguments
+      arguments = $sanitizedArguments
       required = $Required
       status = 'missing'
       exitCode = $null
@@ -76,9 +82,9 @@ function Invoke-CapturedCommand {
 
   return [pscustomobject]@{
     name = $Name
-    executable = $Executable
+    executable = Protect-LocalPath $Executable
     executablePath = Protect-LocalPath $command.Source
-    arguments = $Arguments
+    arguments = $sanitizedArguments
     required = $Required
     status = if ($exitCode -eq 0) { 'success' } else { 'failed' }
     exitCode = $exitCode
@@ -182,6 +188,20 @@ exit /b 0
         throw "self-test did not sanitize USERPROFILE in $($receipt.outputFile)"
       }
     }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+      $mixedCaseProfile = $env:USERPROFILE.ToUpperInvariant()
+      $protectedMixedCase = Protect-LocalPath "$mixedCaseProfile\repo\bundle.mjs"
+      if ($protectedMixedCase -ne '<USERPROFILE>\repo\bundle.mjs') {
+        throw 'self-test case-insensitive USERPROFILE sanitization failed'
+      }
+
+      $argumentReceipt = Invoke-CapturedCommand -Name 'argument-sanitization' -Executable 'token-harness' -Arguments @("$env:USERPROFILE\repo\bundle.mjs") -DestinationDirectory $capture.destination
+      if ($argumentReceipt.arguments.Count -ne 1 -or $argumentReceipt.arguments[0] -ne '<USERPROFILE>\repo\bundle.mjs') {
+        throw 'self-test manifest argument sanitization failed'
+      }
+    }
+
     Write-Host 'windows production-stack evidence collector self-test: PASS'
   }
   finally {
