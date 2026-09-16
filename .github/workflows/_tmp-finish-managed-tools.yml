@@ -81,8 +81,7 @@ jobs:
           apps/cli/test/guided-component-uninstall.test.ts
       - run: pnpm typecheck
       - run: pnpm lint
-      - name: Run managed lifecycle and guided uninstall tests
-        run: pnpm exec tsx --test packages/adapters/test/managed-provider-lifecycle.test.ts apps/cli/test/guided-component-uninstall.test.ts
+      - run: pnpm test
       - name: Commit product changes
         shell: bash
         run: |
