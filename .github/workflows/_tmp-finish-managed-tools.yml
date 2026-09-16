@@ -316,7 +316,6 @@ jobs:
           new_status = '''- 2026-09-16: current integration work moves mcptoon and GitNexus into the ordinary provider registry as **optional managed integrations without production-stack promotion**. RTK + HarnessTrim remain the production baseline. mcptoon uses the existing exact 0.7.10 pipx lifecycle and owned Claude/Codex guidance; an absent provider is admitted only against that exact pinned planned install version, never a guessed range. GitNexus uses only the already-reviewed exact 1.6.12 Claude MCP configuration/removal surface, is never auto-installed or indexed, and still carries the PolyForm Noncommercial license boundary. Headroom remains outside `PROVIDER_ADAPTERS` until a real reversible uv/Python lifecycle exists. The default novice setup remains RTK + HarnessTrim; mcptoon/GitNexus setup is provider-scoped and explicitly reviewed. No Claude/model campaign is part of this integration work.\nCurrent focus: finish the managed-tool PR with full cross-platform CI and merge only when green. Issue #255 remains open but is no longer blocking this feature work; do not ask for another RTK/HarnessTrim evidence campaign as part of this integration.\n\n'''
           if not text.startswith(heading):
               raise SystemExit('development status heading changed')
-          # Replace the old focus line as part of the first historical entry to avoid contradictory active focus.
           text = text.replace(
               'Current focus: keep the full GitNexus campaign manual and quota-safe; meanwhile complete issue #255 with real before/after evidence from the current RTK + HarnessTrim production stack on native Windows.\n\n',
               '',
@@ -330,9 +329,7 @@ jobs:
           )
           save(path, text)
           PY
-      - name: Regenerate compatibility matrices
-        run: node tests/tools/matrices.mjs
-      - name: Format changed product files
+      - name: Format product sources
         run: >-
           pnpm exec prettier --write
           packages/adapters/src/providers/index.ts
@@ -352,8 +349,12 @@ jobs:
           tests/integration/distribution.test.ts
           README.md
           docs/development-status.md
-          docs/matrices.md
-      - run: pnpm typecheck
+      - name: Typecheck and build generated test modules
+        run: pnpm typecheck
+      - name: Regenerate compatibility matrices
+        run: node tests/tools/matrices.mjs
+      - name: Format generated matrix
+        run: pnpm exec prettier --write docs/matrices.md
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
