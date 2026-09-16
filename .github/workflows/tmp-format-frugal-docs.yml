@@ -1,0 +1,62 @@
+name: Temporary frugal formatting
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-frugal-campaign-controls
+    paths:
+      - '.github/workflows/tmp-format-frugal-docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-frugal-campaign-controls
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refresh handoff and format changed non-workflow files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/development-status.md')
+          s = p.read_text()
+          old_focus = 'Current focus: rerun the autonomous GitNexus selection campaign on the exact reviewed Claude/Linux tuple after the evaluation runner is on a GitNexus-supported Node runtime and a real Claude credential is available.'
+          new_focus = 'Current focus: keep the GitNexus real campaign quota-safe after the successful branch-only OAuth/Haiku smoke; validate the frugal campaign controls fully before any explicitly dispatched eight-pair selection run.'
+          if old_focus not in s:
+              raise SystemExit('expected current-focus line not found')
+          s = s.replace(old_focus, new_focus, 1)
+          old_main = '- Current `main`: `1526976b91f9a84f05cf39885f5469012c2dd57e` after PR #299. Final PR CI run `35059397663` and post-merge `main` CI run `35059542858` were fully green on Ubuntu, macOS and Windows, including the GitNexus collector self-test on every platform, Windows RTK live, build, bundle/package and install smoke.'
+          new_main = '- Current `main`: `285efc0da16a938be01be26b16855941f8842a91` after PR #300. PR #300 moved only the disposable GitNexus evaluation runtime to Node `22.18.0`; post-merge CI run `35059956531` was fully green on Ubuntu, macOS and Windows, including the GitNexus collector self-test on every platform, Windows RTK live, build, bundle/package and install smoke. The post-merge real-campaign probe installed GitNexus cleanly with no engine warning and then stopped only at the then-missing Claude credential.'
+          if old_main not in s:
+              raise SystemExit('expected current-main line not found')
+          s = s.replace(old_main, new_main, 1)
+          p.write_text(s)
+
+          r = Path('docs/candidates/gitnexus-real-campaign.md')
+          text = r.read_text().replace('historical receipts.\n\n\n### 2026-09-16 frugal OAuth smoke', 'historical receipts.\n\n### 2026-09-16 frugal OAuth smoke')
+          r.write_text(text)
+          PY
+          pnpm exec prettier --write \
+            scripts/evaluation/gitnexus-real-campaign.mjs \
+            docs/candidates/gitnexus-real-campaign.md \
+            docs/development-status.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/evaluation/gitnexus-real-campaign.mjs docs/candidates/gitnexus-real-campaign.md docs/development-status.md
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(gitnexus): format frugal campaign hardening'
+            git push origin HEAD:codex/gitnexus-frugal-campaign-controls
+          fi
