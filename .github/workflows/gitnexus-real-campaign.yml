@@ -2,11 +2,23 @@ name: GitNexus real Claude campaign
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/gitnexus-real-campaign.yml'
-      - 'scripts/evaluation/gitnexus-real-campaign.mjs'
+    inputs:
+      model:
+        description: Claude model for the paired campaign
+        required: true
+        default: haiku
+        type: choice
+        options:
+          - haiku
+          - sonnet
+      max_attempts:
+        description: Maximum attempts per baseline/optimized variant
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
 
 permissions:
   contents: read
@@ -24,6 +36,8 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign
+      GITNEXUS_CAMPAIGN_MODEL: ${{ inputs.model }}
+      GITNEXUS_CAMPAIGN_MAX_ATTEMPTS: ${{ inputs.max_attempts }}
 
     steps:
       - uses: actions/checkout@v5
