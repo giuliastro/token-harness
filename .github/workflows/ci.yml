@@ -54,6 +54,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: GitNexus real-campaign runner self-test
+        run: node scripts/evaluation/gitnexus-real-campaign.mjs --self-test
+
       # The normal suite keeps release-network tests opt-in. This Windows-only gate closes
       # the RTK updater's real-world admission requirement: production code downloads the exact
       # reviewed release, verifies GitHub's digest, replaces a real NTFS target, starts the PE,
