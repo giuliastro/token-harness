@@ -8,8 +8,8 @@ import process from 'node:process';
 const CLAUDE_VERSION = '2.1.269';
 const GITNEXUS_VERSION = '1.6.12';
 const MODEL = 'haiku';
-const MAX_BUDGET_USD = '0.10';
-const MAX_TURNS = '3';
+const MAX_BUDGET_USD = '0.06';
+const MAX_TURNS = '4';
 const EXPECTED_ANSWER = '2';
 const EXPECTED_FILE = 'apps/cli/src/commands/candidate-benchmark.ts';
 const RESPONSE_SCHEMA = JSON.stringify({
@@ -129,12 +129,12 @@ async function ensureIndex(repo) {
 async function callClaude(repo, optimized) {
   const prompt = [
     'This is a read-only Token Harness smoke test. Do not modify files or configuration.',
-    'Answer from the checked-out repository, not from prior knowledge.',
+    'Do not search the repository broadly.',
     optimized
-      ? 'A GitNexus MCP server should be available. Call at least one mcp__gitnexus__* tool and use it before answering.'
-      : 'GitNexus must not be available. Use only the built-in read-only repository tools.',
-    'How many baseline/optimized pairs per task class does the candidate campaign planner create? Return the exact decimal number as a string.',
-    'Return evidence_files as repository-relative paths.',
+      ? `First call at least one available mcp__gitnexus__* tool to inspect the repository fact in ${EXPECTED_FILE}. Then use Read on that exact file only if needed.`
+      : `GitNexus must not be available. Read exactly ${EXPECTED_FILE}; do not Glob or Grep.`,
+    'Question: how many baseline/optimized pairs per task class does the candidate campaign planner create? Return the exact decimal number as a string.',
+    `Return ${EXPECTED_FILE} in evidence_files.`,
   ].join('\n');
   const execution = await run(
     'claude',
@@ -144,9 +144,9 @@ async function callClaude(repo, optimized) {
       '--verbose',
       '--no-session-persistence',
       '--model', MODEL,
-      '--tools', 'Read,Glob,Grep',
-      '--allowedTools', 'Read,Glob,Grep,mcp__gitnexus__*',
-      '--disallowedTools', 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task',
+      '--tools', 'Read',
+      '--allowedTools', 'Read,mcp__gitnexus__*',
+      '--disallowedTools', 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Glob,Grep',
       '--permission-mode', 'dontAsk',
       '--max-turns', MAX_TURNS,
       '--max-budget-usd', MAX_BUDGET_USD,
