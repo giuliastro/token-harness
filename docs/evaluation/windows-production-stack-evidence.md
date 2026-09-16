@@ -45,8 +45,9 @@ The command writes a timestamped directory under
 - `token-harness stack-review --json`;
 - a `manifest.json` with command paths, arguments, exit codes and completeness.
 
-The Windows profile path is replaced with `<USERPROFILE>` in captured command output and executable
-paths. The collector does not dump environment variables or authentication data.
+The Windows profile path is replaced case-insensitively with `<USERPROFILE>` in captured command
+output and in manifest executable-path/argument metadata. The collector does not dump environment
+variables or authentication data.
 
 A non-zero exit after the files are written means the evidence is incomplete: inspect
 `manifest.json`. RTK, HarnessTrim and the three Token Harness checks are required; at least one of
@@ -76,7 +77,7 @@ provider/harness attribution before changing any compatibility registry or closi
 ## Maintainer self-test
 
 The collector has a Windows-only self-test that creates temporary fake commands, verifies all eight
-receipts are captured, and checks `<USERPROFILE>` sanitization:
+receipts are captured, and checks `<USERPROFILE>` sanitization including manifest arguments:
 
 ```powershell
 pwsh -File .\scripts\evaluation\windows-production-stack-evidence.ps1 -SelfTest
