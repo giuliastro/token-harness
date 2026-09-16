@@ -331,6 +331,27 @@ function combinationReview(
   };
 }
 
+function componentDescriptors(input: BuildOptimizationStackInput): OptimizationComponentDescriptor[] {
+  const descriptors = input.components.map((component) => ({ ...component }));
+  const listed = new Set(descriptors.map((component) => component.providerId));
+
+  // The dashboard used to enumerate only RTK and HarnessTrim. Provider registration is now the
+  // lifecycle source of truth, so a newly managed adapter must not disappear merely because an
+  // older UI descriptor list has not been extended yet. Explicit descriptors still win for labels
+  // and categories; unlisted provider detections receive a conservative `other` projection.
+  for (const detection of input.detections) {
+    if (listed.has(detection.providerId)) continue;
+    descriptors.push({
+      providerId: detection.providerId,
+      displayName: String(detection.providerId),
+      category: 'other',
+    });
+    listed.add(detection.providerId);
+  }
+
+  return descriptors;
+}
+
 /**
  * Build the product-facing stack state from already-observed lifecycle evidence.
  *
@@ -345,7 +366,7 @@ export function buildOptimizationStack(
   const updates = new Map((input.updates ?? []).map((row) => [row.providerId, row]));
   const components: OptimizationStackComponent[] = [];
 
-  for (const descriptor of input.components) {
+  for (const descriptor of componentDescriptors(input)) {
     const detection = detections.get(descriptor.providerId);
     if (detection === undefined) continue;
     const verification = verificationState(detection, input.verification);
