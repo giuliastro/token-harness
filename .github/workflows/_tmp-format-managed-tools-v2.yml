@@ -1,0 +1,44 @@
+name: Temporary managed-tools formatter v2
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools-v2
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools-v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format managed-tool sources
+        run: >-
+          pnpm exec prettier --write
+          packages/adapters/src/providers/index.ts
+          packages/adapters/src/providers/managed-optimization-tools.ts
+          packages/adapters/src/providers/mcptoon-provider.ts
+          packages/adapters/src/providers/gitnexus-provider.ts
+          packages/adapters/test/managed-provider-lifecycle.test.ts
+          packages/core/src/metrics/optimization-stack.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Commit formatted sources and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/_tmp-format-managed-tools-v2.yml
+          git add -A
+          git diff --cached --quiet && exit 1
+          git commit -m 'style: format managed-tool integration'
+          git push origin HEAD:codex/managed-optimization-tools-v2
