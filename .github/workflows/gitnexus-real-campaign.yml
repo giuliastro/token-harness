@@ -34,7 +34,9 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22.13.0'
+          # Evaluation-only runtime: GitNexus 1.6.12 requires ^22.18.0 or >=24.11.0.
+          # Ordinary Token Harness CI intentionally remains on the supported floor 22.13.0.
+          node-version: '22.18.0'
           cache: pnpm
 
       - name: Install Token Harness dependencies
