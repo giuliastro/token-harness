@@ -51,7 +51,9 @@ jobs:
               raise SystemExit('missing workflow trigger block')
           w = w.replace(old_on, new_on, 1)
           old_env = "      GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign"
-          new_env = "      GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign\n      GITNEXUS_CAMPAIGN_MODEL: ${{ inputs.model }}\n      GITNEXUS_CAMPAIGN_MAX_ATTEMPTS: ${{ inputs.max_attempts }}"
+          expr_model = '$' + '{{ inputs.model }}'
+          expr_attempts = '$' + '{{ inputs.max_attempts }}'
+          new_env = "      GITNEXUS_CAMPAIGN_ARTIFACT_DIR: artifacts/gitnexus-real-campaign\n      GITNEXUS_CAMPAIGN_MODEL: " + expr_model + "\n      GITNEXUS_CAMPAIGN_MAX_ATTEMPTS: " + expr_attempts
           if old_env not in w:
               raise SystemExit('missing workflow env block')
           w = w.replace(old_env, new_env, 1)
