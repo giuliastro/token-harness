@@ -1,0 +1,75 @@
+name: Temporary GitNexus runner patch
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-frugal-campaign-controls
+    paths:
+      - '.github/workflows/tmp-patch-gitnexus-runner.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/gitnexus-frugal-campaign-controls
+          fetch-depth: 1
+
+      - name: Patch runner and docs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runner = Path('scripts/evaluation/gitnexus-real-campaign.mjs')
+          s = runner.read_text()
+          replacements = [
+              ("const MAX_ATTEMPTS = 2;", "const MAX_ATTEMPTS = process.env.GITNEXUS_CAMPAIGN_MAX_ATTEMPTS === '2' ? 2 : 1;"),
+              ("const MODEL = process.env.GITNEXUS_CAMPAIGN_MODEL?.trim() || 'sonnet';", "const MODEL = process.env.GITNEXUS_CAMPAIGN_MODEL?.trim() || 'haiku';"),
+              ("    '--permission-mode',\n    'dontAsk',\n    '--permission-prompts',\n    'none',\n    '--max-turns',\n    MAX_TURNS,\n    '--max-budget-usd',\n    MAX_BUDGET_USD,\n    '--json-schema',", "    '--permission-mode',\n    'dontAsk',\n    '--max-turns',\n    MAX_TURNS,\n    ...(process.env.ANTHROPIC_API_KEY ? ['--max-budget-usd', MAX_BUDGET_USD] : []),\n    '--json-schema',"),
+              ("  if (secretValues().length === 0) {\n    throw new Error(\n      'Claude authentication is missing. Configure repository secret ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.',\n    );\n  }", "  if (secretValues().length !== 1) {\n    throw new Error(\n      'Configure exactly one Claude credential: ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.',\n    );\n  }"),
+              ("      if (optimized.attempts.some((attempt) => attempt.gitnexusServer === null)) {\n        throw new Error(\n          `optimized GitNexus MCP server missing from Claude system/init in ${benchmarkId}`,\n        );\n      }\n      await benchmarkFinish(", "      if (optimized.attempts.some((attempt) => attempt.gitnexusServer === null)) {\n        throw new Error(\n          `optimized GitNexus MCP server missing from Claude system/init in ${benchmarkId}`,\n        );\n      }\n      if (!optimized.gitnexusUsed) {\n        throw new Error(`optimized GitNexus actual-use witness missing in ${benchmarkId}`);\n      }\n      await benchmarkFinish("),
+              ("      authentication: process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'subscription-oauth' : 'api-key',\n    },", "      authentication: process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'subscription-oauth' : 'api-key',\n      maxAttemptsPerVariant: MAX_ATTEMPTS,\n      apiBudgetGuardUsd: process.env.ANTHROPIC_API_KEY ? Number(MAX_BUDGET_USD) : null,\n    },"),
+              ("      'Headless/API usage and cost are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings. This run does not validate the combined RTK + HarnessTrim production stack on Claude Code 2.1.269.',", "      'Headless usage and list-price cost fields are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings or billed API spend. The dollar budget guard is used only with ANTHROPIC_API_KEY; subscription OAuth is bounded by manual dispatch, task count, turn count, and attempt count. This run does not validate the combined RTK + HarnessTrim production stack on Claude Code 2.1.269.',"),
+          ]
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit(f'missing runner replacement:\n{old}')
+              s = s.replace(old, new, 1)
+          runner.write_text(s)
+
+          runbook = Path('docs/candidates/gitnexus-real-campaign.md')
+          d = runbook.read_text()
+          old = "The workflow is deliberately not part of ordinary pull-request CI. It runs from trusted `main` when\nthe evaluation workflow/runner itself changes, and can also be started explicitly with\n`workflow_dispatch`. Ordinary CI runs only `node scripts/evaluation/gitnexus-real-campaign.mjs\n--self-test`, which uses synthetic stream events and spends no model quota."
+          new = "The workflow is deliberately not part of ordinary pull-request CI and no longer runs automatically\non pushes to `main`. A real campaign starts only through `workflow_dispatch`, so repository maintenance\ncannot silently spend Claude quota. The dispatch defaults to `haiku` and one attempt per variant; the\nfull eight-pair campaign therefore has a fixed default ceiling of 16 Claude sessions with no automatic\nretry. Ordinary CI runs only `node scripts/evaluation/gitnexus-real-campaign.mjs --self-test`, which\nuses synthetic stream events and spends no model quota."
+          if old not in d:
+              raise SystemExit('missing runbook workflow paragraph')
+          d = d.replace(old, new, 1)
+          marker = "The workflow accepts either of the standard Claude Code CI credentials as repository secrets:\n`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. Missing authentication fails closed before any model\ncall. Secrets are never printed or persisted in campaign artifacts."
+          replacement = marker + "\n\nConfigure exactly one credential. For API-key runs the runner keeps the dollar budget guard. For\nsubscription OAuth runs it omits `--max-budget-usd`: Claude Code reports list-price accounting there,\nwhich can terminate a valid subscription-backed task even when no paid overage is in use. OAuth runs\nare instead bounded by explicit manual dispatch, eight fixed pairs, six turns per session and the\nselected one-or-two-attempt ceiling."
+          if marker not in d:
+              raise SystemExit('missing runbook auth paragraph')
+          d = d.replace(marker, replacement, 1)
+          d += "\n\n### 2026-09-16 frugal OAuth smoke\n\nA branch-only Haiku smoke verified the external boundary before any full campaign was allowed. Claude\nCode `2.1.269` authenticated with `CLAUDE_CODE_OAUTH_TOKEN`, reported subscription quota as allowed and\npaid overage as rejected/not in use. A clean baseline completed before the optimized variant; the\noptimized session exposed GitNexus `1.6.12` as connected, emitted real `mcp__gitnexus__context` and\n`mcp__gitnexus__query` calls, and found the expected repository fact. The smoke intentionally remains\nnon-selection evidence. Its final CLI failure was the artificial low `--max-budget-usd` guard firing\nafter correct structured output, which is why OAuth campaigns no longer use that API-dollar guard.\nNo full eight-pair campaign was started from this smoke.\n"
+          runbook.write_text(d)
+
+          status = Path('docs/development-status.md')
+          t = status.read_text()
+          prefix = "# Development status\n\n"
+          if not t.startswith(prefix):
+              raise SystemExit('unexpected development-status header')
+          note = "- 2026-09-16: branch-only frugal OAuth smoke confirmed Claude Code `2.1.269` subscription OAuth, Haiku, GitNexus `1.6.12` MCP connectivity and real `mcp__gitnexus__context`/`query` tool use without paid overage. The smoke is not selection evidence and no full campaign was launched. Follow-up hardening makes the real campaign manual-dispatch-only, defaults to Haiku + one attempt per variant, applies `--max-budget-usd` only to API-key runs, and fails closed if an optimized pair lacks an actual GitNexus tool-use witness.\n"
+          status.write_text(prefix + note + t[len(prefix):])
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/evaluation/gitnexus-real-campaign.mjs docs/candidates/gitnexus-real-campaign.md docs/development-status.md
+          git diff --cached --check
+          git commit -m 'fix(gitnexus): bound real campaign quota use'
+          git push origin HEAD:codex/gitnexus-frugal-campaign-controls
