@@ -331,7 +331,9 @@ function combinationReview(
   };
 }
 
-function componentDescriptors(input: BuildOptimizationStackInput): OptimizationComponentDescriptor[] {
+function componentDescriptors(
+  input: BuildOptimizationStackInput,
+): OptimizationComponentDescriptor[] {
   const descriptors = input.components.map((component) => ({ ...component }));
   const listed = new Set(descriptors.map((component) => component.providerId));
 

@@ -33,10 +33,7 @@ import {
   MCPTOON_REVIEWED_BENCHMARK_VERSION,
   observeMcptoonCandidate,
 } from './mcptoon-candidate.js';
-import {
-  planMcptoonManagedActivation,
-  verifyMcptoonManagedActivation,
-} from './mcptoon-managed.js';
+import { planMcptoonManagedActivation, verifyMcptoonManagedActivation } from './mcptoon-managed.js';
 
 const MCPTOON = providerId('mcptoon');
 const GITNEXUS = providerId('gitnexus');
@@ -56,7 +53,8 @@ const MCPTOON_MANIFEST: ProviderManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
   id: MCPTOON,
   displayName: 'mcptoon',
-  description: 'MCP discovery/schema compaction with reviewed agent guidance for Claude Code and Codex.',
+  description:
+    'MCP discovery/schema compaction with reviewed agent guidance for Claude Code and Codex.',
   homepage: 'https://github.com/mcptoon/mcptoon',
   sourceRepository: 'https://github.com/mcptoon/mcptoon',
   license: { spdx: null, distributionMode: 'external', reviewRequired: false },
@@ -94,7 +92,8 @@ const GITNEXUS_MANIFEST: ProviderManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
   id: GITNEXUS,
   displayName: 'GitNexus',
-  description: 'Repository graph/code-intelligence provider with a reviewed Claude Code MCP registration.',
+  description:
+    'Repository graph/code-intelligence provider with a reviewed Claude Code MCP registration.',
   homepage: 'https://github.com/abhigyanpatwari/GitNexus',
   sourceRepository: 'https://github.com/abhigyanpatwari/GitNexus',
   // PolyForm Noncommercial is intentionally not represented as an SPDX approval. Token Harness
@@ -285,7 +284,8 @@ async function headroomDetection(context: ProviderContext): Promise<ProviderDete
             warning(
               'headroom-provider-version-unreviewed',
               'headroom',
-              observation.reasons[0] ?? 'The installed Headroom version is outside the reviewed row.',
+              observation.reasons[0] ??
+                'The installed Headroom version is outside the reviewed row.',
             ),
           ]
         : [],
@@ -395,7 +395,12 @@ function dedupeActions<T extends { id: string }>(actions: readonly T[]): T[] {
 
 async function mcptoonPlan(context: ProviderContext, request: ProviderPlanRequest) {
   if (request.desiredState === 'absent') {
-    return { providerId: MCPTOON, desiredState: 'absent' as const, actions: [], targetHarnesses: [] };
+    return {
+      providerId: MCPTOON,
+      desiredState: 'absent' as const,
+      actions: [],
+      targetHarnesses: [],
+    };
   }
   const actions = [];
   const targets: HarnessId[] = [];
@@ -416,7 +421,12 @@ async function mcptoonPlan(context: ProviderContext, request: ProviderPlanReques
 
 async function gitnexusPlan(context: ProviderContext, request: ProviderPlanRequest) {
   if (request.desiredState === 'absent') {
-    return { providerId: GITNEXUS, desiredState: 'absent' as const, actions: [], targetHarnesses: [] };
+    return {
+      providerId: GITNEXUS,
+      desiredState: 'absent' as const,
+      actions: [],
+      targetHarnesses: [],
+    };
   }
   const claude = request.harnesses.find((item) => item.id === CLAUDE);
   if (claude === undefined) {
@@ -450,7 +460,8 @@ export const mcptoonAdapter: ProviderAdapter = {
   detect: mcptoonDetection,
   identifiesCommand: (command) => /(^|[\\/\s"'])mcptoon(?:\.exe)?([\s"']|$)/i.test(command),
   verify: mcptoonVerify,
-  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) => unavailableMetrics(MCPTOON),
+  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) =>
+    unavailableMetrics(MCPTOON),
   plan: mcptoonPlan,
   plansWithoutOwnership: true,
 };
@@ -460,7 +471,8 @@ export const gitnexusAdapter: ProviderAdapter = {
   detect: gitnexusDetection,
   identifiesCommand: (command) => /(^|[\\/\s"'])gitnexus(?:\.cmd|\.exe)?([\s"']|$)/i.test(command),
   verify: gitnexusVerify,
-  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) => unavailableMetrics(GITNEXUS),
+  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) =>
+    unavailableMetrics(GITNEXUS),
   plan: gitnexusPlan,
   plansWithoutOwnership: true,
 };
@@ -470,6 +482,7 @@ export const headroomAdapter: ProviderAdapter = {
   detect: headroomDetection,
   identifiesCommand: (command) => /(^|[\\/\s"'])headroom(?:\.exe)?([\s"']|$)/i.test(command),
   verify: headroomVerify,
-  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) => unavailableMetrics(HEADROOM),
+  collectMetrics: async (_context: ProviderContext, _store: MetricsStore) =>
+    unavailableMetrics(HEADROOM),
   plan: headroomPlan,
 };
