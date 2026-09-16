@@ -1,0 +1,102 @@
+name: Temporary managed-tools finisher
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Persist guided lifecycle integration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/cli/src/guided.ts')
+          text = path.read_text()
+
+          def replace_once(old, new):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, got {count}: {old!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "  harnesstrim: 'HarnessTrim',\n};",
+              "  harnesstrim: 'HarnessTrim',\n  mcptoon: 'mcptoon',\n  gitnexus: 'GitNexus',\n};",
+          )
+          replace_once(
+              "  {\n    providerId: providerId('harnesstrim'),\n    displayName: 'HarnessTrim',\n    category: 'command-output-reduction',\n  },\n];",
+              "  {\n    providerId: providerId('harnesstrim'),\n    displayName: 'HarnessTrim',\n    category: 'command-output-reduction',\n  },\n  {\n    providerId: providerId('mcptoon'),\n    displayName: 'mcptoon',\n    category: 'mcp-discovery',\n  },\n  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n];",
+          )
+          replace_once(
+              "!['rtk', 'harnesstrim'].includes(String(data['provider']))",
+              "!['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'].includes(String(data['provider']))",
+          )
+          path.write_text(text)
+
+          test_path = Path('apps/cli/test/guided-component-uninstall.test.ts')
+          test = test_path.read_text()
+          anchor = "const RTK = providerId('rtk');\n"
+          if test.count(anchor) != 1:
+              raise SystemExit(f'expected one RTK constant, got {test.count(anchor)}')
+          test = test.replace(
+              anchor,
+              anchor + "const MCPTOON = providerId('mcptoon');\nconst GITNEXUS = providerId('gitnexus');\n",
+              1,
+          )
+          marker = "it('does not offer an approval when the provider has no Token Harness-owned change', async () => {"
+          if test.count(marker) != 1:
+              raise SystemExit(f'expected one insertion marker, got {test.count(marker)}')
+          managed_test = '''it('routes mcptoon and GitNexus removal through the same approved uninstall flow', async () => {\n  const calls: string[][] = [];\n  const call: GuideCall = async <T>(args: readonly string[]) => {\n    calls.push([...args]);\n    return envelope<T>('uninstall', null, 8, [\n      diagnostic({\n        severity: 'error',\n        code: 'confirmation-required',\n        message: 'This would remove one owned change',\n        remediation: 'Re-run with --yes',\n      }),\n    ]);\n  };\n\n  for (const provider of [MCPTOON, GITNEXUS]) {\n    const service = new GuideService(call, () => 0, () => `remove-${provider}`);\n    const preview = await service.preview({ action: 'remove', provider });\n    assert.equal(preview.network, false);\n    assert.equal(preview.restart, true);\n    assert.match(preview.title, new RegExp(provider === MCPTOON ? 'mcptoon' : 'GitNexus', 'i'));\n  }\n\n  assert.deepEqual(calls, [\n    ['uninstall', '--provider', 'mcptoon'],\n    ['uninstall', '--provider', 'gitnexus'],\n  ]);\n  assert.ok(calls.every((args) => !args.includes('--yes')));\n});\n\n'''
+          test = test.replace(marker, managed_test + marker, 1)
+          test_path.write_text(test)
+          PY
+      - name: Format intended product files
+        run: >-
+          pnpm exec prettier --write
+          packages/adapters/src/providers/index.ts
+          packages/adapters/src/providers/managed-optimization-tools.ts
+          packages/adapters/src/providers/mcptoon-provider.ts
+          packages/adapters/src/providers/gitnexus-provider.ts
+          packages/adapters/test/managed-provider-lifecycle.test.ts
+          packages/core/src/metrics/optimization-stack.ts
+          apps/cli/src/guided.ts
+          apps/cli/test/guided-component-uninstall.test.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Run managed lifecycle and guided uninstall tests
+        run: pnpm exec tsx --test packages/adapters/test/managed-provider-lifecycle.test.ts apps/cli/test/guided-component-uninstall.test.ts
+      - name: Commit product changes
+        shell: bash
+        run: |
+          test -n "$(git status --porcelain -- apps/cli/src/guided.ts apps/cli/test/guided-component-uninstall.test.ts)"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            packages/adapters/src/providers/index.ts \
+            packages/adapters/src/providers/managed-optimization-tools.ts \
+            packages/adapters/src/providers/mcptoon-provider.ts \
+            packages/adapters/src/providers/gitnexus-provider.ts \
+            packages/adapters/test/managed-provider-lifecycle.test.ts \
+            packages/core/src/metrics/optimization-stack.ts \
+            apps/cli/src/guided.ts \
+            apps/cli/test/guided-component-uninstall.test.ts
+          git commit -m 'feat: wire managed providers into guided lifecycle'
+          git push origin HEAD:codex/managed-optimization-tools
