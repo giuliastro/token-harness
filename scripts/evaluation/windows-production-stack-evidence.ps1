@@ -35,6 +35,19 @@ function Protect-LocalPath {
   return $protected
 }
 
+function Resolve-EvidenceExecutable {
+  param(
+    [Parameter(Mandatory = $true)][string]$LogicalName,
+    [Parameter(Mandatory = $true)][string]$DefaultExecutable,
+    [hashtable]$ExecutableOverrides = @{}
+  )
+
+  if ($null -ne $ExecutableOverrides -and $ExecutableOverrides.ContainsKey($LogicalName)) {
+    return [string]$ExecutableOverrides[$LogicalName]
+  }
+  return $DefaultExecutable
+}
+
 function Invoke-CapturedCommand {
   param(
     [Parameter(Mandatory = $true)][string]$Name,
@@ -96,7 +109,8 @@ function Invoke-EvidenceCollection {
   param(
     [Parameter(Mandatory = $true)][string]$CollectionPhase,
     [Parameter(Mandatory = $true)][string]$CollectionRoot,
-    [bool]$UseFakePathTokenHarness = $false
+    [bool]$UseFakePathTokenHarness = $false,
+    [hashtable]$ExecutableOverrides = @{}
   )
 
   $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -111,44 +125,97 @@ function Invoke-EvidenceCollection {
     $tokenHarnessSource = 'local-bundle'
   }
   else {
-    $tokenHarnessExecutable = 'token-harness'
+    $tokenHarnessExecutable = Resolve-EvidenceExecutable -LogicalName 'token-harness' -DefaultExecutable 'token-harness' -ExecutableOverrides $ExecutableOverrides
     $tokenHarnessPrefix = @()
     $tokenHarnessSource = 'path'
   }
 
+  $rtkExecutable = Resolve-EvidenceExecutable -LogicalName 'rtk' -DefaultExecutable 'rtk' -ExecutableOverrides $ExecutableOverrides
+  $harnessTrimExecutable = Resolve-EvidenceExecutable -LogicalName 'harnesstrim' -DefaultExecutable 'harnesstrim' -ExecutableOverrides $ExecutableOverrides
+  $claudeExecutable = Resolve-EvidenceExecutable -LogicalName 'claude' -DefaultExecutable 'claude' -ExecutableOverrides $ExecutableOverrides
+  $codexExecutable = Resolve-EvidenceExecutable -LogicalName 'codex' -DefaultExecutable 'codex' -ExecutableOverrides $ExecutableOverrides
+
   $results = @()
-  $results += Invoke-CapturedCommand -Name 'rtk-version' -Executable 'rtk' -Arguments @('--version') -DestinationDirectory $destination
-  $results += Invoke-CapturedCommand -Name 'harnesstrim-version' -Executable 'harnesstrim' -Arguments @('--version') -DestinationDirectory $destination
-  $results += Invoke-CapturedCommand -Name 'harnesstrim-capabilities' -Executable 'harnesstrim' -Arguments @('capabilities') -DestinationDirectory $destination
-  $results += Invoke-CapturedCommand -Name 'claude-version' -Executable 'claude' -Arguments @('--version') -DestinationDirectory $destination -Required $false
-  $results += Invoke-CapturedCommand -Name 'codex-version' -Executable 'codex' -Arguments @('--version') -DestinationDirectory $destination -Required $false
+  $results += Invoke-CapturedCommand -Name 'rtk-version' -Executable $rtkExecutable -Arguments @('--version') -DestinationDirectory $destination
+  $results += Invoke-CapturedCommand -Name 'harnesstrim-version' -Executable $harnessTrimExecutable -Arguments @('--version') -DestinationDirectory $destination
+  $results += Invoke-CapturedCommand -Name 'harnesstrim-capabilities' -Executable $harnessTrimExecutable -Arguments @('capabilities') -DestinationDirectory $destination
+  $results += Invoke-CapturedCommand -Name 'claude-version' -Executable $claudeExecutable -Arguments @('--version') -DestinationDirectory $destination -Required $false
+  $results += Invoke-CapturedCommand -Name 'codex-version' -Executable $codexExecutable -Arguments @('--version') -DestinationDirectory $destination -Required $false
   $results += Invoke-CapturedCommand -Name 'token-harness-doctor' -Executable $tokenHarnessExecutable -Arguments @($tokenHarnessPrefix + @('doctor', '--verbose')) -DestinationDirectory $destination
   $results += Invoke-CapturedCommand -Name 'token-harness-verify' -Executable $tokenHarnessExecutable -Arguments @($tokenHarnessPrefix + @('verify', '--verbose')) -DestinationDirectory $destination
   $results += Invoke-CapturedCommand -Name 'token-harness-stack-review' -Executable $tokenHarnessExecutable -Arguments @($tokenHarnessPrefix + @('stack-review', '--json')) -DestinationDirectory $destination
 
   $requiredFailures = @($results | Where-Object { $_.required -and $_.status -ne 'success' })
   $availableHarnesses = @($results | Where-Object { $_.name -in @('claude-version', 'codex-version') -and $_.status -eq 'success' })
-  $complete = $requiredFailures.Count -eq 0 -and $availableHarnesses.Count -gt 0
+  $blockingFailures = @($requiredFailures | ForEach-Object {
+      [ordered]@{
+        name = $_.name
+        status = $_.status
+        exitCode = $_.exitCode
+      }
+    })
+  $availableHarnessNames = @($availableHarnesses | ForEach-Object { $_.name -replace '-version$', '' })
+  $complete = $blockingFailures.Count -eq 0 -and $availableHarnessNames.Count -gt 0
 
   $manifest = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     phase = $CollectionPhase
     capturedAt = (Get-Date).ToUniversalTime().ToString('o')
     nativeWindows = $true
     tokenHarnessSource = $tokenHarnessSource
     complete = $complete
+    blockingFailures = $blockingFailures
+    availableHarnesses = $availableHarnessNames
     commands = $results
     interpretationBoundary = 'This collector is read-only evidence capture. It does not install or update providers, exercise RTK/HarnessTrim, create receipts, or admit a compatibility row. Run before and after real qualifying operations and review the resulting evidence separately.'
   }
 
   $manifestPath = Join-Path $destination 'manifest.json'
   $manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $manifestPath
+  if (-not (Test-Path -LiteralPath $manifestPath)) {
+    throw "Evidence manifest was not created at: $manifestPath"
+  }
+  $resolvedManifestPath = (Resolve-Path -LiteralPath $manifestPath).Path
+  $resolvedDestination = (Resolve-Path -LiteralPath $destination).Path
 
   [pscustomobject]@{
-    destination = $destination
+    destination = $resolvedDestination
+    manifestPath = $resolvedManifestPath
     complete = $complete
     manifest = $manifest
   }
+}
+
+function Write-CollectionSummary {
+  param([Parameter(Mandatory = $true)]$Capture)
+
+  Write-Host "Evidence directory: $($Capture.destination)"
+  Write-Host "Manifest: $($Capture.manifestPath)"
+
+  if ($Capture.complete) {
+    Write-Host 'Evidence capture: COMPLETE'
+    return
+  }
+
+  Write-Warning 'Evidence capture: INCOMPLETE'
+  $blockingFailures = @($Capture.manifest.blockingFailures)
+  if ($blockingFailures.Count -gt 0) {
+    Write-Host 'Blocking required commands:'
+    foreach ($failure in $blockingFailures) {
+      $exitSuffix = if ($null -eq $failure.exitCode) { '' } else { " (exit $($failure.exitCode))" }
+      Write-Host "  - $($failure.name): $($failure.status)$exitSuffix"
+    }
+  }
+
+  $availableHarnesses = @($Capture.manifest.availableHarnesses)
+  if ($availableHarnesses.Count -eq 0) {
+    Write-Host '  - coding-harness: missing (Claude Code or Codex is required)'
+  }
+  else {
+    Write-Host "Detected coding harnesses: $($availableHarnesses -join ', ')"
+  }
+
+  Write-Host 'No extra diagnostic command is required; the manifest already contains the full command results.'
 }
 
 function Invoke-SelfTest {
@@ -167,11 +234,21 @@ exit /b 0
 "@
       Set-Content -Encoding ascii -Path (Join-Path $bin "$tool.cmd") -Value $body
     }
+    $failingRtk = Join-Path $bin 'rtk-fail.cmd'
+    @"
+@echo off
+echo intentional RTK failure
+exit /b 7
+"@ | Set-Content -Encoding ascii -Path $failingRtk
+
     $env:PATH = "$bin;$originalPath"
 
     $capture = Invoke-EvidenceCollection -CollectionPhase 'before' -CollectionRoot $evidence -UseFakePathTokenHarness $true
     if (-not $capture.complete) {
-      throw 'self-test capture should be complete'
+      throw 'self-test complete capture should be complete'
+    }
+    if (-not (Test-Path -LiteralPath $capture.manifestPath)) {
+      throw 'self-test complete capture manifest should exist'
     }
     if ($capture.manifest.commands.Count -ne 8) {
       throw "self-test expected 8 command receipts, got $($capture.manifest.commands.Count)"
@@ -202,6 +279,36 @@ exit /b 0
       }
     }
 
+    $missingExecutable = "token-harness-selftest-missing-$([guid]::NewGuid().ToString('N'))"
+    $missingCapture = Invoke-EvidenceCollection -CollectionPhase 'before' -CollectionRoot $evidence -UseFakePathTokenHarness $true -ExecutableOverrides @{ harnesstrim = $missingExecutable }
+    if ($missingCapture.complete) {
+      throw 'self-test missing-required capture should be incomplete'
+    }
+    if (-not (Test-Path -LiteralPath $missingCapture.manifestPath)) {
+      throw 'self-test missing-required capture must still write manifest.json'
+    }
+    $missingManifest = Get-Content -LiteralPath $missingCapture.manifestPath -Raw | ConvertFrom-Json
+    if ($missingManifest.schemaVersion -ne 2 -or $missingManifest.complete) {
+      throw 'self-test missing-required manifest state is invalid'
+    }
+    $missingNames = @($missingManifest.blockingFailures | ForEach-Object { $_.name })
+    if ($missingNames.Count -ne 2 -or 'harnesstrim-version' -notin $missingNames -or 'harnesstrim-capabilities' -notin $missingNames) {
+      throw 'self-test missing-required blockers were not recorded correctly'
+    }
+
+    $failedCapture = Invoke-EvidenceCollection -CollectionPhase 'after' -CollectionRoot $evidence -UseFakePathTokenHarness $true -ExecutableOverrides @{ rtk = $failingRtk }
+    if ($failedCapture.complete) {
+      throw 'self-test failed-required capture should be incomplete'
+    }
+    if (-not (Test-Path -LiteralPath $failedCapture.manifestPath)) {
+      throw 'self-test failed-required capture must still write manifest.json'
+    }
+    $failedManifest = Get-Content -LiteralPath $failedCapture.manifestPath -Raw | ConvertFrom-Json
+    $rtkFailure = @($failedManifest.blockingFailures | Where-Object { $_.name -eq 'rtk-version' })
+    if ($rtkFailure.Count -ne 1 -or $rtkFailure[0].status -ne 'failed' -or $rtkFailure[0].exitCode -ne 7) {
+      throw 'self-test failed-required blocker was not recorded with exit code 7'
+    }
+
     Write-Host 'windows production-stack evidence collector self-test: PASS'
   }
   finally {
@@ -216,8 +323,7 @@ if ($SelfTest) {
 }
 
 $capture = Invoke-EvidenceCollection -CollectionPhase $Phase -CollectionRoot $OutputRoot
-Write-Host "Evidence written to: $($capture.destination)"
+Write-CollectionSummary -Capture $capture
 if (-not $capture.complete) {
-  Write-Warning 'Evidence is incomplete. Review manifest.json for missing/failed required commands and ensure at least one supported coding harness is installed.'
   exit 2
 }
