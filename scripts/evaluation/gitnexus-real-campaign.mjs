@@ -12,6 +12,12 @@ const MAX_ATTEMPTS = 2;
 const MAX_TURNS = '6';
 const MAX_BUDGET_USD = '0.50';
 const MODEL = process.env.GITNEXUS_CAMPAIGN_MODEL?.trim() || 'sonnet';
+const COMBINED_STACK_BOUNDARY = Object.freeze({
+  state: 'not-collected',
+  providers: ['rtk', 'harnesstrim'],
+  reason:
+    'RTK and HarnessTrim are not installed or activated by this evaluation runner; this campaign does not validate the combined production stack on Claude Code 2.1.269.',
+});
 const TASK_SUFFIX = { mechanical: 'm', standard: 's', hard: 'h', critical: 'c' };
 
 const TASKS = [
@@ -479,6 +485,7 @@ async function writeSummary(report) {
     `- Quality-passed pairs: ${String(qualityPairs)}/${String(report.pairs.length)}`,
     `- Optimized pairs with real mcp__gitnexus__* use: ${String(optimizedUsed)}/${String(report.pairs.length)}`,
     `- Index preparation cost: ${String(report.index.indexWallClockMs)} ms (kept separate from task savings)`,
+    `- Combined RTK + HarnessTrim evidence: ${report.combinedProductionStackEvidence.state}`,
     '',
     'MCP availability and actual tool use are reported separately. API/headless usage is not Claude Pro 5h/7d quota evidence.',
     '',
@@ -543,6 +550,9 @@ async function selfTest() {
   }
   if (availabilityOnly.gitnexusServer === null || availabilityOnly.gitnexusUsed) {
     throw new Error('self-test: MCP availability was confused with actual tool use');
+  }
+  if (COMBINED_STACK_BOUNDARY.state !== 'not-collected') {
+    throw new Error('self-test: combined production-stack boundary is not fail-closed');
   }
   const answer = validateAnswer(optimized, TASKS[0]);
   if (!answer.passed) throw new Error(`self-test: valid answer rejected: ${answer.reason}`);
@@ -688,9 +698,9 @@ async function main() {
       gitnexusVersion,
       modelSetting: MODEL,
       observedModel,
-      productionStack: ['rtk', 'harnesstrim'],
       authentication: process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'subscription-oauth' : 'api-key',
     },
+    combinedProductionStackEvidence: COMBINED_STACK_BOUNDARY,
     index,
     pairs,
     actualUseWitness: {
@@ -700,7 +710,7 @@ async function main() {
     },
     tokenHarnessMatrix: matrix,
     interpretationBoundary:
-      'Headless/API usage and cost are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings.',
+      'Headless/API usage and cost are evaluation evidence only and are not Claude Pro five-hour or seven-day subscription-quota savings. This run does not validate the combined RTK + HarnessTrim production stack on Claude Code 2.1.269.',
   };
   await writeFile(join(artifactRoot, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   await writeSummary(report);
@@ -711,6 +721,7 @@ async function main() {
       qualityPassedPairs: pairs.filter((pair) => pair.baseline.passed && pair.optimized.passed)
         .length,
       optimizedPairsWithGitNexusUse: report.actualUseWitness.optimizedPairsWithGitNexusUse,
+      combinedProductionStackEvidence: report.combinedProductionStackEvidence.state,
       observedModel,
       report: join(artifactRoot, 'report.json'),
     })}\n`,
