@@ -2,7 +2,7 @@
 
 Current focus: run the first real GitNexus selection campaign on the single reviewed Claude/Linux tuple, without changing the production stack.
 
-- Current `main`: `3d7f8476b9482b9ea7bbfd03d6cdaac216db4861` after PR #296.
+- Latest runtime-changing `main`: `3d7f8476b9482b9ea7bbfd03d6cdaac216db4861` after PR #296. PR #297 (`b037b06ae69e45100353b420856c6ea8fc57ab05`) is documentation-only and records this handoff; its PR CI run `35012471427` and post-merge `main` CI run `35012690122` were green on Ubuntu, macOS and Windows, including the Windows RTK live smoke, build, bundle/package and install smoke. Future documentation-only handoffs do not invalidate this runtime checkpoint.
 - PR #296 closed the distinction between GitNexus MCP availability and real task usage, added the reproducible real-campaign runbook, and aligned the README to the only reviewed Claude campaign row. Final PR CI run `35011878843` and post-merge `main` CI run `35012170874` were green on Ubuntu, macOS and Windows, including the Windows RTK live smoke, build, bundle/package and install smoke.
 - Current release: `0.1.11`; release PR #275 merged after full Ubuntu, macOS and Windows CI.
 - Managed production stack remains RTK + HarnessTrim.
