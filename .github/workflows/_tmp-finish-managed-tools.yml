@@ -21,54 +21,318 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Persist guided lifecycle integration
+      - name: Finish managed-tool product integration
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('apps/cli/src/guided.ts')
-          text = path.read_text()
+          def load(path):
+              return Path(path).read_text()
 
-          def replace_once(old, new):
-              global text
+          def save(path, text):
+              Path(path).write_text(text)
+
+          def replace_once(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f'expected exactly one match, got {count}: {old!r}')
-              text = text.replace(old, new, 1)
+                  raise SystemExit(f'{label}: expected exactly one match, got {count}')
+              return text.replace(old, new, 1)
 
-          replace_once(
+          # Guided service: expose both optional managed integrations in stack state,
+          # allow provider-scoped setup, and keep the default setup scoped to the baseline.
+          path = 'apps/cli/src/guided.ts'
+          text = load(path)
+          text = replace_once(
+              text,
               "  harnesstrim: 'HarnessTrim',\n};",
               "  harnesstrim: 'HarnessTrim',\n  mcptoon: 'mcptoon',\n  gitnexus: 'GitNexus',\n};",
+              'guided names',
           )
-          replace_once(
+          text = replace_once(
+              text,
               "  {\n    providerId: providerId('harnesstrim'),\n    displayName: 'HarnessTrim',\n    category: 'command-output-reduction',\n  },\n];",
               "  {\n    providerId: providerId('harnesstrim'),\n    displayName: 'HarnessTrim',\n    category: 'command-output-reduction',\n  },\n  {\n    providerId: providerId('mcptoon'),\n    displayName: 'mcptoon',\n    category: 'mcp-discovery',\n  },\n  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n];",
+              'guided stack components',
           )
-          replace_once(
+          text = replace_once(
+              text,
               "!['rtk', 'harnesstrim'].includes(String(data['provider']))",
               "!['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'].includes(String(data['provider']))",
+              'guided provider allow-list',
           )
-          path.write_text(text)
+          text = replace_once(
+              text,
+              "      (data['action'] !== 'remove' && data['provider'] !== undefined)",
+              "      (data['provider'] !== undefined &&\n        data['action'] !== 'remove' &&\n        data['action'] !== 'setup')",
+              'guided provider action scope',
+          )
+          text = replace_once(
+              text,
+              "        const args = ['plan', '--harness', agent.harnessId];\n        if (data['action'] === 'skill') {",
+              "        const args = ['plan', '--harness', agent.harnessId];\n        if (data['action'] === 'setup' && data['provider'] !== undefined)\n          args.push('--provider', String(data['provider']));\n        if (data['action'] === 'skill') {",
+              'guided provider plan args',
+          )
+          save(path, text)
 
-          test_path = Path('apps/cli/test/guided-component-uninstall.test.ts')
-          test = test_path.read_text()
-          anchor = "const RTK = providerId('rtk');\n"
-          if test.count(anchor) != 1:
-              raise SystemExit(f'expected one RTK constant, got {test.count(anchor)}')
-          test = test.replace(
-              anchor,
-              anchor + "const MCPTOON = providerId('mcptoon');\nconst GITNEXUS = providerId('gitnexus');\n",
-              1,
+          # Planner: optional capability-less integrations require an explicit provider selection.
+          # When an absent provider has one exact pinned package install, use that exact planned
+          # post-install version for RFC 0009 admission instead of failing on observed null.
+          path = 'apps/cli/src/commands/plan.ts'
+          text = load(path)
+          helper = '''export function providerVersionForManagedAdmission(\n  observedVersion: string | null,\n  actions: readonly PlannedAction[],\n): string | null {\n  if (observedVersion !== null) return observedVersion;\n\n  const plannedVersions = new Set<string>();\n  for (const action of actions) {\n    if (action.kind !== 'package-manager-install' || action.version === null) continue;\n    plannedVersions.add(action.version);\n  }\n  return plannedVersions.size === 1 ? ([...plannedVersions][0] ?? null) : null;\n}\n\n'''
+          text = replace_once(
+              text,
+              'export async function computePlan(context: CommandContext): Promise<ComputedPlan> {',
+              helper + 'export async function computePlan(context: CommandContext): Promise<ComputedPlan> {',
+              'planned provider admission helper',
+          )
+          text = replace_once(
+              text,
+              "      const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);\n      if (owned.length === 0 && adapter.plansWithoutOwnership !== true) continue;",
+              "      const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);\n      const mayPlanWithoutOwnership =\n        adapter.plansWithoutOwnership === true &&\n        (adapter.manifest.capabilities.length > 0 || context.provider === adapter.manifest.id);\n      if (owned.length === 0 && !mayPlanWithoutOwnership) continue;",
+              'explicit optional provider planning',
+          )
+          text = replace_once(
+              text,
+              "      if (providerPlan.actions.length === 0) continue;\n\n      /**\n       * RFC 0009 §Compatibility matrix — the managed-mutation gate.",
+              "      if (providerPlan.actions.length === 0) continue;\n\n      const admissionProviderVersion = providerVersionForManagedAdmission(\n        versions.providers[adapter.manifest.id] ?? null,\n        providerPlan.actions,\n      );\n\n      /**\n       * RFC 0009 §Compatibility matrix — the managed-mutation gate.",
+              'admission provider version',
+          )
+          text = replace_once(
+              text,
+              "          providerVersion: versions.providers[adapter.manifest.id] ?? null,\n          harness,",
+              "          providerVersion: admissionProviderVersion,\n          harness,",
+              'admission call version',
+          )
+          text = replace_once(
+              text,
+              "            providerVersion: versions.providers[adapter.manifest.id] ?? null,\n            harness,",
+              "            providerVersion: admissionProviderVersion,\n            harness,",
+              'blocked report version',
+          )
+          save(path, text)
+
+          # Registry tests: new integrations are real registry entries, but zero metrics/capabilities
+          # are valid for integrations that make no savings claim. Keep stronger baseline guarantees
+          # specifically on RTK + HarnessTrim.
+          path = 'packages/adapters/test/registries.test.ts'
+          text = load(path)
+          text = replace_once(
+              text,
+              "      ['rtk', 'harnesstrim'],",
+              "      ['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'],",
+              'registry ids',
+          )
+          text = replace_once(
+              text,
+              "    assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);\n    assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);\n    assert.equal(findProviderAdapter('dejavu' as ProviderId), null);",
+              "    assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);\n    assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);\n    assert.notEqual(findProviderAdapter('mcptoon' as ProviderId), null);\n    assert.notEqual(findProviderAdapter('gitnexus' as ProviderId), null);\n    assert.equal(findProviderAdapter('headroom' as ProviderId), null);\n    assert.equal(findProviderAdapter('dejavu' as ProviderId), null);",
+              'registry lookup',
+          )
+          text = replace_once(
+              text,
+              "      assert.ok(manifest.capabilities.length > 0, 'no capabilities declared');\n      // RFC 0003 §Rule: an assignment \"requires a demonstrated capability ... evidenced\n",
+              "      // RFC 0003 §Rule: an assignment \"requires a demonstrated capability ... evidenced\n",
+              'generic capability nonempty guard',
+          )
+          text = replace_once(
+              text,
+              "      // PLAN §10: \"do not parse human `rtk gain` output when JSON is available.\"\n      assert.notEqual(manifest.metrics.source, 'none');\n      assert.equal(typeof adapter.detect, 'function');",
+              "      assert.equal(typeof adapter.detect, 'function');",
+              'generic metrics nonnone guard',
+          )
+          marker = "  it('only registers ids from the managed set', () => {"
+          baseline_test = '''  it('keeps RTK and HarnessTrim as the evidence-bearing production baseline', () => {\n    for (const id of ['rtk', 'harnesstrim']) {\n      const adapter = findProviderAdapter(id as ProviderId);\n      assert.notEqual(adapter, null);\n      assert.ok(adapter!.manifest.capabilities.length > 0, `${id} declares no capabilities`);\n      assert.notEqual(adapter!.manifest.metrics.source, 'none', `${id} declares no metrics source`);\n    }\n  });\n\n'''
+          text = replace_once(text, marker, baseline_test + marker, 'baseline registry test')
+          save(path, text)
+
+          # Distribution 0.1.x promises a baseline, not an exclusive provider count.
+          path = 'tests/integration/distribution.test.ts'
+          text = load(path)
+          text = replace_once(
+              text,
+              "    // Two providers and five harnesses, by id rather than by count, so adding a sixth of\n    // something does not silently satisfy the gate.\n    assert.deepEqual(\n      listProviderAdapters().map((adapter) => adapter.manifest.id),\n      ['rtk', 'harnesstrim'],\n      'PLAN §16 requires RTK and HarnessTrim for 0.1.0',\n    );",
+              "    // RTK and HarnessTrim are the 0.1.x production baseline. Additive opt-in integrations\n    // do not invalidate that claim, but neither may they substitute for either baseline provider.\n    const providerIds = listProviderAdapters().map((adapter) => adapter.manifest.id);\n    for (const id of ['rtk', 'harnesstrim'])\n      assert.ok(\n        providerIds.some((provider) => provider === id),\n        `PLAN §16 requires ${id} for 0.1.0`,\n      );",
+              'distribution baseline providers',
+          )
+          text = replace_once(
+              text,
+              "      // Metrics from both providers, so the report can carry two measurement classes.\n      assert.notEqual(adapter.manifest.metrics.source, 'none');\n    }",
+              "    }\n    for (const adapter of listProviderAdapters()) {\n      if (adapter.manifest.id !== 'rtk' && adapter.manifest.id !== 'harnesstrim') continue;\n      // Metrics are a production-baseline promise. Optional integrations may explicitly expose\n      // `none` until they have attributable measurements rather than inventing a savings source.\n      assert.notEqual(adapter.manifest.metrics.source, 'none');\n    }",
+              'distribution metrics baseline',
+          )
+          save(path, text)
+
+          # Primary novice UI: keep baseline setup simple, surface mcptoon/GitNexus as optional
+          # provider-scoped managed integrations, and leave Headroom as the only unmanaged candidate.
+          path = 'apps/cli/src/guided-product-client.ts'
+          text = load(path)
+          text = replace_once(
+              text,
+              "    harnesstrim: {\n      name: 'HarnessTrim',\n      role: 'Adds reviewed instructions that help coding agents keep tool output and context lean.',\n      managed: true,\n    },\n  };",
+              "    harnesstrim: {\n      name: 'HarnessTrim',\n      role: 'Adds reviewed instructions that help coding agents keep tool output and context lean.',\n      managed: true,\n    },\n    mcptoon: {\n      name: 'mcptoon',\n      role: 'Provides the reviewed compact MCP discovery integration on exact admitted versions.',\n      managed: true,\n      optional: true,\n    },\n    gitnexus: {\n      name: 'GitNexus',\n      role: 'Registers an already-installed reviewed GitNexus CLI as a narrow Claude MCP integration.',\n      managed: true,\n      optional: true,\n    },\n  };",
+              'product tool info',
+          )
+          start = text.index("    {\n      id: 'mcptoon',")
+          end = text.index("  ];\n  const CATEGORY", start)
+          text = text[:start] + text[end:]
+          text = replace_once(
+              text,
+              "    title.append(node('h3', info.name), node('span', 'Managed by Token Harness', 'caption'));",
+              "    title.append(\n      node('h3', info.name),\n      node('span', info.optional ? 'Optional managed integration' : 'Production baseline', 'caption'),\n    );",
+              'managed tool caption',
+          )
+          text = replace_once(
+              text,
+              "  function reviewSetup(agentId) {\n    if (busy) return;\n    const agent = activeAgents().find(item => item.id === agentId);\n    if (!agent) return;\n    const run = modal('Review managed setup for ' + agent.name);",
+              "  function reviewSetup(agentId, providerId = null) {\n    if (busy) return;\n    const agent = activeAgents().find(item => item.id === agentId);\n    if (!agent) return;\n    const provider = providerId ? TOOL_INFO[providerId] : null;\n    if (providerId && !provider) return;\n    const run = modal(\n      provider ? 'Review ' + provider.name + ' for ' + agent.name : 'Review managed setup for ' + agent.name,\n    );",
+              'provider scoped review function',
+          )
+          text = replace_once(
+              text,
+              "      messageBox('What this checks', 'RTK and HarnessTrim are the two managed optimization tools in this build. Token Harness will inspect both for ' + agent.name + ' and propose only compatible changes.'),",
+              "      messageBox(\n        'What this checks',\n        provider\n          ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + ' and propose a change only on an exact reviewed compatibility row.'\n          : 'RTK and HarnessTrim are the production baseline. Token Harness will inspect both for ' + agent.name + ' and propose only compatible changes.',\n      ),",
+              'provider scoped review explanation',
+          )
+          text = replace_once(
+              text,
+              "    $('modal-actions').append(modalClose('Cancel'));\n    setBusy(true, false);\n    ensureSession()\n      .then(() => request('/api/preview', { action: 'setup', harness: agentId }))",
+              "    if (providerId === 'gitnexus')\n      $('modal-content').append(\n        messageBox(\n          'License boundary',\n          'GitNexus 1.6.12 is reviewed technically but carries PolyForm Noncommercial terms. Token Harness does not install or index it. Continue only when those terms fit your use.',\n          'warn',\n        ),\n      );\n    $('modal-actions').append(modalClose('Cancel'));\n    setBusy(true, false);\n    ensureSession()\n      .then(() =>\n        request('/api/preview', {\n          action: 'setup',\n          harness: agentId,\n          ...(providerId ? { provider: providerId } : {}),\n        }),\n      )",
+              'provider scoped preview request',
+          )
+          text = replace_once(
+              text,
+              "        $('modal-content').append(messageBox('Managed stack', 'This review covers RTK and HarnessTrim only. Experimental tools are never installed or activated by this action.'));",
+              "        $('modal-content').append(\n          messageBox(\n            'Managed scope',\n            provider\n              ? provider.name + ' is reviewed separately from the RTK + HarnessTrim production baseline. This approval changes only the provider-scoped plan shown below.'\n              : 'This review covers the RTK + HarnessTrim production baseline only. Optional managed integrations are reviewed separately.',\n          ),\n        );",
+              'provider scoped result explanation',
+          )
+          text = replace_once(
+              text,
+              "  function renderManagedSetup() {\n    $('managed-tools').replaceChildren(renderManagedTool('rtk'), renderManagedTool('harnesstrim'));",
+              "  function renderManagedSetup() {\n    $('managed-tools').replaceChildren(\n      renderManagedTool('rtk'),\n      renderManagedTool('harnesstrim'),\n      renderManagedTool('mcptoon'),\n      renderManagedTool('gitnexus'),\n    );",
+              'render four managed tools',
+          )
+          text = replace_once(
+              text,
+              "    for (const agent of activeAgents())\n      buttons.append(actionButton('Review setup for ' + agent.name, () => reviewSetup(agent.id)));\n    actions.append(buttons);\n  }",
+              "    for (const agent of activeAgents())\n      buttons.append(actionButton('Review baseline for ' + agent.name, () => reviewSetup(agent.id)));\n    actions.append(buttons);\n\n    const optional = node('div', undefined, 'managed-optional');\n    optional.append(\n      node(\n        'p',\n        'Optional managed integrations are reviewed one at a time. They do not become part of the RTK + HarnessTrim production baseline and they make no savings claim by being enabled.',\n        'caption',\n      ),\n    );\n    const optionalButtons = node('div', undefined, 'inline-actions');\n    for (const agent of activeAgents()) {\n      optionalButtons.append(\n        actionButton('Review mcptoon for ' + agent.name, () => reviewSetup(agent.id, 'mcptoon'), 'secondary'),\n      );\n      if (agent.id === 'claude')\n        optionalButtons.append(\n          actionButton('Review GitNexus for ' + agent.name, () => reviewSetup(agent.id, 'gitnexus'), 'secondary'),\n        );\n    }\n    optional.append(optionalButtons);\n    actions.append(optional);\n  }",
+              'optional managed buttons',
+          )
+          save(path, text)
+
+          # Product HTML copy follows the same boundary and removes stale candidate wording.
+          path = 'apps/cli/src/guided-assets.ts'
+          text = load(path)
+          text = replace_once(
+              text,
+              'Start with your coding agent and the two managed optimizers. Experimental tools are optional and stay outside the active stack until they earn promotion.',
+              'Start with your coding agent and the RTK + HarnessTrim production baseline. Optional managed integrations are reviewed separately; unmanaged experiments stay outside the active stack.',
+              'setup intro copy',
+          )
+          text = replace_once(
+              text,
+              'These are the optimizers Token Harness can configure transactionally today: RTK and HarnessTrim. Setup is reviewed before anything is written.',
+              'RTK and HarnessTrim are the production baseline. mcptoon and GitNexus also expose narrow optional managed integrations on exact reviewed rows. Every setup is reviewed before anything is written.',
+              'managed optimizer copy',
+          )
+          text = replace_once(
+              text,
+              '<div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>RTK</h3><p>Checking…</p></article><article class="tool-card"><h3>HarnessTrim</h3><p>Checking…</p></article></div>',
+              '<div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking managed optimizers…</h3></article></div>',
+              'managed placeholders',
+          )
+          text = replace_once(
+              text,
+              'Removal is reviewed first. Token Harness removes only changes it owns; provider installations remain user-owned.',
+              'Removal is reviewed first. Token Harness removes only configuration changes it owns; an installed provider CLI may remain.',
+              'managed removal copy',
+          )
+          text = replace_once(
+              text,
+              'Headroom, mcptoon and GitNexus are being evaluated. Token Harness can detect and benchmark them, but does not silently install or activate them.',
+              'Headroom remains an unmanaged experiment. Token Harness can detect and benchmark it, but does not silently install or activate it.',
+              'experimental copy',
+          )
+          save(path, text)
+
+          # Guided behavior coverage for provider-scoped setup and managed removal.
+          path = 'apps/cli/test/guided.test.ts'
+          text = load(path)
+          marker = "  it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {"
+          scoped_test = '''  it('scopes optional managed setup to the explicitly selected provider', async () => {\n    const { service, calls } = fixture({ ids: ['claude'] });\n    const preview = await service.preview({\n      action: 'setup',\n      harness: 'claude',\n      provider: 'gitnexus',\n    });\n    assert.notEqual(preview.ticket, null);\n    assert.deepEqual(\n      calls.find((args) => args[0] === 'plan'),\n      ['plan', '--harness', 'claude', '--provider', 'gitnexus'],\n    );\n  });\n\n'''
+          text = replace_once(text, marker, scoped_test + marker, 'guided provider setup test')
+          save(path, text)
+
+          path = 'apps/cli/test/guided-component-uninstall.test.ts'
+          text = load(path)
+          text = replace_once(
+              text,
+              "const RTK = providerId('rtk');\n",
+              "const RTK = providerId('rtk');\nconst MCPTOON = providerId('mcptoon');\nconst GITNEXUS = providerId('gitnexus');\n",
+              'uninstall provider constants',
           )
           marker = "it('does not offer an approval when the provider has no Token Harness-owned change', async () => {"
-          if test.count(marker) != 1:
-              raise SystemExit(f'expected one insertion marker, got {test.count(marker)}')
           managed_test = '''it('routes mcptoon and GitNexus removal through the same approved uninstall flow', async () => {\n  const calls: string[][] = [];\n  const call: GuideCall = async <T>(args: readonly string[]) => {\n    calls.push([...args]);\n    return envelope<T>('uninstall', null, 8, [\n      diagnostic({\n        severity: 'error',\n        code: 'confirmation-required',\n        message: 'This would remove one owned change',\n        remediation: 'Re-run with --yes',\n      }),\n    ]);\n  };\n\n  for (const provider of [MCPTOON, GITNEXUS]) {\n    const service = new GuideService(call, () => 0, () => `remove-${provider}`);\n    const preview = await service.preview({ action: 'remove', provider });\n    assert.equal(preview.network, false);\n    assert.equal(preview.restart, true);\n    assert.match(preview.title, new RegExp(provider === MCPTOON ? 'mcptoon' : 'GitNexus', 'i'));\n  }\n\n  assert.deepEqual(calls, [\n    ['uninstall', '--provider', 'mcptoon'],\n    ['uninstall', '--provider', 'gitnexus'],\n  ]);\n  assert.ok(calls.every((args) => !args.includes('--yes')));\n});\n\n'''
-          test = test.replace(marker, managed_test + marker, 1)
-          test_path.write_text(test)
+          text = replace_once(text, marker, managed_test + marker, 'managed removal test')
+          save(path, text)
+
+          # Pure fail-closed admission coverage for absent-but-pinned provider installs.
+          Path('apps/cli/test/provider-version-admission.test.ts').write_text('''import assert from 'node:assert/strict';\nimport { it } from 'node:test';\n\nimport type { PlannedAction } from '@token-harness/core';\nimport { providerVersionForManagedAdmission } from '../src/commands/plan.js';\n\nfunction install(id: string, version: string | null): PlannedAction {\n  return {\n    kind: 'package-manager-install',\n    id,\n    riskClass: 'reversible',\n    requiresNetwork: true,\n    requiresElevation: false,\n    affectedPaths: [],\n    affectedProcesses: ['pipx'],\n    preconditions: [],\n    postconditions: [],\n    rollbackData: 'package-inventory',\n    explanation: 'test install',\n    packageManager: 'pipx',\n    packageName: 'mcptoon',\n    version,\n  };\n}\n\nit('uses the observed provider version when one is already installed', () => {\n  assert.equal(\n    providerVersionForManagedAdmission('0.7.9', [install('new', '0.7.10')]),\n    '0.7.9',\n  );\n});\n\nit('admits against one exact planned install version when the provider is absent', () => {\n  assert.equal(providerVersionForManagedAdmission(null, [install('new', '0.7.10')]), '0.7.10');\n});\n\nit('fails closed for unpinned or ambiguous planned installs', () => {\n  assert.equal(providerVersionForManagedAdmission(null, [install('unpinned', null)]), null);\n  assert.equal(\n    providerVersionForManagedAdmission(null, [install('one', '0.7.10'), install('two', '0.7.11')]),\n    null,\n  );\n});\n''')
+
+          # README: distinguish production baseline from optional managed integrations and Headroom.
+          path = 'README.md'
+          text = load(path)
+          text = replace_once(
+              text,
+              "The managed stack currently consists of **RTK + HarnessTrim** on individually reviewed\ncombinations. Token Harness tracks the exact combined provider set separately: if no combined-stack\nreview is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility\nfrom healthy individual checks. Token Harness can prepare their integration transactionally, show the\nexact plan, apply it only after approval, verify it, and remove only configuration it owns.",
+              "**RTK + HarnessTrim remain the production baseline** on individually reviewed combinations.\nToken Harness also exposes **mcptoon** and **GitNexus** as optional managed integrations on their exact\nreviewed rows; they are reviewed one at a time and do not become part of the production baseline merely\nby being enabled. mcptoon may install the exact reviewed 0.7.10 build through an already-available\n`pipx`; Token Harness never bootstraps Python or pipx. GitNexus is configuration-only: Token Harness may\nregister an already-installed exact 1.6.12 CLI for the reviewed Claude row, but it does not install or\nindex GitNexus, and its PolyForm Noncommercial terms still require an appropriate license decision.\nEvery managed change is previewed, transactional, compatibility-gated, and removable only where Token\nHarness has recorded ownership.",
+              'README managed stack',
+          )
+          text = replace_once(
+              text,
+              "Headroom, mcptoon and GitNexus are visible as candidates, not silently promoted dependencies. Their\ncards distinguish CLI installation, candidate-side activation/evaluation, Token Harness benchmark\nevidence and promotion-readiness gates. External install or activation commands are shown for\nreview; Token Harness does not silently execute package managers, activate wrappers, index\nrepositories or register MCP servers.",
+              "Headroom remains the unmanaged experimental tool in Setup. mcptoon and GitNexus keep their benchmark\nand promotion evidence, but their reviewed lifecycle is now surfaced under Managed optimizers as an\noptional provider-scoped action. That lifecycle support is not a savings claim or a production-stack\npromotion. Token Harness still never silently activates wrappers or indexes repositories.",
+              'README experimental tools',
+          )
+          text = replace_once(
+              text,
+              "| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Managed first-party integration |\n| [cclimits]",
+              "| [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Managed first-party integration |\n| mcptoon | MCP discovery / compact manifest guidance | Optional managed integration on exact reviewed 0.7.10 rows; no savings assumed |\n| GitNexus | Repository graph / MCP context | Optional managed Claude integration for already-installed 1.6.12; license review required |\n| [cclimits]",
+              'README stack table',
+          )
+          text = replace_once(
+              text,
+              "Current experimental candidates include Headroom, mcptoon and GitNexus. Detection or a promising\nbenchmark is not enough for promotion. Their campaign assessment is structured evidence for the\nselection gate, not an activation or promotion decision.",
+              "Headroom remains an unmanaged experimental candidate. mcptoon and GitNexus still retain candidate\nselection/promotion evidence even though their narrow reviewed lifecycle is available as an optional\nmanaged integration. Detection, lifecycle support or a promising benchmark is not enough for production\npromotion. Their campaign assessment is structured evidence for the selection gate, not an activation\nor promotion decision.",
+              'README candidate status',
+          )
+          save(path, text)
+
+          # Development handoff: this branch is now about concrete integration, not another baseline campaign.
+          path = 'docs/development-status.md'
+          text = load(path)
+          heading = '# Development status\n\n'
+          new_status = '''- 2026-09-16: current integration work moves mcptoon and GitNexus into the ordinary provider registry as **optional managed integrations without production-stack promotion**. RTK + HarnessTrim remain the production baseline. mcptoon uses the existing exact 0.7.10 pipx lifecycle and owned Claude/Codex guidance; an absent provider is admitted only against that exact pinned planned install version, never a guessed range. GitNexus uses only the already-reviewed exact 1.6.12 Claude MCP configuration/removal surface, is never auto-installed or indexed, and still carries the PolyForm Noncommercial license boundary. Headroom remains outside `PROVIDER_ADAPTERS` until a real reversible uv/Python lifecycle exists. The default novice setup remains RTK + HarnessTrim; mcptoon/GitNexus setup is provider-scoped and explicitly reviewed. No Claude/model campaign is part of this integration work.\nCurrent focus: finish the managed-tool PR with full cross-platform CI and merge only when green. Issue #255 remains open but is no longer blocking this feature work; do not ask for another RTK/HarnessTrim evidence campaign as part of this integration.\n\n'''
+          if not text.startswith(heading):
+              raise SystemExit('development status heading changed')
+          # Replace the old focus line as part of the first historical entry to avoid contradictory active focus.
+          text = text.replace(
+              'Current focus: keep the full GitNexus campaign manual and quota-safe; meanwhile complete issue #255 with real before/after evidence from the current RTK + HarnessTrim production stack on native Windows.\n\n',
+              '',
+              1,
+          )
+          text = heading + new_status + text[len(heading):]
+          text = text.replace(
+              '- mcptoon, GitNexus and Headroom remain candidates; none is promoted by this checkpoint.\n',
+              '- RTK + HarnessTrim remain the production baseline. mcptoon and GitNexus may expose optional reviewed managed lifecycle without becoming production-stack components; Headroom remains candidate-only.\n',
+              1,
+          )
+          save(path, text)
           PY
-      - name: Format intended product files
+      - name: Regenerate compatibility matrices
+        run: node tests/tools/matrices.mjs
+      - name: Format changed product files
         run: >-
           pnpm exec prettier --write
           packages/adapters/src/providers/index.ts
@@ -76,26 +340,31 @@ jobs:
           packages/adapters/src/providers/mcptoon-provider.ts
           packages/adapters/src/providers/gitnexus-provider.ts
           packages/adapters/test/managed-provider-lifecycle.test.ts
+          packages/adapters/test/registries.test.ts
           packages/core/src/metrics/optimization-stack.ts
+          apps/cli/src/commands/plan.ts
           apps/cli/src/guided.ts
+          apps/cli/src/guided-assets.ts
+          apps/cli/src/guided-product-client.ts
+          apps/cli/test/guided.test.ts
           apps/cli/test/guided-component-uninstall.test.ts
+          apps/cli/test/provider-version-admission.test.ts
+          tests/integration/distribution.test.ts
+          README.md
+          docs/development-status.md
+          docs/matrices.md
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm format:check
       - run: pnpm test
-      - name: Commit product changes
+      - run: pnpm build
+      - name: Commit product changes and remove temporary workflow
         shell: bash
         run: |
-          test -n "$(git status --porcelain -- apps/cli/src/guided.ts apps/cli/test/guided-component-uninstall.test.ts)"
+          test -n "$(git status --porcelain)"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add \
-            packages/adapters/src/providers/index.ts \
-            packages/adapters/src/providers/managed-optimization-tools.ts \
-            packages/adapters/src/providers/mcptoon-provider.ts \
-            packages/adapters/src/providers/gitnexus-provider.ts \
-            packages/adapters/test/managed-provider-lifecycle.test.ts \
-            packages/core/src/metrics/optimization-stack.ts \
-            apps/cli/src/guided.ts \
-            apps/cli/test/guided-component-uninstall.test.ts
-          git commit -m 'feat: wire managed providers into guided lifecycle'
+          git rm .github/workflows/_tmp-finish-managed-tools.yml
+          git add -A
+          git commit -m 'feat: integrate optional managed mcptoon and GitNexus lifecycle'
           git push origin HEAD:codex/managed-optimization-tools
