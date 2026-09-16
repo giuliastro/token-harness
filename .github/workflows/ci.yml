@@ -1,40 +1,86 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  format:
-    runs-on: ubuntu-latest
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Windows is first in the matrix, and the matrix does not fail fast, so a
+      # Windows failure is visible immediately rather than after two green jobs.
+      # PLAN §1.1 and §7: Windows is the primary development platform for the
+      # platform and state layers, and its failures are the ones this project
+      # exists to catch early.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: codex/gitnexus-autonomous-real-campaign
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v5
         with:
+          # The RFC 0001 runtime floor. CI runs the oldest supported runtime, so
+          # a feature newer than the floor fails here rather than for a user.
           node-version: '22.13.0'
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Apply repository Prettier
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm exec prettier --write scripts/evaluation/gitnexus-real-campaign.mjs
-          git diff --exit-code -- docs/candidates/gitnexus-real-campaign.md docs/development-status.md
-          if git diff --quiet -- scripts/evaluation/gitnexus-real-campaign.mjs; then
-            echo "Script already formatted"
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add scripts/evaluation/gitnexus-real-campaign.mjs
-          git commit -m "fix(format): apply repository Prettier to GitNexus runner"
-          git push origin HEAD:codex/gitnexus-autonomous-real-campaign
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test
+
+      - name: GitNexus real-campaign runner self-test
+        run: node scripts/evaluation/gitnexus-real-campaign.mjs --self-test
+
+      # The normal suite keeps release-network tests opt-in. This Windows-only gate closes
+      # the RTK updater's real-world admission requirement: production code downloads the exact
+      # reviewed release, verifies GitHub's digest, replaces a real NTFS target, starts the PE,
+      # verifies 0.49.0 and rolls the replacement back to the exact previous bytes.
+      - name: RTK live Windows release smoke
+        if: runner.os == 'Windows'
+        env:
+          TOKEN_HARNESS_LIVE_RTK_RELEASE: '1'
+        run: node --test --test-reporter=spec packages/platform/dist/test/rtk-windows-release.live.test.js
+
+      - name: Build
+        run: pnpm build
+
+      - name: Bundle smoke test
+        run: pnpm smoke
+
+      - name: Stage the publishable package
+        run: pnpm package
+
+      # The bundle running is not the same as the package installing: the manifest
+      # could name the wrong bin, omit the file, or carry a dependency npm cannot
+      # resolve, and the bundle would still run when invoked directly. This packs,
+      # installs the tarball with no workspace above it, and runs the result — on all
+      # three platforms, because a package that installs on Linux and not on Windows is
+      # the failure PLAN §1.1 puts Windows first in the matrix to catch.
+      - name: Install smoke test
+        run: pnpm smoke:install
