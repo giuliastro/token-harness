@@ -9,11 +9,8 @@ import type { ProviderId } from '@token-harness/core';
 
 import { harnesstrimAdapter as baseHarnessTrimAdapter } from './harnesstrim.js';
 import { rtkAdapter as baseRtkAdapter } from './rtk.js';
-import {
-  gitnexusAdapter,
-  headroomAdapter,
-  mcptoonAdapter,
-} from './managed-optimization-tools.js';
+import { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
+import { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 import type { ProviderAdapter } from './contract.js';
 import { withProviderVersionCompatibility } from './version-compatibility.js';
 
@@ -70,7 +67,13 @@ export {
   type McptoonManagedVerification,
   type McptoonManagedVerificationState,
 } from './mcptoon-managed.js';
-export { gitnexusAdapter, headroomAdapter, mcptoonAdapter } from './managed-optimization-tools.js';
+export {
+  gitnexusAdapter,
+  headroomAdapter,
+  mcptoonAdapter,
+} from './managed-optimization-tools.js';
+export { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
+export { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
 export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
@@ -149,10 +152,11 @@ const cliHarnessTrimAdapter: ProviderAdapter = {
 };
 
 /**
- * First-class provider registry. RTK and HarnessTrim remain the production baseline, while the
- * reviewed managed surfaces for mcptoon and GitNexus now participate in ordinary lifecycle
- * detection/planning. Headroom participates in detection/verification immediately; its installer
- * remains fail-closed until the uv + Python 3.13 transaction recipe is implemented.
+ * First-class provider registry. RTK and HarnessTrim remain the production baseline. mcptoon and
+ * GitNexus now participate in the same ordinary managed lifecycle, including ownership-safe
+ * removal of changes previously recorded by Token Harness. Headroom deliberately remains outside
+ * this registry until its uv/Python wrapper can be installed and removed transactionally; a
+ * detection-only placeholder must not masquerade as a managed provider.
  *
  * RTK stays first because the RFC 0003 compatibility rule gives it shell-output ownership where it
  * overlaps HarnessTrim. The additional providers claim no exclusive shell interception scope.
@@ -160,9 +164,8 @@ const cliHarnessTrimAdapter: ProviderAdapter = {
 const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [
   rtkAdapter,
   cliHarnessTrimAdapter,
-  mcptoonAdapter,
-  gitnexusAdapter,
-  headroomAdapter,
+  mcptoonManagedProviderAdapter,
+  gitnexusManagedProviderAdapter,
 ];
 
 export function listProviderAdapters(): readonly ProviderAdapter[] {
