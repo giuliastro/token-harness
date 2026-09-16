@@ -158,8 +158,10 @@ interface Approval {
   transactionId: string | null;
   provider: ReturnType<typeof providerId> | null;
   description: string;
-  operation: 'apply' | 'rollback' | 'uninstall';
+  operation: 'apply' | 'rollback' | 'uninstall' | 'candidate-apply' | 'candidate-uninstall';
   network: boolean;
+  candidate?: 'mcptoon' | 'gitnexus';
+  candidateHarness?: GuideHarness;
 }
 type GuideUndoTarget =
   | { kind: 'plan'; plan: string; network: boolean }
@@ -195,6 +197,8 @@ const NAMES: Readonly<Record<string, string>> = {
   codex: 'Codex',
   rtk: 'RTK',
   harnesstrim: 'HarnessTrim',
+  mcptoon: 'mcptoon',
+  gitnexus: 'GitNexus',
 };
 const name = (id: string): string => NAMES[id] ?? id;
 const TASKS = new Set(['mechanical', 'standard', 'hard', 'critical']);
@@ -1014,25 +1018,122 @@ export class GuideService {
     if (input === null || typeof input !== 'object' || Array.isArray(input))
       throw new GuideError(400, 'Choose an available action.');
     const data = input as Record<string, unknown>;
+    const action = String(data['action']);
+    const candidateAction = action === 'candidate-setup' || action === 'candidate-remove';
     if (
-      Object.keys(data).some((key) => !['action', 'harness', 'task', 'provider'].includes(key)) ||
-      !['setup', 'effort', 'skill', 'undo', 'remove'].includes(String(data['action'])) ||
+      Object.keys(data).some(
+        (key) => !['action', 'harness', 'task', 'provider', 'candidate'].includes(key),
+      ) ||
+      ![
+        'setup',
+        'effort',
+        'skill',
+        'undo',
+        'remove',
+        'candidate-setup',
+        'candidate-remove',
+      ].includes(action) ||
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
         !['rtk', 'harnesstrim'].includes(String(data['provider']))) ||
-      (data['action'] === 'effort' &&
-        (data['harness'] === undefined || data['task'] === undefined)) ||
-      (data['action'] === 'skill' && data['harness'] === undefined) ||
-      (data['action'] === 'remove' &&
+      (data['candidate'] !== undefined &&
+        !['mcptoon', 'gitnexus'].includes(String(data['candidate']))) ||
+      (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||
+      (action === 'skill' && data['harness'] === undefined) ||
+      (action === 'remove' &&
         (data['provider'] === undefined ||
           data['harness'] !== undefined ||
+          data['task'] !== undefined ||
+          data['candidate'] !== undefined)) ||
+      (action !== 'remove' && data['provider'] !== undefined) ||
+      (candidateAction &&
+        (data['candidate'] === undefined ||
+          data['harness'] === undefined ||
+          data['provider'] !== undefined ||
           data['task'] !== undefined)) ||
-      (data['action'] !== 'remove' && data['provider'] !== undefined)
+      (!candidateAction && data['candidate'] !== undefined)
     )
-      throw new GuideError(400, 'Choose a supported agent and task.');
+      throw new GuideError(400, 'Choose a supported agent and action.');
     return this.exclusive(async () => {
       this.approval = null;
+      if (candidateAction) {
+        const candidate = String(data['candidate']) as 'mcptoon' | 'gitnexus';
+        const harness = String(data['harness']) as GuideHarness;
+        const command = action === 'candidate-remove' ? 'uninstall' : 'apply';
+        const removing = command === 'uninstall';
+        this.record(
+          `${removing ? 'Reviewing removal of' : 'Reviewing'} experimental ${name(candidate)} setup for ${name(harness)}. Nothing has changed yet.`,
+          'working',
+        );
+        const result = await this.call<ApplyReport>([
+          command,
+          '--candidate',
+          candidate,
+          '--harness',
+          harness,
+        ]);
+        const actionable = result.diagnostics.some(
+          (entry) => entry.code === 'confirmation-required',
+        );
+        if (!actionable) {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            result.data?.outcome === 'nothing-to-do'
+              ? `${name(candidate)} is already in the requested experimental state for ${name(harness)}.`
+              : `No safe experimental ${name(candidate)} ${removing ? 'removal' : 'setup'} is available for ${name(harness)}. Nothing was changed.`,
+          );
+          this.record(message, result.exitCode === 0 ? 'success' : 'attention');
+          return {
+            ticket: null,
+            title: 'No experimental change to apply',
+            changes: [],
+            notices: [message],
+            expiresAt: null,
+            network: false,
+            restart: false,
+          };
+        }
+        const ticket = this.random();
+        const expires = this.now() + 10 * 60_000;
+        const network = candidate === 'mcptoon' && !removing;
+        this.approval = {
+          id: ticket,
+          expires,
+          plans: [],
+          transactionId: null,
+          provider: null,
+          candidate,
+          candidateHarness: harness,
+          description: `${name(candidate)} experimental ${removing ? 'removal' : 'setup'}`,
+          operation: removing ? 'candidate-uninstall' : 'candidate-apply',
+          network,
+        };
+        this.record('Experimental setup preview ready. Waiting for your approval.', 'success');
+        return {
+          ticket,
+          title: `${removing ? 'Remove' : 'Apply'} experimental ${name(candidate)} setup for ${name(harness)}?`,
+          changes: [
+            {
+              title: `${name(candidate)}: ${removing ? 'remove Token Harness-owned experimental integration' : 'apply the reviewed experimental integration'}`,
+              files: 0,
+              description: removing
+                ? 'Uses the existing candidate ownership receipts and removes only Token Harness-owned candidate configuration. The candidate package and repository data remain user-owned.'
+                : 'Uses the existing candidate-only lifecycle and exact compatibility gates. This does not promote the candidate into the RTK + HarnessTrim production stack.',
+            },
+          ],
+          notices: [
+            candidate === 'mcptoon' && !removing
+              ? 'If the reviewed mcptoon build is absent, this approved candidate lifecycle may use an already-installed pipx to install that exact build. Token Harness never installs Python, pipx or administrator prerequisites.'
+              : candidate === 'gitnexus' && !removing
+                ? 'GitNexus must already be installed on the exact reviewed row. Token Harness does not create or refresh its repository index and does not run gitnexus analyze/setup.'
+                : 'Removal keeps the candidate package and any repository index/data. Only Token Harness-owned experimental integration state is eligible.',
+          ],
+          expiresAt: new Date(expires).toISOString(),
+          network,
+          restart: true,
+        };
+      }
       if (data['action'] === 'undo') {
         if (data['harness'] !== undefined || data['task'] !== undefined)
           throw new GuideError(400, 'Undo accepts no agent or task selection.');
@@ -1263,6 +1364,82 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
+      if (
+        approval.operation === 'candidate-apply' ||
+        approval.operation === 'candidate-uninstall'
+      ) {
+        if (approval.candidate === undefined || approval.candidateHarness === undefined)
+          throw new GuideError(409, 'This experimental preview is incomplete. Review it again.');
+        const candidate = approval.candidate;
+        const harness = approval.candidateHarness;
+        const removing = approval.operation === 'candidate-uninstall';
+        const command = removing ? 'uninstall' : 'apply';
+        this.record(
+          `${removing ? 'Removing' : 'Applying'} reviewed experimental ${name(candidate)} setup for ${name(harness)}.`,
+          'working',
+        );
+        let result: CliEnvelope<ApplyReport>;
+        try {
+          result = await this.call<ApplyReport>([
+            command,
+            '--candidate',
+            candidate,
+            '--harness',
+            harness,
+            '--yes',
+          ]);
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The experimental operation stopped before its final result could be read. No automatic retry was made. Refresh and inspect the current candidate state.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Experimental result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        const committed = result.data?.outcome === 'committed';
+        const alreadyVerified =
+          result.data?.outcome === 'nothing-to-do' && result.data.requestedStateVerified === true;
+        if (result.exitCode !== 0 || (!committed && !alreadyVerified)) {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            `The experimental ${name(candidate)} ${removing ? 'removal' : 'setup'} was not applied. Compatibility, ownership or configuration changed after the preview, so nothing was forced.`,
+          );
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Experimental change was not applied',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        // Any later transaction makes an older one-click undo target stale. Candidate lifecycle
+        // remains reversible through its normal ownership/transaction commands, but the novice UI
+        // must never guess a historical transaction to restore.
+        this.lastApplied = null;
+        this.invalidateObservedState();
+        const messages = [
+          removing
+            ? `${name(candidate)} Token Harness-owned experimental integration was removed. The candidate package and repository data were left alone.`
+            : `${name(candidate)} experimental integration was applied for ${name(harness)} using the reviewed candidate-only lifecycle.`,
+          `${name(candidate)} remains experimental and outside the RTK + HarnessTrim production stack.`,
+          'Reopen the affected coding agent when applicable, then choose Refresh to read the current state.',
+        ];
+        this.record(
+          `${name(candidate)} experimental ${removing ? 'integration removed' : 'setup applied'}.`,
+          'success',
+        );
+        return {
+          ok: true,
+          title: removing ? 'Experimental integration removed' : 'Experimental setup applied',
+          messages,
+          appliedPlans: committed ? 1 : 0,
+        };
+      }
       if (approval.operation === 'uninstall') {
         if (approval.provider === null)
           throw new GuideError(409, 'This removal preview is incomplete. Review it again.');

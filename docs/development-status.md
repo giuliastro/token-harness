@@ -1,5 +1,6 @@
 # Development status
 
+- 2026-09-16: candidate UI integration work keeps the production boundary unchanged: RTK + HarnessTrim remain the ordinary managed stack; mcptoon and GitNexus use only their existing candidate-only, exact-row, transactional lifecycle behind explicit browser preview and approval. Headroom remains manual. No candidate is added to `PROVIDER_ADAPTERS`, no GitNexus index is created, no Python/pipx prerequisite is installed, and no model call is run.
 - 2026-09-16: branch-only frugal OAuth smoke confirmed Claude Code `2.1.269` subscription OAuth, Haiku, GitNexus `1.6.12` MCP connectivity and real `mcp__gitnexus__context`/`query` tool use without paid overage. The smoke is not selection evidence and no full campaign was launched. Follow-up hardening makes the real campaign manual-dispatch-only, defaults to Haiku + one attempt per variant, applies `--max-budget-usd` only to API-key runs, and fails closed if an optimized pair lacks an actual GitNexus tool-use witness.
 Current focus: keep the full GitNexus campaign manual and quota-safe; meanwhile complete issue #255 with real before/after evidence from the current RTK + HarnessTrim production stack on native Windows.
 
