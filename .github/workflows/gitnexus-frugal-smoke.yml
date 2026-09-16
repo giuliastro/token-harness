@@ -1,0 +1,68 @@
+name: GitNexus frugal Claude smoke
+
+on:
+  push:
+    branches:
+      - codex/gitnexus-frugal-smoke
+    paths:
+      - '.github/workflows/gitnexus-frugal-smoke.yml'
+      - 'scripts/evaluation/gitnexus-frugal-smoke.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Two-call Haiku smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.18.0'
+          cache: pnpm
+
+      - name: Install Token Harness dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Token Harness
+        run: pnpm build
+
+      - name: Install exact evaluation tools without sudo
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_home="$RUNNER_TEMP/gitnexus-frugal-smoke-home"
+          smoke_tools="$RUNNER_TEMP/gitnexus-frugal-smoke-tools"
+          mkdir -p "$smoke_home" "$smoke_tools"
+          npm install --global --prefix "$smoke_tools" \
+            @anthropic-ai/claude-code@2.1.269 \
+            gitnexus@1.6.12
+          echo "$smoke_tools/bin" >> "$GITHUB_PATH"
+
+      - name: Run two-call Haiku smoke
+        shell: bash
+        env:
+          HOME: ${{ runner.temp }}/gitnexus-frugal-smoke-home
+        run: |
+          set -euo pipefail
+          node scripts/evaluation/gitnexus-frugal-smoke.mjs
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitnexus-frugal-smoke-${{ github.sha }}
+          path: artifacts/gitnexus-frugal-smoke
+          if-no-files-found: warn
+          retention-days: 7
