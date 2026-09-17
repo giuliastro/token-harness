@@ -242,13 +242,14 @@ describe('distribution', () => {
     assert.match(version, /^0\.\d+\.\d+$/);
     if (version === '0.0.0' || version.startsWith('0.0.')) return;
 
-    // Two providers and five harnesses, by id rather than by count, so adding a sixth of
-    // something does not silently satisfy the gate.
-    assert.deepEqual(
-      listProviderAdapters().map((adapter) => adapter.manifest.id),
-      ['rtk', 'harnesstrim'],
-      'PLAN §16 requires RTK and HarnessTrim for 0.1.0',
-    );
+    // RTK and HarnessTrim are the 0.1.x production baseline. Additive opt-in integrations
+    // do not invalidate that claim, but neither may they substitute for either baseline provider.
+    const providerIds = listProviderAdapters().map((adapter) => adapter.manifest.id);
+    for (const id of ['rtk', 'harnesstrim'])
+      assert.ok(
+        providerIds.some((provider) => provider === id),
+        `PLAN §16 requires ${id} for 0.1.0`,
+      );
     assert.deepEqual(
       listHarnessAdapters().map((adapter) => adapter.manifest.id),
       ['claude', 'codex', 'hermes', 'opencode', 'pi'],
@@ -282,7 +283,9 @@ describe('distribution', () => {
       for (const entry of adapter.manifest.harnesses) {
         assert.ok(entry.verificationTier.length > 0);
       }
-      // Metrics from both providers, so the report can carry two measurement classes.
+    }
+    for (const adapter of listProviderAdapters()) {
+      if (adapter.manifest.id !== 'rtk' && adapter.manifest.id !== 'harnesstrim') continue;
       assert.notEqual(adapter.manifest.metrics.source, 'none');
     }
   });

@@ -27,6 +27,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
       role: 'Adds reviewed instructions that help coding agents keep tool output and context lean.',
       managed: true,
     },
+    mcptoon: {
+      name: 'mcptoon',
+      role: 'Provides the reviewed compact MCP discovery integration on exact admitted versions.',
+      managed: true,
+      optional: true,
+    },
+    gitnexus: {
+      name: 'GitNexus',
+      role: 'Registers an already-installed reviewed GitNexus CLI as a narrow Claude MCP integration.',
+      managed: true,
+      optional: true,
+    },
   };
   const EXPERIMENTAL = [
     {
@@ -42,34 +54,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
       activationCommands: ['headroom wrap claude', 'headroom wrap codex'],
       warning:
         'Installing the CLI is separate from activating it. Do not count a benchmark as Headroom evidence unless the optimized run actually used the wrapper.',
-    },
-    {
-      id: 'mcptoon',
-      name: 'mcptoon',
-      category: 'MCP discovery',
-      purpose: 'Evaluated for smaller MCP manifests and tool-schema discovery context.',
-      install: 'pip install mcptoon',
-      fallback: null,
-      verify: 'mcptoon --version',
-      activation:
-        'Token Harness currently evaluates mcptoon as a read-only MCP context candidate. It does not run mcptoon init/add/sync or rewrite your agent MCP configuration.',
-      activationCommands: ['mcptoon manifest --compact', 'mcptoon manifest --json'],
-      warning:
-        'The compact and JSON manifest commands are evidence surfaces, not automatic Claude Code or Codex integration.',
-    },
-    {
-      id: 'gitnexus',
-      name: 'GitNexus',
-      category: 'Repository exploration',
-      purpose: 'Evaluated for reducing repeated repository exploration by using a local code graph.',
-      install: 'npm install -g gitnexus@latest',
-      fallback: null,
-      verify: 'gitnexus --version',
-      activation:
-        'GitNexus needs a repository index before it can provide graph-backed context. Token Harness deliberately does not create that index or register MCP automatically.',
-      activationCommands: ['gitnexus analyze', 'gitnexus setup -c codex'],
-      warning:
-        'gitnexus analyze changes the repository by creating its index and agent context files. Run it only in a repository you intentionally want to evaluate.',
     },
   ];
   const CATEGORY = {
@@ -426,7 +410,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const card = node('article', undefined, 'tool-card');
     const head = node('div', undefined, 'tool-head');
     const title = node('div');
-    title.append(node('h3', info.name), node('span', 'Managed by Token Harness', 'caption'));
+    title.append(
+      node('h3', info.name),
+      node('span', info.optional ? 'Optional managed integration' : 'Production baseline', 'caption'),
+    );
     head.append(title, pill(state.label, state.cls));
     card.append(head, node('p', info.role));
     const facts = node('div', undefined, 'tool-facts');
@@ -459,25 +446,55 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
-  function reviewSetup(agentId) {
+  function reviewSetup(agentId, providerId = null) {
     if (busy) return;
     const agent = activeAgents().find(item => item.id === agentId);
     if (!agent) return;
-    const run = modal('Review managed setup for ' + agent.name);
+    const provider = providerId ? TOOL_INFO[providerId] : null;
+    if (providerId && !provider) return;
+    const run = modal(
+      provider ? 'Review ' + provider.name + ' for ' + agent.name : 'Review managed setup for ' + agent.name,
+    );
     $('modal-content').append(
-      messageBox('What this checks', 'RTK and HarnessTrim are the two managed optimization tools in this build. Token Harness will inspect both for ' + agent.name + ' and propose only compatible changes.'),
+      messageBox(
+        'What this checks',
+        provider
+          ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + ' and propose a change only on an exact reviewed compatibility row.'
+          : 'RTK and HarnessTrim are the production baseline. Token Harness will inspect both for ' + agent.name + ' and propose only compatible changes.',
+      ),
       messageBox('Nothing changes yet', 'This step is read-only. If a change is available, you will see exactly what it writes before an Apply button appears.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
     );
+    if (providerId === 'gitnexus')
+      $('modal-content').append(
+        messageBox(
+          'License boundary',
+          'GitNexus 1.6.12 is reviewed technically but carries PolyForm Noncommercial terms. Token Harness does not install or index it. Continue only when those terms fit your use.',
+          'warn',
+        ),
+      );
     $('modal-actions').append(modalClose('Cancel'));
     setBusy(true, false);
     ensureSession()
-      .then(() => request('/api/preview', { action: 'setup', harness: agentId }))
+      .then(() =>
+        request('/api/preview', {
+          action: 'setup',
+          harness: agentId,
+          ...(providerId ? { provider: providerId } : {}),
+        }),
+      )
       .then(data => {
         if (run !== modalRun || !$('modal').open) return;
         pendingTicket = data.ticket;
         $('modal-content').replaceChildren();
-        $('modal-content').append(messageBox('Managed stack', 'This review covers RTK and HarnessTrim only. Experimental tools are never installed or activated by this action.'));
+        $('modal-content').append(
+          messageBox(
+            'Managed scope',
+            provider
+              ? provider.name + ' is reviewed separately from the RTK + HarnessTrim production baseline. This approval changes only the provider-scoped plan shown below.'
+              : 'This review covers the RTK + HarnessTrim production baseline only. Optional managed integrations are reviewed separately.',
+          ),
+        );
         if (!data.changes.length) $('modal-content').append(messageBox('No managed change proposed', (data.notices || []).join(' ') || 'This agent already has the supported setup, or no safe managed change is available.'));
         for (const change of data.changes) {
           const item = node('article', undefined, 'preview-change');
@@ -527,7 +544,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function renderManagedSetup() {
-    $('managed-tools').replaceChildren(renderManagedTool('rtk'), renderManagedTool('harnesstrim'));
+    $('managed-tools').replaceChildren(
+      renderManagedTool('rtk'),
+      renderManagedTool('harnesstrim'),
+      renderManagedTool('mcptoon'),
+      renderManagedTool('gitnexus'),
+    );
     const actions = $('managed-setup-actions');
     actions.replaceChildren();
     if (!activeAgents().length) {
@@ -537,8 +559,29 @@ export const GUIDE_PRODUCT_JS = String.raw`
     actions.append(node('p', 'Choose the agent you want to configure. Review setup is read-only; Apply appears only after a concrete safe plan is shown.', 'caption'));
     const buttons = node('div', undefined, 'inline-actions');
     for (const agent of activeAgents())
-      buttons.append(actionButton('Review setup for ' + agent.name, () => reviewSetup(agent.id)));
+      buttons.append(actionButton('Review baseline for ' + agent.name, () => reviewSetup(agent.id)));
     actions.append(buttons);
+
+    const optional = node('div', undefined, 'managed-optional');
+    optional.append(
+      node(
+        'p',
+        'Optional managed integrations are reviewed one at a time. Enabling one does not create a savings claim or make it part of the RTK + HarnessTrim production baseline.',
+        'caption',
+      ),
+    );
+    const optionalButtons = node('div', undefined, 'inline-actions');
+    for (const agent of activeAgents()) {
+      optionalButtons.append(
+        actionButton('Review mcptoon for ' + agent.name, () => reviewSetup(agent.id, 'mcptoon'), 'secondary'),
+      );
+      if (agent.id === 'claude')
+        optionalButtons.append(
+          actionButton('Review GitNexus for ' + agent.name, () => reviewSetup(agent.id, 'gitnexus'), 'secondary'),
+        );
+    }
+    optional.append(optionalButtons);
+    actions.append(optional);
   }
 
   function candidateState(observation) {

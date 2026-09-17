@@ -72,8 +72,10 @@ useful read-only allowance and connected-tool observations when available.
 
 **2. Managed optimizers**
 
-The managed stack currently consists of **RTK + HarnessTrim** on individually reviewed
-combinations. Token Harness tracks the exact combined provider set separately: if no combined-stack
+The production baseline remains **RTK + HarnessTrim** on individually reviewed combinations.
+Token Harness also exposes **mcptoon** and **GitNexus** as optional managed integrations on their exact
+reviewed lifecycle rows; enabling either does not make it part of the production baseline or create a
+savings claim. Token Harness tracks the exact combined provider set separately: if no combined-stack
 review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
 from healthy individual checks. Token Harness can prepare their integration transactionally, show the
 exact plan, apply it only after approval, verify it, and remove only configuration it owns.
@@ -93,11 +95,11 @@ verification evidence, has been benchmarked together, and has been deliberately 
 
 **3. Experimental tools**
 
-Headroom, mcptoon and GitNexus are visible as candidates, not silently promoted dependencies. Their
-cards distinguish CLI installation, candidate-side activation/evaluation, Token Harness benchmark
-evidence and promotion-readiness gates. External install or activation commands are shown for
-review; Token Harness does not silently execute package managers, activate wrappers, index
-repositories or register MCP servers.
+Headroom remains visible as an unmanaged experimental candidate. mcptoon and GitNexus retain their
+selection/promotion evidence paths, but their narrow reviewed lifecycle is now also available through
+normal optional managed setup. Lifecycle support is not production promotion. Token Harness still does
+not install system prerequisites, activate Headroom wrappers, or create/refresh GitNexus repository
+indexes.
 
 Choose **Run standard evaluation** to start or resume a paired candidate campaign. Campaign state is
 scoped to both the candidate and the selected harness, so Claude Code and Codex evidence cannot be
@@ -209,6 +211,8 @@ algorithms into this repository.
 | --- | --- | --- |
 | [RTK](https://github.com/rtk-ai/rtk) | Shell/tool output reduction | Managed on reviewed combinations |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Managed first-party integration |
+| mcptoon | MCP discovery / compact manifest guidance | Optional managed integration on exact reviewed 0.7.10 rows; no savings assumed |
+| GitNexus | Repository graph / MCP context | Optional managed Claude integration for already-installed 1.6.12; license review required |
 | [cclimits](https://github.com/cruzanstx/cclimits) | Optional Claude allowance evidence | Read-only evidence; not an optimizer |
 | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
 
