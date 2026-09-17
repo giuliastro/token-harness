@@ -67,11 +67,7 @@ export {
   type McptoonManagedVerification,
   type McptoonManagedVerificationState,
 } from './mcptoon-managed.js';
-export {
-  gitnexusAdapter,
-  headroomAdapter,
-  mcptoonAdapter,
-} from './managed-optimization-tools.js';
+export { gitnexusAdapter, headroomAdapter, mcptoonAdapter } from './managed-optimization-tools.js';
 export { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
 export { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
