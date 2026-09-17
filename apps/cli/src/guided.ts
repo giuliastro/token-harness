@@ -199,6 +199,7 @@ const NAMES: Readonly<Record<string, string>> = {
   harnesstrim: 'HarnessTrim',
   mcptoon: 'mcptoon',
   gitnexus: 'GitNexus',
+  headroom: 'Headroom',
 };
 const name = (id: string): string => NAMES[id] ?? id;
 const TASKS = new Set(['mechanical', 'standard', 'hard', 'critical']);
@@ -223,6 +224,11 @@ const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
     providerId: providerId('gitnexus'),
     displayName: 'GitNexus',
     category: 'repository-retrieval',
+  },
+  {
+    providerId: providerId('headroom'),
+    displayName: 'Headroom',
+    category: 'context-minimization',
   },
 ];
 const ISSUE_COPY: Readonly<Record<string, string>> = {

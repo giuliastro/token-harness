@@ -39,23 +39,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
       managed: true,
       optional: true,
     },
-  };
-  const EXPERIMENTAL = [
-    {
-      id: 'headroom',
+    headroom: {
       name: 'Headroom',
-      category: 'Context optimization',
-      purpose: 'Evaluated as a broader context-compression layer for coding-agent sessions.',
-      install: 'uv tool install --python 3.13 "headroom-ai[all]"',
-      fallback: 'pip install "headroom-ai[all]"',
-      verify: 'headroom --version',
-      activation:
-        'For an experiment, Headroom can launch a wrapped Claude Code or Codex session. Token Harness does not run that wrapper or make it persistent for you.',
-      activationCommands: ['headroom wrap claude', 'headroom wrap codex'],
-      warning:
-        'Installing the CLI is separate from activating it. Do not count a benchmark as Headroom evidence unless the optimized run actually used the wrapper.',
+      role: 'Provides local MCP compression and retrieval through the reviewed Headroom server.',
+      managed: true,
+      optional: true,
     },
-  ];
+  };
+  const EXPERIMENTAL = [];
   const CATEGORY = {
     'command-output-reduction': 'Command output',
     'context-minimization': 'Context optimization',
@@ -321,7 +312,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       label: 'Ready',
       cls: 'good',
       title: 'Your managed setup is active',
-      detail: 'No urgent action is required. Review measured results or explore optional experimental tools when you want to.',
+      detail: 'No urgent action is required. Review measured results or manage optional optimizers when you want to.',
       action: 'results',
     };
   }
@@ -549,6 +540,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       renderManagedTool('harnesstrim'),
       renderManagedTool('mcptoon'),
       renderManagedTool('gitnexus'),
+      renderManagedTool('headroom'),
     );
     const actions = $('managed-setup-actions');
     actions.replaceChildren();
@@ -579,6 +571,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
         optionalButtons.append(
           actionButton('Review GitNexus for ' + agent.name, () => reviewSetup(agent.id, 'gitnexus'), 'secondary'),
         );
+      optionalButtons.append(
+        actionButton('Review Headroom for ' + agent.name, () => reviewSetup(agent.id, 'headroom'), 'secondary'),
+      );
     }
     optional.append(optionalButtons);
     actions.append(optional);
@@ -719,6 +714,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function renderExperimental() {
     const root = $('experimental-tools');
+    if (!root) return;
     root.replaceChildren();
     for (const candidate of EXPERIMENTAL) {
       const observation = candidateObservation(candidate.id);

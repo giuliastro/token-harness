@@ -13,7 +13,10 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderContext } from './contract.js';
-import { HEADROOM_REVIEWED_BENCHMARK_VERSION, observeHeadroomCandidate } from './headroom-candidate.js';
+import {
+  HEADROOM_REVIEWED_BENCHMARK_VERSION,
+  observeHeadroomCandidate,
+} from './headroom-candidate.js';
 
 export const HEADROOM_REVIEWED_MCP_VERSION = HEADROOM_REVIEWED_BENCHMARK_VERSION;
 export const HEADROOM_CLAUDE_MCP_POINTER = 'mcpServers.headroom';
@@ -63,7 +66,9 @@ function directoryAction(harness: HarnessId, path: string): PlannedAction {
   };
 }
 
-async function reviewedMcpCliAvailable(context: ProviderContext): Promise<{ ok: boolean; detail: string }> {
+async function reviewedMcpCliAvailable(
+  context: ProviderContext,
+): Promise<{ ok: boolean; detail: string }> {
   const observation = await observeHeadroomCandidate(context);
   if (observation.version !== HEADROOM_REVIEWED_MCP_VERSION) {
     return {
@@ -87,7 +92,10 @@ async function reviewedMcpCliAvailable(context: ProviderContext): Promise<{ ok: 
       detail: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is installed but its reviewed MCP server command is unavailable`,
     };
   }
-  return { ok: true, detail: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} exposes the reviewed local MCP server` };
+  return {
+    ok: true,
+    detail: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} exposes the reviewed local MCP server`,
+  };
 }
 
 function prerequisite(harness: HarnessId, detail: string): HeadroomManagedMcpPlan {
@@ -101,8 +109,7 @@ function prerequisite(harness: HarnessId, detail: string): HeadroomManagedMcpPla
         code: 'headroom-managed-mcp-prerequisite',
         subject: harness,
         message: detail,
-        remediation:
-          `Install the exact reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} MCP package with your existing Python/uv tooling, then refresh Token Harness. Token Harness will not install Python, uv, or system prerequisites implicitly.`,
+        remediation: `Install the exact reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} MCP package with your existing Python/uv tooling, then refresh Token Harness. Token Harness will not install Python, uv, or system prerequisites implicitly.`,
       }),
     ],
   };
@@ -182,7 +189,10 @@ async function planClaude(
         diagnostics: [
           diagnostic({
             severity: 'warning',
-            code: parsed.state === 'comments' ? 'headroom-claude-json-comments' : 'headroom-claude-json-malformed',
+            code:
+              parsed.state === 'comments'
+                ? 'headroom-claude-json-comments'
+                : 'headroom-claude-json-malformed',
             subject: harness,
             message:
               parsed.state === 'comments'
@@ -195,7 +205,10 @@ async function planClaude(
       };
     }
     const segments = parseJsonPointer(HEADROOM_CLAUDE_MCP_POINTER);
-    const live = segments === null ? { found: false, value: undefined } : resolveJsonPointer(parsed.document, segments);
+    const live =
+      segments === null
+        ? { found: false, value: undefined }
+        : resolveJsonPointer(parsed.document, segments);
     if (live.found && live.value !== undefined) {
       if (jsonValueDigest(live.value) === jsonValueDigest(HEADROOM_MCP_SERVER)) {
         return {
@@ -359,7 +372,8 @@ async function planCodex(
             severity: 'warning',
             code: 'headroom-codex-mcp-marker-drift',
             subject: harness,
-            message: 'An existing Token Harness Headroom marker block differs from the reviewed content',
+            message:
+              'An existing Token Harness Headroom marker block differs from the reviewed content',
             path: target,
             remediation: 'Review the existing block before changing it',
           }),
@@ -376,7 +390,8 @@ async function planCodex(
             severity: 'warning',
             code: 'headroom-codex-mcp-user-owned',
             subject: harness,
-            message: 'A user-owned mcp_servers.headroom table already exists and will not be overwritten',
+            message:
+              'A user-owned mcp_servers.headroom table already exists and will not be overwritten',
             path: target,
             remediation: 'Review the existing Headroom MCP configuration manually',
           }),
@@ -435,7 +450,10 @@ export async function planHeadroomManagedMcpActivation(
   return harness === 'claude' ? planClaude(context, harness) : planCodex(context, harness);
 }
 
-export function headroomOwnedArtifact(context: ProviderContext, harness: HarnessId): OwnedArtifact | null {
+export function headroomOwnedArtifact(
+  context: ProviderContext,
+  harness: HarnessId,
+): OwnedArtifact | null {
   if (harness === 'claude') {
     return {
       kind: 'owned-json-entry',
@@ -467,34 +485,61 @@ export async function verifyHeadroomManagedMcpActivation(
   if (harness === 'claude') {
     const target = context.fs.join(context.paths.home, '.claude', 'mcp.json');
     const stat = await context.fs.stat(target);
-    if (stat === null) return { state: 'not-configured', target, detail: 'Claude MCP config is absent' };
-    if (stat.kind !== 'file') return { state: 'degraded', target, detail: 'Claude MCP config is not a regular file' };
+    if (stat === null)
+      return { state: 'not-configured', target, detail: 'Claude MCP config is absent' };
+    if (stat.kind !== 'file')
+      return { state: 'degraded', target, detail: 'Claude MCP config is not a regular file' };
     const parsed = parseJsonDocumentText(DECODER.decode(await context.fs.readFile(target)));
-    if (parsed.state !== 'parsed') return { state: 'degraded', target, detail: 'Claude MCP config is not clean JSON' };
+    if (parsed.state !== 'parsed')
+      return { state: 'degraded', target, detail: 'Claude MCP config is not clean JSON' };
     const segments = parseJsonPointer(HEADROOM_CLAUDE_MCP_POINTER);
-    if (segments === null) return { state: 'degraded', target, detail: 'Internal Headroom MCP pointer is invalid' };
+    if (segments === null)
+      return { state: 'degraded', target, detail: 'Internal Headroom MCP pointer is invalid' };
     const live = resolveJsonPointer(parsed.document, segments);
-    if (!live.found || live.value === undefined) return { state: 'not-configured', target, detail: 'Headroom MCP entry is absent' };
+    if (!live.found || live.value === undefined)
+      return { state: 'not-configured', target, detail: 'Headroom MCP entry is absent' };
     if (jsonValueDigest(live.value) !== jsonValueDigest(HEADROOM_MCP_SERVER)) {
-      return { state: 'degraded', target, detail: 'Headroom MCP entry differs from the reviewed command' };
+      return {
+        state: 'degraded',
+        target,
+        detail: 'Headroom MCP entry differs from the reviewed command',
+      };
     }
-    return { state: 'verified', target, detail: `${cli.detail}; Claude registration matches the reviewed entry` };
+    return {
+      state: 'verified',
+      target,
+      detail: `${cli.detail}; Claude registration matches the reviewed entry`,
+    };
   }
 
   if (harness === 'codex') {
     const target = context.fs.join(context.paths.home, '.codex', 'config.toml');
     const stat = await context.fs.stat(target);
     if (stat === null) return { state: 'not-configured', target, detail: 'Codex config is absent' };
-    if (stat.kind !== 'file') return { state: 'degraded', target, detail: 'Codex config is not a regular file' };
+    if (stat.kind !== 'file')
+      return { state: 'degraded', target, detail: 'Codex config is not a regular file' };
     const text = DECODER.decode(await context.fs.readFile(target));
     const expected = [
       `# ${HEADROOM_CODEX_MARKER_BEGIN}`,
       HEADROOM_CODEX_MCP_BODY,
       `# ${HEADROOM_CODEX_MARKER_END}`,
     ].join('\n');
-    if (!text.includes(expected)) return { state: 'not-configured', target, detail: 'Reviewed Headroom Codex MCP block is absent' };
-    return { state: 'verified', target, detail: `${cli.detail}; Codex registration matches the reviewed owned block` };
+    if (!text.includes(expected))
+      return {
+        state: 'not-configured',
+        target,
+        detail: 'Reviewed Headroom Codex MCP block is absent',
+      };
+    return {
+      state: 'verified',
+      target,
+      detail: `${cli.detail}; Codex registration matches the reviewed owned block`,
+    };
   }
 
-  return { state: 'degraded', target: null, detail: `Managed Headroom MCP verification is not reviewed for ${harness}` };
+  return {
+    state: 'degraded',
+    target: null,
+    detail: `Managed Headroom MCP verification is not reviewed for ${harness}`,
+  };
 }
