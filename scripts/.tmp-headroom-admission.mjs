@@ -26,6 +26,11 @@ if (mode === 'prepare') {
     "!['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'].includes(String(data['provider']))",
     "!['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'].includes(String(data['provider']))",
   );
+  replaceOnce(
+    'packages/adapters/src/providers/headroom-managed.ts',
+    '      bodyDigest: digestText(HEADROOM_CODEX_MCP_BODY),',
+    '      bodyDigest: digestText(`${HEADROOM_CODEX_MCP_BODY}\\n`),',
+  );
 
   const smoke = '.github/workflows/headroom-candidate-smoke.yml';
   let text = fs.readFileSync(smoke, 'utf8');
