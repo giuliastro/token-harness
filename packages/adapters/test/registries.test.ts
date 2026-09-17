@@ -24,10 +24,11 @@ describe('adapter registries', () => {
 
   it('carries the provider adapters this build ships, and no others', () => {
     // RTK first: RFC 0003's compatibility rule gives it `shell.output.reduce` when both claim the
-    // scope, and the resolver reads a rule's provider order to pick the owner.
+    // scope, and the resolver reads a rule's provider order to pick the owner. Optional managed
+    // integrations follow the production baseline in their ordinary lifecycle order.
     assert.deepEqual(
       listProviderAdapters().map((adapter) => adapter.manifest.id),
-      ['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'],
+      ['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'],
     );
   });
 
@@ -41,7 +42,7 @@ describe('adapter registries', () => {
     assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);
     assert.notEqual(findProviderAdapter('mcptoon' as ProviderId), null);
     assert.notEqual(findProviderAdapter('gitnexus' as ProviderId), null);
-    assert.equal(findProviderAdapter('headroom' as ProviderId), null);
+    assert.notEqual(findProviderAdapter('headroom' as ProviderId), null);
     assert.equal(findProviderAdapter('dejavu' as ProviderId), null);
   });
 
