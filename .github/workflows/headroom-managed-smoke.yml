@@ -85,15 +85,19 @@ jobs:
           args = ["mcp", "serve"]
           TOML
 
+          # Claude's `mcp get` does not print args for a missing executable, but it must
+          # resolve this entry from the user config and attempt the configured `headroom` command.
           claude_output="$(claude mcp get headroom 2>&1)"
           printf '%s\n' "$claude_output"
-          grep -F 'headroom' <<<"$claude_output"
-          grep -F 'mcp serve' <<<"$claude_output"
+          grep -F 'headroom:' <<<"$claude_output"
+          grep -F 'Scope: User config' <<<"$claude_output"
+          grep -F 'Executable not found in $PATH: "headroom"' <<<"$claude_output"
 
           codex_output="$(codex mcp get headroom 2>&1)"
           printf '%s\n' "$codex_output"
           grep -F 'headroom' <<<"$codex_output"
-          grep -F 'mcp serve' <<<"$codex_output"
+          grep -F 'command: headroom' <<<"$codex_output"
+          grep -F 'args: mcp serve' <<<"$codex_output"
 
       - name: Guard quota-free scope
         shell: bash
