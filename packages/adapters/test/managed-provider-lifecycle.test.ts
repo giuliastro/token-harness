@@ -5,8 +5,11 @@ import { harnessId, providerId } from '@token-harness/core';
 
 import {
   GITNEXUS_CLAUDE_MCP_POINTER,
+  HEADROOM_CLAUDE_MCP_POINTER,
+  HEADROOM_CODEX_MARKER_BEGIN,
   MCPTOON_MARKER_BEGIN,
   gitnexusManagedProviderAdapter,
+  headroomManagedProviderAdapter,
   listProviderAdapters,
   mcptoonManagedProviderAdapter,
   type ProviderContext,
@@ -27,11 +30,11 @@ const absentRequest = {
   desiredState: 'absent',
 } as unknown as ProviderPlanRequest;
 
-test('ordinary provider registry contains mcptoon and GitNexus but not placeholder Headroom', () => {
+test('ordinary provider registry contains mcptoon, GitNexus and Headroom', () => {
   const ids = listProviderAdapters().map((adapter) => adapter.manifest.id);
   assert.ok(ids.includes(providerId('mcptoon')));
   assert.ok(ids.includes(providerId('gitnexus')));
-  assert.equal(ids.includes(providerId('headroom')), false);
+  assert.ok(ids.includes(providerId('headroom')));
 });
 
 test('mcptoon plans ownership-safe removal for Claude and Codex integrations', async () => {
@@ -58,5 +61,23 @@ test('GitNexus plans ownership-safe removal of its Claude MCP configuration', as
   assert.equal(target?.kind, 'owned-json-entry');
   if (target?.kind === 'owned-json-entry') {
     assert.equal(target.pointer, GITNEXUS_CLAUDE_MCP_POINTER);
+  }
+});
+
+test('Headroom plans surgical removal for Claude JSON and Codex marker ownership', async () => {
+  const plan = await headroomManagedProviderAdapter.plan(context, absentRequest);
+  const removals = plan.actions.filter((action) => action.kind === 'remove-owned-change');
+
+  assert.equal(removals.length, 2);
+  const claude = removals.find((action) => action.target.kind === 'owned-json-entry');
+  const codex = removals.find((action) => action.target.kind === 'owned-marker-block');
+
+  assert.equal(claude?.target.kind, 'owned-json-entry');
+  if (claude?.target.kind === 'owned-json-entry') {
+    assert.equal(claude.target.pointer, HEADROOM_CLAUDE_MCP_POINTER);
+  }
+  assert.equal(codex?.target.kind, 'owned-marker-block');
+  if (codex?.target.kind === 'owned-marker-block') {
+    assert.equal(codex.target.markerBegin, HEADROOM_CODEX_MARKER_BEGIN);
   }
 });
