@@ -30,11 +30,11 @@ jobs:
           from pathlib import Path
           p = Path('apps/cli/test/guided.test.ts')
           text = p.read_text()
-          old = "'candidate:headroom'"
+          old = 'candidate:headroom'
           count = text.count(old)
           if count != 3:
               raise SystemExit(f'Expected exactly 3 stale Headroom ids, found {count}')
-          p.write_text(text.replace(old, "'headroom'"))
+          p.write_text(text.replace(old, 'headroom'))
           PY
       - run: pnpm exec prettier --write apps/cli/test/guided.test.ts
       - run: pnpm test --filter @token-harness/cli
