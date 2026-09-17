@@ -75,6 +75,7 @@ test('Headroom plans surgical removal for Claude JSON and Codex marker ownership
   assert.equal(claude?.target.kind, 'owned-json-entry');
   if (claude?.target.kind === 'owned-json-entry') {
     assert.equal(claude.target.pointer, HEADROOM_CLAUDE_MCP_POINTER);
+    assert.equal(claude.target.path, '/home/dev/.claude.json');
   }
   assert.equal(codex?.target.kind, 'owned-marker-block');
   if (codex?.target.kind === 'owned-marker-block') {

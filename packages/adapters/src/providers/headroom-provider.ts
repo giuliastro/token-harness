@@ -39,7 +39,7 @@ const HEADROOM_MANIFEST: ProviderManifest = {
     'Local MCP compression and retrieval tools for Claude Code and Codex, managed without starting a persistent proxy.',
   homepage: 'https://github.com/headroomlabs-ai/headroom',
   sourceRepository: 'https://github.com/headroomlabs-ai/headroom',
-  license: { spdx: 'MIT', distributionMode: 'external', reviewRequired: false },
+  license: { spdx: 'Apache-2.0', distributionMode: 'external', reviewRequired: false },
   capabilities: [],
   platforms: [
     { os: 'windows', wsl: false, supported: true, limitation: null },
@@ -80,7 +80,7 @@ function manualInstallWarning() {
     code: 'headroom-uv-install-prerequisite',
     subject: 'headroom',
     message: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is not installed. Token Harness can manage its MCP configuration after the reviewed CLI is present.`,
-    remediation: `With your existing uv and Python 3.10+ installation, run: uv tool install --no-python-downloads --no-managed-python "headroom-ai[mcp]==${HEADROOM_REVIEWED_MCP_VERSION}". Token Harness does not install uv, Python, or admin prerequisites.`,
+    remediation: `With your existing uv and Python 3.13 installation, run: uv tool install --python 3.13 --no-python-downloads "headroom-ai[mcp]==${HEADROOM_REVIEWED_MCP_VERSION}". Token Harness does not install uv, Python, or admin prerequisites.`,
   });
 }
 

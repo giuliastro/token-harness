@@ -119,8 +119,7 @@ async function planClaude(
   context: ProviderContext,
   harness: HarnessId,
 ): Promise<HeadroomManagedMcpPlan> {
-  const directory = context.fs.join(context.paths.home, '.claude');
-  const target = context.fs.join(directory, 'mcp.json');
+  const target = context.fs.join(context.paths.home, '.claude.json');
   if (!context.fs.isInside(target, context.paths.home)) {
     return {
       harness,
@@ -140,26 +139,6 @@ async function planClaude(
   }
 
   const actions: PlannedAction[] = [];
-  const dirStat = await context.fs.stat(directory);
-  if (dirStat !== null && dirStat.kind !== 'directory') {
-    return {
-      harness,
-      target,
-      actions: [],
-      diagnostics: [
-        diagnostic({
-          severity: 'warning',
-          code: 'headroom-claude-directory-conflict',
-          subject: harness,
-          message: 'Claude configuration directory is occupied by a non-directory path',
-          path: directory,
-          remediation: 'Resolve the path conflict manually before enabling Headroom MCP',
-        }),
-      ],
-    };
-  }
-  if (dirStat === null) actions.push(directoryAction(harness, directory));
-
   const stat = await context.fs.stat(target);
   if (stat !== null && stat.kind !== 'file') {
     return {
@@ -457,7 +436,7 @@ export function headroomOwnedArtifact(
   if (harness === 'claude') {
     return {
       kind: 'owned-json-entry',
-      path: context.fs.join(context.paths.home, '.claude', 'mcp.json'),
+      path: context.fs.join(context.paths.home, '.claude.json'),
       pointer: HEADROOM_CLAUDE_MCP_POINTER,
       placement: 'value',
       valueDigest: jsonValueDigest(HEADROOM_MCP_SERVER),
@@ -483,7 +462,7 @@ export async function verifyHeadroomManagedMcpActivation(
   if (!cli.ok) return { state: 'candidate-unavailable', target: null, detail: cli.detail };
 
   if (harness === 'claude') {
-    const target = context.fs.join(context.paths.home, '.claude', 'mcp.json');
+    const target = context.fs.join(context.paths.home, '.claude.json');
     const stat = await context.fs.stat(target);
     if (stat === null)
       return { state: 'not-configured', target, detail: 'Claude MCP config is absent' };
