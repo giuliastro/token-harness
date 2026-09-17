@@ -1,0 +1,66 @@
+name: Headroom contract fix
+
+on:
+  push:
+    branches: [codex/managed-optimization-tools-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools-v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Align Headroom 0.37.0 with upstream MCP contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          managed = Path('packages/adapters/src/providers/headroom-managed.ts')
+          text = managed.read_text()
+          old_target = "  const directory = context.fs.join(context.paths.home, '.claude');\n  const target = context.fs.join(directory, 'mcp.json');"
+          new_target = "  const target = context.fs.join(context.paths.home, '.claude.json');"
+          if old_target not in text:
+              raise SystemExit('Claude target block not found')
+          text = text.replace(old_target, new_target, 1)
+          directory_block = re.compile(r"  const actions: PlannedAction\[\] = \[\];\n  const dirStat = await context\.fs\.stat\(directory\);\n  if \(dirStat !== null && dirStat\.kind !== 'directory'\) \{.*?\n  \}\n  if \(dirStat === null\) actions\.push\(directoryAction\(harness, directory\)\);\n\n  const stat = await context\.fs\.stat\(target\);", re.S)
+          text, count = directory_block.subn("  const actions: PlannedAction[] = [];\n  const stat = await context.fs.stat(target);", text, count=1)
+          if count != 1:
+              raise SystemExit('Claude legacy directory block not found')
+          text = text.replace("context.fs.join(context.paths.home, '.claude', 'mcp.json')", "context.fs.join(context.paths.home, '.claude.json')")
+          managed.write_text(text)
+          provider = Path('packages/adapters/src/providers/headroom-provider.ts')
+          text = provider.read_text()
+          text = text.replace("license: { spdx: 'MIT', distributionMode: 'external', reviewRequired: false }", "license: { spdx: 'Apache-2.0', distributionMode: 'external', reviewRequired: false }")
+          text = text.replace('With your existing uv and Python 3.10+ installation, run: uv tool install --no-python-downloads --no-managed-python', 'With your existing uv and Python 3.13 installation, run: uv tool install --python 3.13 --no-python-downloads')
+          provider.write_text(text)
+          test = Path('packages/adapters/test/managed-provider-lifecycle.test.ts')
+          text = test.read_text()
+          needle = "    assert.equal(claude.target.pointer, HEADROOM_CLAUDE_MCP_POINTER);\n"
+          if needle not in text:
+              raise SystemExit('Headroom removal assertion not found')
+          text = text.replace(needle, needle + "    assert.equal(claude.target.path, '/home/dev/.claude.json');\n", 1)
+          test.write_text(text)
+          PY
+      - run: pnpm format
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Commit fix and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/branch-headroom-contract-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(headroom): align managed MCP lifecycle with upstream 0.37.0"
+          git push origin HEAD:codex/managed-optimization-tools-v2
