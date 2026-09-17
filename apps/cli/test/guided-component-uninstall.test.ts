@@ -17,6 +17,7 @@ import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 const RTK = providerId('rtk');
 const MCPTOON = providerId('mcptoon');
 const GITNEXUS = providerId('gitnexus');
+const HEADROOM = providerId('headroom');
 
 function report(
   outcome: ApplyReport['outcome'],
@@ -95,7 +96,7 @@ it('previews a provider-scoped uninstall without confirmation and applies only a
   assert.equal(service.status().canUndo, false);
 });
 
-it('routes mcptoon and GitNexus removal through the approved provider uninstall flow', async () => {
+it('routes mcptoon, GitNexus, and Headroom removal through the approved provider uninstall flow', async () => {
   const calls: string[][] = [];
   const call: GuideCall = async <T>(args: readonly string[]) => {
     calls.push([...args]);
@@ -109,7 +110,7 @@ it('routes mcptoon and GitNexus removal through the approved provider uninstall 
     ]);
   };
 
-  for (const provider of [MCPTOON, GITNEXUS]) {
+  for (const provider of [MCPTOON, GITNEXUS, HEADROOM]) {
     const service = new GuideService(
       call,
       () => 0,
@@ -123,6 +124,7 @@ it('routes mcptoon and GitNexus removal through the approved provider uninstall 
   assert.deepEqual(calls, [
     ['uninstall', '--provider', 'mcptoon'],
     ['uninstall', '--provider', 'gitnexus'],
+    ['uninstall', '--provider', 'headroom'],
   ]);
   assert.ok(calls.every((args) => !args.includes('--yes')));
 });
@@ -149,7 +151,7 @@ it('rejects arbitrary providers and keeps removal inside a reviewed managed-only
     () => 'unused',
   );
   await assert.rejects(
-    service.preview({ action: 'remove', provider: 'headroom' }),
+    service.preview({ action: 'remove', provider: 'attacker-provider' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
   await assert.rejects(
