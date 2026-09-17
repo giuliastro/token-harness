@@ -414,8 +414,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
     facts.append(node('span', 'Configured for'), node('strong', configuredFor));
     if (component?.version) facts.append(node('span', 'Version'), node('strong', 'v' + component.version));
     card.append(facts);
-    if (component?.health === 'attention' && component.warnings?.length)
-      card.append(messageBox('Needs attention', component.warnings[0].message, 'warn'));
+    if (component?.warnings?.length) {
+      const attention = component.health === 'attention';
+      const prerequisite = !component.installed && component.nextAction?.kind === 'install-configure';
+      if (attention || prerequisite)
+        card.append(
+          messageBox(
+            attention ? 'Needs attention' : 'Prerequisite needed',
+            component.warnings[0].message,
+            attention ? 'warn' : '',
+          ),
+        );
+    }
     return card;
   }
 
