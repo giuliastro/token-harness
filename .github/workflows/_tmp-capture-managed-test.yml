@@ -1,0 +1,41 @@
+name: Temporary capture managed test
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools-v2
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools-v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run tests and capture tail
+        shell: bash
+        run: |
+          set +e
+          pnpm test > /tmp/full-test.log 2>&1
+          rc=$?
+          tail -n 300 /tmp/full-test.log > docs/.tmp-managed-test-tail.txt
+          echo "exit_code=$rc" >> docs/.tmp-managed-test-tail.txt
+          exit 0
+      - name: Persist diagnostics and self-remove
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/_tmp-capture-managed-test.yml
+          git add docs/.tmp-managed-test-tail.txt
+          git commit -m 'chore: capture managed optimizer test failure'
+          git push origin HEAD:codex/managed-optimization-tools-v2
