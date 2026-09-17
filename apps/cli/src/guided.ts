@@ -1052,7 +1052,9 @@ export class GuideService {
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
-        !['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'].includes(String(data['provider']))) ||
+        !['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'].includes(
+          String(data['provider']),
+        )) ||
       (data['candidate'] !== undefined &&
         !['mcptoon', 'gitnexus'].includes(String(data['candidate']))) ||
       (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||

@@ -80,7 +80,7 @@ function manualInstallWarning() {
     code: 'headroom-uv-install-prerequisite',
     subject: 'headroom',
     message: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is not installed. Token Harness can manage its MCP configuration after the reviewed CLI is present.`,
-    remediation: `With your existing uv and Python 3.13 installation, run: uv tool install --python 3.13 --no-python-downloads "headroom-ai[mcp]==${HEADROOM_REVIEWED_MCP_VERSION}". Token Harness does not install uv, Python, or admin prerequisites.`,
+    remediation: `With your existing uv and a compatible system Python >=3.10, run: uv tool install --no-managed-python --no-python-downloads "headroom-ai[mcp]==${HEADROOM_REVIEWED_MCP_VERSION}". Token Harness does not install uv, Python, or admin prerequisites.`,
   });
 }
 
