@@ -26,74 +26,36 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-
           guided = Path('apps/cli/src/guided.ts')
           text = guided.read_text()
-          text = text.replace(
-              "  gitnexus: 'GitNexus',\n};",
-              "  gitnexus: 'GitNexus',\n  headroom: 'Headroom',\n};",
-          )
-          text = text.replace(
-              "  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n];",
-              "  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n  {\n    providerId: providerId('headroom'),\n    displayName: 'Headroom',\n    category: 'context-minimization',\n  },\n];",
-          )
-          guided.write_text(text)
-
+          text = text.replace("  gitnexus: 'GitNexus',\n};", "  gitnexus: 'GitNexus',\n  headroom: 'Headroom',\n};")
+          old = "  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n];"
+          new = "  {\n    providerId: providerId('gitnexus'),\n    displayName: 'GitNexus',\n    category: 'repository-retrieval',\n  },\n  {\n    providerId: providerId('headroom'),\n    displayName: 'Headroom',\n    category: 'context-minimization',\n  },\n];"
+          if old not in text:
+              raise SystemExit('STACK_COMPONENTS insertion point not found')
+          guided.write_text(text.replace(old, new, 1))
           client = Path('apps/cli/src/guided-product-client.ts')
           text = client.read_text()
           marker = "      optional: true,\n    },\n  };\n  const EXPERIMENTAL"
-          replacement = """      optional: true,
-    },
-    headroom: {
-      name: 'Headroom',
-      role: 'Provides local MCP compression and retrieval through the reviewed Headroom server.',
-      managed: true,
-      optional: true,
-    },
-  };
-  const EXPERIMENTAL"""
+          headroom = "      optional: true,\n    },\n    headroom: {\n      name: 'Headroom',\n      role: 'Provides local MCP compression and retrieval through the reviewed Headroom server.',\n      managed: true,\n      optional: true,\n    },\n  };\n  const EXPERIMENTAL"
           if marker not in text:
               raise SystemExit('TOOL_INFO insertion point not found')
-          text = text.replace(marker, replacement, 1)
-          text, count = re.subn(
-              r"  const EXPERIMENTAL = \[\n.*?\n  \];\n  const CATEGORY",
-              "  const EXPERIMENTAL = [];\n  const CATEGORY",
-              text,
-              count=1,
-              flags=re.S,
-          )
+          text = text.replace(marker, headroom, 1)
+          text, count = re.subn(r"  const EXPERIMENTAL = \[\n.*?\n  \];\n  const CATEGORY", "  const EXPERIMENTAL = [];\n  const CATEGORY", text, count=1, flags=re.S)
           if count != 1:
               raise SystemExit('experimental list replacement failed')
-          text = text.replace(
-              "Review measured results or explore optional experimental tools when you want to.",
-              "Review measured results or manage optional optimizers when you want to.",
-          )
-          text = text.replace(
-              "      renderManagedTool('gitnexus'),\n    );",
-              "      renderManagedTool('gitnexus'),\n      renderManagedTool('headroom'),\n    );",
-          )
-          insertion = """    }
-    optional.append(optionalButtons);"""
-          replacement = """      optionalButtons.append(
-        actionButton('Review Headroom for ' + agent.name, () => reviewSetup(agent.id, 'headroom'), 'secondary'),
-      );
-    }
-    optional.append(optionalButtons);"""
+          text = text.replace('Review measured results or explore optional experimental tools when you want to.', 'Review measured results or manage optional optimizers when you want to.')
+          text = text.replace("      renderManagedTool('gitnexus'),\n    );", "      renderManagedTool('gitnexus'),\n      renderManagedTool('headroom'),\n    );", 1)
+          insertion = "    }\n    optional.append(optionalButtons);"
+          replacement = "      optionalButtons.append(\n        actionButton('Review Headroom for ' + agent.name, () => reviewSetup(agent.id, 'headroom'), 'secondary'),\n      );\n    }\n    optional.append(optionalButtons);"
           if insertion not in text:
               raise SystemExit('optional managed actions insertion point not found')
           text = text.replace(insertion, replacement, 1)
-          text = text.replace(
-              "  function renderExperimental() {\n    const root = $('experimental-tools');\n    root.replaceChildren();",
-              "  function renderExperimental() {\n    const root = $('experimental-tools');\n    if (!root) return;\n    root.replaceChildren();",
-          )
+          text = text.replace("  function renderExperimental() {\n    const root = $('experimental-tools');\n    root.replaceChildren();", "  function renderExperimental() {\n    const root = $('experimental-tools');\n    if (!root) return;\n    root.replaceChildren();", 1)
           client.write_text(text)
-
           assets = Path('apps/cli/src/guided-assets.ts')
           text = assets.read_text()
-          text = text.replace(
-              'RTK and HarnessTrim are the production baseline. mcptoon and GitNexus also expose narrow optional managed integrations on exact reviewed rows.',
-              'RTK and HarnessTrim are the production baseline. mcptoon, GitNexus and Headroom also expose narrow optional managed integrations on exact reviewed rows.',
-          )
+          text = text.replace('RTK and HarnessTrim are the production baseline. mcptoon and GitNexus also expose narrow optional managed integrations on exact reviewed rows.', 'RTK and HarnessTrim are the production baseline. mcptoon, GitNexus and Headroom also expose narrow optional managed integrations on exact reviewed rows.')
           experimental = '<section class="setup-step"><div class="step-heading"><span class="step-number">3</span><div><h2>Experimental tools</h2><p>Headroom remains an unmanaged experiment. Token Harness can detect and benchmark it, but does not silently install or activate it.</p></div></div><div id="experimental-tools" class="tool-grid"><article class="tool-card experimental"><h3>Checking experimental tools…</h3></article></div></section>\n\n'
           if experimental not in text:
               raise SystemExit('experimental setup section not found')
