@@ -1,0 +1,42 @@
+name: Finalize status copy once
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools-v2
+    paths:
+      - .github/workflows/finalize-status-copy-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools-v2
+      - name: Make current status durable
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/development-status.md')
+          text = p.read_text()
+          old = 'The Headroom package/CLI passive smoke is exercised on Ubuntu, macOS and Windows. Current focus: finish the complete PR CI (tests, Windows RTK live smoke, build, bundle/package and installed-package smoke), merge only when every job is green, then verify post-merge `main` CI.'
+          new = 'The Headroom package/CLI passive smoke is exercised on Ubuntu, macOS and Windows. Release gate: the complete PR CI must be green across tests, Windows RTK live smoke, build, bundle/package and installed-package smoke before merge, followed by post-merge `main` CI verification.'
+          if text.count(old) != 1:
+              raise SystemExit('Expected current-status sentence exactly once')
+          p.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit durable status and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/finalize-status-copy-once.yml
+          git add docs/development-status.md
+          git diff --cached --check
+          git commit -m "docs: make managed stack status durable"
+          git push origin HEAD:codex/managed-optimization-tools-v2
