@@ -1,0 +1,151 @@
+name: Temporary managed-tools promotion
+
+on:
+  push:
+    branches:
+      - codex/managed-tools-production-lifecycle
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-tools-production-lifecycle
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Restore reviewed managed-provider implementation
+        shell: bash
+        run: |
+          git fetch origin codex/managed-optimization-tools
+          git checkout origin/codex/managed-optimization-tools -- \
+            packages/adapters/src/providers/index.ts \
+            packages/adapters/src/providers/managed-optimization-tools.ts \
+            packages/adapters/src/providers/mcptoon-provider.ts \
+            packages/adapters/src/providers/gitnexus-provider.ts \
+            packages/adapters/test/managed-provider-lifecycle.test.ts
+      - name: Wire managed providers into guided stack
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/cli/src/guided.ts')
+          text = path.read_text()
+
+          old = """  {
+            providerId: providerId('harnesstrim'),
+            displayName: 'HarnessTrim',
+            category: 'command-output-reduction',
+          },
+        ];"""
+          new = """  {
+            providerId: providerId('harnesstrim'),
+            displayName: 'HarnessTrim',
+            category: 'command-output-reduction',
+          },
+          {
+            providerId: providerId('mcptoon'),
+            displayName: 'mcptoon',
+            category: 'mcp-discovery',
+          },
+          {
+            providerId: providerId('gitnexus'),
+            displayName: 'GitNexus',
+            category: 'repository-retrieval',
+          },
+        ];"""
+          if old not in text:
+            raise SystemExit('STACK_COMPONENTS anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = "!['rtk', 'harnesstrim'].includes(String(data['provider']))"
+          new = "!['rtk', 'harnesstrim', 'mcptoon', 'gitnexus'].includes(String(data['provider']))"
+          if old not in text:
+            raise SystemExit('provider validation anchor not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          test_path = Path('apps/cli/test/guided-component-uninstall.test.ts')
+          test = test_path.read_text()
+          anchor = "const RTK = providerId('rtk');\n"
+          if anchor not in test:
+            raise SystemExit('guided uninstall constants anchor not found')
+          test = test.replace(
+              anchor,
+              anchor + "const MCPTOON = providerId('mcptoon');\nconst GITNEXUS = providerId('gitnexus');\n",
+              1,
+          )
+          marker = "it('does not offer an approval when the provider has no Token Harness-owned change', async () => {"
+          if marker not in test:
+            raise SystemExit('guided uninstall insertion marker not found')
+          managed_test = """it('routes mcptoon and GitNexus removal through the ordinary approved uninstall flow', async () => {
+            const calls: string[][] = [];
+            const call: GuideCall = async <T>(args: readonly string[]) => {
+              calls.push([...args]);
+              return envelope<T>('uninstall', null, 8, [
+                diagnostic({
+                  severity: 'error',
+                  code: 'confirmation-required',
+                  message: 'This would remove one owned change',
+                  remediation: 'Re-run with --yes',
+                }),
+              ]);
+            };
+
+            for (const provider of [MCPTOON, GITNEXUS]) {
+              const service = new GuideService(call, () => 0, () => `remove-${provider}`);
+              const preview = await service.preview({ action: 'remove', provider });
+              assert.equal(preview.network, false);
+              assert.equal(preview.restart, true);
+              assert.match(preview.title, new RegExp(provider === MCPTOON ? 'mcptoon' : 'GitNexus', 'i'));
+            }
+
+            assert.deepEqual(calls, [
+              ['uninstall', '--provider', 'mcptoon'],
+              ['uninstall', '--provider', 'gitnexus'],
+            ]);
+            assert.ok(calls.every((args) => !args.includes('--yes')));
+          });
+
+          """
+          test = test.replace(marker, managed_test + marker, 1)
+          test_path.write_text(test)
+          PY
+      - name: Format intended product files
+        run: >-
+          pnpm exec prettier --write
+          packages/adapters/src/providers/index.ts
+          packages/adapters/src/providers/managed-optimization-tools.ts
+          packages/adapters/src/providers/mcptoon-provider.ts
+          packages/adapters/src/providers/gitnexus-provider.ts
+          packages/adapters/test/managed-provider-lifecycle.test.ts
+          apps/cli/src/guided.ts
+          apps/cli/test/guided-component-uninstall.test.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Commit product changes and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/_tmp-promote-managed-tools.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            packages/adapters/src/providers/index.ts \
+            packages/adapters/src/providers/managed-optimization-tools.ts \
+            packages/adapters/src/providers/mcptoon-provider.ts \
+            packages/adapters/src/providers/gitnexus-provider.ts \
+            packages/adapters/test/managed-provider-lifecycle.test.ts \
+            apps/cli/src/guided.ts \
+            apps/cli/test/guided-component-uninstall.test.ts
+          git commit -m 'feat: promote mcptoon and GitNexus to managed providers'
+          git push origin HEAD:codex/managed-tools-production-lifecycle
