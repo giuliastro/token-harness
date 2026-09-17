@@ -1,0 +1,49 @@
+name: Fix Headroom guided tests once
+
+on:
+  push:
+    branches:
+      - codex/managed-optimization-tools-v2
+    paths:
+      - .github/workflows/fix-headroom-guided-tests-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/managed-optimization-tools-v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate stale Headroom provider expectations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/cli/test/guided.test.ts')
+          text = p.read_text()
+          old = "'candidate:headroom'"
+          count = text.count(old)
+          if count != 3:
+              raise SystemExit(f'Expected exactly 3 stale Headroom ids, found {count}')
+          p.write_text(text.replace(old, "'headroom'"))
+          PY
+      - run: pnpm exec prettier --write apps/cli/test/guided.test.ts
+      - run: pnpm test --filter @token-harness/cli
+      - name: Commit migrated tests
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/cli/test/guided.test.ts
+          git diff --cached --check
+          git commit -m "test: align Headroom guided expectations"
+          git push origin HEAD:codex/managed-optimization-tools-v2
