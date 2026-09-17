@@ -31,13 +31,7 @@ const FACTS: PlatformFacts = {
 
 class MemoryFs implements FileSystemPort {
   readonly files = new Map<string, Uint8Array>();
-  readonly directories = new Set<string>([
-    '/',
-    '/home',
-    '/home/dev',
-    '/work',
-    '/work/demo',
-  ]);
+  readonly directories = new Set<string>(['/', '/home', '/home/dev', '/work', '/work/demo']);
 
   join(...segments: string[]): string {
     return segments.join('/').replace(/\/+/g, '/');
@@ -53,10 +47,8 @@ class MemoryFs implements FileSystemPort {
   }
   async stat(path: string): Promise<FileStat | null> {
     const file = this.files.get(path);
-    if (file !== undefined)
-      return { kind: 'file', byteLength: file.byteLength, mode: null };
-    if (this.directories.has(path))
-      return { kind: 'directory', byteLength: 0, mode: null };
+    if (file !== undefined) return { kind: 'file', byteLength: file.byteLength, mode: null };
+    if (this.directories.has(path)) return { kind: 'directory', byteLength: 0, mode: null };
     return null;
   }
   async readFile(path: string): Promise<Uint8Array> {
@@ -166,9 +158,7 @@ test('plans the reviewed Headroom MCP entry in the modern Claude Code user confi
     },
   ]);
   assert.equal(
-    plan.actions.some((entry) =>
-      entry.affectedPaths.includes('/home/dev/.claude/mcp.json'),
-    ),
+    plan.actions.some((entry) => entry.affectedPaths.includes('/home/dev/.claude/mcp.json')),
     false,
   );
 });
@@ -176,10 +166,7 @@ test('plans the reviewed Headroom MCP entry in the modern Claude Code user confi
 test('plans a reversible Codex marker block without running wrap or proxy commands', async () => {
   const fs = new MemoryFs();
   const commands: string[] = [];
-  const plan = await planHeadroomManagedMcpActivation(
-    context(fs, commands),
-    harnessId('codex'),
-  );
+  const plan = await planHeadroomManagedMcpActivation(context(fs, commands), harnessId('codex'));
 
   assert.equal(plan.target, '/home/dev/.codex/config.toml');
   const patch = plan.actions.find((action) => action.kind === 'patch-marker-block');
