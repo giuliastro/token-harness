@@ -175,8 +175,13 @@ test('plans a reversible Codex marker block without running wrap or proxy comman
   assert.equal(patch.markerBegin, HEADROOM_CODEX_MARKER_BEGIN);
   assert.equal(patch.body, HEADROOM_CODEX_MCP_BODY);
   assert.ok(plan.actions.some((action) => action.kind === 'create-directory'));
+  assert.deepEqual(commands, [
+    'headroom --version',
+    'headroom wrap --help',
+    'headroom mcp serve --help',
+  ]);
   assert.equal(
-    commands.some((command) => /headroom (wrap|proxy|deploy)/.test(command)),
+    commands.some((command) => /headroom (?:proxy|deploy)(?: |$)/.test(command)),
     false,
   );
 });
