@@ -29,90 +29,67 @@ of CLI commands to memorize.
 
 ### First run
 
-1. Open **Dashboard** and let Token Harness inspect the current setup.
-2. If setup is incomplete, choose **Open setup**.
-3. In **Setup**, work from top to bottom:
-   - Coding agents
-   - Managed optimizers
-   - Optional agent tuning
-   - Checks and maintenance
-4. For Claude Code or Codex, choose **Review baseline** when the RTK + HarnessTrim setup is available.
-5. Read the exact proposed changes. **Apply reviewed setup** appears only when there is a concrete
-   safe plan to apply.
-6. Keep using Claude Code or Codex normally.
-7. Open **Results** when you want to see what Token Harness can actually prove.
+The first screen is **Overview**. There is no separate Setup page to learn.
 
-Opening the app does not change your configuration. Read-only checks stay read-only, and a managed
-write requires an explicit review and approval.
+1. Token Harness detects Claude Code and Codex.
+2. Each detected coding agent says either **Ready** or **Setup incomplete**.
+3. If setup is incomplete, choose **Finish setup** on that agent. Token Harness prepares the
+   recommended **RTK + HarnessTrim** baseline and shows the exact safe plan before anything changes.
+4. The **Optimizers** section keeps the recommended baseline separate from optional tools
+   (mcptoon, GitNexus and Headroom). When a tool needs an action, that action appears on the same
+   card as the status it refers to.
+5. **Health and updates** is maintenance, not another onboarding checklist. Normal setup performs its
+   own safety checks. Use **Re-check health** for troubleshooting and **Check for updates** when you
+   want to inspect provider versions. If a reviewed update is available, the same dialog offers
+   **Install updates** after showing the versions.
+6. Keep using Claude Code or Codex normally. Open **Results** when you want detailed evidence.
 
-## The three views
+Opening the app does not change your configuration. A configuration or software change is always
+previewed first and requires explicit approval.
 
-### Dashboard
+## The two views
 
-Dashboard answers the questions that matter first:
+### Overview
 
-- is my setup ready;
-- which coding agents and managed optimizers are active;
-- what should I do next;
-- what value has actually been measured;
-- whether quality or an integration needs attention.
+Overview is both the first-run screen and the normal status screen. It keeps the two product entities
+separate:
 
-The headline cards deliberately distinguish measured evidence from unknown values. Missing evidence
-is never shown as zero savings.
+- **Coding agents** — currently Claude Code and Codex. Detection only means Token Harness can see the
+  agent; first-run setup is complete for that agent only when both RTK and HarnessTrim are connected.
+- **Optimizers** — RTK and HarnessTrim are the recommended baseline. mcptoon, GitNexus and Headroom
+  are optional reviewed integrations with narrower prerequisites and compatibility boundaries.
 
-### Setup
+The status at the top always answers what to do next. States such as **Setup incomplete**,
+**Installed · not connected**, **Needs attention**, or **Update available** have their action beside
+the affected agent or optimizer instead of in a separate action list.
 
-Setup is one ordered workflow instead of a collection of unrelated actions.
+Overview also contains a compact **Measured impact** summary. Missing evidence is shown as unknown,
+never as zero savings.
 
-**1. Coding agents**
+Advanced agent details and reasoning preferences are collapsed because they are not required for
+first-run optimizer setup.
 
-Token Harness currently supports guided setup for Claude Code and Codex. Agent details also show
-useful read-only allowance and connected-tool observations when available.
+### Optimizer lifecycle and evidence
 
-**2. Managed optimizers**
+The recommended baseline remains **RTK + HarnessTrim** on individually reviewed combinations.
+Token Harness also exposes **mcptoon**, **GitNexus** and **Headroom** as optional managed integrations
+on exact reviewed lifecycle rows. Enabling an optional optimizer does not make it part of the
+production baseline and does not create a savings claim.
 
-The production baseline remains **RTK + HarnessTrim** on individually reviewed combinations.
-Token Harness also exposes **mcptoon**, **GitNexus** and **Headroom** as optional managed integrations on their exact
-reviewed lifecycle rows; enabling any of them does not make it part of the production baseline or create a
-savings claim. Token Harness tracks the exact combined provider set separately: if no combined-stack
-review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
-from healthy individual checks. Token Harness can prepare their integration transactionally, show the
-exact plan, apply it only after approval, verify it, and remove only configuration it owns.
+Token Harness can prepare supported integration changes transactionally, show the exact plan, apply
+it only after approval, verify what the declared tier can verify, and remove only configuration it
+owns. GitNexus is never auto-indexed and its noncommercial license boundary stays visible. Headroom
+remains config-only managed on its reviewed row; Token Harness does not bootstrap uv/Python or start
+wrapper/proxy/deploy flows.
 
-For maintainers validating the combined stack, `token-harness stack-review --json` captures the exact
-configured provider versions and managed harness sets and reuses the existing passive `verify`
-evidence for exact provider/harness pairs. Runtime evidence is credited only when it can be
-attributed to that harness: HarnessTrim uses its native event harness field, while provider-wide
-telemetry can be attributed by exclusion only when one harness is wired. With multiple harnesses, an
-unattributable receipt stays **Unavailable** instead of being copied across rows. A `not-exercised`
-result does not promise that ordinary agent use will create a receipt: the provider must record a
-qualifying operation, and for reducers that means a real reduction. `stack-review` does not run an
-active canary or spend a model call, and it never makes the compatibility decision itself. The
-shipped combined-review registry stays empty until the captured configuration has enough real
-verification evidence, has been benchmarked together, and has been deliberately reviewed; see
-`docs/combined-stack-reviews.md`.
+For maintainers, `token-harness stack-review --json` captures the exact configured provider versions
+and managed harness sets for combined-stack review. Runtime evidence is credited only when it can be
+attributed to the relevant harness; missing attribution remains unavailable rather than being copied
+across rows.
 
-**3. Evaluation evidence (maintainers)**
-
-Selection campaigns and historical candidate evidence remain available for maintainers, but they are
-not a separate novice setup product. Once a tool has a reviewed managed lifecycle, Setup presents it in
-the same **Optimization Stack** with its exact state, version, prerequisites, harness scope and safe
-Apply/Remove controls. Evaluation evidence never turns into a savings or compatibility claim by itself.
-
-Headroom is config-only managed on its exact reviewed 0.37.0 row. Token Harness can own the narrow
-Claude Code or Codex MCP registration after the pinned CLI is present; it deliberately does not
-bootstrap `uv`/Python, start wrappers/proxies, or claim runtime compression savings. GitNexus likewise
-does not auto-index repositories, and its noncommercial license boundary stays visible.
-
-**4. Optional agent tuning**
-
-Reasoning preferences are separate from optimizer installation. They are persistent agent settings,
-not hidden per-task switches, and are changed only through the normal preview/apply flow.
-
-**5. Checks and maintenance**
-
-Read-only integration checks, update checks and safe removal/undo controls live here. An update
-outside reviewed compatibility is not forced.
+Evaluation campaigns are an advanced maintainer workflow, not a novice setup step. Normal managed
+setup stays in the unified **Optimization Stack** and historical candidate evidence never turns into
+a savings, compatibility or promotion claim by itself.
 
 ### Results
 
@@ -384,8 +361,9 @@ Update Token Harness itself:
 npm install --global token-harness@latest
 ```
 
-Provider checks and reviewed updates are in **Setup -> Checks and maintenance**. From the advanced
-CLI, first preview and then explicitly apply the provider-package updates:
+Provider checks and reviewed updates are in **Overview -> Health and updates**. The browser first
+checks reviewed channels and, when an installable update exists, offers **Install updates** in the
+same dialog. From the advanced CLI, the preview prints the exact confirmation command:
 
 ```sh
 token-harness update
@@ -442,7 +420,7 @@ Node must be at least 22.13. Reopen the terminal after installation if needed.
 
 ### Setup or verification needs attention
 
-Use the action shown in Dashboard or Setup. For technical evidence:
+Use the action shown beside the affected agent or optimizer in Overview. For technical evidence:
 
 ```sh
 token-harness doctor --verbose
