@@ -177,11 +177,12 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
   }
 });
 
-it('exposes one explicit read-only update check in maintenance', () => {
-  assert.match(GUIDE_HTML, /Checks and maintenance/);
-  assert.match(GUIDE_JS, /Check optimizer updates/);
-  assert.match(GUIDE_JS, /Check updates/);
+it('keeps update discovery read-only but makes reviewed updates actionable', () => {
+  assert.match(GUIDE_HTML, /<h2>Maintenance<\/h2>/);
+  assert.match(GUIDE_JS, /Check for updates/);
   assert.match(GUIDE_JS, /\/api\/update-check/);
-  assert.match(GUIDE_JS, /does not download or upgrade anything/);
+  assert.match(GUIDE_JS, /Update now/);
+  assert.match(GUIDE_JS, /\/api\/update-apply/);
+  assert.match(GUIDE_JS, /Nothing will be changed during this check/);
   assert.doesNotMatch(GUIDE_JS, /update-check[^\n]+--yes/);
 });
