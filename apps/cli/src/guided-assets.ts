@@ -46,6 +46,10 @@ export const GUIDE_HTML = `<!doctype html>
 
 <div class="section-title"><div><h2>Coding agents</h2><p>Token Harness currently works with Claude Code and Codex. A detected agent that needs setup has its Set up button on the same card.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
+<details class="disclosure"><summary>Agent details</summary>
+<p class="caption">Optional read-only details such as in-session guidance, plan allowance and connected-tool checks.</p>
+<div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div>
+</details>
 
 <div class="section-title"><div><h2>Recommended optimizers</h2><p>RTK + HarnessTrim are the normal baseline. Each tool shows exactly which agent it is connected to and exposes setup beside the missing connection.</p></div></div>
 <div id="baseline-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
