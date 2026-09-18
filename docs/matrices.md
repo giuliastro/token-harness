@@ -154,14 +154,16 @@ is exactly the drift generating the tables above exists to prevent.
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
-- **Six managed-provider compatibility rows ship.** The original three Windows rows are: RTK × Claude Code at rtk `0.44.0` /
+- **Ten provider/harness compatibility rows are declared; six historical baseline recordings remain under `tests/fixtures/rows/`.** The original three Windows recordings are: RTK × Claude Code at rtk `0.44.0` /
   Claude Code `2.1.220` (`canary`), HarnessTrim × Claude Code at harnesstrim `0.1.0` /
   Claude Code `2.1.220` (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` /
   Codex `0.146.0` (`config-only`). Two more Windows recordings cover RTK `0.44.0` and `0.48.0`
-  with Claude Code `2.1.251`. The remaining row is the real Linux/non-WSL recording:
-  HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). Each names a recording under
-  `tests/fixtures/rows/`, and the Linux row is exact: nearby Codex/HarnessTrim versions and WSL
-  remain refused. HarnessTrim's OpenCode combination remains adoption-only.
+  with Claude Code `2.1.251`. The sixth is the real Linux/non-WSL recording:
+  HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). The optional mcptoon, GitNexus and
+  Headroom rows are admitted only on their exact reviewed config-only contracts and dedicated
+  compatibility evidence; they do not rewrite the older baseline recordings. The Linux HarnessTrim
+  row remains exact: nearby Codex/HarnessTrim versions and WSL remain refused. HarnessTrim's
+  OpenCode combination remains adoption-only.
 - **`invalidating-update` is still intentionally missing from the Linux recording.** It needs a
   second real provider or harness version on the same machine; a synthesised state would assert
   something nobody stood in. The Linux fixture does include `uninstall`, recorded after a second
@@ -194,9 +196,9 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Scope
 
-- **Two providers, three harnesses.** The capability resolver is a static rule table, not a solver:
-  the ownership policy for this one provider pair is known and written down, and a general engine
-  built now would be designed against one data point.
+- **Five providers have declared compatibility rows across three harnesses.** The capability resolver
+  is a static rule table, not a general solver: every provider/harness/version combination is admitted
+  explicitly, and adding another integration requires another reviewed rule rather than inference.
 - **A compatibility rule covers only the versions it records.** Outside them the rule is withdrawn
   and the pair is reported as unresolved, which is the conservative outcome rather than a guess.
 - **`profile: custom` has no CLI surface yet.** The resolver supports it; nothing exposes it.
