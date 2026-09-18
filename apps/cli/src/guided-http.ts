@@ -322,6 +322,20 @@ export function createGuideHandler(input: {
         send(200, JSON.stringify(result));
         return;
       }
+      if (url.pathname === '/api/update-apply') {
+        if (
+          body === null ||
+          typeof body !== 'object' ||
+          Array.isArray(body) ||
+          Object.keys(body as Record<string, unknown>).length !== 1 ||
+          (body as Record<string, unknown>)['confirm'] !== true
+        )
+          throw new GuideError(400, 'Confirm the reviewed optimizer update from this dashboard.');
+        const result = await input.service.applyUpdates();
+        overviewCache.clear();
+        send(200, JSON.stringify(result));
+        return;
+      }
       if (url.pathname === '/api/update-check') {
         if (body === null || typeof body !== 'object' || Array.isArray(body))
           throw new GuideError(400, 'Only an optional reporting period is accepted.');
