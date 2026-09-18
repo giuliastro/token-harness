@@ -19,6 +19,11 @@ version outside it is reported as such and treated conservatively rather than re
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
 | harnesstrim | opencode | 1.18.9–1.18.9 | `tool.output.reduce` |
+| mcptoon | claude | 2.1.269–2.1.269 | none claimed |
+| mcptoon | codex | 0.152.1–0.153.0 | none claimed |
+| gitnexus | claude | 2.1.269–2.1.269 | none claimed |
+| headroom | claude | 2.1.269–2.1.269 | none claimed |
+| headroom | codex | 0.153.0–0.153.0 | none claimed |
 
 ## Harnesses
 
@@ -43,6 +48,11 @@ correct and that nothing available can show it ran.
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
 | harnesstrim | opencode | config-only | config-only | at the harness ceiling |
+| mcptoon | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| mcptoon | codex | config-only | config-only | at the harness ceiling |
+| gitnexus | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| headroom | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| headroom | codex | config-only | config-only | at the harness ceiling |
 
 ## Platforms
 
@@ -56,6 +66,15 @@ correct and that nothing available can show it ran.
 | harnesstrim | windows (WSL) | supported | — |
 | harnesstrim | macos | supported | — |
 | harnesstrim | linux | supported | — |
+| mcptoon | windows | supported | — |
+| mcptoon | macos | supported | — |
+| mcptoon | linux | supported | — |
+| gitnexus | windows | supported | — |
+| gitnexus | macos | supported | — |
+| gitnexus | linux | supported | — |
+| headroom | windows | supported | — |
+| headroom | macos | supported | — |
+| headroom | linux | supported | — |
 
 ## Metrics sources
 
@@ -66,6 +85,9 @@ RFC 0005 §Importer degradation policy: an importer states the fidelity mode it 
 | --- | --- | --- | --- |
 | rtk | local-database | native | `<user data directory>/rtk/history.db` |
 | harnesstrim | jsonl | native | `.harnesstrim/metrics.jsonl`, `.hermes/harnesstrim-metrics.jsonl` |
+| mcptoon | none | unavailable | — |
+| gitnexus | none | unavailable | — |
+| headroom | none | unavailable | — |
 
 ## Known limitations
 
