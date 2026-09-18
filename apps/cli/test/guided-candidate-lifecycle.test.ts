@@ -153,12 +153,12 @@ it('keeps Headroom and arbitrary selectors outside the managed candidate UI boun
   assert.equal(calls, 0, 'invalid candidate UI input must not reach the CLI');
 });
 
-it('keeps candidates visibly experimental while exposing only reviewed lifecycle actions', () => {
-  assert.match(GUIDE_HTML, /does not silently install or activate them/i);
-  assert.match(GUIDE_JS, /Managed evaluation setup/);
+it('keeps historical candidate lifecycle bounded after the tools move into managed setup', () => {
+  assert.match(GUIDE_HTML, /Managed optimizers/);
+  assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
+  assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
   assert.match(GUIDE_JS, /candidate-setup/);
   assert.match(GUIDE_JS, /candidate-remove/);
-  assert.match(GUIDE_JS, /remains outside the RTK \+ HarnessTrim production stack/);
   assert.match(GUIDE_JS, /does not install Python, pipx or administrator prerequisites/);
   assert.match(GUIDE_JS, /never creates or refreshes the repository index/);
 });
