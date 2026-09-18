@@ -928,11 +928,11 @@ export class GuideService {
       );
     if (status.data === null)
       notices.push(
-        'The integration configuration check could not finish. Use Check integrations in Activity to try again. No agent settings changed.',
+        'The optimizer setup check could not finish. Use Verify setup in Overview to try again. No agent settings changed.',
       );
     if ((status.data?.problemCount ?? 0) > 0)
       notices.push(
-        'An integration has changed or needs verification. Use Check integrations in Activity; existing settings are not repaired silently.',
+        'An optimizer configuration has changed or needs verification. Use Verify setup in Overview; existing settings are not repaired silently.',
       );
     this.stackBase =
       doctor.data === null
@@ -1666,7 +1666,7 @@ export class GuideService {
         messages.push(
           ...available.map(
             (row) =>
-              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is available. Run token-harness update to review the dry-run; applying still requires explicit approval.`,
+              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is available. Choose Update now to install the reviewed update, or run token-harness update --yes in a terminal.`,
           ),
         );
       }
@@ -1775,7 +1775,7 @@ export class GuideService {
 
   async verify(): Promise<GuideResult> {
     return this.exclusive(async () => {
-      this.record('Checking the configured integrations without changing them.', 'working');
+      this.record('Verifying the configured optimizer setup without changing it.', 'working');
       const messages: string[] = [];
       const results: VerifyReport['results'] = [];
       let ok = true;
@@ -1792,7 +1792,7 @@ export class GuideService {
       for (const agent of present) {
         const harness = agent.harnessId;
         this.record(
-          `Checking ${name(harness)} configuration and available execution evidence. No settings changed.`,
+          `Verifying ${name(harness)} optimizer configuration and available execution evidence. No settings changed.`,
           'working',
         );
         const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
@@ -1833,10 +1833,10 @@ export class GuideService {
       const stack = this.stackSnapshot();
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record(
-        'Integration checks completed. No settings changed.',
+        'Setup verification completed. No settings changed.',
         ok ? 'success' : 'attention',
       );
-      return { ok, title: 'Integration checks', messages, appliedPlans: 0, stack };
+      return { ok, title: 'Setup verification', messages, appliedPlans: 0, stack };
     });
   }
 }
