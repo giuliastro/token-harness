@@ -11,7 +11,8 @@ describe('guided loading layout', () => {
     assert.match(GUIDE_HTML, /id="optional-tools"/);
     assert.match(GUIDE_HTML, /id="maintenance-actions"/);
     assert.match(GUIDE_HTML, /Checking agents…/);
-    assert.doesNotMatch(GUIDE_HTML, /id="agent-capabilities"/);
+    assert.match(GUIDE_HTML, /<summary>Agent details<\/summary>/);
+    assert.match(GUIDE_HTML, /id="agent-capabilities"/);
   });
 
   it('surfaces progressive read feedback without triggering another full refresh', () => {
