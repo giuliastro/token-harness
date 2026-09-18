@@ -3,53 +3,66 @@ import { describe, it } from 'node:test';
 
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
-describe('setup-first guided dashboard', () => {
-  it('uses three product destinations with a clear mental model', () => {
-    assert.match(GUIDE_HTML, /id="tab-dashboard"[^>]*>Dashboard</);
-    assert.match(GUIDE_HTML, /id="tab-setup"[^>]*>Setup</);
+describe('actionable first-run overview', () => {
+  it('uses two product destinations with setup embedded in Overview', () => {
+    assert.match(GUIDE_HTML, /id="tab-dashboard"[^>]*>Overview</);
     assert.match(GUIDE_HTML, /id="tab-results"[^>]*>Results</);
-    assert.doesNotMatch(GUIDE_HTML, />Actions</);
-    assert.doesNotMatch(GUIDE_HTML, />Monitor</);
-    assert.match(GUIDE_HTML, /Your coding setup, what is active, and what to do next/);
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
+    assert.doesNotMatch(GUIDE_HTML, /id="view-setup"/);
+    assert.match(
+      GUIDE_HTML,
+      /Your agents, optimizer status, results summary, and the next useful action/,
+    );
   });
 
-  it('makes setup an ordered onboarding flow instead of a bag of actions', () => {
-    for (const label of [
-      'Coding agents',
-      'Managed optimizers',
-      'Optional agent tuning',
-      'Checks and maintenance',
-    ])
-      assert.match(GUIDE_HTML, new RegExp(label));
-    assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
-    assert.match(GUIDE_HTML, /mcptoon, GitNexus and Headroom/);
-    assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
-    assert.doesNotMatch(GUIDE_HTML, /<h2>Actions<\/h2>/);
+  it('organizes first run around agents and recommended optimizers', () => {
+    assert.match(GUIDE_HTML, /Coding agents/);
+    assert.match(GUIDE_HTML, /Recommended optimizers/);
+    assert.match(GUIDE_HTML, /RTK + HarnessTrim/);
+    assert.match(GUIDE_HTML, /<summary>Optional optimizers</summary>/);
+    assert.match(GUIDE_HTML, /mcptoon, GitNexus and Headroom are optional/);
+    assert.match(GUIDE_HTML, /Agent preferences (advanced)/);
+    assert.doesNotMatch(GUIDE_HTML, /Set up Token Harness in order/);
   });
 
-  it('keeps setup status and the next useful destination on the dashboard', () => {
-    assert.match(GUIDE_HTML, /SETUP STATUS/);
-    assert.match(GUIDE_HTML, /Active today/);
-    assert.match(GUIDE_HTML, /Getting started/);
-    assert.match(GUIDE_JS, /Open setup/);
-    assert.match(GUIDE_JS, /Manage setup/);
-    assert.match(GUIDE_JS, /Setup incomplete/);
+  it('puts the action beside every incomplete first-run state', () => {
+    assert.match(GUIDE_JS, /Set up ' + agent.name/);
+    assert.match(GUIDE_JS, /Set up ' + info.name + ' for ' + agent.name/);
+    assert.match(GUIDE_JS, /Setup needed/);
+    assert.doesNotMatch(GUIDE_JS, /Review baseline for /);
+    assert.doesNotMatch(GUIDE_JS, /Open setup/);
+    assert.doesNotMatch(GUIDE_JS, /Manage setup/);
+    assert.doesNotMatch(GUIDE_JS, /No agent yet/);
+    assert.doesNotMatch(GUIDE_JS, /Installed · setup needed/);
   });
 
-  it('keeps read, review and apply phases explicit for managed setup', () => {
-    assert.match(GUIDE_JS, /Review baseline for /);
-    assert.match(GUIDE_JS, /Review Headroom for /);
+  it('keeps safe preview and explicit apply underneath simple setup language', () => {
     assert.match(GUIDE_JS, /Nothing changes yet/);
-    assert.match(GUIDE_JS, /Apply reviewed setup/);
+    assert.match(GUIDE_JS, /Apply setup/);
     assert.match(GUIDE_JS, /transactional engine with backups/);
     assert.match(GUIDE_JS, /Applying the reviewed change/);
+    assert.match(
+      GUIDE_JS,
+      /request('/api/preview', {s*action: 'setup',s*harness: agentId/,
+    );
+    assert.match(GUIDE_JS, /request('/api/apply', { ticket })/);
   });
 
-  it('does not invent plan-time, API-cost or quality savings', () => {
-    assert.match(GUIDE_JS, /5h \/ 7d allowance/);
+  it('turns maintenance into understandable actions', () => {
+    assert.match(GUIDE_HTML, /<h2>Maintenance</h2>/);
+    assert.match(GUIDE_JS, /Verify setup/);
+    assert.match(GUIDE_JS, /Check for updates/);
+    assert.match(GUIDE_JS, /Update now/);
+    assert.match(GUIDE_JS, //api/update-apply/);
+    assert.doesNotMatch(GUIDE_JS, /Check integrations/);
+    assert.doesNotMatch(GUIDE_JS, /Check optimizer updates/);
+  });
+
+  it('keeps overview metrics as a summary and full evidence in Results', () => {
+    assert.match(GUIDE_HTML, /A small summary only. Full measurement details stay in Results/);
+    assert.match(GUIDE_JS, /5h / 7d allowance/);
     assert.match(GUIDE_JS, /Not measured yet/);
     assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
-    assert.match(GUIDE_JS, /billed-token evidence/);
     assert.match(GUIDE_JS, /Quality is never inferred from token savings alone/);
   });
 
@@ -62,7 +75,7 @@ describe('setup-first guided dashboard', () => {
     assert.match(GUIDE_JS, /\$\('period'\)\.addEventListener\('change', changePeriod\)/);
   });
 
-  it('marks status stale after a change instead of hiding the operation behind an automatic reload', () => {
+  it('marks visible state stale after a change instead of hiding it behind an automatic reload', () => {
     assert.match(GUIDE_JS, /previous state until you choose Refresh/);
     assert.doesNotMatch(GUIDE_JS, /finally\s*\{[^}]*await refresh\(/);
   });
