@@ -54,13 +54,14 @@ export const GUIDE_HTML = `<!doctype html>
 
 <section class="setup-step" id="optimizers">
 <div class="section-title"><div><h2>Optimizers</h2><p>Recommended and optional tools are kept separate. Every button sits next to the tool or agent it affects, and every configuration change is previewed before approval.</p></div></div>
-<div id="managed-setup-actions" class="managed-action-box"><p>Checking recommended setup…</p></div>
-
-<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK + HarnessTrim are the default first setup for each detected coding agent.</p></div>
+<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK + HarnessTrim are configured together from the coding-agent card above, so first-run setup stays one action per agent.</p></div>
 <div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
 
-<div class="subsection-heading optional-heading"><h3>Optional optimizers</h3><p class="caption">Add these only when you want their specific capability. They are not required to complete first-run setup and are never counted as savings merely because they are configured.</p></div>
+<details class="disclosure optional-disclosure">
+<summary>Optional optimizers</summary>
+<p class="caption">Add these only when you want their specific capability. They are not required to complete first-run setup and are never counted as savings merely because they are configured.</p>
 <div id="optional-tools" class="tool-grid"><article class="tool-card"><h3>Checking optional optimizers…</h3></article></div>
+</details>
 
 <details class="disclosure"><summary>Remove Token Harness-managed configuration</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration it owns; installed provider software and user-owned configuration may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details>
 </section>
