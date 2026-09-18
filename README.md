@@ -36,7 +36,7 @@ of CLI commands to memorize.
    - Managed optimizers
    - Optional agent tuning
    - Checks and maintenance
-4. For Claude Code or Codex, choose **Review setup** when a managed setup is available.
+4. For Claude Code or Codex, choose **Review baseline** when the RTK + HarnessTrim setup is available.
 5. Read the exact proposed changes. **Apply reviewed setup** appears only when there is a concrete
    safe plan to apply.
 6. Keep using Claude Code or Codex normally.
@@ -73,7 +73,7 @@ useful read-only allowance and connected-tool observations when available.
 
 The production baseline remains **RTK + HarnessTrim** on individually reviewed combinations.
 Token Harness also exposes **mcptoon**, **GitNexus** and **Headroom** as optional managed integrations on their exact
-reviewed lifecycle rows; enabling either does not make it part of the production baseline or create a
+reviewed lifecycle rows; enabling any of them does not make it part of the production baseline or create a
 savings claim. Token Harness tracks the exact combined provider set separately: if no combined-stack
 review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
 from healthy individual checks. Token Harness can prepare their integration transactionally, show the
