@@ -1423,7 +1423,8 @@ export class GuideService {
             appliedPlans: 0,
           };
         }
-        const applied = result.data.execution?.results.filter((row) => row.status === 'applied') ?? [];
+        const applied =
+          result.data.execution?.results.filter((row) => row.status === 'applied') ?? [];
         this.lastApplied = null;
         this.invalidateObservedState();
         const messages =
@@ -1438,7 +1439,9 @@ export class GuideService {
                 'Nothing was forced. Choose Refresh to read the current versions.',
               ];
         this.record(
-          applied.length > 0 ? 'Reviewed optimizer update installed.' : 'Optimizer update no longer needed.',
+          applied.length > 0
+            ? 'Reviewed optimizer update installed.'
+            : 'Optimizer update no longer needed.',
           'success',
         );
         return {
