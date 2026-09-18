@@ -29,7 +29,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
   return toEnvelope(commandResult({ command, data, exitCode: 0 }), 'test');
 }
 
-it('checks updates only on demand, keeps the period cache hot, and expires evidence on version drift', async () => {
+it('checks updates on demand and applies only after the returned approval ticket', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
   const doctor = (): DoctorReport => ({
@@ -65,7 +65,7 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
       },
     ],
   });
-  const update = (): UpdateReport => ({
+  const update = (confirmed: boolean): UpdateReport => ({
     providers: [
       {
         providerId: RTK,
@@ -77,28 +77,50 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
       },
     ],
     network: ['crates.io'],
-    execution: {
-      planId: null,
-      transactionId: null,
-      fromStoredPlan: false,
-      outcome: providerVersion === '0.44.0' ? 'confirmation-required' : 'nothing-to-do',
-      results: [],
-      unrestored: [],
-      receiptId: null,
-    },
+    execution: confirmed
+      ? {
+          planId: null,
+          transactionId: 'update-rtk',
+          fromStoredPlan: false,
+          outcome: 'committed',
+          results: [
+            {
+              actionId: 'rtk-update',
+              kind: 'provider-update',
+              status: 'applied',
+              path: '/tools/rtk',
+            },
+          ],
+          unrestored: [],
+          receiptId: 'update-rtk',
+        }
+      : {
+          planId: null,
+          transactionId: null,
+          fromStoredPlan: false,
+          outcome: providerVersion === '0.44.0' ? 'confirmation-required' : 'nothing-to-do',
+          results: [],
+          unrestored: [],
+          receiptId: null,
+        },
   });
   const call: GuideCall = async <T>(args: readonly string[]) => {
     calls.push([...args]);
     const command = args[0] ?? '';
     if (command === 'doctor') return envelope(command, doctor() as T);
-    if (command === 'update') return envelope(command, update() as T);
+    if (command === 'update') {
+      const confirmed = args.includes('--yes');
+      const report = update(confirmed);
+      if (confirmed) providerVersion = '0.45.0';
+      return envelope(command, report as T);
+    }
     return envelope(command, null as T);
   };
 
   const service = new GuideService(
     call,
     () => 0,
-    () => 'ticket',
+    () => 'update-ticket',
   );
   const token = 'a'.repeat(64);
   let authority = '';
@@ -119,7 +141,6 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
       0,
       'opening the UI must not poll update channels',
     );
-    const afterOverview = calls.length;
 
     const checked = await fetch(`${origin}/api/update-check`, {
       method: 'POST',
@@ -131,32 +152,45 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
       body: JSON.stringify({ period: 'all' }),
     });
     assert.equal(checked.status, 200);
-    const result = (await checked.json()) as { ok: boolean; stack?: GuideOverview['stack'] };
+    const result = (await checked.json()) as {
+      ok: boolean;
+      ticket?: string | null;
+      stack?: GuideOverview['stack'];
+    };
     assert.equal(result.ok, true);
+    assert.equal(result.ticket, 'update-ticket');
     assert.equal(result.stack?.components[0]?.update, 'available');
     assert.equal(result.stack?.components[0]?.updateAvailableVersion, '0.45.0');
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
       [['update']],
-    );
-    assert.ok(
-      calls.every((args) => !args.includes('--yes')),
-      'the dashboard check must never request confirmation',
-    );
-    const afterCheck = calls.length;
-    assert.ok(afterCheck > afterOverview);
-
-    const cached = await fetch(`${origin}/api/overview?period=all`);
-    assert.equal(cached.status, 200);
-    const cachedOverview = (await cached.json()) as GuideOverview;
-    assert.equal(cachedOverview.stack.components[0]?.update, 'available');
-    assert.equal(
-      calls.length,
-      afterCheck,
-      'reading the checked stack must not reload allowance, context, or metrics',
+      'the channel check itself must remain read-only',
     );
 
-    providerVersion = '0.45.0';
+    const applied = await fetch(`${origin}/api/apply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+        'X-Token-Harness-CSRF': token,
+      },
+      body: JSON.stringify({ ticket: 'update-ticket' }),
+    });
+    assert.equal(applied.status, 200);
+    const appliedResult = (await applied.json()) as {
+      ok: boolean;
+      title: string;
+      appliedPlans: number;
+    };
+    assert.equal(appliedResult.ok, true);
+    assert.equal(appliedResult.title, 'Optimizer updated');
+    assert.equal(appliedResult.appliedPlans, 1);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'update'),
+      [['update'], ['update', '--yes']],
+      'only an approved ticket may turn the update preview into a mutation',
+    );
+
     const refreshed = await fetch(`${origin}/api/overview?period=all&refresh=1`);
     assert.equal(refreshed.status, 200);
     const changed = (await refreshed.json()) as GuideOverview;
@@ -164,12 +198,7 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
     assert.equal(
       changed.stack.components[0]?.update,
       'not-checked',
-      'update evidence must expire when the stack fingerprint changes',
-    );
-    assert.equal(
-      calls.filter((args) => args[0] === 'update').length,
-      1,
-      'refresh must not silently recheck channels',
+      'update evidence must expire after the installed stack changes',
     );
   } finally {
     server.closeAllConnections();
@@ -177,11 +206,12 @@ it('checks updates only on demand, keeps the period cache hot, and expires evide
   }
 });
 
-it('exposes one explicit read-only update check in maintenance', () => {
-  assert.match(GUIDE_HTML, /Checks and maintenance/);
-  assert.match(GUIDE_JS, /Check optimizer updates/);
-  assert.match(GUIDE_JS, /Check updates/);
+it('presents updates as one complete check then install flow', () => {
+  assert.match(GUIDE_HTML, /Health and updates/);
+  assert.match(GUIDE_JS, /Check for updates/);
+  assert.match(GUIDE_JS, /Install updates/);
   assert.match(GUIDE_JS, /\/api\/update-check/);
-  assert.match(GUIDE_JS, /does not download or upgrade anything/);
-  assert.doesNotMatch(GUIDE_JS, /update-check[^\n]+--yes/);
+  assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
+  assert.match(GUIDE_JS, /Nothing changes during this check/);
+  assert.doesNotMatch(GUIDE_JS, /Check optimizer updates/);
 });
