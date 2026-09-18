@@ -3,11 +3,12 @@ import { describe, it } from 'node:test';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('guided agent capability state UI', () => {
-  it('keeps guidance, plan allowance and contextual checks visible in the setup-first UI', () => {
+  it('keeps guidance, plan allowance and contextual checks available under advanced agent details', () => {
+    assert.match(GUIDE_HTML, /<summary>Agent details<\/summary>/);
     assert.match(GUIDE_HTML, /id="agent-capabilities"/);
     assert.match(
       GUIDE_HTML,
-      /In-session guidance, plan allowance and useful connected-tool checks/,
+      /Optional read-only details such as in-session guidance, plan allowance and connected-tool checks/,
     );
     assert.match(GUIDE_JS, /In-session guidance/);
     assert.match(GUIDE_JS, /agent\.guidance\?\.label/);
