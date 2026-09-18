@@ -153,8 +153,9 @@ it('keeps Headroom and arbitrary selectors outside the managed candidate UI boun
   assert.equal(calls, 0, 'invalid candidate UI input must not reach the CLI');
 });
 
-it('keeps historical candidate lifecycle bounded after the tools move into managed setup', () => {
-  assert.match(GUIDE_HTML, /Managed optimizers/);
+it('keeps historical candidate lifecycle bounded after the tools move into optional optimizer setup', () => {
+  assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
+  assert.match(GUIDE_HTML, /Optional optimizers/);
   assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
   assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
   assert.match(GUIDE_JS, /candidate-setup/);
