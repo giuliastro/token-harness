@@ -18,7 +18,8 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
     assert.match(GUIDE_JS, /Review managed setup for /);
     assert.match(GUIDE_JS, /This step is read-only/);
-    assert.match(GUIDE_JS, /Experimental tools are never installed or activated by this action/);
+    assert.match(GUIDE_JS, /This review covers the RTK \+ HarnessTrim production baseline only/);
+    assert.match(GUIDE_JS, /Optional managed integrations are reviewed separately/);
     assert.match(GUIDE_JS, /Apply reviewed setup/);
   });
 
