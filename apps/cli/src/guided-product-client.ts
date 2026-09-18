@@ -1277,7 +1277,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
     renderNotices();
     renderDashboard();
     renderSetup();
-    renderAgentCapabilities(current);
     renderResults();
   }
 
