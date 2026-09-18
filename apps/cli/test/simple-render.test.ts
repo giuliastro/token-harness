@@ -122,7 +122,6 @@ describe('progressive human rendering', () => {
     assert.match(output, /token-harness verify/);
   });
 
-
   it('prints the exact confirmation command when a provider update is ready', () => {
     const report: UpdateReport = {
       providers: [
