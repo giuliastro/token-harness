@@ -316,7 +316,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         title: incomplete.length === 1
           ? 'Finish setup for ' + incomplete[0].name
           : 'Finish the recommended setup for your coding agents',
-        detail: 'The recommended baseline is RTK + HarnessTrim. You will see the exact safe plan before anything changes.',
+        detail: 'The recommended baseline is RTK + HarnessTrim. Finish setup on each incomplete coding-agent card below; you will see the exact safe plan before anything changes.',
         action: 'configure',
       };
     if (!(current?.savings?.rows || []).length)
@@ -351,10 +351,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const main = node('div');
     main.append(node('span', 'CURRENT STATUS', 'eyebrow'), node('h2', assessment.title), node('p', assessment.detail));
     const actions = node('div', undefined, 'inline-actions');
-    if (assessment.action === 'configure') {
-      for (const agent of baselineIncompleteAgents())
-        actions.append(actionButton('Finish setup for ' + agent.name, () => reviewSetup(agent.id)));
-    } else if (assessment.action === 'verify') {
+    if (assessment.action === 'verify') {
       actions.append(actionButton('Re-check health', () => readOnlyOperation('verify')));
     } else if (assessment.action === 'results') {
       actions.append(navigateButton('View detailed results', 'results'));
@@ -430,16 +427,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
 
     const actions = node('div', undefined, 'inline-actions');
-    for (const agent of activeAgents()) {
-      if (!providerSupportsAgent(id, agent.id)) continue;
-      if (!component?.configuredHarnesses?.includes(agent.id))
-        actions.append(
-          actionButton(
-            'Set up for ' + agent.name,
-            () => reviewSetup(agent.id, id),
-            info.optional ? 'secondary' : '',
-          ),
-        );
+    if (info.optional) {
+      for (const agent of activeAgents()) {
+        if (!providerSupportsAgent(id, agent.id)) continue;
+        if (!component?.configuredHarnesses?.includes(agent.id))
+          actions.append(
+            actionButton(
+              'Set up for ' + agent.name,
+              () => reviewSetup(agent.id, id),
+              'secondary',
+            ),
+          );
+      }
     }
     if (component?.update === 'available')
       actions.append(actionButton('Install update', () => readOnlyOperation('updates'), 'secondary'));
@@ -623,39 +622,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
         renderManagedTool('headroom'),
       );
 
-    const actions = $('managed-setup-actions');
-    actions.replaceChildren();
-    if (!activeAgents().length) {
-      actions.append(
-        sectionEmpty('A supported coding agent must be detected before optimizer setup can start.'),
-      );
-      return;
-    }
-    const incomplete = baselineIncompleteAgents();
-    if (!incomplete.length) {
-      actions.append(
-        messageBox(
-          'Recommended setup complete',
-          'RTK + HarnessTrim are configured for every detected supported coding agent. Optional optimizers below are independent and can be added later.',
-          'safe',
-        ),
-      );
-      return;
-    }
-    const box = node('div');
-    box.append(
-      node('strong', 'Recommended first setup'),
-      node(
-        'p',
-        'Start with RTK + HarnessTrim. One action prepares both for the selected coding agent and shows the exact changes before you confirm.',
-        'caption',
-      ),
-    );
-    const buttons = node('div', undefined, 'inline-actions');
-    for (const agent of incomplete)
-      buttons.append(actionButton('Finish setup for ' + agent.name, () => reviewSetup(agent.id)));
-    box.append(buttons);
-    actions.append(box);
   }
 
   function candidateState(observation) {
