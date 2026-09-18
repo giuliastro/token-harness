@@ -480,6 +480,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
       actions.append(actionButton('Verify ' + info.name, () => readOnlyOperation('verify'), 'secondary'));
     if (component?.update === 'available')
       actions.append(actionButton('Update ' + info.name, applyUpdates, 'secondary'));
+    if (component && (component.managedByTokenHarness || component.configured))
+      actions.append(
+        actionButton('Remove ' + info.name + ' setup', () => reviewRemoval(component), 'secondary'),
+      );
     if (actions.children.length) card.append(actions);
     return card;
   }
@@ -586,6 +590,72 @@ export const GUIDE_PRODUCT_JS = String.raw`
         $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket) $('modal-actions').append(actionButton('Apply setup', () => applyTicket(data.ticket), ''));
+      })
+      .catch(error => {
+        if (run !== modalRun) return;
+        $('modal-error').textContent = error.message;
+        $('modal-error').hidden = false;
+      })
+      .finally(() => {
+        if (run === modalRun) setBusy(false, false);
+      });
+  }
+
+  function reviewRemoval(component) {
+    if (busy || !component) return;
+    const info = TOOL_INFO[component.providerId] || {
+      name: component.displayName || component.providerId,
+    };
+    const run = modal('Remove ' + info.name + ' setup');
+    $('modal-content').append(
+      messageBox(
+        'Before anything changes',
+        'Token Harness checks its ownership receipts and current configuration. Only setup recorded as Token Harness-owned can be removed safely.',
+      ),
+      progress(
+        'Checking ' + info.name + ' ownership',
+        'Provider software and unrelated user configuration are left alone.',
+      ),
+    );
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    ensureSession()
+      .then(() =>
+        request('/api/preview', {
+          action: 'remove',
+          provider: component.providerId,
+        }),
+      )
+      .then(data => {
+        if (run !== modalRun || !$('modal').open) return;
+        $('modal-content').replaceChildren();
+        if (!(data.changes || []).length)
+          $('modal-content').append(
+            messageBox(
+              'Nothing to remove',
+              (data.notices || []).join(' ') ||
+                'No Token Harness-owned setup can be removed from this optimizer.',
+            ),
+          );
+        for (const change of data.changes || []) {
+          const item = node('article', undefined, 'preview-change');
+          item.append(node('h3', change.title), node('p', change.description));
+          $('modal-content').append(item);
+        }
+        for (const notice of data.notices || [])
+          $('modal-content').append(node('p', notice, 'notice-row'));
+        $('modal-content').append(
+          messageBox(
+            'Safety',
+            'Removal uses the existing ownership-aware transaction. Provider installation remains user-owned and edited or unrelated configuration is not forced.',
+            'safe',
+          ),
+        );
+        $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
+        if (data.ticket)
+          $('modal-actions').append(
+            actionButton('Remove setup', () => applyTicket(data.ticket), 'secondary'),
+          );
       })
       .catch(error => {
         if (run !== modalRun) return;
@@ -1207,6 +1277,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     renderNotices();
     renderDashboard();
     renderSetup();
+    renderAgentCapabilities(current);
     renderResults();
   }
 
