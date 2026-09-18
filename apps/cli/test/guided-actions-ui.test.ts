@@ -17,6 +17,10 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
     assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
     assert.match(GUIDE_JS, /Set up recommended optimizers for /);
+    assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
+    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
+    assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
     assert.match(GUIDE_JS, /Optional optimizers stay separate/);

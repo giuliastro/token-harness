@@ -7,7 +7,7 @@ import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 describe('guided optional managed optimizers', () => {
   it('places reviewed tools under Optional optimizers instead of Experimental tools', () => {
     assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
-    assert.match(GUIDE_HTML, /<h3>Optional optimizers<\/h3>/);
+    assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_HTML, /They are not required to complete first-run setup/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
@@ -26,7 +26,7 @@ describe('guided optional managed optimizers', () => {
 
   it('keeps the recommended baseline distinct from optional managed integrations', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
-    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim are the default first setup/);
+    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim are configured together/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /Optional optimizer/);
     assert.match(GUIDE_HTML, /never counted as savings merely because they are configured/);
