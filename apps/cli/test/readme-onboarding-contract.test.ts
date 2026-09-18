@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
-import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
+import { GUIDE_HTML } from '../src/guided-assets.js';
 import { GUIDE_CANDIDATE_CAMPAIGN_JS } from '../src/guided-candidate-campaign-client.js';
 
 const ROOT = new URL('../../../../', import.meta.url);
