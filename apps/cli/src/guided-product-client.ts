@@ -534,16 +534,16 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const provider = providerId ? TOOL_INFO[providerId] : null;
     if (providerId && !provider) return;
     const run = modal(
-      provider ? 'Review ' + provider.name + ' for ' + agent.name : 'Review managed setup for ' + agent.name,
+      provider ? 'Set up ' + provider.name + ' for ' + agent.name : 'Set up ' + agent.name,
     );
     $('modal-content').append(
       messageBox(
-        'What this checks',
+        'Before anything changes',
         provider
-          ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + ' and propose a change only on an exact reviewed compatibility row.'
-          : 'RTK and HarnessTrim are the production baseline. Token Harness will inspect both for ' + agent.name + ' and propose only compatible changes.',
+          ? 'Token Harness checks whether ' + provider.name + ' can be safely connected to ' + agent.name + ' on this exact installed version.'
+          : 'Token Harness checks the recommended RTK + HarnessTrim setup for ' + agent.name + ' and prepares only changes supported by the installed versions.',
       ),
-      messageBox('Nothing changes yet', 'This step is read-only. If a change is available, you will see exactly what it writes before an Apply button appears.'),
+      messageBox('Nothing changes yet', 'This first step only prepares the setup. You will see the exact change before an Apply setup button appears.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
     );
     if (providerId === 'gitnexus')
@@ -570,10 +570,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
         $('modal-content').replaceChildren();
         $('modal-content').append(
           messageBox(
-            'Managed scope',
+            'Setup scope',
             provider
-              ? provider.name + ' is reviewed separately from the RTK + HarnessTrim production baseline. This approval changes only the provider-scoped plan shown below.'
-              : 'This review covers the RTK + HarnessTrim production baseline only. Optional managed integrations are reviewed separately.',
+              ? 'This setup changes only ' + provider.name + ' for the selected coding agent. The recommended RTK + HarnessTrim baseline is separate.'
+              : 'This setup covers only the recommended RTK + HarnessTrim baseline. Optional optimizers are configured separately.',
           ),
         );
         if (!data.changes.length) $('modal-content').append(messageBox('No managed change proposed', (data.notices || []).join(' ') || 'This agent already has the supported setup, or no safe managed change is available.'));
@@ -585,7 +585,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
-        if (data.ticket) $('modal-actions').append(actionButton('Apply reviewed setup', () => applyTicket(data.ticket), ''));
+        if (data.ticket) $('modal-actions').append(actionButton('Apply setup', () => applyTicket(data.ticket), ''));
       })
       .catch(error => {
         if (run !== modalRun) return;
@@ -609,7 +609,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       if (run !== modalRun) return;
       $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
       $('modal-content').replaceChildren(messageBox(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'));
-      $('modal-content').append(node('p', 'The dashboard is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
+      $('modal-content').append(node('p', 'The overview is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
       $('stale-state').hidden = false;
       $('stale-state').textContent = 'A setup change was applied. Displayed status is the previous state until you choose Refresh.';
       $('modal-actions').replaceChildren(modalClose('Done'));
