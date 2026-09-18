@@ -26,7 +26,7 @@ describe('guided optional managed optimizers', () => {
 
   it('keeps the recommended baseline distinct from optional managed integrations', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
-    assert.match(GUIDE_HTML, /RTK \\+ HarnessTrim are configured together/);
+    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim are configured together/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /Optional optimizer/);
     assert.match(GUIDE_HTML, /never counted as savings merely because they are configured/);
