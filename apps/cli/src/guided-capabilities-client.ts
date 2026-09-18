@@ -20,7 +20,7 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     cclimits: ['Show Claude allowance', 'Install the reviewed cclimits companion, keep Claude signed in, then Refresh this dashboard.', 'npm install --global cclimits@1.7.0'],
     python: ['Python is required', 'Make Python 3 available in the terminal that starts Token Harness, then reopen Token Harness.', 'python --version'],
     'claude-login': ['Sign in to Claude', 'Sign in inside Claude Code. Keep credentials inside Claude.', null],
-    compatibility: ['Check this integration', 'Use Checks and maintenance for read-only verification. Unsupported or ambiguous configurations are left unchanged.', null],
+    compatibility: ['Verify this setup', 'Use Verify setup in Overview for a read-only check. Unsupported or ambiguous configurations are left unchanged.', null],
   };
   let csrf = '';
   let working = false;
