@@ -25,16 +25,20 @@ describe('README onboarding contract', () => {
     assert.equal(packageJson.engines?.node, '>=22.13.0');
 
     for (const [id, label] of [
-      ['tab-dashboard', 'Dashboard'],
-      ['tab-setup', 'Setup'],
+      ['tab-dashboard', 'Overview'],
       ['tab-results', 'Results'],
     ] as const) {
       assert.match(GUIDE_HTML, new RegExp(`id="${id}"[^>]*>${label}</button>`));
       assert.match(readme, new RegExp(`\\*\\*${label}\\*\\*|### ${label}`));
     }
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
+    assert.match(readme, /There is no separate Setup tab/i);
+    assert.match(readme, /Set up Codex|Set up Claude Code/);
+    assert.match(readme, /Update now/);
+    assert.match(readme, /token-harness update --yes/);
 
     assert.match(GUIDE_HTML, /Nothing changes without your approval/);
-    assert.match(readme, /requires an explicit review and approval/i);
+    assert.match(readme, /requires an explicit\s+preview and approval/i);
   });
 
   it('documents candidate campaigns as advanced evidence outside novice managed setup', async () => {
