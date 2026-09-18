@@ -305,7 +305,7 @@ function stackFingerprint(report: DoctorReport): string {
 export function createGuideCall(base: Omit<RunOptions, 'argv' | 'streams'>): GuideCall {
   return async <T>(args: readonly string[]): Promise<CliEnvelope<T>> => {
     const savings = args[0] === 'savings';
-    const updateCheck = args[0] === 'update';
+    const updateCheck = args[0] === 'update' && !args.includes('--yes');
     const translated = savings ? ['metrics', ...args.slice(1)] : [...args];
     let stdout = '';
     await run({
@@ -1690,6 +1690,86 @@ export class GuideService {
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record('Provider update check completed. No software changed.', 'success');
       return { ok: true, title: 'Optimizer update check', messages, appliedPlans: 0, stack };
+    });
+  }
+
+  async applyUpdates(): Promise<GuideResult> {
+    return this.exclusive(async () => {
+      this.record('Applying reviewed optimizer updates after explicit approval.', 'working');
+      let result: CliEnvelope<UpdateReport>;
+      try {
+        result = await this.call<UpdateReport>(['update', '--yes']);
+      } catch {
+        this.invalidateObservedState();
+        const message =
+          'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect the installed optimizer versions before trying again.';
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Update result needs checking',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+
+      if (result.exitCode !== 0 || result.data === null) {
+        const message = explainGuideIssue(
+          result.diagnostics,
+          'The reviewed optimizer update was not applied. Compatibility, ownership or the available version may have changed since the check.',
+        );
+        this.invalidateObservedState();
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Optimizer update was not applied',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+
+      const execution = result.data.execution;
+      const committed = execution?.outcome === 'committed';
+      const nothingToDo = execution === null || execution.outcome === 'nothing-to-do';
+      this.invalidateObservedState();
+      this.lastApplied = null;
+      if (!committed && !nothingToDo) {
+        const message =
+          'The updater returned without a committed result. Refresh and inspect the installed optimizer versions before making another change.';
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Optimizer update needs checking',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+
+      const changed = result.data.providers.filter(
+        (row) => row.verdict === 'upgradable' && row.available !== null,
+      );
+      const messages =
+        changed.length > 0
+          ? [
+              ...changed.map(
+                (row) =>
+                  `${name(row.providerId)} update to ${row.available} completed through its reviewed update channel.`,
+              ),
+              'Refresh the overview to re-read installed versions and integration state.',
+            ]
+          : [
+              'No reviewed optimizer update remained to apply. The installed software was left unchanged.',
+              'Refresh the overview if another process changed an optimizer version.',
+            ];
+      this.record(
+        committed ? 'Reviewed optimizer updates applied.' : 'No optimizer update remained to apply.',
+        'success',
+      );
+      return {
+        ok: true,
+        title: committed ? 'Optimizer updates applied' : 'Optimizers already current',
+        messages,
+        appliedPlans: committed ? 1 : 0,
+      };
     });
   }
 
