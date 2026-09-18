@@ -8,10 +8,7 @@ describe('guided optional managed optimizers', () => {
   it('places reviewed tools under Optional optimizers instead of Experimental tools', () => {
     assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
     assert.match(GUIDE_HTML, /<h3>Optional optimizers<\/h3>/);
-    assert.match(
-      GUIDE_HTML,
-      /They are not required to complete first-run setup/,
-    );
+    assert.match(GUIDE_HTML, /They are not required to complete first-run setup/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
     assert.match(GUIDE_JS, /renderManagedTool\('mcptoon'\)/);
