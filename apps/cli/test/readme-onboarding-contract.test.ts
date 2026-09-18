@@ -25,13 +25,16 @@ describe('README onboarding contract', () => {
     assert.equal(packageJson.engines?.node, '>=22.13.0');
 
     for (const [id, label] of [
-      ['tab-dashboard', 'Dashboard'],
-      ['tab-setup', 'Setup'],
+      ['tab-dashboard', 'Overview'],
       ['tab-results', 'Results'],
     ] as const) {
       assert.match(GUIDE_HTML, new RegExp(`id="${id}"[^>]*>${label}</button>`));
       assert.match(readme, new RegExp(`\\*\\*${label}\\*\\*|### ${label}`));
     }
+    assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
+    assert.match(readme, /There is no separate Setup page to learn/i);
+    assert.match(readme, /Finish setup/);
+    assert.match(readme, /Install updates/);
 
     assert.match(GUIDE_HTML, /Nothing changes without your approval/);
     assert.match(readme, /requires an explicit review and approval/i);
