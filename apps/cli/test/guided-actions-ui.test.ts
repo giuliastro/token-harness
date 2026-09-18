@@ -24,7 +24,10 @@ describe('guided setup UX', () => {
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
-    assert.match(GUIDE_JS, /request\('\/api\/preview', \{ action: 'setup', harness: agentId \}\)/);
+    assert.match(
+      GUIDE_JS,
+      /request\('\/api\/preview', \{\s*action: 'setup',\s*harness: agentId,\s*\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\),\s*\}\)/,
+    );
     assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
     assert.match(GUIDE_JS, /backups, compatibility checks, ownership checks and rollback/i);
     assert.doesNotThrow(() => new Script(GUIDE_JS));
