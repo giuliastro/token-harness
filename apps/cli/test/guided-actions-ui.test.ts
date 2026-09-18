@@ -13,14 +13,13 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /choice-grid/);
   });
 
-  it('explains managed setup before any apply action exists', () => {
-    assert.match(GUIDE_HTML, /Managed optimizers/);
-    assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
-    assert.match(GUIDE_JS, /Review managed setup for /);
-    assert.match(GUIDE_JS, /This step is read-only/);
-    assert.match(GUIDE_JS, /This review covers the RTK \+ HarnessTrim production baseline only/);
-    assert.match(GUIDE_JS, /Optional managed integrations are reviewed separately/);
-    assert.match(GUIDE_JS, /Apply reviewed setup/);
+  it('keeps first-run setup visible beside agents and optimizers', () => {
+    assert.match(GUIDE_HTML, /Coding agents/);
+    assert.match(GUIDE_HTML, /Recommended optimizers/);
+    assert.match(GUIDE_JS, /Set up ' \+ agent\.name/);
+    assert.match(GUIDE_JS, /Set up ' \+ info\.name \+ ' for ' \+ agent\.name/);
+    assert.match(GUIDE_JS, /Nothing changes yet/);
+    assert.match(GUIDE_JS, /Apply setup/);
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
@@ -39,7 +38,13 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
   });
 
-  it('never automatically refreshes the whole dashboard after apply', () => {
+  it('makes checked updates actionable from the same UI', () => {
+    assert.match(GUIDE_JS, /Check for optimizer updates/);
+    assert.match(GUIDE_JS, /Update now/);
+    assert.match(GUIDE_JS, /request\('\/api\/update-apply', \{ confirm: true \}\)/);
+  });
+
+  it('never automatically refreshes the whole overview after apply', () => {
     assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
     const applyStart = GUIDE_JS.indexOf('async function applyTicket(ticket)');
     const manualRefresh = "$('refresh').addEventListener";
@@ -49,7 +54,7 @@ describe('guided setup UX', () => {
     assert.doesNotMatch(GUIDE_JS.slice(applyStart, refreshHandler), /refresh\(true\)/);
   });
 
-  it('labels experimental installation as external and manual', () => {
+  it('keeps historical experimental installation explicitly external and manual', () => {
     assert.match(GUIDE_JS, /Experimental, not managed/);
     assert.match(GUIDE_JS, /Token Harness will not execute them for you/);
     assert.match(GUIDE_JS, /Installation is not activation/);
