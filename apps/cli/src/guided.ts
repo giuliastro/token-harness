@@ -1769,7 +1769,9 @@ export class GuideService {
               'Refresh the overview if another process changed an optimizer version.',
             ];
       this.record(
-        committed ? 'Reviewed optimizer updates applied.' : 'No optimizer update remained to apply.',
+        committed
+          ? 'Reviewed optimizer updates applied.'
+          : 'No optimizer update remained to apply.',
         'success',
       );
       return {

@@ -59,7 +59,9 @@ describe('actionable first-run overview', () => {
   });
 
   it('keeps overview metrics as a summary and full evidence in Results', () => {
-    assert.ok(GUIDE_HTML.includes('A small summary only. Full measurement details stay in Results.'));
+    assert.ok(
+      GUIDE_HTML.includes('A small summary only. Full measurement details stay in Results.'),
+    );
     assert.ok(GUIDE_JS.includes('5h / 7d allowance'));
     assert.ok(GUIDE_JS.includes('Not measured yet'));
     assert.ok(GUIDE_JS.includes('authoritative paired allowance evidence'));

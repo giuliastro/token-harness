@@ -261,7 +261,6 @@ describe('guided workflow', () => {
     );
   });
 
-
   it('empty savings are missing, not zero; raw diagnostic text never enters friendly errors', async () => {
     assert.deepEqual(savingsView(null, 'all').rows, []);
     const { service } = fixture();
