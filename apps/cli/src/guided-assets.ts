@@ -19,42 +19,49 @@ export const GUIDE_HTML = `<!doctype html>
 <header class="app-header"><div class="header-inner">
 <div class="brand"><span class="brand-mark" aria-hidden="true">TH</span><span>Token Harness<small>Use less. Know what changed.</small></span></div>
 <nav class="view-tabs" role="tablist" aria-label="Token Harness">
-<button id="tab-dashboard" role="tab" aria-selected="true" aria-controls="view-dashboard" data-view="dashboard" type="button">Dashboard</button>
-<button id="tab-setup" role="tab" aria-selected="false" aria-controls="view-setup" data-view="setup" tabindex="-1" type="button">Setup</button>
+<button id="tab-dashboard" role="tab" aria-selected="true" aria-controls="view-dashboard" data-view="dashboard" type="button">Overview</button>
 <button id="tab-results" role="tab" aria-selected="false" aria-controls="view-results" data-view="results" tabindex="-1" type="button">Results</button>
 </nav>
 <div class="header-tools"><label><span class="sr-only">Appearance</span><select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><button id="refresh" class="secondary" type="button">Refresh</button></div>
 </div></header>
 <main id="main">
-<div class="page-heading"><div><h1 id="view-title">Dashboard</h1><p id="view-description">Your coding setup, what is active, and what to do next.</p></div></div>
+<div class="page-heading"><div><h1 id="view-title">Overview</h1><p id="view-description">Your agents, optimizer status, results summary, and the next useful action.</p></div></div>
 <div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption">Nothing changes without your approval</span></div>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
 
 <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabindex="0">
-<section id="dashboard-status" class="dashboard-status"><div><span class="eyebrow">SETUP STATUS</span><h2>Checking your machine…</h2><p>Finding Claude Code, Codex, managed optimizers and measured results.</p></div><span class="pill">Checking</span></section>
-<div class="section-title"><div><h2>What Token Harness is doing for you</h2><p>Only measured results or explicitly unknown values are shown.</p></div></div>
+<section id="dashboard-status" class="dashboard-status"><div><span class="eyebrow">CURRENT STATUS</span><h2>Checking your machine…</h2><p>Finding Claude Code, Codex and optimizer configuration.</p></div><span class="pill">Checking</span></section>
+
+<div class="section-title"><div><h2>At a glance</h2><p>A small summary only. Full measurement details stay in Results.</p></div></div>
 <div id="dashboard-metrics" class="impact-grid" aria-label="Efficiency summary">
 <article class="metric-card"><span class="metric-label">Measured output</span><strong class="metric-value">Checking…</strong><p class="metric-help">Recorded optimizer output.</p></article>
 <article class="metric-card"><span class="metric-label">5h / 7d allowance</span><strong class="metric-value">Checking…</strong><p class="metric-help">Shown only when measured.</p></article>
-<article class="metric-card"><span class="metric-label">API cost</span><strong class="metric-value">Checking…</strong><p class="metric-help">Shown only from billing evidence.</p></article>
 <article class="metric-card"><span class="metric-label">Quality</span><strong class="metric-value">Checking…</strong><p class="metric-help">Measured separately from savings.</p></article>
 </div>
+
 <div class="dashboard-columns">
-<section class="panel"><h2>Active today</h2><p class="caption">Coding agents and managed optimization that Token Harness can actually see.</p><div id="dashboard-active" class="status-list"><p class="empty">Checking…</p></div></section>
-<section class="panel"><h2>Getting started</h2><p class="caption">The shortest path from installation to useful measured results.</p><div id="dashboard-checklist" class="checklist"><p class="empty">Checking…</p></div></section>
+<section class="panel"><h2>Current setup</h2><p class="caption">Detected coding agents and optimizers that are already connected.</p><div id="dashboard-active" class="status-list"><p class="empty">Checking…</p></div></section>
+<section class="panel"><h2>First-run checklist</h2><p class="caption">If something is incomplete, its action appears beside the affected agent or optimizer below.</p><div id="dashboard-checklist" class="checklist"><p class="empty">Checking…</p></div></section>
 </div>
-</section>
 
-<section id="view-setup" role="tabpanel" aria-labelledby="tab-setup" tabindex="0" hidden>
-<div class="setup-intro"><div><h2>Set up Token Harness in order</h2><p>Start with your coding agent and the RTK + HarnessTrim production baseline. Optional managed integrations are reviewed separately; unmanaged experiments stay outside the active stack.</p></div><span class="pill good">Safe previews before changes</span></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Token Harness currently works with Claude Code and Codex. A detected agent that needs setup has its Set up button on the same card.</p></div></div>
+<div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">1</span><div><h2>Coding agents</h2><p>Token Harness currently supports guided setup for Claude Code and Codex. The app must be started from an environment where the agent is detectable.</p></div></div><div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div><div class="subsection-heading"><h3>Agent details</h3><p class="caption">In-session guidance, plan allowance and useful connected-tool checks.</p></div><div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div></section>
+<div class="section-title"><div><h2>Recommended optimizers</h2><p>RTK + HarnessTrim are the normal baseline. Each tool shows exactly which agent it is connected to and exposes setup beside the missing connection.</p></div></div>
+<div id="baseline-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">2</span><div><h2>Managed optimizers</h2><p>RTK and HarnessTrim are the production baseline. mcptoon, GitNexus and Headroom also expose narrow optional managed integrations on exact reviewed rows. Every setup is reviewed before anything is written.</p></div></div><div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking managed optimizers…</h3></article></div><div id="managed-setup-actions" class="managed-action-box"><p>Checking available agents…</p></div><details class="disclosure"><summary>Remove managed changes</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration changes it owns; an installed provider CLI may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details></section>
+<details class="disclosure"><summary>Optional optimizers</summary>
+<p class="caption">mcptoon, GitNexus and Headroom are optional. They are not required to complete first-run setup and are configured one tool at a time.</p>
+<div id="optional-tools" class="tool-grid"><article class="tool-card"><h3>Checking optional optimizers…</h3></article></div>
+</details>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">3</span><div><h2>Optional agent tuning</h2><p>Reasoning preferences are separate from optimizer installation. Change them only when you intentionally want a persistent agent preference.</p></div></div><div id="agent-tuning" class="tool-grid"><article class="tool-card"><h3>Checking reasoning controls…</h3></article></div></section>
+<details class="disclosure"><summary>Agent preferences (advanced)</summary>
+<p class="caption">Reasoning preferences are separate from optimizer setup. Change them only when you intentionally want a persistent agent preference.</p>
+<div id="agent-tuning" class="tool-grid"><article class="tool-card"><h3>Checking reasoning controls…</h3></article></div>
+</details>
 
-<section class="setup-step"><div class="step-heading"><span class="step-number">4</span><div><h2>Checks and maintenance</h2><p>Read-only verification and update checks live here. Undo is shown only when this dashboard has an exact transaction it can safely restore.</p></div></div><div id="maintenance-actions" class="maintenance-list"><p class="empty">Checking…</p></div></section>
+<div class="section-title"><div><h2>Maintenance</h2><p>Verify the current setup, install reviewed optimizer updates, or undo the last app change. These are maintenance actions, not additional setup steps.</p></div></div>
+<div id="maintenance-actions" class="maintenance-list"><p class="empty">Checking…</p></div>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
