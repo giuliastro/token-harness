@@ -145,6 +145,8 @@ export interface GuideResult {
   messages: string[];
   appliedPlans: number;
   stack?: OptimizationStackSnapshot;
+  /** Present only after a read-only preview found a concrete change the user may approve. */
+  ticket?: string | null;
 }
 export interface GuideActivity {
   at: string;
@@ -158,7 +160,13 @@ interface Approval {
   transactionId: string | null;
   provider: ReturnType<typeof providerId> | null;
   description: string;
-  operation: 'apply' | 'rollback' | 'uninstall' | 'candidate-apply' | 'candidate-uninstall';
+  operation:
+    | 'apply'
+    | 'rollback'
+    | 'uninstall'
+    | 'update'
+    | 'candidate-apply'
+    | 'candidate-uninstall';
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
@@ -1384,6 +1392,65 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
+      if (approval.operation === 'update') {
+        this.record('Installing only the reviewed provider updates you approved.', 'working');
+        let result: CliEnvelope<UpdateReport>;
+        try {
+          result = await this.call<UpdateReport>(['update', '--yes']);
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect the installed optimizer versions before retrying.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Update result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        if (result.exitCode !== 0 || result.data === null) {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            'The reviewed optimizer update was not applied. The installed version, update channel or compatibility evidence changed after the preview, so nothing was forced.',
+          );
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Optimizer update was not applied',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        const applied =
+          result.data.execution?.results.filter((row) => row.status === 'applied') ?? [];
+        this.lastApplied = null;
+        this.invalidateObservedState();
+        const messages =
+          applied.length > 0
+            ? [
+                'The reviewed optimizer update completed successfully.',
+                'Token Harness re-ran the update transaction safety checks before changing software.',
+                'Choose Refresh to read the installed versions again. Reopen a coding agent if the updated optimizer requires it.',
+              ]
+            : [
+                'No optimizer needed an update by the time the approved action ran.',
+                'Nothing was forced. Choose Refresh to read the current versions.',
+              ];
+        this.record(
+          applied.length > 0
+            ? 'Reviewed optimizer update installed.'
+            : 'Optimizer update no longer needed.',
+          'success',
+        );
+        return {
+          ok: true,
+          title: applied.length > 0 ? 'Optimizer updated' : 'Already up to date',
+          messages,
+          appliedPlans: applied.length,
+        };
+      }
       if (
         approval.operation === 'candidate-apply' ||
         approval.operation === 'candidate-uninstall'
@@ -1613,6 +1680,7 @@ export class GuideService {
   }
   async checkUpdates(): Promise<GuideResult> {
     return this.exclusive(async () => {
+      this.approval = null;
       this.record('Checking provider update channels without changing software.', 'working');
       const updateResult = await this.call<UpdateReport>(['update']);
       const inventory = await this.call<DoctorReport>(['doctor']);
@@ -1627,6 +1695,7 @@ export class GuideService {
           title: 'Update check needs attention',
           messages: [message],
           appliedPlans: 0,
+          ticket: null,
         };
       }
 
@@ -1653,6 +1722,7 @@ export class GuideService {
           messages: [message],
           appliedPlans: 0,
           stack,
+          ticket: null,
         };
       }
 
@@ -1666,7 +1736,7 @@ export class GuideService {
         messages.push(
           ...available.map(
             (row) =>
-              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is available. Run token-harness update to review the dry-run; applying still requires explicit approval.`,
+              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is reviewed and ready to install.`,
           ),
         );
       }
@@ -1674,22 +1744,50 @@ export class GuideService {
         messages.push(
           ...blocked.map(
             (row) =>
-              `${name(row.providerId)}: ${row.available ?? 'a newer version'} exists, but Token Harness is keeping ${row.installed ?? 'the installed version'} until that combination has reviewed compatibility evidence.`,
+              `${name(row.providerId)}: ${row.available ?? 'a newer version'} exists, but Token Harness is keeping ${row.installed ?? 'the installed version'} because that newer combination is not reviewed yet.`,
           ),
         );
       }
       if (available.length === 0 && blocked.length === 0)
+        messages.push('Your managed optimizers are up to date on their reviewed channels.');
+
+      let ticket: string | null = null;
+      if (available.length > 0) {
+        ticket = this.random();
+        const expires = this.now() + 10 * 60_000;
+        this.approval = {
+          id: ticket,
+          expires,
+          plans: [],
+          transactionId: null,
+          provider: null,
+          description: 'Optimizer updates',
+          operation: 'update',
+          network: updateResult.data.network.length > 0,
+        };
         messages.push(
-          'No reviewed provider update is currently available. Pins and unavailable channels remain visible in the stack.',
+          'Review the versions above, then choose Install updates. Token Harness will re-check the update channels and transaction safety rules before changing software.',
         );
-      messages.push(
-        'This was a read-only channel check. No provider was installed, updated, downgraded or enabled.',
-      );
+      } else {
+        messages.push('No software was changed.');
+      }
 
       const stack = this.stackSnapshot();
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
-      this.record('Provider update check completed. No software changed.', 'success');
-      return { ok: true, title: 'Optimizer update check', messages, appliedPlans: 0, stack };
+      this.record(
+        available.length > 0
+          ? 'Reviewed optimizer update available. Waiting for your approval.'
+          : 'Provider update check completed. No reviewed update is pending.',
+        'success',
+      );
+      return {
+        ok: true,
+        title: available.length > 0 ? 'Updates available' : 'Optimizers up to date',
+        messages,
+        appliedPlans: 0,
+        stack,
+        ticket,
+      };
     });
   }
 

@@ -208,7 +208,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
         receiptId: null,
       },
     };
-    return result(EXIT_CODES['confirmation-required'], null, [
+    return result(EXIT_CODES['confirmation-required'], report, [
       ...preparedDiagnostics,
       adoptionConfirmationDiagnostic(plan),
       confirmationDiagnostic(report),

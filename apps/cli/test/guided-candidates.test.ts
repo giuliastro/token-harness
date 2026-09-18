@@ -5,12 +5,10 @@ import { Script } from 'node:vm';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('guided optional managed optimizers', () => {
-  it('promotes the reviewed tools into Managed optimizers instead of Experimental tools', () => {
-    assert.match(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
-    assert.match(
-      GUIDE_HTML,
-      /mcptoon, GitNexus and Headroom also expose narrow optional managed integrations/,
-    );
+  it('places reviewed tools under Optional optimizers instead of Experimental tools', () => {
+    assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
+    assert.match(GUIDE_HTML, /<h3>Optional optimizers<\/h3>/);
+    assert.match(GUIDE_HTML, /They are not required to complete first-run setup/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
     assert.match(GUIDE_JS, /renderManagedTool\('mcptoon'\)/);
@@ -18,19 +16,20 @@ describe('guided optional managed optimizers', () => {
     assert.match(GUIDE_JS, /renderManagedTool\('headroom'\)/);
   });
 
-  it('reviews each optional optimizer through a provider-scoped managed plan', () => {
-    assert.match(GUIDE_JS, /Review mcptoon for /);
-    assert.match(GUIDE_JS, /Review GitNexus for /);
-    assert.match(GUIDE_JS, /Review Headroom for /);
+  it('sets up each optional optimizer through a provider-scoped managed plan', () => {
+    assert.match(GUIDE_JS, /Optional optimizer/);
+    assert.match(GUIDE_JS, /Set up for /);
+    assert.match(GUIDE_JS, /Set up ['"] \+ provider\.name/);
     assert.match(GUIDE_JS, /provider: providerId/);
     assert.match(GUIDE_JS, /PolyForm Noncommercial/);
   });
 
-  it('keeps the production baseline distinct from optional managed integrations', () => {
-    assert.match(GUIDE_HTML, /RTK and HarnessTrim are the production baseline/);
-    assert.match(GUIDE_JS, /Production baseline/);
-    assert.match(GUIDE_JS, /Optional managed integration/);
-    assert.match(GUIDE_JS, /Enabling one does not create a savings claim/);
+  it('keeps the recommended baseline distinct from optional managed integrations', () => {
+    assert.match(GUIDE_HTML, /Recommended baseline/);
+    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim are the default first setup/);
+    assert.match(GUIDE_JS, /Recommended baseline/);
+    assert.match(GUIDE_JS, /Optional optimizer/);
+    assert.match(GUIDE_HTML, /never counted as savings merely because they are configured/);
   });
 
   it('keeps experimental benchmark evidence separate from managed setup', () => {

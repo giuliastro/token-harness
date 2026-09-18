@@ -158,7 +158,7 @@ it('rejects arbitrary providers and keeps removal inside a reviewed managed-only
     service.preview({ action: 'undo', transaction: 'attacker-selected-id' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
-  assert.match(GUIDE_HTML, /<summary>Remove managed changes<\/summary>/);
+  assert.match(GUIDE_HTML, /<summary>Remove Token Harness-managed configuration<\/summary>/);
   assert.match(GUIDE_JS, /component\.managedByTokenHarness \|\| component\.configured/);
   assert.match(GUIDE_JS, /provider installation remains user-owned/i);
   assert.match(GUIDE_JS, /\{ action: 'remove', provider: component\.providerId \}/);
