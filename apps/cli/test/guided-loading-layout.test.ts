@@ -4,11 +4,14 @@ import { describe, it } from 'node:test';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('guided loading layout', () => {
-  it('shows stable setup-first loading surfaces while agent data is being read', () => {
+  it('shows stable first-run overview surfaces while agent data is being read', () => {
     assert.match(GUIDE_HTML, /id="dashboard-status"/);
     assert.match(GUIDE_HTML, /id="setup-agents"/);
+    assert.match(GUIDE_HTML, /id="baseline-tools"/);
+    assert.match(GUIDE_HTML, /id="optional-tools"/);
+    assert.match(GUIDE_HTML, /id="maintenance-actions"/);
     assert.match(GUIDE_HTML, /Checking agents…/);
-    assert.match(GUIDE_HTML, /id="agent-capabilities"/);
+    assert.doesNotMatch(GUIDE_HTML, /id="agent-capabilities"/);
   });
 
   it('surfaces progressive read feedback without triggering another full refresh', () => {
