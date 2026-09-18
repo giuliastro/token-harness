@@ -7,7 +7,10 @@ import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 describe('guided optional managed optimizers', () => {
   it('promotes the reviewed tools into Managed optimizers instead of Experimental tools', () => {
     assert.match(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
-    assert.match(GUIDE_HTML, /mcptoon, GitNexus and Headroom also expose narrow optional managed integrations/);
+    assert.match(
+      GUIDE_HTML,
+      /mcptoon, GitNexus and Headroom also expose narrow optional managed integrations/,
+    );
     assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
     assert.match(GUIDE_JS, /renderManagedTool\('mcptoon'\)/);
@@ -32,14 +35,20 @@ describe('guided optional managed optimizers', () => {
 
   it('keeps experimental benchmark evidence separate from managed setup', () => {
     assert.match(GUIDE_HTML, /<h2>Experimental benchmark results<\/h2>/);
-    assert.match(GUIDE_HTML, /Candidate evidence is evaluation only; it never promotes a tool automatically/);
+    assert.match(
+      GUIDE_HTML,
+      /Candidate evidence is evaluation only; it never promotes a tool automatically/,
+    );
     assert.match(GUIDE_JS, /benchmark-start/);
     assert.match(GUIDE_JS, /Candidate attribution names the experiment target/);
   });
 
   it('is a self-contained browser controller with no direct package-install execution', () => {
     assert.doesNotMatch(GUIDE_JS, /fetch\([^\n]*(headroom|mcptoon|gitnexus)/i);
-    assert.doesNotMatch(GUIDE_JS, /request\([^\n]*(pip install|pipx install|npm install|uv tool install)/i);
+    assert.doesNotMatch(
+      GUIDE_JS,
+      /request\([^\n]*(pip install|pipx install|npm install|uv tool install)/i,
+    );
     assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 });
