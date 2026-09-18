@@ -45,7 +45,7 @@ The first screen is **Overview**. There is no separate Setup page to learn.
 6. Keep using Claude Code or Codex normally. Open **Results** when you want detailed evidence.
 
 Opening the app does not change your configuration. A configuration or software change is always
-previewed first and requires explicit approval.
+previewed first and requires an explicit review and approval.
 
 ## The two views
 
