@@ -109,6 +109,31 @@ function fixture(input: { failSecond?: boolean; ids?: string[] } = {}) {
     if (command === 'context') data = { harnesses: [], instructions: [] };
     if (command === 'budget') data = { harnesses: [] };
     if (command === 'status') data = { problemCount: 0 };
+    if (command === 'update')
+      data = {
+        providers: [
+          {
+            providerId: providerId('rtk'),
+            installed: '0.44.0',
+            available: '0.49.0',
+            channel: 'github-release',
+            verdict: 'upgradable',
+            pin: null,
+          },
+        ],
+        network: ['github.com'],
+        execution: args.includes('--yes')
+          ? {
+              planId: null,
+              transactionId: 'tx-update',
+              fromStoredPlan: false,
+              outcome: 'committed',
+              results: [],
+              unrestored: [],
+              receiptId: 'tx-update',
+            }
+          : null,
+      };
     if (command === 'plan') data = plan('abc0000' + ++sequence);
     if (command === 'apply' || command === 'rollback') {
       writes++;
@@ -222,6 +247,21 @@ describe('guided workflow', () => {
     assert.equal((await service.verify()).ok, true);
     assert.ok(calls.every((args) => !args.includes('codex')));
   });
+  it('turns a reviewed update check into an explicit update action', async () => {
+    const { service, calls } = fixture({ ids: ['claude'] });
+    await assert.rejects(service.applyUpdates(), /Check for updates first/);
+    const checked = await service.checkUpdates();
+    assert.equal(checked.ok, true);
+    assert.match(checked.messages.join(' '), /Update now/);
+    const applied = await service.applyUpdates();
+    assert.equal(applied.ok, true);
+    assert.deepEqual(
+      calls.find((args) => args[0] === 'update' && args.includes('--yes')),
+      ['update', '--yes'],
+    );
+  });
+
+
   it('empty savings are missing, not zero; raw diagnostic text never enters friendly errors', async () => {
     assert.deepEqual(savingsView(null, 'all').rows, []);
     const { service } = fixture();
@@ -373,6 +413,10 @@ describe('guided browser security and assets', () => {
         413,
       );
       assert.equal((await fetch(origin + '/api/apply')).status, 404);
+      assert.equal((await post('/api/update-apply', { confirm: true })).status, 409);
+      assert.equal((await post('/api/update-check', { period: 'all' })).status, 200);
+      assert.equal((await post('/api/update-apply', { confirm: false })).status, 400);
+      assert.equal((await post('/api/update-apply', { confirm: true })).status, 200);
       assert.equal((await post('/api/preview', { action: 'setup', argv: ['evil'] })).status, 400);
       assert.equal((await fetch(origin + '/api/overview?period=wrong')).status, 400);
       const previewResponse = await post('/api/preview', {
@@ -398,7 +442,7 @@ describe('guided browser security and assets', () => {
     assert.ok(GUIDE_HTML.includes('<dialog'));
     assert.ok(GUIDE_HTML.includes('id="modal-actions"'));
     assert.ok(GUIDE_HTML.includes('Nothing changes without your approval'));
-    assert.ok(GUIDE_JS.includes('Apply reviewed setup'));
+    assert.ok(GUIDE_JS.includes('Apply setup'));
     assert.ok(GUIDE_JS.includes("request('/api/apply', { ticket })"));
     assert.ok(!GUIDE_HTML.includes('onclick='));
   });
@@ -468,16 +512,20 @@ describe('reasoning explanations and contextual actions', () => {
     }
   });
   it('keeps the UI grouped, keyboard-navigable, neutral and explicitly approved', () => {
-    assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 3);
+    assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 2);
     assert.ok(GUIDE_HTML.includes('aria-controls="view-dashboard"'));
-    assert.ok(GUIDE_HTML.includes('aria-controls="view-setup"'));
+    assert.ok(!GUIDE_HTML.includes('aria-controls="view-setup"'));
     assert.ok(GUIDE_HTML.includes('aria-controls="view-results"'));
     assert.ok(GUIDE_HTML.includes('aria-label="Appearance"'));
     assert.ok(!GUIDE_HTML.includes('Less setup. More useful work.'));
     assert.ok(!GUIDE_CSS.includes('radial-gradient'));
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
-    assert.ok(GUIDE_HTML.includes('<h2>Set up Token Harness in order</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Recommended optimizers</h2>'));
+    assert.ok(GUIDE_HTML.includes('<summary>Optional optimizers</summary>'));
+    assert.ok(GUIDE_JS.includes('Set up '));
+    assert.ok(GUIDE_JS.includes('Update now'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));
