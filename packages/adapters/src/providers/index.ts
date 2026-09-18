@@ -9,6 +9,9 @@ import type { ProviderId } from '@token-harness/core';
 
 import { harnesstrimAdapter as baseHarnessTrimAdapter } from './harnesstrim.js';
 import { rtkAdapter as baseRtkAdapter } from './rtk.js';
+import { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
+import { headroomManagedProviderAdapter } from './headroom-provider.js';
+import { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 import type { ProviderAdapter } from './contract.js';
 import { withProviderVersionCompatibility } from './version-compatibility.js';
 
@@ -43,6 +46,20 @@ export {
   type HeadroomCandidateState,
 } from './headroom-candidate.js';
 export {
+  HEADROOM_CLAUDE_MCP_POINTER,
+  HEADROOM_CODEX_MARKER_BEGIN,
+  HEADROOM_CODEX_MARKER_END,
+  HEADROOM_CODEX_MCP_BODY,
+  HEADROOM_MCP_SERVER,
+  HEADROOM_REVIEWED_MCP_VERSION,
+  headroomOwnedArtifact,
+  planHeadroomManagedMcpActivation,
+  verifyHeadroomManagedMcpActivation,
+  type HeadroomManagedMcpPlan,
+  type HeadroomManagedMcpVerification,
+  type HeadroomManagedMcpVerificationState,
+} from './headroom-managed.js';
+export {
   MCPTOON_MINIMUM_BENCHMARK_VERSION,
   MCPTOON_REVIEWED_BENCHMARK_VERSION,
   mcptoonVersionAtLeast,
@@ -65,6 +82,10 @@ export {
   type McptoonManagedVerification,
   type McptoonManagedVerificationState,
 } from './mcptoon-managed.js';
+export { gitnexusAdapter, headroomAdapter, mcptoonAdapter } from './managed-optimization-tools.js';
+export { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
+export { headroomManagedProviderAdapter } from './headroom-provider.js';
+export { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
 export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
 export {
@@ -143,14 +164,21 @@ const cliHarnessTrimAdapter: ProviderAdapter = {
 };
 
 /**
- * RTK first, HarnessTrim second.
+ * First-class provider registry. RTK and HarnessTrim remain the production baseline. mcptoon,
+ * GitNexus and Headroom now participate in the same ordinary managed lifecycle. Headroom manages
+ * only the narrow local MCP registration surface: it does not start a proxy, index repositories,
+ * install system prerequisites, or delegate broad persistent-install mutations to upstream.
  *
- * Order is not arbitrary: RFC 0003's compatibility table gives RTK `shell.output.reduce` when both
- * claim it, and the resolver reads a `compatible` rule's provider order to pick the owner. The
- * conflict between these two is the one the shipped rule table names, so the order here is the
- * order that rule assumes.
+ * RTK stays first because the RFC 0003 compatibility rule gives it shell-output ownership where it
+ * overlaps HarnessTrim. The additional providers claim no exclusive shell interception scope.
  */
-const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [rtkAdapter, cliHarnessTrimAdapter];
+const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [
+  rtkAdapter,
+  cliHarnessTrimAdapter,
+  mcptoonManagedProviderAdapter,
+  gitnexusManagedProviderAdapter,
+  headroomManagedProviderAdapter,
+];
 
 export function listProviderAdapters(): readonly ProviderAdapter[] {
   return PROVIDER_ADAPTERS;

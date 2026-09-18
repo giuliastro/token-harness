@@ -474,6 +474,20 @@ export interface BlockedManagedMutation {
   missing: string;
 }
 
+export function providerVersionForManagedAdmission(
+  observedVersion: string | null,
+  actions: readonly PlannedAction[],
+): string | null {
+  if (observedVersion !== null) return observedVersion;
+
+  const plannedVersions = new Set<string>();
+  for (const action of actions) {
+    if (action.kind !== 'package-manager-install' || action.version === null) continue;
+    plannedVersions.add(action.version);
+  }
+  return plannedVersions.size === 1 ? ([...plannedVersions][0] ?? null) : null;
+}
+
 export async function computePlan(context: CommandContext): Promise<ComputedPlan> {
   const diagnostics: Diagnostic[] = [];
 
@@ -594,13 +608,21 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     const rows = context.compatibilityRows ?? COMPATIBILITY_ROWS;
     for (const adapter of providerAdapters) {
       const owned = resolution.ownership.filter((entry) => entry.owner === adapter.manifest.id);
-      if (owned.length === 0 && adapter.plansWithoutOwnership !== true) continue;
+      const mayPlanWithoutOwnership =
+        adapter.plansWithoutOwnership === true &&
+        (adapter.manifest.capabilities.length > 0 || context.provider === adapter.manifest.id);
+      if (owned.length === 0 && !mayPlanWithoutOwnership) continue;
       const providerPlan = await adapter.plan(providerContext, {
         ownership: owned,
         harnesses: present,
         desiredState: 'configured',
       });
       if (providerPlan.actions.length === 0) continue;
+
+      const admissionProviderVersion = providerVersionForManagedAdmission(
+        versions.providers[adapter.manifest.id] ?? null,
+        providerPlan.actions,
+      );
 
       /**
        * RFC 0009 §Compatibility matrix — the managed-mutation gate.
@@ -623,7 +645,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       for (const harness of touched) {
         const admission = admitManagedMutation(rows, {
           provider: adapter.manifest.id,
-          providerVersion: versions.providers[adapter.manifest.id] ?? null,
+          providerVersion: admissionProviderVersion,
           harness,
           harnessVersion: versions.harnesses[harness] ?? null,
           os: context.platform.os,
@@ -633,7 +655,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           admitted = false;
           blocked.push({
             provider: adapter.manifest.id,
-            providerVersion: versions.providers[adapter.manifest.id] ?? null,
+            providerVersion: admissionProviderVersion,
             harness,
             harnessVersion: versions.harnesses[harness] ?? null,
             verdict: admission.verdict,

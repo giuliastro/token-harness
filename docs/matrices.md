@@ -19,6 +19,11 @@ version outside it is reported as such and treated conservatively rather than re
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
 | harnesstrim | opencode | 1.18.9–1.18.9 | `tool.output.reduce` |
+| mcptoon | claude | 2.1.269–2.1.269 | none claimed |
+| mcptoon | codex | 0.152.1–0.153.0 | none claimed |
+| gitnexus | claude | 2.1.269–2.1.269 | none claimed |
+| headroom | claude | 2.1.269–2.1.269 | none claimed |
+| headroom | codex | 0.153.0–0.153.0 | none claimed |
 
 ## Harnesses
 
@@ -43,6 +48,11 @@ correct and that nothing available can show it ran.
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
 | harnesstrim | opencode | config-only | config-only | at the harness ceiling |
+| mcptoon | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| mcptoon | codex | config-only | config-only | at the harness ceiling |
+| gitnexus | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| headroom | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| headroom | codex | config-only | config-only | at the harness ceiling |
 
 ## Platforms
 
@@ -56,6 +66,15 @@ correct and that nothing available can show it ran.
 | harnesstrim | windows (WSL) | supported | — |
 | harnesstrim | macos | supported | — |
 | harnesstrim | linux | supported | — |
+| mcptoon | windows | supported | — |
+| mcptoon | macos | supported | — |
+| mcptoon | linux | supported | — |
+| gitnexus | windows | supported | — |
+| gitnexus | macos | supported | — |
+| gitnexus | linux | supported | — |
+| headroom | windows | supported | — |
+| headroom | macos | supported | — |
+| headroom | linux | supported | — |
 
 ## Metrics sources
 
@@ -66,6 +85,9 @@ RFC 0005 §Importer degradation policy: an importer states the fidelity mode it 
 | --- | --- | --- | --- |
 | rtk | local-database | native | `<user data directory>/rtk/history.db` |
 | harnesstrim | jsonl | native | `.harnesstrim/metrics.jsonl`, `.hermes/harnesstrim-metrics.jsonl` |
+| mcptoon | none | unavailable | — |
+| gitnexus | none | unavailable | — |
+| headroom | none | unavailable | — |
 
 ## Known limitations
 
@@ -132,14 +154,16 @@ is exactly the drift generating the tables above exists to prevent.
 
 - **The plugin must be enabled with `hermes plugins enable harnesstrim`.** This PR adds read-only detection and telemetry import, but no Hermes compatibility row is shipped because the adapter does not perform a managed mutation. The gateway lifecycle remains outside Token Harness.
 - **Pi has no enable command, and its effective mode defaults to `dryrun`.** `harnesstrim install pi --apply` drops a module into `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`, which Pi auto-loads; `HARNESSTRIM_MODE=active` in Pi's environment is what makes the extension reduce. This PR adds read-only detection and configuration verification, but no Pi compatibility row is shipped because the adapter does not perform a managed mutation.
-- **Six managed-provider compatibility rows ship.** The original three Windows rows are: RTK × Claude Code at rtk `0.44.0` /
+- **Ten provider/harness compatibility rows are declared; six historical baseline recordings remain under `tests/fixtures/rows/`.** The original three Windows recordings are: RTK × Claude Code at rtk `0.44.0` /
   Claude Code `2.1.220` (`canary`), HarnessTrim × Claude Code at harnesstrim `0.1.0` /
   Claude Code `2.1.220` (`config-only`), and HarnessTrim × Codex at harnesstrim `0.1.0` /
   Codex `0.146.0` (`config-only`). Two more Windows recordings cover RTK `0.44.0` and `0.48.0`
-  with Claude Code `2.1.251`. The remaining row is the real Linux/non-WSL recording:
-  HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). Each names a recording under
-  `tests/fixtures/rows/`, and the Linux row is exact: nearby Codex/HarnessTrim versions and WSL
-  remain refused. HarnessTrim's OpenCode combination remains adoption-only.
+  with Claude Code `2.1.251`. The sixth is the real Linux/non-WSL recording:
+  HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). The optional mcptoon, GitNexus and
+  Headroom rows are admitted only on their exact reviewed config-only contracts and dedicated
+  compatibility evidence; they do not rewrite the older baseline recordings. The Linux HarnessTrim
+  row remains exact: nearby Codex/HarnessTrim versions and WSL remain refused. HarnessTrim's
+  OpenCode combination remains adoption-only.
 - **`invalidating-update` is still intentionally missing from the Linux recording.** It needs a
   second real provider or harness version on the same machine; a synthesised state would assert
   something nobody stood in. The Linux fixture does include `uninstall`, recorded after a second
@@ -172,9 +196,9 @@ is exactly the drift generating the tables above exists to prevent.
 
 ### Scope
 
-- **Two providers, three harnesses.** The capability resolver is a static rule table, not a solver:
-  the ownership policy for this one provider pair is known and written down, and a general engine
-  built now would be designed against one data point.
+- **Five providers have declared compatibility rows across three harnesses.** The capability resolver
+  is a static rule table, not a general solver: every provider/harness/version combination is admitted
+  explicitly, and adding another integration requires another reviewed rule rather than inference.
 - **A compatibility rule covers only the versions it records.** Outside them the rule is withdrawn
   and the pair is reported as unresolved, which is the conservative outcome rather than a guess.
 - **`profile: custom` has no CLI surface yet.** The resolver supports it; nothing exposes it.

@@ -1,0 +1,106 @@
+name: Headroom managed compatibility smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/headroom-managed-smoke.yml'
+      - 'packages/adapters/src/providers/headroom-candidate.ts'
+      - 'packages/adapters/src/providers/headroom-managed.ts'
+      - 'packages/adapters/src/providers/headroom-provider.ts'
+      - 'packages/adapters/test/headroom-candidate.test.ts'
+      - 'packages/adapters/test/headroom-managed.test.ts'
+      - 'apps/cli/src/guided.ts'
+      - 'apps/cli/src/guided-product-client.ts'
+      - 'apps/cli/src/guided-assets.ts'
+      - 'docs/candidates/headroom.md'
+      - 'docs/development-status.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  passive-package-contract:
+    name: passive package contract (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Install exact reviewed Headroom MCP build
+        shell: bash
+        run: python -m pip install --disable-pip-version-check 'headroom-ai[mcp]==0.37.0'
+
+      - name: Verify passive managed MCP CLI contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(headroom --version 2>&1)"
+          mcp_help="$(headroom mcp serve --help 2>&1)"
+
+          printf '%s\n' "$version"
+          printf '%s\n' "$mcp_help"
+
+          grep -Eq '(^|[^0-9])0\.37\.0([^0-9]|$)' <<<"$version"
+          grep -Eiq 'serve|server|mcp' <<<"$mcp_help"
+
+      - name: Guard passive scope
+        shell: bash
+        run: |
+          echo 'This job intentionally stops at --version and mcp serve --help.'
+          echo 'It does not launch the MCP server, wrap/proxy commands, call a model/API, or mutate harness configuration.'
+
+  harness-config-contract:
+    name: exact harness config contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+
+      - name: Install exact reviewed harness rows
+        run: npm install --global @anthropic-ai/claude-code@2.1.269 @openai/codex@0.153.0
+
+      - name: Verify local config parsing without model calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          claude --version | grep -F '2.1.269'
+          codex --version | grep -F '0.153.0'
+
+          tmp="$(mktemp -d)"
+          export HOME="$tmp"
+          cat > "$HOME/.claude.json" <<'JSON'
+          {"mcpServers":{"headroom":{"command":"headroom","args":["mcp","serve"]}}}
+          JSON
+          mkdir -p "$HOME/.codex"
+          cat > "$HOME/.codex/config.toml" <<'TOML'
+          [mcp_servers.headroom]
+          command = "headroom"
+          args = ["mcp", "serve"]
+          TOML
+
+          # Claude's `mcp get` does not print args for a missing executable, but it must
+          # resolve this entry from the user config and attempt the configured `headroom` command.
+          claude_output="$(claude mcp get headroom 2>&1)"
+          printf '%s\n' "$claude_output"
+          grep -F 'headroom:' <<<"$claude_output"
+          grep -F 'Scope: User config' <<<"$claude_output"
+          grep -F 'Executable not found in $PATH: "headroom"' <<<"$claude_output"
+
+          codex_output="$(codex mcp get headroom 2>&1)"
+          printf '%s\n' "$codex_output"
+          grep -F 'headroom' <<<"$codex_output"
+          grep -F 'command: headroom' <<<"$codex_output"
+          grep -F 'args: mcp serve' <<<"$codex_output"
+
+      - name: Guard quota-free scope
+        shell: bash
+        run: |
+          echo 'This job only exercises local --version and MCP config-reader commands in an isolated HOME.'
+          echo 'It does not send a model prompt, log in, make a model/API request, run a benchmark, or install Headroom.'

@@ -24,10 +24,11 @@ describe('adapter registries', () => {
 
   it('carries the provider adapters this build ships, and no others', () => {
     // RTK first: RFC 0003's compatibility rule gives it `shell.output.reduce` when both claim the
-    // scope, and the resolver reads a rule's provider order to pick the owner.
+    // scope, and the resolver reads a rule's provider order to pick the owner. Optional managed
+    // integrations follow the production baseline in their ordinary lifecycle order.
     assert.deepEqual(
       listProviderAdapters().map((adapter) => adapter.manifest.id),
-      ['rtk', 'harnesstrim'],
+      ['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'],
     );
   });
 
@@ -39,13 +40,15 @@ describe('adapter registries', () => {
     assert.notEqual(findHarnessAdapter('pi' as HarnessId), null);
     assert.notEqual(findProviderAdapter('rtk' as ProviderId), null);
     assert.notEqual(findProviderAdapter('harnesstrim' as ProviderId), null);
+    assert.notEqual(findProviderAdapter('mcptoon' as ProviderId), null);
+    assert.notEqual(findProviderAdapter('gitnexus' as ProviderId), null);
+    assert.notEqual(findProviderAdapter('headroom' as ProviderId), null);
     assert.equal(findProviderAdapter('dejavu' as ProviderId), null);
   });
 
   it('declares a complete contract for every registered provider', () => {
     for (const adapter of listProviderAdapters()) {
       const { manifest } = adapter;
-      assert.ok(manifest.capabilities.length > 0, 'no capabilities declared');
       // RFC 0003 §Rule: an assignment "requires a demonstrated capability ... evidenced
       // in the provider's own source at a recorded version".
       for (const capability of manifest.capabilities) {
@@ -53,8 +56,6 @@ describe('adapter registries', () => {
         assert.ok((capability.evidence?.upstreamVersion.length ?? 0) > 0);
       }
       assert.ok(manifest.installationChannels.length > 0, 'no installation channels declared');
-      // PLAN §10: "do not parse human `rtk gain` output when JSON is available."
-      assert.notEqual(manifest.metrics.source, 'none');
       assert.equal(typeof adapter.detect, 'function');
       assert.equal(typeof adapter.verify, 'function');
       // Every lifecycle method the contract declares, for every registered provider — so a second
@@ -67,6 +68,15 @@ describe('adapter registries', () => {
         assert.ok(capability.harnesses.length > 0, `${capability.capability} names no harness`);
         assert.ok(capability.surfaces.length > 0, `${capability.capability} names no surface`);
       }
+    }
+  });
+
+  it('keeps RTK and HarnessTrim as the evidence-bearing production baseline', () => {
+    for (const id of ['rtk', 'harnesstrim']) {
+      const adapter = findProviderAdapter(id as ProviderId);
+      assert.notEqual(adapter, null);
+      assert.ok(adapter!.manifest.capabilities.length > 0, `${id} declares no capabilities`);
+      assert.notEqual(adapter!.manifest.metrics.source, 'none', `${id} declares no metrics source`);
     }
   });
 

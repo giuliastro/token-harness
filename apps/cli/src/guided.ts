@@ -199,6 +199,7 @@ const NAMES: Readonly<Record<string, string>> = {
   harnesstrim: 'HarnessTrim',
   mcptoon: 'mcptoon',
   gitnexus: 'GitNexus',
+  headroom: 'Headroom',
 };
 const name = (id: string): string => NAMES[id] ?? id;
 const TASKS = new Set(['mechanical', 'standard', 'hard', 'critical']);
@@ -213,6 +214,21 @@ const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
     providerId: providerId('harnesstrim'),
     displayName: 'HarnessTrim',
     category: 'command-output-reduction',
+  },
+  {
+    providerId: providerId('mcptoon'),
+    displayName: 'mcptoon',
+    category: 'mcp-discovery',
+  },
+  {
+    providerId: providerId('gitnexus'),
+    displayName: 'GitNexus',
+    category: 'repository-retrieval',
+  },
+  {
+    providerId: providerId('headroom'),
+    displayName: 'Headroom',
+    category: 'context-minimization',
   },
 ];
 const ISSUE_COPY: Readonly<Record<string, string>> = {
@@ -1036,7 +1052,9 @@ export class GuideService {
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
-        !['rtk', 'harnesstrim'].includes(String(data['provider']))) ||
+        !['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'].includes(
+          String(data['provider']),
+        )) ||
       (data['candidate'] !== undefined &&
         !['mcptoon', 'gitnexus'].includes(String(data['candidate']))) ||
       (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||
@@ -1046,7 +1064,7 @@ export class GuideService {
           data['harness'] !== undefined ||
           data['task'] !== undefined ||
           data['candidate'] !== undefined)) ||
-      (action !== 'remove' && data['provider'] !== undefined) ||
+      (data['provider'] !== undefined && action !== 'remove' && action !== 'setup') ||
       (candidateAction &&
         (data['candidate'] === undefined ||
           data['harness'] === undefined ||
@@ -1260,6 +1278,8 @@ export class GuideService {
           'working',
         );
         const args = ['plan', '--harness', agent.harnessId];
+        if (data['action'] === 'setup' && data['provider'] !== undefined)
+          args.push('--provider', String(data['provider']));
         if (data['action'] === 'skill') {
           args.push('--provider', 'none', '--agent-skill');
         } else if (data['action'] === 'effort')

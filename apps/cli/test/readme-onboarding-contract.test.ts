@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
-import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
+import { GUIDE_HTML } from '../src/guided-assets.js';
 import { GUIDE_CANDIDATE_CAMPAIGN_JS } from '../src/guided-candidate-campaign-client.js';
 
 const ROOT = new URL('../../../../', import.meta.url);
@@ -37,11 +37,13 @@ describe('README onboarding contract', () => {
     assert.match(readme, /requires an explicit review and approval/i);
   });
 
-  it('documents the same bounded candidate-campaign workflow shipped in the UI', async () => {
+  it('documents candidate campaigns as advanced evidence outside novice managed setup', async () => {
     const readme = await repositoryFile('README.md');
 
-    assert.match(readme, /Run standard evaluation/);
-    assert.match(GUIDE_JS, /Run standard evaluation/);
+    assert.doesNotMatch(readme, /Run standard evaluation/);
+    assert.match(readme, /Evaluation campaigns are an advanced maintainer workflow/i);
+    assert.match(readme, /managed setup stays in the unified \*\*Optimization Stack\*\*/i);
+    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Run standard evaluation/);
     assert.match(readme, /Start baseline capture/);
     assert.match(readme, /Start optimized\s+capture/);
     assert.match(readme, /Record outcome/);
@@ -59,9 +61,9 @@ describe('README onboarding contract', () => {
       assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, new RegExp(flag));
     }
 
-    assert.match(readme, /Decision-ready is not promotion-ready/i);
+    assert.match(readme, /decision-ready[^]*cannot promote a candidate by itself/i);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
-    assert.match(readme, /not activation verification/i);
+    assert.match(readme, /browser acknowledgement[^]*proof that the candidate was active/i);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not treat it as activation verification/);
     assert.match(readme, /does not treat attribution.*proof that the candidate was active/is);
     assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);

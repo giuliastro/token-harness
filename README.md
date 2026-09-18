@@ -3,8 +3,8 @@
 **Build, verify and measure an optimization stack for Claude Code and Codex.**
 
 Token Harness is a local **optimization stack manager**. It checks your coding agents, manages the
-optimization components it can safely own, keeps experimental candidates separate, verifies the
-result, and reports savings only when it has evidence to support them.
+optimization components it can safely own, keeps evaluation evidence separate from managed lifecycle,
+verifies the result, and reports savings only when it has evidence to support them.
 
 It is not another coding agent and it does not replace specialized projects such as RTK or
 HarnessTrim.
@@ -34,10 +34,9 @@ of CLI commands to memorize.
 3. In **Setup**, work from top to bottom:
    - Coding agents
    - Managed optimizers
-   - Experimental tools
    - Optional agent tuning
    - Checks and maintenance
-4. For Claude Code or Codex, choose **Review setup** when a managed setup is available.
+4. For Claude Code or Codex, choose **Review baseline** when the RTK + HarnessTrim setup is available.
 5. Read the exact proposed changes. **Apply reviewed setup** appears only when there is a concrete
    safe plan to apply.
 6. Keep using Claude Code or Codex normally.
@@ -72,8 +71,10 @@ useful read-only allowance and connected-tool observations when available.
 
 **2. Managed optimizers**
 
-The managed stack currently consists of **RTK + HarnessTrim** on individually reviewed
-combinations. Token Harness tracks the exact combined provider set separately: if no combined-stack
+The production baseline remains **RTK + HarnessTrim** on individually reviewed combinations.
+Token Harness also exposes **mcptoon**, **GitNexus** and **Headroom** as optional managed integrations on their exact
+reviewed lifecycle rows; enabling any of them does not make it part of the production baseline or create a
+savings claim. Token Harness tracks the exact combined provider set separately: if no combined-stack
 review is recorded, Setup says so and keeps the stack incomplete rather than inferring compatibility
 from healthy individual checks. Token Harness can prepare their integration transactionally, show the
 exact plan, apply it only after approval, verify it, and remove only configuration it owns.
@@ -91,45 +92,17 @@ shipped combined-review registry stays empty until the captured configuration ha
 verification evidence, has been benchmarked together, and has been deliberately reviewed; see
 `docs/combined-stack-reviews.md`.
 
-**3. Experimental tools**
+**3. Evaluation evidence (maintainers)**
 
-Headroom, mcptoon and GitNexus are visible as candidates, not silently promoted dependencies. Their
-cards distinguish CLI installation, candidate-side activation/evaluation, Token Harness benchmark
-evidence and promotion-readiness gates. External install or activation commands are shown for
-review; Token Harness does not silently execute package managers, activate wrappers, index
-repositories or register MCP servers.
+Selection campaigns and historical candidate evidence remain available for maintainers, but they are
+not a separate novice setup product. Once a tool has a reviewed managed lifecycle, Setup presents it in
+the same **Optimization Stack** with its exact state, version, prerequisites, harness scope and safe
+Apply/Remove controls. Evaluation evidence never turns into a savings or compatibility claim by itself.
 
-Choose **Run standard evaluation** to start or resume a paired candidate campaign. Campaign state is
-scoped to both the candidate and the selected harness, so Claude Code and Codex evidence cannot be
-mixed accidentally. The browser reads the campaign directly and shows **Progress**, the current
-selection signal, whether the evidence is **Decision ready**, the number of evidence-bearing pairs
-and the exact **Next** step.
-
-For normal use, the browser can now start and finish the local benchmark capture itself. You still
-run the actual task in Claude Code or Codex. When the task finishes, record the quality result,
-attempt count and failed-attempt count you actually observed. Before an optimized capture, Token
-Harness requires you to acknowledge that you enabled the candidate through its own documented
-workflow. That acknowledgement is **not activation verification** and is never treated as promotion
-evidence. Every browser capture action is matched against the campaign engine's current step before
-it can write local benchmark state, so a stale tab cannot advance a different step.
-
-`benchmark-matrix`, `benchmark-start` and `benchmark-finish` remain available as advanced terminal
-fallbacks for debugging or automation. The browser does not run the coding task, install or activate
-a candidate, or claim that candidate attribution proves activation.
-
-A campaign selection assessment can report `insufficient-evidence`, `promising`, `mixed` or
-`negative`, plus whether the evidence is decision-ready. **Decision-ready is not promotion-ready.**
-The campaign shows the same promotion-review gate count and next gate as the candidate card, using
-the current local observation rather than starting another environment scan. Activation
-verification, managed lifecycle, compatibility/reversibility, project maturity and combined-stack
-validation remain separate gates.
-
-Choose **Compare evaluation evidence** when you want one read-only view of campaigns you already
-started. The comparison is loaded only on request, never creates a campaign, keeps candidate and
-harness ordering fixed, and reports progress, selection signal, decision readiness, runtime
-activation evidence and promotion gates without producing a composite score or automatic winner.
-Activation is shown separately as **Verified**, **Blocked** or **Unreviewed**, with
-verified/blocked/unknown pair counts when campaign evidence exists.
+Headroom is config-only managed on its exact reviewed 0.37.0 row. Token Harness can own the narrow
+Claude Code or Codex MCP registration after the pinned CLI is present; it deliberately does not
+bootstrap `uv`/Python, start wrappers/proxies, or claim runtime compression savings. GitNexus likewise
+does not auto-index repositories, and its noncommercial license boundary stays visible.
 
 **4. Optional agent tuning**
 
@@ -209,6 +182,9 @@ algorithms into this repository.
 | --- | --- | --- |
 | [RTK](https://github.com/rtk-ai/rtk) | Shell/tool output reduction | Managed on reviewed combinations |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Managed first-party integration |
+| mcptoon | MCP discovery / compact manifest guidance | Optional managed integration on exact reviewed 0.7.10 rows; no savings assumed |
+| GitNexus | Repository graph / MCP context | Optional managed Claude integration for already-installed 1.6.12; license review required |
+| Headroom | Local MCP context compression/retrieval | Optional config-only managed Claude/Codex integration for already-installed 0.37.0; package prerequisite stays user-owned |
 | [cclimits](https://github.com/cruzanstx/cclimits) | Optional Claude allowance evidence | Read-only evidence; not an optimizer |
 | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |
 
@@ -233,8 +209,8 @@ RTK has no equivalent machine-readable capability endpoint, so releases newer th
 reviewed RTK set remain visible as `unknown-newer` until their consumed contract is checked. See
 [docs/provider-version-compatibility.md](docs/provider-version-compatibility.md).
 
-Current experimental candidates include Headroom, mcptoon and GitNexus. Detection or a promising
-benchmark is not enough for promotion. Their campaign assessment is structured evidence for the
+Historical evaluation evidence remains available for mcptoon, GitNexus and Headroom. Detection or a promising
+benchmark is not enough for a production-stack promotion or savings claim. Their campaign assessment is structured evidence for the
 selection gate, not an activation or promotion decision. A candidate must pass structured promotion
 readiness across benchmark capability, category fit, selection evidence, real activation
 verification, managed lifecycle, compatibility/reversibility, project maturity and combined-stack
@@ -307,9 +283,9 @@ The older automation contracts remain available. `ui --json` preserves its exist
 report; `ui --read-only` opens the legacy read-only UI; `ui --no-open` starts the guided app without
 launching a browser.
 
-### Evaluating an experimental candidate
+### Evaluation evidence (advanced / maintainers)
 
-For normal use, open **Setup -> Experimental tools** and choose **Run standard evaluation**. The app
+Evaluation campaigns are an advanced maintainer workflow; managed setup stays in the unified **Optimization Stack**. The app
 keeps a resumable campaign ID for each candidate/harness pair and reads campaign progress, assessment
 and the exact **Next** step directly in the browser. Use **Start baseline capture** or **Start optimized
 capture**, run the requested task in the selected coding agent, then choose **Record outcome** and

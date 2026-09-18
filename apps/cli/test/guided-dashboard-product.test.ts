@@ -17,13 +17,13 @@ describe('setup-first guided dashboard', () => {
     for (const label of [
       'Coding agents',
       'Managed optimizers',
-      'Experimental tools',
       'Optional agent tuning',
       'Checks and maintenance',
     ])
       assert.match(GUIDE_HTML, new RegExp(label));
     assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
-    assert.match(GUIDE_HTML, /Headroom, mcptoon and GitNexus/);
+    assert.match(GUIDE_HTML, /mcptoon, GitNexus and Headroom/);
+    assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Actions<\/h2>/);
   });
 
@@ -37,7 +37,8 @@ describe('setup-first guided dashboard', () => {
   });
 
   it('keeps read, review and apply phases explicit for managed setup', () => {
-    assert.match(GUIDE_JS, /Review setup for /);
+    assert.match(GUIDE_JS, /Review baseline for /);
+    assert.match(GUIDE_JS, /Review Headroom for /);
     assert.match(GUIDE_JS, /Nothing changes yet/);
     assert.match(GUIDE_JS, /Apply reviewed setup/);
     assert.match(GUIDE_JS, /transactional engine with backups/);

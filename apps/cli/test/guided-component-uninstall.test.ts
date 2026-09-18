@@ -15,6 +15,9 @@ import { GuideError, GuideService, type GuideCall } from '../src/guided.js';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 const RTK = providerId('rtk');
+const MCPTOON = providerId('mcptoon');
+const GITNEXUS = providerId('gitnexus');
+const HEADROOM = providerId('headroom');
 
 function report(
   outcome: ApplyReport['outcome'],
@@ -93,6 +96,39 @@ it('previews a provider-scoped uninstall without confirmation and applies only a
   assert.equal(service.status().canUndo, false);
 });
 
+it('routes mcptoon, GitNexus, and Headroom removal through the approved provider uninstall flow', async () => {
+  const calls: string[][] = [];
+  const call: GuideCall = async <T>(args: readonly string[]) => {
+    calls.push([...args]);
+    return envelope<T>('uninstall', null, 8, [
+      diagnostic({
+        severity: 'error',
+        code: 'confirmation-required',
+        message: 'This would remove one owned change',
+        remediation: 'Re-run with --yes',
+      }),
+    ]);
+  };
+
+  for (const provider of [MCPTOON, GITNEXUS, HEADROOM]) {
+    const service = new GuideService(
+      call,
+      () => 0,
+      () => `remove-${provider}`,
+    );
+    const preview = await service.preview({ action: 'remove', provider });
+    assert.equal(preview.network, false);
+    assert.equal(preview.restart, true);
+  }
+
+  assert.deepEqual(calls, [
+    ['uninstall', '--provider', 'mcptoon'],
+    ['uninstall', '--provider', 'gitnexus'],
+    ['uninstall', '--provider', 'headroom'],
+  ]);
+  assert.ok(calls.every((args) => !args.includes('--yes')));
+});
+
 it('does not offer an approval when the provider has no Token Harness-owned change', async () => {
   const call: GuideCall = async <T>(args: readonly string[]) =>
     envelope(args[0] ?? '', report('nothing-to-do') as T);
@@ -115,7 +151,7 @@ it('rejects arbitrary providers and keeps removal inside a reviewed managed-only
     () => 'unused',
   );
   await assert.rejects(
-    service.preview({ action: 'remove', provider: 'headroom' }),
+    service.preview({ action: 'remove', provider: 'attacker-provider' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
   await assert.rejects(
