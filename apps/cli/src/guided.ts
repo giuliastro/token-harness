@@ -1695,6 +1695,14 @@ export class GuideService {
 
   async applyUpdates(): Promise<GuideResult> {
     return this.exclusive(async () => {
+      if (
+        this.updates === null ||
+        !this.updates.report.providers.some((row) => row.verdict === 'upgradable')
+      )
+        throw new GuideError(
+          409,
+          'Check for updates first. Update now is available only after this session finds a reviewed optimizer update.',
+        );
       this.record('Applying reviewed optimizer updates after explicit approval.', 'working');
       let result: CliEnvelope<UpdateReport>;
       try {
