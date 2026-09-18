@@ -141,7 +141,7 @@ function confirmationDiagnostic(report: UpdateReport): Diagnostic {
   return diagnostic({
     severity: 'error',
     code: 'confirmation-required',
-    message: `Would update ${summary}. Run \\`token-harness update --yes\\` to apply the reviewed update.`,
+    message: `Would update ${summary}. Run token-harness update --yes to apply the reviewed update.`,
     remediation: 'Run `token-harness update --yes` to apply it',
   });
 }
