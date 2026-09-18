@@ -7,6 +7,7 @@ import {
   type DoctorReport,
   type ApplyReport,
   type PlatformFacts,
+  type UpdateReport,
 } from '@token-harness/core';
 
 import { renderHuman } from '../src/render/index.js';
@@ -119,6 +120,44 @@ describe('progressive human rendering', () => {
     ).report;
 
     assert.match(output, /token-harness verify/);
+  });
+
+
+  it('prints the exact confirmation command when a provider update is ready', () => {
+    const report: UpdateReport = {
+      providers: [
+        {
+          providerId: 'rtk' as UpdateReport['providers'][number]['providerId'],
+          installed: '0.44.0',
+          available: '0.45.0',
+          channel: 'cargo',
+          verdict: 'upgradable',
+          pin: null,
+        },
+      ],
+      network: ['crates.io'],
+      execution: {
+        planId: null,
+        transactionId: null,
+        fromStoredPlan: false,
+        outcome: 'confirmation-required',
+        results: [],
+        unrestored: [],
+        receiptId: null,
+      },
+    };
+    const output = renderHuman(
+      commandResult({
+        command: 'update',
+        exitCode: EXIT_CODES['confirmation-required'],
+        data: report,
+      }),
+      { toolVersion: '0.1.12', home: '/home/dev', decorate: false },
+    ).report;
+
+    assert.equal(output.match(/NEXT STEP/g)?.length, 1);
+    assert.match(output, /token-harness update --yes/);
+    assert.match(output, /Apply the reviewed provider update/);
   });
 
   it('keeps the established technical report behind --verbose', () => {
