@@ -327,7 +327,7 @@ export interface HarnessTrimCapabilities {
    * HarnessTrim >=0.3.0 computes these from the exact assets its installer will write. Older
    * releases do not expose this field, so an empty map keeps the historical fixture fallback.
    */
-  digests: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  digests?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -1497,7 +1497,7 @@ function skillArtifacts(
   if (install === undefined) return [];
 
   const prefix = `${install.directory}/skills/`;
-  const dynamic = Object.entries(capabilities?.digests[harness] ?? {})
+  const dynamic = Object.entries(capabilities?.digests?.[harness] ?? {})
     .filter(([path]) => path.startsWith(prefix))
     .map(([path, digest]) => ({
       path: context.fs.join(context.projectRoot, ...path.split('/')),
