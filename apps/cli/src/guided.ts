@@ -345,9 +345,9 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'cclimits-claude-source-unsupported':
     'This cclimits response lacks supported Claude discovery information. Check its installed version.',
   'claude-native-policy-blocked':
-    'Claude settings could not be changed safely. A project override, environment setting or unreviewed version may be in effect. Your settings were kept.',
+    'Claude settings could not be changed safely. A project override, environment setting or changed writable surface may be in effect. Your settings were kept.',
   'native-policy-harness-unsupported':
-    'This agent does not expose a reviewed setting for this action.',
+    'This agent does not expose a writable setting surface for this action.',
   'codex-native-policy-unavailable':
     'Codex did not expose a writable, versioned user setting. No change is proposed.',
   'codex-native-policy-shadowed':
@@ -356,7 +356,7 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'already-in-desired-state':
     'The supported integration is already configured. Nothing needs to be changed.',
   'managed-mutation-unsupported':
-    'Automatic setup is not yet verified for this installed version combination. Existing integrations are left untouched.',
+    'Automatic setup is unavailable because the installed provider does not expose the required managed surface. Existing integrations are left untouched.',
   'plan-ownership-drift':
     'The integration changed after the preview. Review a fresh plan; nothing was forced.',
   'plan-version-drift': 'An installed version changed after the preview. Review a fresh plan.',
@@ -370,7 +370,7 @@ export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: 
     /compatibility|unsupported|unreviewed|no-row/.test(entry.code),
   );
   if (blocked !== undefined)
-    return 'Automatic changes are not verified for this version combination. Your current settings are preserved.';
+    return 'The required automatic capability or safety precondition is not available in the current runtime. Your current settings are preserved.';
   if (diagnostics.some((entry) => /drift|mismatch|precondition|conflict/.test(entry.code)))
     return 'Something changed since the preview. No unsafe change was made. Review the current setup again.';
   return fallback;
@@ -895,7 +895,7 @@ export class GuideService {
     if (!PERIODS.has(period)) throw new GuideError(400, 'Choose all history, 7 days or 30 days.');
     if (force) this.cached = null;
     if (this.busy && this.cached !== null) return this.cached.value;
-    if (this.busy) throw new GuideError(409, 'A reviewed change is in progress.');
+    if (this.busy) throw new GuideError(409, 'Another managed change is in progress.');
     if (this.cached?.period === period && this.now() - this.cached.at < 15_000)
       return this.cached.value;
     if (this.reading !== null) {
@@ -1092,7 +1092,7 @@ export class GuideService {
               ? 'Integration configured'
               : hasActionableSetup
                 ? 'Ready to set up'
-                : 'No reviewed automatic setup available',
+                : 'No automatic setup surface available',
         providers: providers.map(name),
         setup,
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
@@ -1508,10 +1508,10 @@ export class GuideService {
   }
   async apply(input: unknown): Promise<GuideResult> {
     if (input === null || typeof input !== 'object' || Array.isArray(input))
-      throw new GuideError(400, 'A reviewed preview is required.');
+      throw new GuideError(400, 'A current preview is required.');
     const data = input as Record<string, unknown>;
     if (Object.keys(data).length !== 1 || typeof data['ticket'] !== 'string')
-      throw new GuideError(400, 'A reviewed preview is required.');
+      throw new GuideError(400, 'A current preview is required.');
     return this.exclusive(async () => {
       const approval = this.approval;
       if (approval === null || approval.id !== data['ticket'] || this.now() >= approval.expires)
@@ -1521,7 +1521,7 @@ export class GuideService {
         );
       this.approval = null;
       if (approval.operation === 'update') {
-        this.record('Installing only the reviewed provider updates you approved.', 'working');
+        this.record('Installing only the provider updates you approved.', 'working');
         let result: CliEnvelope<UpdateReport>;
         try {
           result = await this.call<UpdateReport>(['update', '--yes']);
@@ -1540,7 +1540,7 @@ export class GuideService {
         if (result.exitCode !== 0 || result.data === null) {
           const message = explainGuideIssue(
             result.diagnostics,
-            'The reviewed optimizer update was not applied. The installed version, update channel or compatibility evidence changed after the preview, so nothing was forced.',
+            'The optimizer update was not applied. The installed version, update channel or runtime capability state changed after the preview, so nothing was forced.',
           );
           this.invalidateObservedState();
           this.record(message, 'attention');
@@ -1558,7 +1558,7 @@ export class GuideService {
         const messages =
           applied.length > 0
             ? [
-                'The reviewed optimizer update completed successfully.',
+                'The optimizer update completed successfully and the active runtime was verified.',
                 'Token Harness re-ran the update transaction safety checks before changing software.',
                 'Choose Refresh to read the installed versions again. Reopen a coding agent if the updated optimizer requires it.',
               ]
@@ -1568,7 +1568,7 @@ export class GuideService {
               ];
         this.record(
           applied.length > 0
-            ? 'Reviewed optimizer update installed.'
+            ? 'Optimizer update installed and verified.'
             : 'Optimizer update no longer needed.',
           'success',
         );
@@ -1710,7 +1710,7 @@ export class GuideService {
       }
       this.record(
         approval.operation === 'rollback'
-          ? 'Restoring the reviewed configuration backup.'
+          ? 'Restoring the approved configuration backup.'
           : 'Backing up and applying exactly the changes you approved.',
         'working',
       );
@@ -1788,7 +1788,7 @@ export class GuideService {
       this.invalidateObservedState();
       messages.push(
         approval.operation === 'rollback'
-          ? 'The reviewed backup was restored. Reopen the affected coding agent.'
+          ? 'The approved backup was restored. Reopen the affected coding agent.'
           : 'The approved configuration was saved and checked. Reopen the affected coding agent to load it.',
       );
       messages.push(
@@ -1864,7 +1864,7 @@ export class GuideService {
         messages.push(
           ...available.map(
             (row) =>
-              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is reviewed and ready to install.`,
+              `${name(row.providerId)}: ${row.installed ?? 'installed version'} → ${row.available ?? 'new version'} is available and ready to install; Token Harness will verify the active runtime after installation.`,
           ),
         );
       }
@@ -1872,12 +1872,12 @@ export class GuideService {
         messages.push(
           ...blocked.map(
             (row) =>
-              `${name(row.providerId)}: ${row.available ?? 'a newer version'} exists, but Token Harness is keeping ${row.installed ?? 'the installed version'} because that newer combination is not reviewed yet.`,
+              `${name(row.providerId)}: ${row.available ?? 'a newer version'} exists, but Token Harness is keeping ${row.installed ?? 'the installed version'} because the target does not meet the provider update prerequisites.`,
           ),
         );
       }
       if (available.length === 0 && blocked.length === 0)
-        messages.push('Your managed optimizers are up to date on their reviewed channels.');
+        messages.push('Your managed optimizers are up to date on their configured channels.');
 
       let ticket: string | null = null;
       if (available.length > 0) {
@@ -1904,8 +1904,8 @@ export class GuideService {
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record(
         available.length > 0
-          ? 'Reviewed optimizer update available. Waiting for your approval.'
-          : 'Provider update check completed. No reviewed update is pending.',
+          ? 'Optimizer update available. Waiting for your approval.'
+          : 'Provider update check completed. No update is pending.',
         'success',
       );
       return {
