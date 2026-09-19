@@ -207,7 +207,10 @@ describe('apply refuses the same combinations', () => {
 
     assert.equal(exitCode, EXIT_CODES.ok);
     assert.equal(data?.outcome, 'committed');
-    assert.equal(diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'), false);
+    assert.equal(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      false,
+    );
     const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
     assert.notEqual(updated, original);
     assert.match(updated, /rtk hook claude/);
@@ -239,7 +242,10 @@ describe('apply refuses the same combinations', () => {
     );
     assert.equal(exitCode, EXIT_CODES.ok);
     assert.equal(data?.outcome, 'committed');
-    assert.equal(diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'), false);
+    assert.equal(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      false,
+    );
     const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
     assert.notEqual(updated, original);
     assert.match(updated, /rtk hook claude/);
