@@ -162,7 +162,8 @@ function warning(code: string, subject: string, message: string) {
     code,
     subject,
     message,
-    remediation: 'Use the exact reviewed version before asking Token Harness to change this tool.',
+    remediation:
+      'Update the provider or restore the CLI capability this managed integration requires, then refresh Token Harness.',
   });
 }
 
