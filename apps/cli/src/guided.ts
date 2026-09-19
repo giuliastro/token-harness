@@ -1290,9 +1290,11 @@ export class GuideService {
           data['provider'] === undefined &&
           data['harness'] !== undefined
             ? ['rtk', 'harnesstrim']
-            : [data['action'] === 'setup' && data['provider'] !== undefined
-                ? String(data['provider'])
-                : null];
+            : [
+                data['action'] === 'setup' && data['provider'] !== undefined
+                  ? String(data['provider'])
+                  : null,
+              ];
         for (const setupProvider of setupProviders) {
           const args = ['plan', '--harness', agent.harnessId];
           if (setupProvider !== null) args.push('--provider', setupProvider);
