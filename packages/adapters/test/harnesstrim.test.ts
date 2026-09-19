@@ -144,10 +144,7 @@ function defaultCapabilities(): string {
   });
 }
 
-function dynamicCapabilities(
-  version: string,
-  skillContent: string,
-): string {
+function dynamicCapabilities(version: string, skillContent: string): string {
   const parsed = JSON.parse(defaultCapabilities()) as {
     version: string;
     harnesses: Record<
@@ -1158,14 +1155,11 @@ describe('planning', () => {
   it('uses HarnessTrim 0.3 capability digests instead of the historical hard-coded skill set', async () => {
     const skill = '# Latest HarnessTrim skill\n';
     const capabilities = dynamicCapabilities('0.3.0', skill);
-    const result = await harnesstrimAdapter.plan(
-      context({ version: '0.3.0', capabilities }),
-      {
-        ownership: [],
-        harnesses: [claudeAdapter.manifest],
-        desiredState: 'configured',
-      },
-    );
+    const result = await harnesstrimAdapter.plan(context({ version: '0.3.0', capabilities }), {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
 
     const action = result.actions[0];
     assert.ok(action !== undefined && action.kind === 'delegated-provider-install');
