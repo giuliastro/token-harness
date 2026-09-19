@@ -20,6 +20,7 @@ import {
   type UpdateReport,
   type VerifyReport,
 } from '@token-harness/core';
+import { listProviderAdapters, reviewedProviderPackageMaximum } from '@token-harness/adapters';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
@@ -87,6 +88,8 @@ export interface GuideAgent {
   configured: boolean;
   state: string;
   providers: string[];
+  /** Recommended baseline providers that Token Harness can actually manage for this agent. */
+  recommendedProviders: Array<'rtk' | 'harnesstrim'>;
   effort: string | null;
   reasoning: GuideReasoning;
   guidance?: GuideGuidance;
@@ -138,6 +141,12 @@ export interface GuidePreview {
   expiresAt: string | null;
   network: boolean;
   restart: boolean;
+  prerequisites?: Array<{
+    provider: 'rtk' | 'harnesstrim';
+    title: string;
+    detail: string;
+    command: string | null;
+  }>;
 }
 export interface GuideResult {
   ok: boolean;
@@ -239,6 +248,37 @@ const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
     category: 'context-minimization',
   },
 ];
+
+type GuideBaselineProvider = 'rtk' | 'harnesstrim';
+const BASELINE_PROVIDER_IDS = new Set<GuideBaselineProvider>(['rtk', 'harnesstrim']);
+
+function recommendedBaselineProviders(harness: GuideHarness): GuideBaselineProvider[] {
+  const providers: GuideBaselineProvider[] = [];
+  for (const adapter of listProviderAdapters()) {
+    const id = String(adapter.manifest.id);
+    if (!BASELINE_PROVIDER_IDS.has(id as GuideBaselineProvider)) continue;
+    if (!adapter.manifest.harnesses.some((entry) => entry.harness === harness)) continue;
+    providers.push(id as GuideBaselineProvider);
+  }
+  return providers;
+}
+
+function setupPrerequisite(
+  provider: GuideBaselineProvider,
+  harness: GuideHarness,
+  detection: DoctorReport['providers'][number] | undefined,
+): NonNullable<GuidePreview['prerequisites']>[number] | null {
+  if (provider !== 'harnesstrim' || detection?.state !== 'absent') return null;
+  const reviewed = reviewedProviderPackageMaximum(providerId('harnesstrim'));
+  return {
+    provider,
+    title: `Install HarnessTrim before connecting it to ${name(harness)}`,
+    detail:
+      'HarnessTrim is a user-owned prerequisite for this integration. Install the reviewed package, then use Re-check setup in the browser; Token Harness will prepare only the reviewed agent configuration.',
+    command: reviewed === null ? null : `npm install --global harnesstrim@${reviewed}`,
+  };
+}
+
 const ISSUE_COPY: Readonly<Record<string, string>> = {
   'cclimits-not-installed':
     'Claude allowance needs the optional cclimits companion. Output optimization does not depend on the allowance meter.',
@@ -998,6 +1038,7 @@ export class GuideService {
               ? 'Integration configured'
               : 'Ready to set up',
         providers: providers.map(name),
+        recommendedProviders: recommendedBaselineProviders(agent.harnessId as GuideHarness),
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
         ...(guidance?.[agent.harnessId as GuideHarness]
@@ -1278,70 +1319,137 @@ export class GuideService {
       );
       const changes: GuidePreview['changes'] = [],
         notices: string[] = [],
-        plans: string[] = [];
+        plans: string[] = [],
+        prerequisites: NonNullable<GuidePreview['prerequisites']> = [];
+      const addNotice = (message: string): void => {
+        if (!notices.includes(message)) notices.push(message);
+      };
       let network = false;
       for (const agent of selected) {
         this.record(
           `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
           'working',
         );
-        const args = ['plan', '--harness', agent.harnessId];
-        if (data['action'] === 'setup' && data['provider'] !== undefined)
-          args.push('--provider', String(data['provider']));
-        if (data['action'] === 'skill') {
-          args.push('--provider', 'none', '--agent-skill');
-        } else if (data['action'] === 'effort')
-          args.push(
-            '--provider',
-            'none',
-            '--native-policy',
-            '--task',
-            String(data['task']),
-            '--profile',
-            data['task'] === 'mechanical'
-              ? 'economy'
-              : data['task'] === 'standard'
-                ? 'balanced'
-                : 'quality',
-          );
-        const result = await this.call<PlanReport>(args);
-        const report = result.data;
-        if (
-          report === null ||
-          result.exitCode !== 0 ||
-          report.conflicts.length > 0 ||
-          report.actions.length === 0 ||
-          !report.persisted ||
-          report.planId === null
-        ) {
-          notices.push(
-            `${name(agent.harnessId)}: ${explainGuideIssue(
-              result.diagnostics,
-              data['action'] === 'effort'
-                ? 'No supported preference change is needed or available. Your current preference is kept.'
-                : data['action'] === 'skill'
-                  ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
-                  : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
-            )}`,
-          );
-          continue;
+        const setupProviders: Array<GuideBaselineProvider | string | null> =
+          data['action'] === 'setup'
+            ? data['provider'] !== undefined
+              ? [String(data['provider'])]
+              : recommendedBaselineProviders(agent.harnessId as GuideHarness)
+            : [null];
+
+        for (const setupProvider of setupProviders) {
+          const providerDetection =
+            setupProvider === null
+              ? undefined
+              : inventory.data?.providers.find(
+                  (provider) => String(provider.providerId) === setupProvider,
+                );
+          if (
+            data['action'] === 'setup' &&
+            setupProvider !== null &&
+            providerDetection?.state === 'configured' &&
+            providerDetection.configuredHarnesses.includes(agent.harnessId)
+          ) {
+            continue;
+          }
+
+          if (
+            data['action'] === 'setup' &&
+            (setupProvider === 'rtk' || setupProvider === 'harnesstrim')
+          ) {
+            const prerequisite = setupPrerequisite(
+              setupProvider,
+              agent.harnessId as GuideHarness,
+              providerDetection,
+            );
+            if (prerequisite !== null) {
+              if (
+                !prerequisites.some(
+                  (entry) => entry.provider === prerequisite.provider && entry.title === prerequisite.title,
+                )
+              )
+                prerequisites.push(prerequisite);
+              addNotice(
+                `${name(agent.harnessId)} · ${name(setupProvider)}: install the required optimizer first, then re-check setup.`,
+              );
+              continue;
+            }
+          }
+
+          const args = ['plan', '--harness', agent.harnessId];
+          if (data['action'] === 'setup' && setupProvider !== null)
+            args.push('--provider', setupProvider);
+          if (data['action'] === 'skill') {
+            args.push('--provider', 'none', '--agent-skill');
+          } else if (data['action'] === 'effort')
+            args.push(
+              '--provider',
+              'none',
+              '--native-policy',
+              '--task',
+              String(data['task']),
+              '--profile',
+              data['task'] === 'mechanical'
+                ? 'economy'
+                : data['task'] === 'standard'
+                  ? 'balanced'
+                  : 'quality',
+            );
+          const result = await this.call<PlanReport>(args);
+          const report = result.data;
+          if (
+            report === null ||
+            result.exitCode !== 0 ||
+            report.conflicts.length > 0 ||
+            report.actions.length === 0 ||
+            !report.persisted ||
+            report.planId === null
+          ) {
+            const subject =
+              data['action'] === 'setup' && setupProvider !== null
+                ? `${name(agent.harnessId)} · ${name(setupProvider)}`
+                : name(agent.harnessId);
+            addNotice(
+              `${subject}: ${explainGuideIssue(
+                result.diagnostics,
+                data['action'] === 'effort'
+                  ? 'No supported preference change is needed or available. Your current preference is kept.'
+                  : data['action'] === 'skill'
+                    ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
+                    : 'Automatic setup is not available for this exact installed combination. Nothing was changed; the current configuration is preserved.',
+              )}`,
+            );
+            continue;
+          }
+          plans.push(report.planId);
+          if (data['action'] === 'skill') {
+            changes.push({
+              title: `${name(agent.harnessId)}: enable in-session guidance`,
+              description:
+                'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
+              files: 1,
+            });
+          } else {
+            changes.push(
+              ...report.actions.map((action) => describeChange(action, agent.harnessId)),
+            );
+          }
+          network ||= report.network.length > 0;
         }
-        plans.push(report.planId);
-        if (data['action'] === 'skill') {
-          changes.push({
-            title: `${name(agent.harnessId)}: enable in-session guidance`,
-            description:
-              'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
-            files: 1,
-          });
-        } else {
-          changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
-        }
-        network ||= report.network.length > 0;
       }
       if (selected.length === 0)
-        notices.push(
+        addNotice(
           'No supported coding agent was found. Install and sign in to Claude Code or Codex, then refresh.',
+        );
+      if (
+        data['action'] === 'setup' &&
+        selected.length > 0 &&
+        plans.length === 0 &&
+        prerequisites.length === 0 &&
+        notices.length === 0
+      )
+        addNotice(
+          'The recommended optimizer setup is already connected for this coding agent. Re-checking the current state will clear any stale setup label.',
         );
       const id = plans.length > 0 ? this.random() : null;
       const expires = this.now() + 10 * 60_000;
@@ -1375,6 +1483,7 @@ export class GuideService {
         expiresAt: id === null ? null : new Date(expires).toISOString(),
         network,
         restart: data['action'] === 'effort' || data['action'] === 'skill',
+        ...(prerequisites.length > 0 ? { prerequisites } : {}),
       };
     });
   }
