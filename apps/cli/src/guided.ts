@@ -1,6 +1,8 @@
 /** Guided product workflow. Only fixed commands reach the existing transaction engine. */
 import {
+  admitManagedMutation,
   buildOptimizationStack,
+  COMPATIBILITY_ROWS,
   providerId,
   selectStackCombinationReview,
   type ApplyReport,
@@ -31,6 +33,18 @@ import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.j
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
+export type GuideManagedProvider = 'rtk' | 'harnesstrim' | 'mcptoon' | 'gitnexus' | 'headroom';
+export type GuideSetupTargetState =
+  | 'connected'
+  | 'actionable'
+  | 'unavailable'
+  | 'not-applicable';
+export interface GuideSetupTarget {
+  providerId: GuideManagedProvider;
+  provider: string;
+  state: GuideSetupTargetState;
+  reason: string;
+}
 export type GuideCall = <T>(args: readonly string[]) => Promise<CliEnvelope<T>>;
 export interface GuideAction {
   kind: 'setup' | 'effort' | 'skill' | 'verify' | 'help' | 'refresh';
@@ -87,6 +101,7 @@ export interface GuideAgent {
   configured: boolean;
   state: string;
   providers: string[];
+  setup: GuideSetupTarget[];
   effort: string | null;
   reasoning: GuideReasoning;
   guidance?: GuideGuidance;
@@ -210,6 +225,112 @@ const NAMES: Readonly<Record<string, string>> = {
   headroom: 'Headroom',
 };
 const name = (id: string): string => NAMES[id] ?? id;
+const GUIDE_MANAGED_PROVIDERS: readonly GuideManagedProvider[] = [
+  'rtk',
+  'harnesstrim',
+  'mcptoon',
+  'gitnexus',
+  'headroom',
+];
+const RECOMMENDED_SETUP_PROVIDERS: readonly GuideManagedProvider[] = ['rtk', 'harnesstrim'];
+
+export function guideSetupTarget(
+  report: DoctorReport,
+  harness: GuideHarness,
+  provider: GuideManagedProvider,
+): GuideSetupTarget {
+  const harnessDetection = report.harnesses.find((item) => item.harnessId === harness);
+  const detection = report.providers.find((item) => item.providerId === provider);
+  const label = name(provider);
+  if (harnessDetection === undefined || harnessDetection.state === 'absent') {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'not-applicable',
+      reason: `${name(harness)} is not currently detected.`,
+    };
+  }
+  if (detection === undefined) {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'not-applicable',
+      reason: `${label} is not a managed provider in this build.`,
+    };
+  }
+  if (detection.configuredHarnesses.includes(harnessDetection.harnessId)) {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'connected',
+      reason: `${label} is configured for ${name(harness)}.`,
+    };
+  }
+
+  const hasReviewedHarnessSurface = COMPATIBILITY_ROWS.some(
+    (row) => row.provider === provider && row.harness === harnessDetection.harnessId,
+  );
+  if (!hasReviewedHarnessSurface) {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'not-applicable',
+      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(harness)}.`,
+    };
+  }
+  if (detection.state === 'absent' || detection.state === 'available') {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'unavailable',
+      reason: `${label} is not installed in a state Token Harness can configure automatically.`,
+    };
+  }
+  if (detection.state === 'broken') {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'unavailable',
+      reason: `${label} is detected but its current integration needs attention before setup can continue.`,
+    };
+  }
+  if (!detection.assignableHarnesses.includes(harnessDetection.harnessId)) {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'unavailable',
+      reason: `The installed ${label} build does not expose a reviewed automatic setup for ${name(harness)}.`,
+    };
+  }
+
+  const admission = admitManagedMutation(COMPATIBILITY_ROWS, {
+    provider: detection.providerId,
+    providerVersion: detection.version,
+    harness: harnessDetection.harnessId,
+    harnessVersion: harnessDetection.version,
+    os: report.platform.os,
+    wsl: report.platform.isWsl,
+  });
+  if (admission.state !== 'admitted') {
+    return {
+      providerId: provider,
+      provider: label,
+      state: 'unavailable',
+      reason: `Automatic ${label} setup is not reviewed for the installed ${name(harness)} / ${label} version combination on ${report.platform.os}.`,
+    };
+  }
+  return {
+    providerId: provider,
+    provider: label,
+    state: 'actionable',
+    reason: `${label} can be configured automatically for ${name(harness)} with the reviewed transaction path.`,
+  };
+}
+
+function guideSetupTargets(report: DoctorReport, harness: GuideHarness): GuideSetupTarget[] {
+  return GUIDE_MANAGED_PROVIDERS.map((provider) => guideSetupTarget(report, harness, provider));
+}
+
 const TASKS = new Set(['mechanical', 'standard', 'hard', 'critical']);
 const PERIODS = new Set(['all', '7d', '30d']);
 const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
@@ -304,6 +425,7 @@ function stackFingerprint(report: DoctorReport): string {
       versionVerdict: item.versionVerdict,
       managedByTokenHarness: item.managedByTokenHarness,
       configuredHarnesses: [...item.configuredHarnesses].sort(),
+      assignableHarnesses: [...item.assignableHarnesses].sort(),
     }))
     .sort((left, right) => left.id.localeCompare(right.id));
   return JSON.stringify({ harnesses, providers });
@@ -998,6 +1120,10 @@ export class GuideService {
               ? 'Integration configured'
               : 'Ready to set up',
         providers: providers.map(name),
+        setup:
+          doctor.data === null
+            ? []
+            : guideSetupTargets(doctor.data, agent.harnessId as GuideHarness),
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
         ...(guidance?.[agent.harnessId as GuideHarness]
@@ -1286,11 +1412,31 @@ export class GuideService {
           'working',
         );
         const setupProviders: Array<string | null> = [];
-        if (data['action'] === 'setup' && data['harness'] !== undefined) {
-          if (data['provider'] === undefined) {
-            setupProviders.push('rtk', 'harnesstrim');
-          } else {
-            setupProviders.push(String(data['provider']));
+        if (data['action'] === 'setup') {
+          const requested =
+            data['provider'] === undefined
+              ? RECOMMENDED_SETUP_PROVIDERS
+              : [String(data['provider']) as GuideManagedProvider];
+          for (const setupProvider of requested) {
+            const target =
+              inventory.data === null
+                ? null
+                : guideSetupTarget(
+                    inventory.data,
+                    agent.harnessId as GuideHarness,
+                    setupProvider,
+                  );
+            if (target?.state === 'actionable') {
+              setupProviders.push(setupProvider);
+            } else if (target?.state === 'connected') {
+              notices.push(
+                `${name(agent.harnessId)} · ${name(setupProvider)}: already connected. No setup change is needed.`,
+              );
+            } else if (target !== null) {
+              notices.push(
+                `${name(agent.harnessId)} · ${name(setupProvider)}: ${target.reason}`,
+              );
+            }
           }
         } else {
           setupProviders.push(null);
@@ -1335,7 +1481,7 @@ export class GuideService {
                   ? 'No supported preference change is needed or available. Your current preference is kept.'
                   : data['action'] === 'skill'
                     ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
-                    : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
+                    : 'No safe setup change is available for the current provider, agent version and platform.',
               )}`,
             );
             continue;
