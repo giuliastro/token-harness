@@ -1349,7 +1349,9 @@ export class GuideService {
               files: 1,
             });
           } else {
-            changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
+            changes.push(
+              ...report.actions.map((action) => describeChange(action, agent.harnessId)),
+            );
           }
           network ||= report.network.length > 0;
         }
