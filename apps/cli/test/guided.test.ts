@@ -178,29 +178,25 @@ describe('guided workflow', () => {
     );
   });
 
-  it(
-    'derives the recommended baseline from provider support instead of requiring RTK for Codex',
-    async () => {
-      const { service, calls } = fixture();
-      const overview = await service.overview();
-      assert.deepEqual(
-        overview.agents.find((agent) => agent.id === 'claude')?.recommendedProviders,
-        ['rtk', 'harnesstrim'],
-      );
-      assert.deepEqual(
-        overview.agents.find((agent) => agent.id === 'codex')?.recommendedProviders,
-        ['harnesstrim'],
-      );
+  it('derives the recommended baseline from provider support instead of requiring RTK for Codex', async () => {
+    const { service, calls } = fixture();
+    const overview = await service.overview();
+    assert.deepEqual(overview.agents.find((agent) => agent.id === 'claude')?.recommendedProviders, [
+      'rtk',
+      'harnesstrim',
+    ]);
+    assert.deepEqual(overview.agents.find((agent) => agent.id === 'codex')?.recommendedProviders, [
+      'harnesstrim',
+    ]);
 
-      calls.splice(0);
-      const preview = await service.preview({ action: 'setup', harness: 'codex' });
-      assert.notEqual(preview.ticket, null);
-      assert.deepEqual(
-        calls.filter((args) => args[0] === 'plan'),
-        [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
-      );
-    },
-  );
+    calls.splice(0);
+    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
+  });
 
   it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {
     const { service, advance } = fixture();
