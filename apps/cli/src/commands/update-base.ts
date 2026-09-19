@@ -290,9 +290,9 @@ export async function runPackageChannelUpdate(
       diagnostic({
         severity: 'info',
         code: 'provider-update-target-unreviewed',
-        message: `${blocked.providerId} ${blocked.target} is available but is outside the reviewed provider package-update policy; keeping ${blocked.installed ?? 'the installed version'}`,
+        message: `${blocked.providerId} ${blocked.target} is available but does not meet the provider update prerequisites; keeping ${blocked.installed ?? 'the installed version'}`,
         remediation:
-          'Review the provider package contract before enabling unattended update to this release',
+          'Check the provider update floor or version format, then retry the update',
       }),
     );
     diagnostics.push(
