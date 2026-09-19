@@ -30,4 +30,19 @@ describe('npm trusted publishing runtime', () => {
     const publishBlock = RELEASE.slice(RELEASE.indexOf('Publish to npm with trusted publishing'));
     assert.doesNotMatch(publishBlock, /NODE_AUTH_TOKEN|NPM_TOKEN/);
   });
+
+  it('does not declare the release complete before npm latest is actually visible', () => {
+    assert.match(RELEASE, /Verify npm release is visible as latest/);
+    assert.match(RELEASE, /npm view "\$name@\$version" version/);
+    assert.match(RELEASE, /npm view "\$name" dist-tags\.latest/);
+    assert.match(RELEASE, /seq 1 30/);
+
+    const publish = RELEASE.indexOf('Publish to npm with trusted publishing');
+    const verify = RELEASE.indexOf('Verify npm release is visible as latest');
+    const githubRelease = RELEASE.indexOf('Create or refresh GitHub release');
+    assert.ok(
+      publish >= 0 && verify > publish && githubRelease > verify,
+      'npm visibility must be verified after publish and before GitHub Release creation',
+    );
+  });
 });
