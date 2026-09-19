@@ -178,6 +178,26 @@ describe('guided workflow', () => {
     );
   });
 
+  it('derives the recommended baseline from provider support instead of requiring RTK for Codex', async () => {
+    const { service, calls } = fixture();
+    const overview = await service.overview();
+    assert.deepEqual(overview.agents.find((agent) => agent.id === 'claude')?.recommendedProviders, [
+      'rtk',
+      'harnesstrim',
+    ]);
+    assert.deepEqual(overview.agents.find((agent) => agent.id === 'codex')?.recommendedProviders, [
+      'harnesstrim',
+    ]);
+
+    calls.splice(0);
+    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
+  });
+
   it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {
     const { service, advance } = fixture();
     const p = await service.preview({ action: 'setup' });
@@ -195,8 +215,8 @@ describe('guided workflow', () => {
       await assert.rejects(service.preview(data), GuideError);
     await assert.rejects(service.apply({ ticket: 'x', plan: 'other' }), GuideError);
   });
-  it('reports partial multi-agent success and does not retry', async () => {
-    const { service, calls } = fixture({ failSecond: true });
+  it('reports partial multi-plan success and does not retry', async () => {
+    const { service, calls } = fixture({ failSecond: true, ids: ['claude'] });
     const p = await service.preview({ action: 'setup' });
     const result = await service.apply({ ticket: p.ticket });
     assert.equal(result.ok, false);
@@ -207,7 +227,7 @@ describe('guided workflow', () => {
   it('undo requires a new review and is guarded by the exact last applied plan', async () => {
     const { service, calls } = fixture({ ids: ['claude'] });
     await assert.rejects(service.preview({ action: 'undo' }), /no change/);
-    const setup = await service.preview({ action: 'setup' });
+    const setup = await service.preview({ action: 'setup', harness: 'claude', provider: 'rtk' });
     await service.apply({ ticket: setup.ticket });
     const undo = await service.preview({ action: 'undo' });
     assert.match(undo.changes[0]?.description ?? '', /manual edits/);

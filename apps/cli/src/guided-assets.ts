@@ -41,7 +41,7 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>These are the harnesses Token Harness can configure today. A detected agent is not considered fully set up until the recommended RTK + HarnessTrim baseline is connected to it.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>These are the coding agents Token Harness can configure today. Each agent is checked only against the recommended baseline Token Harness can actually manage for that agent; unsupported optimizer/agent pairs are not shown as impossible setup requirements.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
 <summary>Agent details and optional reasoning settings</summary>
@@ -54,7 +54,7 @@ export const GUIDE_HTML = `<!doctype html>
 
 <section class="setup-step" id="optimizers">
 <div class="section-title"><div><h2>Optimizers</h2><p>Recommended and optional tools are kept separate. Every button sits next to the tool or agent it affects, and every configuration change is previewed before approval.</p></div></div>
-<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK + HarnessTrim are configured together from the coding-agent card above, so first-run setup stays one action per agent.</p></div>
+<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK and HarnessTrim are the recommended baseline components, but their managed agent support is not identical. Each card shows the connection actions that are actually available for the coding agents detected on this machine.</p></div>
 <div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
 
 <details class="disclosure optional-disclosure">
@@ -80,7 +80,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this local app session.</p></div></div><section class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></section>
 </section>
 
-<footer><span>Local data. No account required.</span><span>Full overview refresh runs only when you choose Refresh.</span></footer>
+<footer><span>Local data. No account required.</span><span>Changes made in this app refresh the current setup automatically. Refresh is still available for external changes.</span></footer>
 </main>
 <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="modal-title">Review</h2></div><div id="modal-content"></div><div id="modal-error" class="error" role="alert" hidden></div><div id="modal-actions" class="dialog-actions"></div></div></dialog>
 <script src="/guide.js" defer></script></body></html>`;

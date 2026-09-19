@@ -111,11 +111,6 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     return data;
   }
 
-  function markStale() {
-    $('stale-state').hidden = false;
-    $('stale-state').textContent = 'A reviewed change was applied. Displayed status is the previous state until you choose Refresh.';
-  }
-
   async function applyTicket(ticket, title) {
     if (!ticket || working) return;
     const activeRun = runId;
@@ -126,8 +121,34 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
       const result = await request('/api/apply', { ticket });
       if (activeRun !== runId) return;
       $('modal-title').textContent = result.ok ? title : 'Change needs attention';
-      $('modal-content').replaceChildren(message(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' ') || 'The transaction finished.', result.ok ? 'safe' : 'warn'));
-      if (result.ok) markStale();
+      $('modal-content').replaceChildren(
+        message(
+          result.ok ? 'Change applied' : 'Needs attention',
+          (result.messages || []).join(' ') || 'The transaction finished.',
+          result.ok ? 'safe' : 'warn',
+        ),
+      );
+      if (result.ok) {
+        $('modal-content').append(
+          progress(
+            'Refreshing current setup',
+            'Reading the resulting agent and optimizer state. No manual page refresh is needed.',
+          ),
+        );
+        $('modal-actions').replaceChildren(closeButton('Refreshing…', true));
+        const refreshCurrentState = window.tokenHarnessRefreshCurrentState;
+        if (typeof refreshCurrentState === 'function') await refreshCurrentState();
+        else $('refresh')?.click();
+        if (activeRun !== runId) return;
+        $('modal-content').replaceChildren(
+          message(
+            'Completed',
+            (result.messages || []).join(' ') || 'The transaction finished.',
+            'safe',
+          ),
+          node('p', 'The dashboard has been refreshed with the resulting configuration.', 'caption'),
+        );
+      }
       $('modal-actions').replaceChildren(closeButton('Done'));
     } catch (error) {
       if (activeRun !== runId) return;

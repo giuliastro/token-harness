@@ -224,8 +224,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return Boolean(component?.configuredHarnesses?.includes(agentId));
   }
 
+  function recommendedProviderIds(agentId) {
+    const agent = activeAgents().find(item => item.id === agentId);
+    return Array.isArray(agent?.recommendedProviders) ? agent.recommendedProviders : [];
+  }
+
+  function recommendedProviderNames(agentId) {
+    return recommendedProviderIds(agentId).map(id => TOOL_INFO[id]?.name || id);
+  }
+
   function baselineReadyFor(agentId) {
-    return componentConfiguredFor('rtk', agentId) && componentConfiguredFor('harnesstrim', agentId);
+    const required = recommendedProviderIds(agentId);
+    return required.length > 0 && required.every(id => componentConfiguredFor(id, agentId));
   }
 
   function baselineIncompleteAgents() {
@@ -233,6 +243,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function providerSupportsAgent(providerId, agentId) {
+    if (providerId === 'rtk' || providerId === 'harnesstrim')
+      return recommendedProviderIds(agentId).includes(providerId);
     if (providerId === 'gitnexus') return agentId === 'claude';
     return agentId === 'claude' || agentId === 'codex';
   }
@@ -311,12 +323,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
       };
     if (incomplete.length)
       return {
-        label: 'Setup incomplete',
+        label: 'Setup needs review',
         cls: 'warn',
         title: incomplete.length === 1
-          ? 'Finish setup for ' + incomplete[0].name
-          : 'Finish the recommended setup for your coding agents',
-        detail: 'The recommended baseline is RTK + HarnessTrim. Finish setup on each incomplete coding-agent card below; you will see the exact safe plan before anything changes.',
+          ? 'Review setup for ' + incomplete[0].name
+          : 'Review the recommended setup for your coding agents',
+        detail: 'Each agent now uses only the baseline optimizers Token Harness can actually manage for that agent. Review the affected coding-agent card below; unsupported combinations are explained instead of being shown as a setup you can never finish.',
         action: 'configure',
       };
     if (!(current?.savings?.rows || []).length)
@@ -387,7 +399,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
   function renderManagedTool(id) {
     const info = TOOL_INFO[id];
     const component = managedComponent(id);
-    const state = componentState(component);
+    const supportedBaselineAgents = info.optional
+      ? []
+      : activeAgents().filter(agent => providerSupportsAgent(id, agent.id));
+    let state = componentState(component);
+    if (
+      !info.optional &&
+      component?.installed &&
+      !component?.configured &&
+      supportedBaselineAgents.length === 0 &&
+      activeAgents().length > 0
+    )
+      state = { label: 'Installed · not needed here', cls: '' };
     const card = node('article', undefined, 'tool-card');
     const head = node('div', undefined, 'tool-head');
     const title = node('div');
@@ -402,7 +425,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (component?.version) facts.append(node('span', 'Installed version'), node('strong', 'v' + component.version));
     const configuredFor = component?.configuredHarnesses?.length
       ? component.configuredHarnesses.map(agentName).join(', ')
-      : 'Not connected to a coding agent';
+      : (!info.optional && supportedBaselineAgents.length === 0 && activeAgents().length > 0)
+        ? 'No supported detected agent requires this optimizer'
+        : 'Not connected to a coding agent';
     facts.append(node('span', 'Connection'), node('strong', configuredFor));
     if (component?.update === 'available')
       facts.append(
@@ -426,7 +451,33 @@ export const GUIDE_PRODUCT_JS = String.raw`
         );
     }
 
+    if (
+      !info.optional &&
+      supportedBaselineAgents.length === 0 &&
+      activeAgents().length > 0 &&
+      component?.installed &&
+      !component?.configured
+    )
+      card.append(
+        messageBox(
+          'No action required for detected agents',
+          info.name + ' is installed, but Token Harness does not include it in the managed baseline for the coding agents currently detected on this machine.',
+        ),
+      );
+
     const actions = node('div', undefined, 'inline-actions');
+    if (!info.optional) {
+      for (const agent of supportedBaselineAgents) {
+        if (!componentConfiguredFor(id, agent.id))
+          actions.append(
+            actionButton(
+              (component?.installed ? 'Connect to ' : 'Set up for ') + agent.name,
+              () => reviewSetup(agent.id, id),
+              'secondary',
+            ),
+          );
+      }
+    }
     if (info.optional) {
       for (const agent of activeAgents()) {
         if (!providerSupportsAgent(id, agent.id)) continue;
@@ -473,14 +524,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('h3', agent.name),
         node('span', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
       );
-      head.append(title, pill(ready ? 'Ready' : 'Setup incomplete', ready ? 'good' : 'warn'));
+      const recommended = recommendedProviderNames(agent.id);
+      const missing = recommendedProviderIds(agent.id)
+        .filter(id => !componentConfiguredFor(id, agent.id))
+        .map(id => TOOL_INFO[id]?.name || id);
+      head.append(title, pill(ready ? 'Ready' : 'Setup needs review', ready ? 'good' : 'warn'));
       card.append(
         head,
         node(
           'p',
           ready
-            ? 'RTK + HarnessTrim are configured for this coding agent.'
-            : 'The agent is detected. Finish the recommended RTK + HarnessTrim setup to complete onboarding.',
+            ? recommended.join(' + ') + ' ' + (recommended.length === 1 ? 'is' : 'are') + ' configured for this coding agent.'
+            : 'Recommended for this agent: ' + (recommended.join(' + ') || 'no managed baseline') + '. ' +
+              (missing.length ? 'Still to configure: ' + missing.join(', ') + '.' : 'Review the current setup state.'),
         ),
       );
       if (agent.providers?.length)
@@ -493,7 +549,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         );
       if (!ready) {
         const actions = node('div', undefined, 'inline-actions');
-        actions.append(actionButton('Finish setup', () => reviewSetup(agent.id)));
+        actions.append(actionButton('Review setup', () => reviewSetup(agent.id)));
         card.append(actions);
       }
       root.append(card);
@@ -506,17 +562,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (!agent) return;
     const provider = providerId ? TOOL_INFO[providerId] : null;
     if (providerId && !provider) return;
+    const recommendedNames = recommendedProviderNames(agentId);
+    const recommendedLabel = recommendedNames.join(' + ') || 'the supported baseline';
     const run = modal(
       provider
         ? 'Set up ' + provider.name + ' for ' + agent.name
-        : 'Set up recommended optimizers for ' + agent.name,
+        : 'Review recommended setup for ' + agent.name,
     );
     $('modal-content').append(
       messageBox(
         'Safe preview first',
         provider
           ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + '. If setup is supported, the exact change appears before you confirm it.'
-          : 'Token Harness will prepare the recommended RTK + HarnessTrim setup for ' + agent.name + '. The exact files and changes appear before you confirm them.',
+          : 'Token Harness will inspect only the recommended ' + recommendedLabel + ' setup for ' + agent.name + '. The exact files and changes appear before you confirm them.',
       ),
       messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
@@ -548,17 +606,24 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This approval covers only RTK + HarnessTrim for ' + agent.name + '. Optional optimizers stay separate.',
+              : 'This approval covers only ' + recommendedLabel + ' for ' + agent.name + '. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length)
           $('modal-content').append(
             messageBox(
-              'No setup change available',
-              (data.notices || []).join(' ') ||
-                'This setup is already complete, or a prerequisite/version prevents Token Harness from changing it safely.',
+              (data.prerequisites || []).length ? 'Required step first' : 'No automatic setup change available',
+              (data.prerequisites || []).length
+                ? 'Complete the prerequisite shown below, then re-check setup. Token Harness will not pretend the agent is incomplete without telling you what is missing.'
+                : 'The current combination either already satisfies this setup or is outside the reviewed automatic-change boundary. The explanation below names the reason.',
             ),
           );
+        for (const prerequisite of data.prerequisites || []) {
+          const item = node('article', undefined, 'preview-change');
+          item.append(node('h3', prerequisite.title), node('p', prerequisite.detail));
+          if (prerequisite.command) item.append(copyRow(prerequisite.command));
+          $('modal-content').append(item);
+        }
         for (const change of data.changes) {
           const item = node('article', undefined, 'preview-change');
           item.append(node('h3', change.title), node('p', change.description));
@@ -567,6 +632,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
         for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
+        if (!data.ticket && (data.prerequisites || []).length)
+          $('modal-actions').append(
+            actionButton('Re-check setup', async () => {
+              closeModal();
+              await refresh(true);
+              reviewSetup(agentId, providerId);
+            }),
+          );
         if (data.ticket)
           $('modal-actions').append(
             actionButton(provider ? 'Set up ' + provider.name : 'Apply recommended setup', () => applyTicket(data.ticket), ''),
@@ -582,23 +655,74 @@ export const GUIDE_PRODUCT_JS = String.raw`
       });
   }
 
+  async function refreshAfterMutation(run) {
+    reading = true;
+    setStatus('Change finished. Re-reading current configuration…', true);
+    $('live-status').textContent = 'Applying finished · refreshing current setup…';
+    const progressTimer = setInterval(() => { if (!document.hidden) loadActivity(); }, 700);
+    try {
+      const period = $('period').value;
+      const refreshed = await request('/api/overview?period=' + encodeURIComponent(period) + '&refresh=1');
+      if (run !== modalRun) return false;
+      current = refreshed;
+      periodCache.clear();
+      periodCache.set(period, current);
+      $('stale-state').hidden = true;
+      $('stale-state').textContent = '';
+      render();
+      await loadActivity();
+      setStatus('Current configuration refreshed at ' + new Date(current.generatedAt).toLocaleTimeString() + '.', false);
+      return true;
+    } catch (error) {
+      if (run !== modalRun) return false;
+      $('stale-state').hidden = false;
+      $('stale-state').textContent = 'The change finished, but the automatic status refresh failed. Choose Refresh to read the current configuration.';
+      setError(error.name === 'TimeoutError' ? 'The change finished, but refreshing the new state took too long. Choose Refresh to try again.' : error.message);
+      setStatus('Change finished; status refresh needs attention.', false);
+      return false;
+    } finally {
+      clearInterval(progressTimer);
+      reading = false;
+    }
+  }
+
   async function applyTicket(ticket) {
     if (!ticket || busy) return;
     const run = modalRun;
     setBusy(true, true);
     $('modal-actions').replaceChildren(modalClose('Applying…', true));
-    $('modal-content').append(progress('Applying the reviewed change', 'Keep this window open until the transaction finishes.'));
+    $('modal-content').append(progress('Applying the reviewed change', 'Keep this window open until the transaction and automatic status refresh finish.'));
     try {
       await ensureSession();
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return;
       $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
-      $('modal-content').replaceChildren(messageBox(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'));
-      $('modal-content').append(node('p', 'The dashboard is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
-      $('stale-state').hidden = false;
-      $('stale-state').textContent = 'A setup change was applied. Displayed status is the previous state until you choose Refresh.';
+      $('modal-content').replaceChildren(
+        messageBox(
+          result.ok ? 'Change applied' : 'Change needs attention',
+          (result.messages || []).join(' ') || 'The operation finished. Token Harness is reading the resulting state now.',
+          result.ok ? 'safe' : 'warn',
+        ),
+        progress('Refreshing current setup', 'Reading agents, optimizer connections and health again. No manual page refresh is needed.'),
+      );
+      $('modal-actions').replaceChildren(modalClose('Refreshing…', true));
+      const refreshed = await refreshAfterMutation(run);
+      if (run !== modalRun) return;
+      $('modal-content').replaceChildren(
+        messageBox(
+          result.ok ? 'Completed' : 'Needs attention',
+          (result.messages || []).join(' ') || 'The operation finished.',
+          result.ok ? 'safe' : 'warn',
+        ),
+        node(
+          'p',
+          refreshed
+            ? 'The dashboard has already been refreshed and now shows the resulting configuration.'
+            : 'The change finished, but the new state could not be read automatically. Use Refresh before making another setup decision.',
+          'caption',
+        ),
+      );
       $('modal-actions').replaceChildren(modalClose('Done'));
-      loadActivity();
     } catch (error) {
       if (run !== modalRun) return;
       $('modal-error').textContent = error.message;
@@ -1144,7 +1268,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       $('stale-state').textContent = '';
       render();
       await loadActivity();
-      setStatus('Checked at ' + new Date(current.generatedAt).toLocaleTimeString() + '. Full checks run again only when you choose Refresh.', false);
+      setStatus('Checked at ' + new Date(current.generatedAt).toLocaleTimeString() + '. Changes made here refresh their status automatically.', false);
     } catch (error) {
       setError(error.name === 'TimeoutError' ? 'The check took too long. Existing results were kept; choose Refresh to try again.' : error.message);
       setStatus('Check needs attention.', false);
@@ -1190,6 +1314,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
   document.querySelectorAll('[data-view]').forEach(button => {
     button.addEventListener('click', () => selectView(button.dataset.view, true));
   });
+  window.tokenHarnessRefreshCurrentState = async () => {
+    await refresh(true);
+  };
   $('refresh').addEventListener('click', () => refresh(true));
   $('period').addEventListener('change', changePeriod);
   $('measurement-help').addEventListener('click', measurementHelp);

@@ -13,13 +13,16 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /choice-grid/);
   });
 
-  it('uses one obvious first-run baseline action per incomplete coding agent', () => {
+  it('makes baseline setup capability-aware and puts remediation beside the affected state', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
-    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
-    assert.match(GUIDE_JS, /Set up recommended optimizers for /);
-    assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.match(GUIDE_HTML, /managed agent support is not identical/);
+    assert.match(GUIDE_JS, /Review recommended setup for /);
+    assert.match(GUIDE_JS, /actionButton\('Review setup'/);
+    assert.match(GUIDE_JS, /component\?\.installed \? 'Connect to ' : 'Set up for '/);
+    assert.match(GUIDE_JS, /\+ agent\.name/);
+    assert.match(GUIDE_JS, /recommendedProviders/);
+    assert.doesNotMatch(GUIDE_JS, /Setup incomplete/);
     assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
-    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
     assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
@@ -43,14 +46,13 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
   });
 
-  it('never automatically refreshes the whole overview after apply', () => {
-    assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
-    const applyStart = GUIDE_JS.indexOf('async function applyTicket(ticket)');
-    const manualRefresh = "$('refresh').addEventListener";
-    const refreshHandler = GUIDE_JS.indexOf(manualRefresh, applyStart);
-    assert.notEqual(applyStart, -1);
-    assert.notEqual(refreshHandler, -1);
-    assert.doesNotMatch(GUIDE_JS.slice(applyStart, refreshHandler), /refresh\(true\)/);
+  it('automatically refreshes the complete current state after an approved mutation', () => {
+    assert.match(GUIDE_JS, /async function refreshAfterMutation\(run\)/);
+    assert.match(GUIDE_JS, /refresh=1/);
+    assert.match(GUIDE_JS, /refreshing current setup/i);
+    assert.match(GUIDE_JS, /No manual page refresh is needed/i);
+    assert.match(GUIDE_JS, /dashboard has already been refreshed/i);
+    assert.match(GUIDE_JS, /automatic status refresh failed/i);
   });
 
   it('keeps advanced evaluation installation explicitly external and manual', () => {

@@ -20,20 +20,20 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
     assert.match(GUIDE_HTML, /Recommended baseline/);
     assert.match(GUIDE_HTML, /Optional optimizers/);
-    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
+    assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
     assert.match(GUIDE_HTML, /Health and updates/);
     assert.doesNotMatch(GUIDE_HTML, /Checks and maintenance/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
   });
 
-  it('puts the next setup action beside an incomplete agent', () => {
-    assert.match(GUIDE_JS, /Setup incomplete/);
-    assert.match(GUIDE_JS, /Finish setup for /);
-    assert.match(GUIDE_JS, /Finish setup/);
+  it('puts an actionable setup review beside an agent that needs attention', () => {
+    assert.match(GUIDE_JS, /Setup needs review/);
+    assert.match(GUIDE_JS, /Review setup for /);
+    assert.match(GUIDE_JS, /Review setup/);
     assert.match(GUIDE_JS, /baselineReadyFor/);
-    assert.match(GUIDE_JS, /componentConfiguredFor\('rtk'/);
-    assert.match(GUIDE_JS, /componentConfiguredFor\('harnesstrim'/);
-    assert.doesNotMatch(GUIDE_JS, /Review baseline for /);
+    assert.match(GUIDE_JS, /recommendedProviderIds/);
+    assert.match(GUIDE_JS, /recommendedProviders/);
+    assert.doesNotMatch(GUIDE_JS, /Setup incomplete/);
     assert.doesNotMatch(GUIDE_JS, /Open setup/);
     assert.doesNotMatch(GUIDE_JS, /Manage setup/);
   });
@@ -76,8 +76,12 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /\$\('period'\)\.addEventListener\('change', changePeriod\)/);
   });
 
-  it('marks status stale after a change instead of hiding it behind an automatic reload', () => {
-    assert.match(GUIDE_JS, /previous state until you choose Refresh/);
-    assert.doesNotMatch(GUIDE_JS, /finally\s*\{[^}]*await refresh\(/);
+  it('refreshes current state automatically after a reviewed change', () => {
+    assert.match(GUIDE_JS, /async function refreshAfterMutation\(run\)/);
+    assert.match(GUIDE_JS, /refresh=1/);
+    assert.match(GUIDE_JS, /refreshing current setup/i);
+    assert.match(GUIDE_JS, /dashboard has already been refreshed/i);
+    assert.match(GUIDE_JS, /automatic status refresh failed/i);
+    assert.match(GUIDE_JS, /window\.tokenHarnessRefreshCurrentState/);
   });
 });
