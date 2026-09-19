@@ -26,16 +26,29 @@ const HEADROOM = providerId('headroom');
  * resolved on PATH. Providers with runtime capability probes are rejected after installation when
  * those probes no longer expose the managed surface.
  */
-const PACKAGE_UPDATE_BASELINES: ReadonlyMap<
-  ProviderId,
-  { minimum: string; maximum: string }
-> = new Map([
-  [RTK, { minimum: '0.44.0', maximum: '0.49.0' }],
-  [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.0' }],
-  [MCPTOON, { minimum: MCPTOON_REVIEWED_BENCHMARK_VERSION, maximum: MCPTOON_REVIEWED_BENCHMARK_VERSION }],
-  [GITNEXUS, { minimum: GITNEXUS_REVIEWED_BENCHMARK_VERSION, maximum: GITNEXUS_REVIEWED_BENCHMARK_VERSION }],
-  [HEADROOM, { minimum: HEADROOM_REVIEWED_BENCHMARK_VERSION, maximum: HEADROOM_REVIEWED_BENCHMARK_VERSION }],
-]);
+const PACKAGE_UPDATE_BASELINES: ReadonlyMap<ProviderId, { minimum: string; maximum: string }> =
+  new Map([
+    [RTK, { minimum: '0.44.0', maximum: '0.49.0' }],
+    [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.0' }],
+    [
+      MCPTOON,
+      { minimum: MCPTOON_REVIEWED_BENCHMARK_VERSION, maximum: MCPTOON_REVIEWED_BENCHMARK_VERSION },
+    ],
+    [
+      GITNEXUS,
+      {
+        minimum: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+        maximum: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+      },
+    ],
+    [
+      HEADROOM,
+      {
+        minimum: HEADROOM_REVIEWED_BENCHMARK_VERSION,
+        maximum: HEADROOM_REVIEWED_BENCHMARK_VERSION,
+      },
+    ],
+  ]);
 
 export type ProviderPackageUpdateAdmission =
   | { state: 'admitted' }
