@@ -135,6 +135,26 @@ jobs:
         # the ID token itself. Keep this enabled so a failed trusted-publishing exchange is actionable.
         run: npm publish --loglevel verbose
 
+      - name: Verify npm release is visible as latest
+        shell: bash
+        run: |
+          version="$(node -p "require('./dist/package/package.json').version")"
+          name="$(node -p "require('./dist/package/package.json').name")"
+          published=""
+          latest=""
+          for attempt in $(seq 1 30); do
+            published="$(npm view "$name@$version" version 2>/dev/null || true)"
+            latest="$(npm view "$name" dist-tags.latest 2>/dev/null || true)"
+            if [ "$published" = "$version" ] && [ "$latest" = "$version" ]; then
+              echo "$name@$version is visible on npm and latest points to $version"
+              exit 0
+            fi
+            echo "npm propagation pending (attempt $attempt/30): version=${published:-missing}, latest=${latest:-missing}"
+            sleep 10
+          done
+          echo "::error::$name@$version did not become visible as npm latest after publish. observed version=${published:-missing}, latest=${latest:-missing}"
+          exit 1
+
       - name: Create or refresh GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
