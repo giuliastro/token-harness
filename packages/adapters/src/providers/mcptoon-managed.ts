@@ -452,10 +452,8 @@ export async function planMcptoonManagedActivation(
         severity: 'warning',
         code: 'mcptoon-managed-prerequisite',
         subject: harness,
-        message:
-          observation.detail,
-        remediation:
-          `Update mcptoon to ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the required compact/JSON CLI surfaces, then refresh Token Harness`,
+        message: observation.detail,
+        remediation: `Update mcptoon to ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the required compact/JSON CLI surfaces, then refresh Token Harness`,
       }),
     ],
   };
@@ -511,7 +509,6 @@ export async function verifyMcptoonManagedActivation(
   return {
     state: 'verified',
     target,
-    detail:
-      `Agent instructions are present and mcptoon ${observation.version ?? ''} exposes the required passive CLI capabilities`,
+    detail: `Agent instructions are present and mcptoon ${observation.version ?? ''} exposes the required passive CLI capabilities`,
   };
 }
