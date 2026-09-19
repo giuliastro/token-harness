@@ -1366,8 +1366,7 @@ export class GuideService {
               if (
                 !prerequisites.some(
                   (entry) =>
-                    entry.provider === prerequisite.provider &&
-                    entry.title === prerequisite.title,
+                    entry.provider === prerequisite.provider && entry.title === prerequisite.title,
                 )
               )
                 prerequisites.push(prerequisite);
