@@ -1,6 +1,8 @@
 import {
+  compareVersions,
   diagnostic,
   jsonValueDigest,
+  parseSemanticVersion,
   parseJsonDocumentText,
   parseJsonPointer,
   resolveJsonPointer,
@@ -12,7 +14,7 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderContext } from './contract.js';
-import { observeGitNexusCandidate } from './gitnexus-candidate.js';
+import { parseGitNexusCliCapabilities, parseGitNexusVersion } from './gitnexus-candidate.js';
 
 /**
  * First reviewed managed MCP slice for GitNexus.
@@ -55,22 +57,81 @@ function claudeTarget(context: ProviderContext): string {
   return context.fs.join(context.paths.home, '.claude.json');
 }
 
-function prerequisiteDiagnostic(
-  harness: HarnessId,
-  version: string | null,
-  supportsMcp: boolean,
-): Diagnostic {
+export interface GitNexusManagedRuntime {
+  ready: boolean;
+  absent: boolean;
+  version: string | null;
+  executable: string | null;
+  supportsMcp: boolean;
+  detail: string;
+}
+
+export async function observeGitNexusManagedRuntime(
+  context: ProviderContext,
+): Promise<GitNexusManagedRuntime> {
+  const versionOutcome = await context.runner.run({
+    executable: 'gitnexus',
+    args: ['--version'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+  if (versionOutcome.failure !== null) {
+    return {
+      ready: false,
+      absent: versionOutcome.failure.reason === 'executable-not-found',
+      version: null,
+      executable: versionOutcome.executablePath,
+      supportsMcp: false,
+      detail: `gitnexus --version failed: ${versionOutcome.failure.reason}`,
+    };
+  }
+  const version = parseGitNexusVersion(`${versionOutcome.stdout}\n${versionOutcome.stderr}`);
+  const actual = version === null ? null : parseSemanticVersion(version);
+  const floor = parseSemanticVersion(GITNEXUS_REVIEWED_MCP_VERSION);
+  const newEnough = actual !== null && floor !== null && compareVersions(actual, floor) >= 0;
+  if (versionOutcome.exitCode !== 0 || !newEnough) {
+    return {
+      ready: false,
+      absent: false,
+      version,
+      executable: versionOutcome.executablePath,
+      supportsMcp: false,
+      detail:
+        version === null
+          ? 'GitNexus did not report a semantic version'
+          : `GitNexus ${version} predates the managed MCP floor ${GITNEXUS_REVIEWED_MCP_VERSION}`,
+    };
+  }
+
+  const help = await context.runner.run({
+    executable: 'gitnexus',
+    args: ['--help'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+  const capabilities =
+    help.failure === null && help.exitCode === 0
+      ? parseGitNexusCliCapabilities(`${help.stdout}\n${help.stderr}`, '')
+      : { query: false, context: false, statusJson: false, mcp: false };
+  return {
+    ready: capabilities.mcp,
+    absent: false,
+    version,
+    executable: versionOutcome.executablePath,
+    supportsMcp: capabilities.mcp,
+    detail: capabilities.mcp
+      ? `GitNexus ${version} exposes the MCP command required by the managed Claude integration`
+      : `GitNexus ${version} does not advertise the MCP command required by the managed Claude integration`,
+  };
+}
+
+function prerequisiteDiagnostic(harness: HarnessId, detail: string): Diagnostic {
   return diagnostic({
     severity: 'warning',
     code: 'gitnexus-managed-mcp-prerequisite',
     subject: harness,
-    message:
-      version === null
-        ? 'GitNexus is not available on the reviewed managed MCP surface'
-        : supportsMcp
-          ? `GitNexus ${version} is not the reviewed managed MCP version ${GITNEXUS_REVIEWED_MCP_VERSION}`
-          : `GitNexus ${version} does not advertise the reviewed MCP command`,
-    remediation: `Keep the current installation user-owned; this build manages MCP registration only for GitNexus ${GITNEXUS_REVIEWED_MCP_VERSION}`,
+    message: detail,
+    remediation: `Install or update GitNexus to ${GITNEXUS_REVIEWED_MCP_VERSION} or newer with the MCP command, then refresh Token Harness`,
   });
 }
 
@@ -97,17 +158,13 @@ export async function planGitNexusManagedMcpActivation(
     };
   }
 
-  const observation = await observeGitNexusCandidate(context);
-  if (
-    observation.state !== 'benchmark-ready' ||
-    observation.version !== GITNEXUS_REVIEWED_MCP_VERSION ||
-    !observation.supportsMcp
-  ) {
+  const observation = await observeGitNexusManagedRuntime(context);
+  if (!observation.ready) {
     return {
       harness,
       target: null,
       actions: [],
-      diagnostics: [prerequisiteDiagnostic(harness, observation.version, observation.supportsMcp)],
+      diagnostics: [prerequisiteDiagnostic(harness, observation.detail)],
     };
   }
 
@@ -314,16 +371,12 @@ export async function verifyGitNexusManagedMcpActivation(
     };
   }
 
-  const observation = await observeGitNexusCandidate(context);
-  if (
-    observation.state !== 'benchmark-ready' ||
-    observation.version !== GITNEXUS_REVIEWED_MCP_VERSION ||
-    !observation.supportsMcp
-  ) {
+  const observation = await observeGitNexusManagedRuntime(context);
+  if (!observation.ready) {
     return {
       state: 'candidate-unavailable',
       target: null,
-      detail: observation.reasons.join('; '),
+      detail: observation.detail,
     };
   }
 
@@ -363,6 +416,6 @@ export async function verifyGitNexusManagedMcpActivation(
   return {
     state: 'verified',
     target,
-    detail: `GitNexus ${GITNEXUS_REVIEWED_MCP_VERSION} is registered through the reviewed Claude MCP entry; verification did not start the MCP server`,
+    detail: `GitNexus ${observation.version ?? ''} is registered through the Token Harness-owned Claude MCP entry; verification did not start the MCP server`,
   };
 }

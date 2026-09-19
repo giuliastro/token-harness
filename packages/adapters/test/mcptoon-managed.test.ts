@@ -96,12 +96,12 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
   };
 }
 
-function runner(commands: string[] = []): ProcessRunner {
+function runner(commands: string[] = [], version = '0.7.10'): ProcessRunner {
   return {
     run: (request) => {
       commands.push(`${request.executable} ${request.args.join(' ')}`);
       if (request.args[0] === '--version') {
-        return Promise.resolve(outcome(request, 'mcptoon 0.7.10'));
+        return Promise.resolve(outcome(request, `mcptoon ${version}`));
       }
       if (request.args[0] === '--help') {
         return Promise.resolve(outcome(request, 'Options: --compact --json --toon'));
@@ -183,6 +183,19 @@ test('plans a Token Harness-owned Claude skill without touching mcptoon config',
     plan.actions.some((action) => action.affectedPaths.includes('/home/dev/.mcptoon/config.json')),
     false,
   );
+});
+
+test('keeps a newer mcptoon release usable when the required CLI surfaces are still present', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const commands: string[] = [];
+  const plan = await planMcptoonManagedActivation(
+    { ...base, runner: runner(commands, '0.9.0') },
+    harnessId('claude'),
+  );
+
+  assert.ok(plan.actions.some((action) => action.kind === 'write-owned-file'));
+  assert.deepEqual(commands, ['mcptoon --version', 'mcptoon --help']);
 });
 
 test('plans a surgical Codex AGENTS marker block', async () => {

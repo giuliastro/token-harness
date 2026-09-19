@@ -172,6 +172,24 @@ describe('optimization stack snapshot', () => {
     assert.equal(component.nextAction, null);
   });
 
+  it('does not mark a verified newer provider unhealthy merely because its version is newer', () => {
+    const newer = {
+      ...detection(),
+      version: '9.9.9',
+      versionVerdict: 'unknown-newer' as const,
+    };
+    const stack = buildOptimizationStack({
+      components: [descriptor],
+      detections: [newer],
+      verification: verification(),
+      metrics: metrics(),
+      updates: [currentUpdate()],
+    });
+
+    assert.equal(stack.components[0]!.health, 'healthy');
+    assert.equal(stack.components[0]!.nextAction, null);
+  });
+
   it('keeps unlike local measurements separate instead of inventing a total', () => {
     const component = buildOptimizationStack({
       components: [descriptor],

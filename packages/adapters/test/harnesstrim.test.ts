@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { digestText } from '@token-harness/core';
 import type {
   FileStat,
   HarnessConfigSummary,
@@ -141,6 +142,39 @@ function defaultCapabilities(): string {
       },
     },
   });
+}
+
+function dynamicCapabilities(version: string, skillContent: string): string {
+  const parsed = JSON.parse(defaultCapabilities()) as {
+    version: string;
+    harnesses: Record<
+      string,
+      {
+        adapter: string;
+        surfaces: string[];
+        narrowing: Array<{ flag: string; produces: string }>;
+        writeSet: string[];
+      }
+    >;
+    digests?: Record<string, Record<string, string>>;
+  };
+  parsed.version = version;
+  if (parsed.harnesses['claude'])
+    parsed.harnesses['claude'].narrowing = [
+      { flag: '--no-hook', produces: 'skills + instructions only' },
+      { flag: '--no-instructions', produces: 'skills + hook only' },
+    ];
+  if (parsed.harnesses['codex'])
+    parsed.harnesses['codex'].narrowing = [
+      { flag: '--no-instructions', produces: 'skills only' },
+      { flag: '--hook', produces: 'skills + hook' },
+    ];
+  const digest = digestText(skillContent).slice('sha256:'.length);
+  parsed.digests = {
+    claude: { '.claude/skills/latest/SKILL.md': digest },
+    codex: { '.codex/skills/latest/SKILL.md': digest },
+  };
+  return JSON.stringify(parsed);
 }
 
 function context(options: Options = {}): ProviderContext {
@@ -1116,6 +1150,58 @@ describe('planning', () => {
       },
     );
     assert.deepEqual(action.protectedPaths, [`${PROJECT}\\.claude\\settings.json`, CLAUDE_MD]);
+  });
+
+  it('uses HarnessTrim 0.3 capability digests instead of the historical hard-coded skill set', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.0', skill);
+    const result = await harnesstrimAdapter.plan(context({ version: '0.3.0', capabilities }), {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
+
+    const action = result.actions[0];
+    assert.ok(action !== undefined && action.kind === 'delegated-provider-install');
+    assert.deepEqual(action.expectedArtifacts, [
+      {
+        path: `${PROJECT}\\.claude\\skills\\latest\\SKILL.md`,
+        digest: digestText(skill),
+      },
+    ]);
+    assert.deepEqual(action.args, [
+      'install',
+      'claude',
+      PROJECT,
+      '--apply',
+      '--no-hook',
+      '--no-instructions',
+    ]);
+  });
+
+  it('recognizes a matching HarnessTrim 0.3 skills-only install as configured and verified', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.0', skill);
+    const skillPath = `${PROJECT}\\.claude\\skills\\latest\\SKILL.md`;
+    const ctx = context({
+      version: '0.3.0',
+      capabilities,
+      files: { [skillPath]: skill },
+    });
+
+    const detection = await harnesstrimAdapter.detect(ctx);
+    assert.equal(detection.version, '0.3.0');
+    assert.equal(detection.versionVerdict, 'in-range');
+    assert.equal(detection.state, 'configured');
+    assert.ok(detection.configuredHarnesses.includes('claude' as never));
+    assert.ok(detection.assignableHarnesses.includes('claude' as never));
+
+    const verification = await harnesstrimAdapter.verify(ctx);
+    assert.equal(verification.achievedTier, 'config-only');
+    assert.equal(
+      verification.checks.find((check) => check.id === 'integration-configured')?.status,
+      'pass',
+    );
   });
 
   it('plans removal of the reviewed skills only when Claude Code is in scope', async () => {

@@ -201,7 +201,6 @@ function healthState(input: {
 }): StackHealthState {
   if (
     input.detection.state === 'broken' ||
-    input.detection.versionVerdict === 'unknown-newer' ||
     input.verification === 'degraded' ||
     input.quality.state === 'regressed' ||
     input.conflicts.length > 0 ||

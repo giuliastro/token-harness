@@ -7,85 +7,90 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderAdapter } from './contract.js';
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from './gitnexus-candidate.js';
+import { HEADROOM_REVIEWED_BENCHMARK_VERSION } from './headroom-candidate.js';
+import { MCPTOON_REVIEWED_BENCHMARK_VERSION } from './mcptoon-candidate.js';
 
 const RTK = providerId('rtk');
 const HARNESSTRIM = providerId('harnesstrim');
+const MCPTOON = providerId('mcptoon');
+const GITNEXUS = providerId('gitnexus');
+const HEADROOM = providerId('headroom');
 
 /**
- * Provider releases whose external contract has been reviewed after the adapter's fixture-backed
- * baseline was recorded.
+ * Historical package baselines.
  *
- * RTK does not currently expose a machine-readable capability contract, so advancing its reviewed
- * ceiling remains an explicit source-contract decision. v0.49.0 keeps the `gain --all --format
- * json` analytics contract Token Harness consumes; later releases remain visible as
- * `unknown-newer` until their contract is reviewed.
+ * These ranges record releases Token Harness has directly exercised. They are evidence, not a
+ * ceiling. Normal package updates are latest-forward: a newer semantic version may be installed
+ * transactionally and must then pass post-install detection against the executable actually
+ * resolved on PATH. Providers with runtime capability probes are rejected after installation when
+ * those probes no longer expose the managed surface.
  */
-const SOURCE_REVIEWED_RTK_RELEASES = new Set(['0.49.0']);
-
-/**
- * Package-update admission is intentionally separate from managed harness mutation admission.
- *
- * These ranges answer only whether Token Harness has reviewed enough of the provider package itself
- * to replace one installed release with another. They do not authorize writing Claude, Codex or
- * OpenCode configuration; those writes still require their exact compatibility rows.
- *
- * HarnessTrim can validate a newer *installed* build dynamically through `capabilities`, but an
- * updater has to decide before that build is installed. Until an install-and-verify transaction can
- * roll a contract mismatch back atomically, unattended updates stop at the latest reviewed target.
- */
-const REVIEWED_PACKAGE_UPDATE_RANGES: ReadonlyMap<
-  ProviderId,
-  { minimum: string; maximum: string }
-> = new Map([
-  [RTK, { minimum: '0.44.0', maximum: '0.49.0' }],
-  [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.0' }],
-]);
+const PACKAGE_UPDATE_BASELINES: ReadonlyMap<ProviderId, { minimum: string; maximum: string }> =
+  new Map([
+    [RTK, { minimum: '0.44.0', maximum: '0.49.0' }],
+    [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.0' }],
+    [
+      MCPTOON,
+      { minimum: MCPTOON_REVIEWED_BENCHMARK_VERSION, maximum: MCPTOON_REVIEWED_BENCHMARK_VERSION },
+    ],
+    [
+      GITNEXUS,
+      {
+        minimum: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+        maximum: GITNEXUS_REVIEWED_BENCHMARK_VERSION,
+      },
+    ],
+    [
+      HEADROOM,
+      {
+        minimum: HEADROOM_REVIEWED_BENCHMARK_VERSION,
+        maximum: HEADROOM_REVIEWED_BENCHMARK_VERSION,
+      },
+    ],
+  ]);
 
 export type ProviderPackageUpdateAdmission =
   | { state: 'admitted' }
   | { state: 'blocked'; reason: string };
 
 /**
- * The newest package release Token Harness has source-reviewed for unattended replacement.
- *
- * This is deliberately only the provider-package ceiling. It grants no permission to mutate an
- * agent integration; exact provider × harness × version × platform rows remain the gate for that.
+ * Newest directly exercised package release. Kept for historical evidence/reporting only; callers
+ * must not treat this as a forward-compatibility ceiling.
  */
 export function reviewedProviderPackageMaximum(provider: ProviderId): string | null {
-  return REVIEWED_PACKAGE_UPDATE_RANGES.get(provider)?.maximum ?? null;
+  return PACKAGE_UPDATE_BASELINES.get(provider)?.maximum ?? null;
 }
 
 /**
  * Decide whether a provider package may be upgraded to `targetVersion`.
  *
- * This is deliberately provider-only: harness versions, OS rows and managed ownership do not
- * belong here because replacing the provider package does not itself mutate a harness. Exact
- * provider × harness × platform evidence remains mandatory when a later plan wants to edit those
- * harnesses.
+ * A known provider is admitted when the target is a parseable semantic version at or above its
+ * supported floor. The transaction must still verify the exact active executable after install and
+ * reject/rollback when the runtime capability surface no longer matches what Token Harness needs.
  */
 export function admitProviderPackageUpdate(
   provider: ProviderId,
   targetVersion: string,
 ): ProviderPackageUpdateAdmission {
-  const range = REVIEWED_PACKAGE_UPDATE_RANGES.get(provider);
+  const range = PACKAGE_UPDATE_BASELINES.get(provider);
   if (range === undefined) {
     return { state: 'blocked', reason: `no package-update policy exists for ${provider}` };
   }
 
   const target = parseSemanticVersion(targetVersion);
   const minimum = parseSemanticVersion(range.minimum);
-  const maximum = parseSemanticVersion(range.maximum);
-  if (target === null || minimum === null || maximum === null) {
+  if (target === null || minimum === null) {
     return {
       state: 'blocked',
-      reason: `${targetVersion} is not a parseable reviewed provider release`,
+      reason: `${targetVersion} is not a parseable provider release`,
     };
   }
 
-  if (compareVersions(target, minimum) < 0 || compareVersions(target, maximum) > 0) {
+  if (compareVersions(target, minimum) < 0) {
     return {
       state: 'blocked',
-      reason: `${targetVersion} is outside the reviewed package-update range ${range.minimum}..${range.maximum}`,
+      reason: `${targetVersion} predates the supported provider update floor ${range.minimum}`,
     };
   }
 
@@ -108,25 +113,33 @@ function harnessTrimContractMatchesInstalledVersion(detection: ProviderDetection
   return declaredByInstalledBuild && !capabilityDrift;
 }
 
+function runtimeManagedSurfaceStillAvailable(detection: ProviderDetection): boolean {
+  if (detection.state === 'broken' || detection.assignableHarnesses.length === 0) return false;
+  return !detection.warnings.some(
+    (warning) =>
+      /capabilit/i.test(warning.code) &&
+      /(unavailable|drift|mismatch|unsupported)/i.test(warning.code),
+  );
+}
+
 /**
- * Promote a newer provider release only when Token Harness has evidence that its consumed contract
- * is still compatible.
+ * Promote newer releases from historical evidence to runtime-compatible when the installed build
+ * still exposes the managed surface Token Harness needs.
  *
- * HarnessTrim is deliberately not pinned to a forever-growing version table. Newer builds are
- * accepted when the executable and `harnesstrim capabilities` report the same version and the
- * existing semantic surface/write-set comparison reports no drift. Managed mutation remains gated
- * independently by the reviewed write-set checks in the HarnessTrim adapter.
- *
- * RTK has no equivalent capability endpoint, so only explicitly source-reviewed releases are
- * promoted. This keeps future RTK releases usable for detection while refusing to silently claim a
- * contract Token Harness has not inspected.
+ * HarnessTrim has the strongest contract and is checked against its machine-readable capability,
+ * write-set and artifact declarations. mcptoon, GitNexus and Headroom are checked through their
+ * read-only CLI capability probes. RTK's managed mutation is produced by Token Harness itself and
+ * remains forward-usable while the adapter can still detect a runnable build and its assignable
+ * harness surface. Historical benchmark evidence remains exact-version elsewhere.
  */
 export function applyProviderVersionCompatibility(detection: ProviderDetection): ProviderDetection {
   if (detection.versionVerdict !== 'unknown-newer' || detection.version === null) return detection;
 
   const compatible =
-    (detection.providerId === RTK && SOURCE_REVIEWED_RTK_RELEASES.has(detection.version)) ||
-    (detection.providerId === HARNESSTRIM && harnessTrimContractMatchesInstalledVersion(detection));
+    detection.providerId === HARNESSTRIM
+      ? harnessTrimContractMatchesInstalledVersion(detection)
+      : [RTK, MCPTOON, GITNEXUS, HEADROOM].includes(detection.providerId) &&
+        runtimeManagedSurfaceStillAvailable(detection);
 
   if (!compatible) return detection;
 

@@ -164,12 +164,65 @@ interface FakeChannel {
   channelStdout?: Readonly<Record<string, string>>;
   inventoryStdout?: Readonly<Record<string, string>>;
   installExitCode?: number;
+  installDoesNotChangeResolvedVersion?: boolean;
   compatibilityRows?: readonly CompatibilityRow[];
+}
+
+function harnesstrimCapabilityAnswer(version: string): string {
+  return JSON.stringify({
+    version,
+    harnesses: {
+      claude: {
+        adapter: '@harnesstrim/adapter-claude',
+        surfaces: ['PostToolUse Bash hook — deterministic reduction of Bash output'],
+        narrowing: [
+          { flag: '--no-hook', produces: 'skills + instructions only' },
+          { flag: '--no-instructions', produces: 'skills + hook only' },
+        ],
+        writeSet: [
+          '.claude/skills/',
+          '.claude/settings.json',
+          'CLAUDE.md (marker-guarded snippet)',
+        ],
+      },
+      codex: {
+        adapter: '@harnesstrim/adapter-codex',
+        surfaces: ['PostToolUse Bash hook — deterministic reduction of Bash output'],
+        narrowing: [
+          { flag: '--no-instructions', produces: 'skills only' },
+          { flag: '--hook', produces: 'skills + hook' },
+        ],
+        writeSet: ['.codex/skills/'],
+      },
+      opencode: {
+        adapter: '@harnesstrim/adapter-opencode',
+        surfaces: ['tool.execute.after — slims noisy tool output in place'],
+        narrowing: [],
+        writeSet: ['.opencode/plugin/harnesstrim.ts'],
+      },
+      hermes: {
+        adapter: '@harnesstrim/adapter-hermes',
+        surfaces: ['transform_tool_result — deterministic reduction'],
+        narrowing: [],
+        writeSet: ['.hermes/plugins/harnesstrim/'],
+      },
+      pi: {
+        adapter: '@harnesstrim/adapter-pi',
+        surfaces: ['tool_result — deterministic reduction'],
+        narrowing: [],
+        writeSet: ['.pi/extensions/harnesstrim/'],
+      },
+    },
+    digests: {
+      claude: {},
+      codex: {},
+    },
+  });
 }
 
 function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunner } {
   const asked: string[] = [];
-  const installed = config.installed ?? {};
+  const installed: Record<string, string> = { ...(config.installed ?? {}) };
   const channelStdout = config.channelStdout ?? {};
   const inventoryStdout = config.inventoryStdout ?? {};
 
@@ -191,11 +244,37 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
     const inventory = inventoryStdout[line];
     if (inventory !== undefined) return { ...base, exitCode: 0, stdout: inventory };
 
+    if (request.executable === 'harnesstrim' && request.args[0] === 'capabilities') {
+      const raw = installed['harnesstrim'];
+      const version = raw === undefined ? null : (/(\d+\.\d+\.\d+)/.exec(raw)?.[1] ?? null);
+      if (version !== null)
+        return { ...base, exitCode: 0, stdout: harnesstrimCapabilityAnswer(version) };
+    }
+
     const channel = channelStdout[request.executable];
     if (channel !== undefined) {
       const isInstall = request.args[0] === 'install';
+      const exitCode = isInstall ? (config.installExitCode ?? 0) : 0;
+      if (isInstall && exitCode === 0 && config.installDoesNotChangeResolvedVersion !== true) {
+        const explicitVersionIndex = request.args.indexOf('--version');
+        const explicitVersion =
+          explicitVersionIndex >= 0 ? (request.args[explicitVersionIndex + 1] ?? null) : null;
+        if (
+          request.executable === 'winget' &&
+          request.args.includes('rtk-ai.rtk') &&
+          explicitVersion
+        )
+          installed['rtk'] = `rtk ${explicitVersion}`;
+        if (request.executable === 'cargo' && request.args.includes('rtk') && explicitVersion)
+          installed['rtk'] = `rtk ${explicitVersion}`;
+        if (request.executable === 'npm') {
+          const spec = request.args.find((arg) => arg.startsWith('harnesstrim@'));
+          const version = spec?.slice('harnesstrim@'.length) ?? null;
+          if (version) installed['harnesstrim'] = version;
+        }
+      }
       return isInstall
-        ? { ...base, exitCode: config.installExitCode ?? 0, stdout: '' }
+        ? { ...base, exitCode, stdout: '' }
         : { ...base, exitCode: 0, stdout: channel };
     }
 
@@ -456,7 +535,7 @@ describe('update', () => {
     );
   });
 
-  it('blocks an unreviewed future package target even when an old config row exists', async () => {
+  it('updates to a future RTK package target without requiring a new compatibility row', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
@@ -468,12 +547,13 @@ describe('update', () => {
     );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');
-    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');
-    assert.ok(result.codes.includes('provider-update-target-unreviewed'));
-    assert.equal(
-      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
-      false,
+    assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.50.0'),
+      ),
       JSON.stringify(result.asked),
     );
   });
@@ -491,6 +571,62 @@ describe('update', () => {
         (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.44.0'),
       ),
       JSON.stringify(result.asked),
+    );
+  });
+
+  it('updates HarnessTrim to the latest npm version and verifies the active executable', async () => {
+    const result = await invoke(['update', '--provider', 'harnesstrim', '--yes'], world(), {
+      installed: { harnesstrim: '0.2.1' },
+      channelStdout: { npm: '0.3.0\n' },
+      inventoryStdout: {
+        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.2.1\n',
+      },
+    });
+
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(row(result.data, 'harnesstrim')?.verdict, 'upgradable');
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.ok(result.codes.includes('provider-update-version-verified'));
+    assert.ok(
+      result.asked.includes('npm install --global harnesstrim@0.3.0'),
+      JSON.stringify(result.asked),
+    );
+  });
+
+  it('admits a future HarnessTrim release when its runtime capability contract still matches', async () => {
+    const result = await invoke(['update', '--provider', 'harnesstrim', '--yes'], world(), {
+      installed: { harnesstrim: '0.3.0' },
+      channelStdout: { npm: '0.4.0\n' },
+      inventoryStdout: {
+        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.3.0\n',
+      },
+    });
+
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(row(result.data, 'harnesstrim')?.verdict, 'upgradable');
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.ok(result.codes.includes('provider-update-version-verified'));
+    assert.ok(result.asked.includes('npm install --global harnesstrim@0.4.0'));
+  });
+
+  it('rolls the update back instead of claiming success when PATH still resolves old HarnessTrim', async () => {
+    const result = await invoke(['update', '--provider', 'harnesstrim', '--yes'], world(), {
+      installed: { harnesstrim: '0.2.1' },
+      channelStdout: { npm: '0.3.0\n' },
+      inventoryStdout: {
+        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.2.1\n',
+      },
+      installDoesNotChangeResolvedVersion: true,
+    });
+
+    assert.notEqual(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data, null);
+    assert.ok(result.codes.includes('provider-update-version-not-observed'));
+    assert.equal(result.codes.includes('provider-update-version-verified'), false);
+    assert.ok(result.asked.includes('npm install --global harnesstrim@0.3.0'));
+    assert.ok(
+      result.asked.includes('npm install --global harnesstrim@0.2.1'),
+      `expected rollback to restore the previously active package: ${JSON.stringify(result.asked)}`,
     );
   });
 

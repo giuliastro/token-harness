@@ -95,12 +95,12 @@ function successfulOutcome(request: ProcessRequest, stdout: string): ProcessOutc
   };
 }
 
-function runner(commands: string[] = []): ProcessRunner {
+function runner(commands: string[] = [], version = '0.37.0'): ProcessRunner {
   return {
     run: (request) => {
       commands.push(`${request.executable} ${request.args.join(' ')}`);
       if (request.args[0] === '--version') {
-        return Promise.resolve(successfulOutcome(request, 'headroom 0.37.0'));
+        return Promise.resolve(successfulOutcome(request, `headroom ${version}`));
       }
       if (request.args[0] === 'wrap' && request.args[1] === '--help') {
         return Promise.resolve(successfulOutcome(request, 'Supported: claude codex aider'));
@@ -161,6 +161,24 @@ test('plans the reviewed Headroom MCP entry in the modern Claude Code user confi
     plan.actions.some((entry) => entry.affectedPaths.includes('/home/dev/.claude/mcp.json')),
     false,
   );
+});
+
+test('keeps a newer Headroom release usable when its MCP server command still exists', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const commands: string[] = [];
+  const plan = await planHeadroomManagedMcpActivation(
+    { ...base, runner: runner(commands, '0.50.0') },
+    harnessId('claude'),
+  );
+
+  assert.equal(plan.actions.length, 1);
+  assert.equal(plan.actions[0]?.kind, 'merge-json');
+  assert.deepEqual(commands, [
+    'headroom --version',
+    'headroom wrap --help',
+    'headroom mcp serve --help',
+  ]);
 });
 
 test('plans a reversible Codex marker block without running wrap or proxy commands', async () => {

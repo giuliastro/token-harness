@@ -321,6 +321,13 @@ export interface HarnessTrimHarnessCapabilities {
 export interface HarnessTrimCapabilities {
   version: string;
   harnesses: Readonly<Record<string, HarnessTrimHarnessCapabilities>>;
+  /**
+   * Per-version artifact digests published by HarnessTrim itself.
+   *
+   * HarnessTrim >=0.3.0 computes these from the exact assets its installer will write. Older
+   * releases do not expose this field, so an empty map keeps the historical fixture fallback.
+   */
+  digests?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -352,6 +359,24 @@ function parseHarnessCapabilities(value: unknown): HarnessTrimHarnessCapabilitie
   };
 }
 
+function parseCapabilityDigests(
+  value: unknown,
+): Readonly<Record<string, Readonly<Record<string, string>>>> | null {
+  if (value === undefined) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const result: Record<string, Record<string, string>> = {};
+  for (const [harness, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+    const entries: Record<string, string> = {};
+    for (const [path, digest] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/i.test(digest)) return null;
+      entries[path.replaceAll('\\', '/')] = `sha256:${digest.toLowerCase()}`;
+    }
+    result[harness] = entries;
+  }
+  return result;
+}
+
 function parseCapabilities(stdout: string): HarnessTrimCapabilities | null {
   let parsed: unknown;
   try {
@@ -363,7 +388,13 @@ function parseCapabilities(stdout: string): HarnessTrimCapabilities | null {
   const record = parsed as Record<string, unknown>;
   const version = record['version'];
   const harnesses = record['harnesses'];
-  if (typeof version !== 'string' || typeof harnesses !== 'object' || harnesses === null) {
+  const digests = parseCapabilityDigests(record['digests']);
+  if (
+    typeof version !== 'string' ||
+    typeof harnesses !== 'object' ||
+    harnesses === null ||
+    digests === null
+  ) {
     return null;
   }
   const entries: Record<string, HarnessTrimHarnessCapabilities> = {};
@@ -372,7 +403,7 @@ function parseCapabilities(stdout: string): HarnessTrimCapabilities | null {
     if (entry === null) return null;
     entries[harness] = entry;
   }
-  return { version, harnesses: entries };
+  return { version, harnesses: entries, digests };
 }
 
 /**
@@ -781,7 +812,10 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
   // and compared against the manifest's. A build that cannot answer contributes nothing; an
   // answer that disagrees is drift, named on both sides.
   const observed = probe.installed ? await probeCapabilities(context) : null;
-  const configured = harnessesWiredToHarnessTrim(context.harnessConfigs);
+  const configured = await configuredHarnessesForHarnessTrim(
+    context,
+    observed?.capabilities ?? null,
+  );
   const warnings: Diagnostic[] = [];
   const evidenceItems: Evidence[] = [...probe.evidence, ...(observed?.evidence ?? [])];
 
@@ -1114,14 +1148,18 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     remediation: probe.installed ? null : 'Install HarnessTrim, or add it to PATH',
   });
 
-  const configured = harnessesWiredToHarnessTrim(context.harnessConfigs);
+  const currentCapabilities = probe.installed ? await probeCapabilities(context) : null;
+  const configured = await configuredHarnessesForHarnessTrim(
+    context,
+    currentCapabilities?.capabilities ?? null,
+  );
   checks.push({
-    id: 'hook-registered',
+    id: 'integration-configured',
     status: configured.length > 0 ? 'pass' : 'not-exercised',
     summary:
       configured.length > 0
-        ? `wired to ${configured.join(', ')}`
-        : 'no harness configuration names harnesstrim',
+        ? `configured for ${configured.join(', ')}`
+        : 'no HarnessTrim hook, plugin, or matching skills-only installation was found',
     achievedTier: configured.length > 0 ? 'config-only' : null,
     evidence: [],
     remediation: null,
@@ -1449,18 +1487,56 @@ async function collectMetrics(
  * Claude skills while skipping both output-reduction paths. The reviewed files are exact, and the
  * executor rejects any hook or instruction change before restoring its snapshot.
  */
-/** The artifacts the skills-only install writes for one harness, with their reviewed digests. */
+/** The exact skill artifacts this installed HarnessTrim build says it will write. */
 function skillArtifacts(
   context: ProviderContext,
   harness: string,
+  capabilities: HarnessTrimCapabilities | null = null,
 ): { path: string; digest: string }[] {
   const install = SKILLS_INSTALL[harness];
   if (install === undefined) return [];
+
+  const prefix = `${install.directory}/skills/`;
+  const dynamic = Object.entries(capabilities?.digests?.[harness] ?? {})
+    .filter(([path]) => path.startsWith(prefix))
+    .map(([path, digest]) => ({
+      path: context.fs.join(context.projectRoot, ...path.split('/')),
+      digest,
+    }));
+  if (dynamic.length > 0) return dynamic;
+
   const skills = context.fs.join(context.projectRoot, install.directory, 'skills');
   return Object.entries(SKILL_ARTIFACT_DIGESTS).map(([path, digest]) => ({
     path: context.fs.join(skills, ...path.split('/')),
     digest,
   }));
+}
+
+async function harnessTrimSkillsConfigured(
+  context: ProviderContext,
+  harness: HarnessId,
+  capabilities: HarnessTrimCapabilities | null,
+): Promise<boolean> {
+  const artifacts = skillArtifacts(context, harness, capabilities);
+  if (artifacts.length === 0) return false;
+  for (const artifact of artifacts) {
+    const stat = await context.fs.stat(artifact.path);
+    if (stat === null || stat.kind !== 'file') return false;
+    const actual = digestText(new TextDecoder().decode(await context.fs.readFile(artifact.path)));
+    if (actual !== artifact.digest) return false;
+  }
+  return true;
+}
+
+async function configuredHarnessesForHarnessTrim(
+  context: ProviderContext,
+  capabilities: HarnessTrimCapabilities | null,
+): Promise<HarnessId[]> {
+  const configured = new Set(harnessesWiredToHarnessTrim(context.harnessConfigs));
+  for (const harness of [CLAUDE, CODEX]) {
+    if (await harnessTrimSkillsConfigured(context, harness, capabilities)) configured.add(harness);
+  }
+  return [...configured];
 }
 
 /**
@@ -1490,9 +1566,13 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     };
   }
 
+  const installed = await probeExecutable(context);
+  const observed = installed.installed ? await probeCapabilities(context) : null;
+  const currentCapabilities = observed?.capabilities ?? null;
+
   if (request.desiredState === 'absent') {
     const actions: RemoveOwnedChangeAction[] = targets.flatMap((harness) =>
-      skillArtifacts(context, harness).map((artifact) => ({
+      skillArtifacts(context, harness, currentCapabilities).map((artifact) => ({
         kind: 'remove-owned-change' as const,
         id: `harnesstrim-${harness}-skill-remove-${digestText(artifact.path).slice(7, 15)}`,
         riskClass: 'reversible' as const,
@@ -1501,7 +1581,7 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
         affectedPaths: [artifact.path],
         affectedProcesses: [],
         preconditions: [
-          `the HarnessTrim skill still matches the reviewed ${SKILLS_UPSTREAM} artifact`,
+          `the HarnessTrim skill still matches the installed HarnessTrim artifact contract`,
         ],
         postconditions: ['the owned HarnessTrim skill is absent'],
         rollbackData: 'file-snapshot' as const,
@@ -1524,7 +1604,6 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     };
   }
 
-  const installed = await probeExecutable(context);
   if (!installed.installed) {
     return {
       providerId: HARNESSTRIM,
@@ -1534,7 +1613,6 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     };
   }
 
-  const observed = await probeCapabilities(context);
   const actions: DelegatedProviderInstallAction[] = [];
   const plannedHarnesses: HarnessId[] = [];
 
@@ -1544,12 +1622,12 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     if (review === undefined || install === undefined) continue;
 
     const reviewed =
-      observed.capabilities === null
+      currentCapabilities === null
         ? installed.version === review.upstreamVersion
-        : writeSetStillReviewed(observed.capabilities, harnessId(harness));
+        : writeSetStillReviewed(currentCapabilities, harnessId(harness));
     if (!reviewed) continue;
 
-    const expectedArtifacts = skillArtifacts(context, harness);
+    const expectedArtifacts = skillArtifacts(context, harness, currentCapabilities);
     actions.push({
       kind: 'delegated-provider-install',
       id: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
@@ -1559,11 +1637,11 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
       affectedPaths: expectedArtifacts.map((artifact) => artifact.path),
       affectedProcesses: ['harnesstrim'],
       preconditions: [
-        'harnesstrim is installed, on PATH, and declares the reviewed write set',
-        `the reviewed installer writes only the declared ${harness} skill artifacts`,
+        'harnesstrim is installed, on PATH, and declares a compatible write set',
+        `the installed HarnessTrim build publishes the exact ${harness} skill artifact contract`,
       ],
       postconditions: [
-        `HarnessTrim ${harness} skills match the reviewed ${review.upstreamVersion} artifacts`,
+        `HarnessTrim ${harness} skills match the installed ${installed.version ?? review.upstreamVersion} artifact contract`,
         'no HarnessTrim hook or reduce-pipe instruction was added',
       ],
       rollbackData: 'directory-snapshot',
