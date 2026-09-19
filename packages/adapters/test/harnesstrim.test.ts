@@ -1204,6 +1204,30 @@ describe('planning', () => {
     );
   });
 
+  it('refuses a modern HarnessTrim build that drops the runtime skill digest contract', async () => {
+    const skill = '# Future HarnessTrim skill\n';
+    const parsed = JSON.parse(dynamicCapabilities('0.4.0', skill)) as {
+      digests?: Record<string, Record<string, string>>;
+    };
+    delete parsed.digests;
+    const capabilities = JSON.stringify(parsed);
+    const ctx = context({ version: '0.4.0', capabilities });
+
+    const detection = await harnesstrimAdapter.detect(ctx);
+    assert.equal(detection.versionVerdict, 'unknown-newer');
+    assert.equal(detection.assignableHarnesses.includes('claude' as never), false);
+    assert.ok(
+      detection.warnings.some((warning) => warning.code === 'provider-capabilities-drift'),
+    );
+
+    const result = await harnesstrimAdapter.plan(ctx, {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
+    assert.equal(result.actions.length, 0);
+  });
+
   it('plans removal of the reviewed skills only when Claude Code is in scope', async () => {
     const result = await harnesstrimAdapter.plan(context(), {
       ownership: [],
