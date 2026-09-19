@@ -179,7 +179,11 @@ function harnesstrimCapabilityAnswer(version: string): string {
           { flag: '--no-hook', produces: 'skills + instructions only' },
           { flag: '--no-instructions', produces: 'skills + hook only' },
         ],
-        writeSet: ['.claude/skills/', '.claude/settings.json', 'CLAUDE.md (marker-guarded snippet)'],
+        writeSet: [
+          '.claude/skills/',
+          '.claude/settings.json',
+          'CLAUDE.md (marker-guarded snippet)',
+        ],
       },
       codex: {
         adapter: '@harnesstrim/adapter-codex',
@@ -242,7 +246,7 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
 
     if (request.executable === 'harnesstrim' && request.args[0] === 'capabilities') {
       const raw = installed['harnesstrim'];
-      const version = raw === undefined ? null : /(\d+\.\d+\.\d+)/.exec(raw)?.[1] ?? null;
+      const version = raw === undefined ? null : (/(\d+\.\d+\.\d+)/.exec(raw)?.[1] ?? null);
       if (version !== null)
         return { ...base, exitCode: 0, stdout: harnesstrimCapabilityAnswer(version) };
     }
@@ -251,15 +255,15 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
     if (channel !== undefined) {
       const isInstall = request.args[0] === 'install';
       const exitCode = isInstall ? (config.installExitCode ?? 0) : 0;
-      if (
-        isInstall &&
-        exitCode === 0 &&
-        config.installDoesNotChangeResolvedVersion !== true
-      ) {
+      if (isInstall && exitCode === 0 && config.installDoesNotChangeResolvedVersion !== true) {
         const explicitVersionIndex = request.args.indexOf('--version');
         const explicitVersion =
-          explicitVersionIndex >= 0 ? request.args[explicitVersionIndex + 1] ?? null : null;
-        if (request.executable === 'winget' && request.args.includes('rtk-ai.rtk') && explicitVersion)
+          explicitVersionIndex >= 0 ? (request.args[explicitVersionIndex + 1] ?? null) : null;
+        if (
+          request.executable === 'winget' &&
+          request.args.includes('rtk-ai.rtk') &&
+          explicitVersion
+        )
           installed['rtk'] = `rtk ${explicitVersion}`;
         if (request.executable === 'cargo' && request.args.includes('rtk') && explicitVersion)
           installed['rtk'] = `rtk ${explicitVersion}`;
