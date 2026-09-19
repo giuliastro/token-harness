@@ -220,11 +220,11 @@ describe('guided workflow', () => {
     );
   });
 
-  it('requires an exact reviewed row for optional provider setup', async () => {
+  it('keeps optional setup actionable on newer versions when the installed adapter exposes it', async () => {
     const doctor = inventory(['claude'], {
       platform: linuxPlatform,
-      harnessVersions: { claude: '2.1.269' },
-      providerVersions: { gitnexus: '1.6.12' },
+      harnessVersions: { claude: '9.9.9' },
+      providerVersions: { gitnexus: '9.9.9' },
     });
     assert.equal(guideSetupTarget(doctor, 'claude', 'gitnexus').state, 'actionable');
 
@@ -241,15 +241,16 @@ describe('guided workflow', () => {
     );
   });
 
-  it('marks unsupported exact versions unavailable instead of advertising a setup action', () => {
+  it('treats newer HarnessTrim/Codex tuples as actionable when the provider still declares Codex', () => {
     const doctor = inventory(['codex'], {
       platform: linuxPlatform,
-      harnessVersions: { codex: '0.153.0' },
-      providerVersions: { harnesstrim: '0.2.1' },
+      harnessVersions: { codex: '9.9.9' },
+      providerVersions: { harnesstrim: '9.9.9' },
     });
     const target = guideSetupTarget(doctor, 'codex', 'harnesstrim');
-    assert.equal(target.state, 'unavailable');
-    assert.match(target.reason, /not reviewed/i);
+    assert.equal(target.state, 'actionable');
+    assert.match(target.reason, /transactionally/i);
+    assert.doesNotMatch(target.reason, /reviewed|version combination/i);
   });
 
   it('moves Codex HarnessTrim from actionable to connected after apply', async () => {
