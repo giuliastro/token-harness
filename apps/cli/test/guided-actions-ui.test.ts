@@ -30,7 +30,7 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /Optional optimizers stay separate/);
     assert.match(GUIDE_JS, /Apply recommended setup/);
     assert.match(GUIDE_JS, /No automatic setup/);
-    assert.match(GUIDE_JS, /Token Harness will not offer a no-op setup button/);
+    assert.match(GUIDE_JS, /Token Harness will not offer a no-op button/);
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
@@ -39,7 +39,7 @@ describe('guided setup UX', () => {
       /request\('\/api\/preview', \{\s*action: 'setup',\s*harness: agentId,\s*\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\),\s*\}\)/,
     );
     assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
-    assert.match(GUIDE_JS, /backups, compatibility checks, ownership checks and rollback/i);
+    assert.match(GUIDE_JS, /transactional engine with backups, ownership checks and rollback/i);
     assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 
