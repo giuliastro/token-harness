@@ -224,8 +224,13 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return Boolean(component?.configuredHarnesses?.includes(agentId));
   }
 
+  function baselineProvidersFor(agentId) {
+    return agentId === 'claude' ? ['rtk', 'harnesstrim'] : agentId === 'codex' ? ['harnesstrim'] : [];
+  }
+
   function baselineReadyFor(agentId) {
-    return componentConfiguredFor('rtk', agentId) && componentConfiguredFor('harnesstrim', agentId);
+    const required = baselineProvidersFor(agentId);
+    return required.length > 0 && required.every(providerId => componentConfiguredFor(providerId, agentId));
   }
 
   function baselineIncompleteAgents() {
@@ -233,7 +238,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function providerSupportsAgent(providerId, agentId) {
-    if (providerId === 'gitnexus') return agentId === 'claude';
+    if (providerId === 'rtk' || providerId === 'gitnexus') return agentId === 'claude';
     return agentId === 'claude' || agentId === 'codex';
   }
 
@@ -427,6 +432,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
 
     const actions = node('div', undefined, 'inline-actions');
+    if (!info.optional) {
+      for (const agent of activeAgents()) {
+        if (!providerSupportsAgent(id, agent.id)) continue;
+        if (!component?.configuredHarnesses?.includes(agent.id))
+          actions.append(
+            actionButton(
+              (component?.installed ? 'Connect to ' : 'Set up for ') + agent.name,
+              () => reviewSetup(agent.id, id),
+              'secondary',
+            ),
+          );
+      }
+    }
     if (info.optional) {
       for (const agent of activeAgents()) {
         if (!providerSupportsAgent(id, agent.id)) continue;
@@ -479,8 +497,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node(
           'p',
           ready
-            ? 'RTK + HarnessTrim are configured for this coding agent.'
-            : 'The agent is detected. Finish the recommended RTK + HarnessTrim setup to complete onboarding.',
+            ? baselineProvidersFor(agent.id).map(id => TOOL_INFO[id].name).join(' + ') + ' are configured for this coding agent.'
+            : 'The agent is detected. Finish the recommended ' + baselineProvidersFor(agent.id).map(id => TOOL_INFO[id].name).join(' + ') + ' setup to complete onboarding.',
         ),
       );
       if (agent.providers?.length)
@@ -548,7 +566,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This approval covers only RTK + HarnessTrim for ' + agent.name + '. Optional optimizers stay separate.',
+              : 'This approval covers only the recommended baseline supported by ' + agent.name + ': ' + baselineProvidersFor(agent.id).map(id => TOOL_INFO[id].name).join(' + ') + '. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length)
@@ -593,12 +611,26 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return;
       $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
-      $('modal-content').replaceChildren(messageBox(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'));
-      $('modal-content').append(node('p', 'The dashboard is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
-      $('stale-state').hidden = false;
-      $('stale-state').textContent = 'A setup change was applied. Displayed status is the previous state until you choose Refresh.';
+      $('modal-content').replaceChildren(
+        messageBox(result.ok ? 'Applied' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'),
+        progress('Refreshing current state', 'Please wait while Token Harness re-reads agents, optimizer connections and versions.'),
+      );
+      $('modal-actions').replaceChildren(modalClose('Refreshing…', true));
+      setStatus('Applying changes finished. Refreshing current configuration…', true);
+      const period = $('period').value;
+      current = await request('/api/overview?period=' + encodeURIComponent(period) + '&refresh=1');
+      periodCache.set(period, current);
+      $('stale-state').hidden = true;
+      $('stale-state').textContent = '';
+      render();
+      await loadActivity();
+      if (run !== modalRun) return;
+      $('modal-content').replaceChildren(
+        messageBox(result.ok ? 'Completed and refreshed' : 'Refreshed after attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'),
+        node('p', 'The status shown behind this dialog is now current.', 'caption'),
+      );
       $('modal-actions').replaceChildren(modalClose('Done'));
-      loadActivity();
+      setStatus('Configuration refreshed at ' + new Date(current.generatedAt).toLocaleTimeString() + '.', false);
     } catch (error) {
       if (run !== modalRun) return;
       $('modal-error').textContent = error.message;
