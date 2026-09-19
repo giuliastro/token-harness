@@ -913,7 +913,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           `${entry.providerVersion !== null ? ` at ${entry.providerVersion}` : ''}: ` +
           `${entry.missing}`,
         remediation:
-          'Add a compatibility row whose fixture proves this combination, or configure this integration by hand',
+          'Restore the provider runtime capability required for this managed integration, or configure it by hand',
       }),
     );
   }
