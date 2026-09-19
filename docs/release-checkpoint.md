@@ -1,11 +1,15 @@
 # Release checkpoint — 2026-09-19
 
-Token Harness `0.1.14` is the next incremental stable release candidate.
+Token Harness `0.1.15` is the next incremental stable release candidate.
 
-PR #322 merged to `main` as `46f8165dfa9fbdc145def641027c80ef393c32b0` after the final CI run `35430799095` passed on Ubuntu, macOS and Windows and Headroom managed compatibility smoke `35430799108` passed all config/package checks. It fixes the guided setup dead end reported from real use: **Finish setup** now plans RTK and HarnessTrim explicitly for the selected coding agent, and baseline cards expose a direct setup/connect action when an installed optimizer is not connected.
+PR #324 merged to `main` as `6bad1b5d932d5a953a2881b6179965921d12cae5` after CI run `35433245433` passed on Ubuntu, macOS and Windows and Headroom managed compatibility smoke `35433245436` passed all platforms.
 
-The same patch removes stale post-action UI behavior. After an approved setup/update/removal action, Token Harness now keeps the dialog busy, shows refresh progress, re-reads the current setup automatically, and updates the visible state before returning control. Manual Refresh remains only as a fallback when the automatic re-read fails. Duplicate no-change notices were also removed.
+This release fixes the guided setup model rather than only its button wiring. Setup availability is now derived from the provider's real detected assignability plus the exact reviewed provider × agent-version × platform compatibility admission. The browser no longer assumes RTK is configurable for Codex, no longer assumes every provider supports every coding agent, and no longer shows **Finish setup** or **Connect to …** when the backend cannot produce a reviewed automatic change.
 
-No provider compatibility row, ownership boundary, transaction rule, measurement claim or rollback behavior is widened by this release. The existing preview → approval → apply model, backups, compatibility checks, ownership checks and fail-closed handling of unsupported/unreviewed versions remain unchanged.
+A recommended-agent card is marked **Setup incomplete** only when at least one concrete recommended setup action is actionable. Unsupported or unreviewed combinations are shown as unavailable instead of unfinished. Provider cards distinguish **setup available** from **no automatic setup**, and explain why a Connect button is absent.
 
-Release preparation aligns the workspace, publishable CLI and embedded tool version at `0.1.14`. The release may proceed only after the release-prep PR itself passes the full cross-platform CI and installed-package smoke gates. After that PR merges, create `release/v0.1.14` from the exact release-prep merge commit; the existing release bridge will create `v0.1.14`, dispatch the trusted release workflow, attest the tarball/SBOM, publish to npm through OIDC trusted publishing, and create the GitHub Release.
+Coverage now includes a stateful Codex + HarnessTrim path that verifies actionable → preview → apply → re-observe → connected and confirms the setup action is gone afterward. It also asserts RTK is never planned for Codex and exact unreviewed version combinations do not advertise setup controls.
+
+No compatibility row was widened. Existing preview → approval → apply transactions, ownership checks, backups, rollback and fail-closed compatibility behavior remain unchanged.
+
+Release preparation aligns workspace, publishable CLI and embedded version at `0.1.15`. After this release-prep PR is green and merged, create `release/v0.1.15` from its exact merge commit; the existing release bridge will create the immutable tag, dispatch the trusted release workflow, attest the tarball/SBOM, publish to npm via OIDC trusted publishing, and create the GitHub Release.
