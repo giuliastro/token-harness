@@ -520,6 +520,17 @@ describe('the machine-readable capability declaration (item 43a)', () => {
     assert.match(warning.message, /0\.1\.0/);
   });
 
+  it('reports missing runtime skill digests on modern HarnessTrim releases', () => {
+    const capabilities = parsedCapabilities();
+    capabilities.version = '0.4.0';
+    delete capabilities.digests;
+    const warnings = compareCapabilities(harnesstrimAdapter.manifest, capabilities);
+    const warning = warnings.find((entry) => /artifact digests/.test(entry.message));
+    assert.ok(warning);
+    assert.match(warning.message, /HarnessTrim 0\.4\.0/);
+    assert.match(warning.message, /managed install contract/);
+  });
+
   it('reports a reviewed path the write set no longer covers', async () => {
     const capabilities = parsedCapabilities();
     const claude = capabilities.harnesses['claude'];
@@ -1202,33 +1213,6 @@ describe('planning', () => {
       verification.checks.find((check) => check.id === 'integration-configured')?.status,
       'pass',
     );
-  });
-
-  it('refuses a modern HarnessTrim build that drops the runtime skill digest contract', async () => {
-    const skill = '# Future HarnessTrim skill\n';
-    const parsed = JSON.parse(dynamicCapabilities('0.4.0', skill)) as {
-      digests?: Record<string, Record<string, string>>;
-    };
-    delete parsed.digests;
-    const capabilities = JSON.stringify(parsed);
-    const ctx = context({ version: '0.4.0', capabilities });
-
-    const detection = await harnesstrimAdapter.detect(ctx);
-    assert.equal(detection.versionVerdict, 'unknown-newer');
-    assert.equal(
-      detection.assignableHarnesses.includes('claude' as never),
-      false,
-    );
-    assert.ok(
-      detection.warnings.some((warning) => warning.code === 'provider-capabilities-drift'),
-    );
-
-    const result = await harnesstrimAdapter.plan(ctx, {
-      ownership: [],
-      harnesses: [claudeAdapter.manifest],
-      desiredState: 'configured',
-    });
-    assert.equal(result.actions.length, 0);
   });
 
   it('plans removal of the reviewed skills only when Claude Code is in scope', async () => {
