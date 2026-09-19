@@ -18,6 +18,7 @@ import {
 import {
   GuideService,
   GuideError,
+  guideSetupTarget,
   savingsView,
   explainGuideIssue,
   reasoningView,
@@ -27,24 +28,65 @@ import { createGuideHandler } from '../src/guided-http.js';
 import { GUIDE_JS, GUIDE_HTML, GUIDE_CSS } from '../src/guided-assets.js';
 
 const platform = {
-  os: 'linux',
+  os: 'windows',
   osDisplayName: 'test',
   arch: 'x64',
   nodeVersion: '22.13.0',
   isWsl: false,
 } as const;
+const linuxPlatform = { ...platform, os: 'linux', osDisplayName: 'Linux' } as const;
 function envelope<T>(command: string, data: T, exitCode: 0 | 5 = 0): CliEnvelope<T> {
   return toEnvelope(commandResult({ command, data, exitCode }), 'test');
 }
-function inventory(ids = ['claude', 'codex']): DoctorReport {
+function inventory(
+  ids = ['claude', 'codex'],
+  options: {
+    platform?: DoctorReport['platform'];
+    configured?: Partial<Record<'rtk' | 'harnesstrim' | 'gitnexus', string[]>>;
+    providerVersions?: Partial<Record<'rtk' | 'harnesstrim' | 'gitnexus', string>>;
+    harnessVersions?: Partial<Record<'claude' | 'codex', string>>;
+  } = {},
+): DoctorReport {
+  const configured = options.configured ?? {};
+  const providerVersions = options.providerVersions ?? {};
+  const harnessVersions = options.harnessVersions ?? {};
+  const provider = (
+    id: 'rtk' | 'harnesstrim' | 'gitnexus',
+    assignableHarnesses: string[],
+  ) => {
+    const configuredHarnesses = (configured[id] ?? []).map(harnessId);
+    return {
+      providerId: providerId(id),
+      state: configuredHarnesses.length > 0 ? ('configured' as const) : ('installed' as const),
+      version:
+        providerVersions[id] ??
+        (id === 'rtk' ? '0.44.0' : id === 'harnesstrim' ? '0.1.0' : '1.6.12'),
+      executable: '/private/' + id,
+      installationChannel: null,
+      versionVerdict: 'in-range' as const,
+      configuredHarnesses,
+      unmanagedHarnessesConfigured: [],
+      supportsUnmanagedHarnesses: id === 'harnesstrim',
+      managedByTokenHarness: false,
+      assignableHarnesses: assignableHarnesses.map(harnessId),
+      evidence: [],
+      warnings: [],
+    };
+  };
   return {
-    platform,
+    platform: options.platform ?? platform,
     problemCount: 0,
-    providers: [],
+    providers: [
+      provider('rtk', ['claude']),
+      provider('harnesstrim', ['claude', 'codex']),
+      provider('gitnexus', ['claude']),
+    ],
     harnesses: ids.map((id) => ({
       harnessId: harnessId(id),
       state: 'configured',
-      version: '2.1.261',
+      version:
+        harnessVersions[id as 'claude' | 'codex'] ??
+        (id === 'claude' ? '2.1.220' : '0.146.0'),
       versionVerdict: 'in-range',
       configPath: '/private/settings.json',
       declaredVerificationTier: 'config-only',
@@ -96,7 +138,7 @@ function plan(id: string): PlanReport {
     persisted: true,
   };
 }
-function fixture(input: { failSecond?: boolean; ids?: string[] } = {}) {
+function fixture(input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {}) {
   const calls: string[][] = [];
   let clock = 0,
     sequence = 0,
@@ -105,7 +147,7 @@ function fixture(input: { failSecond?: boolean; ids?: string[] } = {}) {
     calls.push([...args]);
     let data: unknown = null;
     const command = args[0] ?? '';
-    if (command === 'doctor') data = inventory(input.ids);
+    if (command === 'doctor') data = input.doctor ?? inventory(input.ids);
     if (command === 'context') data = { harnesses: [], instructions: [] };
     if (command === 'budget') data = { harnesses: [] };
     if (command === 'status') data = { problemCount: 0 };
@@ -164,21 +206,28 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it('plans the recommended baseline as explicit RTK and HarnessTrim changes for one agent', async () => {
-    const { service, calls } = fixture({ ids: ['codex'] });
+  it('never plans an RTK connection for Codex and only previews the actionable baseline target', async () => {
+    const doctor = inventory(['codex']);
+    assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'not-applicable');
+    assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
+
+    const { service, calls } = fixture({ ids: ['codex'], doctor });
     const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.notEqual(preview.ticket, null);
-    assert.deepEqual(
-      calls.filter((args) => args[0] === 'plan'),
-      [
-        ['plan', '--harness', 'codex', '--provider', 'rtk'],
-        ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
-      ],
-    );
+    assert.deepEqual(calls.filter((args) => args[0] === 'plan'), [
+      ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
+    ]);
   });
 
-  it('scopes optional managed setup to the explicitly selected provider', async () => {
-    const { service, calls } = fixture({ ids: ['claude'] });
+  it('shows an optional provider setup only on an exact reviewed provider/harness/platform row', async () => {
+    const doctor = inventory(['claude'], {
+      platform: linuxPlatform,
+      harnessVersions: { claude: '2.1.269' },
+      providerVersions: { gitnexus: '1.6.12' },
+    });
+    assert.equal(guideSetupTarget(doctor, 'claude', 'gitnexus').state, 'actionable');
+
+    const { service, calls } = fixture({ ids: ['claude'], doctor });
     const preview = await service.preview({
       action: 'setup',
       harness: 'claude',
@@ -188,6 +237,78 @@ describe('guided workflow', () => {
     assert.deepEqual(
       calls.find((args) => args[0] === 'plan'),
       ['plan', '--harness', 'claude', '--provider', 'gitnexus'],
+    );
+  });
+
+  it('marks unsupported exact versions unavailable instead of advertising a setup action', () => {
+    const doctor = inventory(['codex'], {
+      platform: linuxPlatform,
+      harnessVersions: { codex: '0.153.0' },
+      providerVersions: { harnesstrim: '0.2.1' },
+    });
+    const target = guideSetupTarget(doctor, 'codex', 'harnesstrim');
+    assert.equal(target.state, 'unavailable');
+    assert.match(target.reason, /not reviewed/i);
+  });
+
+  it('moves an actionable Codex HarnessTrim setup to connected after apply and re-observation', async () => {
+    let connected = false;
+    let sequence = 0;
+    const calls: string[][] = [];
+    const doctor = () =>
+      inventory(['codex'], {
+        platform: linuxPlatform,
+        harnessVersions: { codex: '0.152.1' },
+        providerVersions: { harnesstrim: '0.2.1' },
+        configured: connected ? { harnesstrim: ['codex'] } : {},
+      });
+    const call: GuideCall = async <T>(args: readonly string[]) => {
+      calls.push([...args]);
+      const command = args[0] ?? '';
+      let data: unknown = null;
+      if (command === 'doctor') data = doctor();
+      if (command === 'context') data = { harnesses: [], instructions: [] };
+      if (command === 'budget') data = { harnesses: [] };
+      if (command === 'status') data = { problemCount: 0, drift: [] };
+      if (command === 'plan') {
+        assert.deepEqual(args, ['plan', '--harness', 'codex', '--provider', 'harnesstrim']);
+        data = plan('stateful-' + ++sequence);
+      }
+      if (command === 'apply') {
+        connected = true;
+        data = { outcome: 'committed' };
+      }
+      if (command === 'verify') data = verification();
+      return envelope(command, data as T);
+    };
+    const service = new GuideService(call, () => 0, () => 'stateful-ticket');
+
+    const before = await service.overview('all', true);
+    const beforeCodex = before.agents.find((agent) => agent.id === 'codex');
+    assert.equal(
+      beforeCodex?.setup.find((target) => target.providerId === 'rtk')?.state,
+      'not-applicable',
+    );
+    assert.equal(
+      beforeCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
+      'actionable',
+    );
+
+    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    assert.ok(preview.ticket);
+    assert.equal(calls.some((args) => args.includes('rtk')), false);
+    const applied = await service.apply({ ticket: preview.ticket });
+    assert.equal(applied.ok, true);
+
+    const after = await service.overview('all', true);
+    const afterCodex = after.agents.find((agent) => agent.id === 'codex');
+    assert.equal(
+      afterCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
+      'connected',
+    );
+    assert.equal(
+      afterCodex?.setup.some((target) => target.state === 'actionable'),
+      false,
     );
   });
 
@@ -220,7 +341,11 @@ describe('guided workflow', () => {
   it('undo requires a new review and is guarded by the exact last applied plan', async () => {
     const { service, calls } = fixture({ ids: ['claude'] });
     await assert.rejects(service.preview({ action: 'undo' }), /no change/);
-    const setup = await service.preview({ action: 'setup' });
+    const setup = await service.preview({
+      action: 'setup',
+      harness: 'claude',
+      provider: 'rtk',
+    });
     await service.apply({ ticket: setup.ticket });
     const undo = await service.preview({ action: 'undo' });
     assert.match(undo.changes[0]?.description ?? '', /manual edits/);
