@@ -80,7 +80,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this local app session.</p></div></div><section class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></section>
 </section>
 
-<footer><span>Local data. No account required.</span><span>Full overview refresh runs only when you choose Refresh.</span></footer>
+<footer><span>Local data. No account required.</span><span>After a configuration change, Token Harness refreshes the affected state automatically.</span></footer>
 </main>
 <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="modal-title">Review</h2></div><div id="modal-content"></div><div id="modal-error" class="error" role="alert" hidden></div><div id="modal-actions" class="dialog-actions"></div></div></dialog>
 <script src="/guide.js" defer></script></body></html>`;
