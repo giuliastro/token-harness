@@ -32,9 +32,11 @@ of CLI commands to memorize.
 The first screen is **Overview**. There is no separate Setup page to learn.
 
 1. Token Harness detects Claude Code and Codex.
-2. Each detected coding agent says either **Ready** or **Setup incomplete**.
-3. If setup is incomplete, choose **Finish setup** on that agent. Token Harness prepares the
-   recommended **RTK + HarnessTrim** baseline and shows the exact safe plan before anything changes.
+2. Each detected coding agent says either **Ready** or **Setup needs review**.
+3. Choose **Review setup** when the recommended baseline is not active. Token Harness derives that
+   baseline from what it can actually manage for the detected agent (for example, Codex is not
+   blocked waiting for an RTK integration this build cannot safely create), then shows the exact
+   safe plan or the concrete prerequisite before anything changes.
 4. The **Optimizers** section keeps the recommended baseline separate from optional tools
    (mcptoon, GitNexus and Headroom). When a tool needs an action, that action appears on the same
    card as the status it refers to.
@@ -55,13 +57,15 @@ Overview is both the first-run screen and the normal status screen. It keeps the
 separate:
 
 - **Coding agents** — currently Claude Code and Codex. Detection only means Token Harness can see the
-  agent; first-run setup is complete for that agent only when both RTK and HarnessTrim are connected.
+  agent. Readiness is evaluated against the recommended providers Token Harness can actually manage
+  for that agent; an unsupported optimizer/agent pair is never treated as an impossible missing step.
 - **Optimizers** — RTK and HarnessTrim are the recommended baseline. mcptoon, GitNexus and Headroom
   are optional reviewed integrations with narrower prerequisites and compatibility boundaries.
 
-The status at the top always answers what to do next. States such as **Setup incomplete**,
+The status at the top always answers what to do next. States such as **Setup needs review**,
 **Installed · not connected**, **Needs attention**, or **Update available** have their action beside
-the affected agent or optimizer instead of in a separate action list.
+the affected agent or optimizer when Token Harness has a reviewed path. If a prerequisite must be
+installed first, the review shows the exact reviewed command instead of a dead-end setup button.
 
 Overview also contains a compact **Measured impact** summary. Missing evidence is shown as unknown,
 never as zero savings.
@@ -117,10 +121,11 @@ not need to decide before every command whether an optimizer should run.
 Open `token-harness` when you want to inspect health/results, review a setup change, check an update,
 verify integrations or re-evaluate the stack after a meaningful version/configuration change.
 
-The app does not periodically reload the whole setup. A full read happens on initial open or when you
-choose **Refresh**. Existing readings remain visible while a refresh runs. Applying a reviewed change
-marks the displayed data as previous state instead of immediately launching another expensive full
-read.
+The app does not periodically reload the whole setup. A full read happens on initial open, when you
+choose **Refresh**, and automatically after a reviewed change finishes. During that post-change read
+the interface shows a progress indicator and keeps actions disabled; the resulting configuration is
+rendered as soon as it is available. Manual Refresh remains useful for changes made outside Token
+Harness.
 
 ## What counts as savings
 
