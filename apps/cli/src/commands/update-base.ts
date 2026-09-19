@@ -416,13 +416,16 @@ export async function runPackageChannelUpdate(
           continue;
         }
 
+        const capabilityProblem = detection.warnings.find(
+          (warning) =>
+            /capabilit/i.test(warning.code) &&
+            /(unavailable|drift|mismatch|unsupported)/i.test(warning.code),
+        );
+
         if (
           target.adapter.manifest.id === 'harnesstrim' &&
-          detection.versionVerdict !== 'in-range'
+          (detection.versionVerdict !== 'in-range' || capabilityProblem !== undefined)
         ) {
-          const drift = detection.warnings.find(
-            (warning) => warning.code === 'provider-capabilities-drift',
-          );
           postconditions.push(
             diagnostic({
               severity: 'error',
@@ -430,10 +433,30 @@ export async function runPackageChannelUpdate(
               subject: target.adapter.manifest.id,
               message:
                 `HarnessTrim ${target.target} was installed, but its machine-readable capability/artifact contract did not pass Token Harness validation` +
-                (drift === undefined ? '' : `: ${drift.message}`),
+                (capabilityProblem === undefined ? '' : `: ${capabilityProblem.message}`),
               path: detection.executable,
               remediation:
                 'Keep the previous working HarnessTrim release until the changed contract is understood.',
+            }),
+          );
+          continue;
+        }
+
+        if (
+          ['mcptoon', 'gitnexus', 'headroom'].includes(target.adapter.manifest.id) &&
+          (detection.assignableHarnesses.length === 0 || capabilityProblem !== undefined)
+        ) {
+          postconditions.push(
+            diagnostic({
+              severity: 'error',
+              code: 'provider-update-capability-unavailable',
+              subject: target.adapter.manifest.id,
+              message:
+                `${target.providerId} ${target.target} became active on PATH, but the installed build no longer exposes the runtime capability surface required by Token Harness` +
+                (capabilityProblem === undefined ? '' : `: ${capabilityProblem.message}`),
+              path: detection.executable,
+              remediation:
+                'Keep the previous working provider release until the changed CLI capability surface is understood.',
             }),
           );
           continue;
