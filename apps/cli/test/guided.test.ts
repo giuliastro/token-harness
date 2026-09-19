@@ -54,10 +54,7 @@ function inventory(
   const configured = options.configured ?? {};
   const providerVersions = options.providerVersions ?? {};
   const harnessVersions = options.harnessVersions ?? {};
-  const provider = (
-    id: 'rtk' | 'harnesstrim' | 'gitnexus',
-    assignableHarnesses: string[],
-  ) => {
+  const provider = (id: 'rtk' | 'harnesstrim' | 'gitnexus', assignableHarnesses: string[]) => {
     const configuredHarnesses = (configured[id] ?? []).map(harnessId);
     return {
       providerId: providerId(id),
@@ -89,8 +86,7 @@ function inventory(
       harnessId: harnessId(id),
       state: 'configured',
       version:
-        harnessVersions[id as 'claude' | 'codex'] ??
-        (id === 'claude' ? '2.1.220' : '0.146.0'),
+        harnessVersions[id as 'claude' | 'codex'] ?? (id === 'claude' ? '2.1.220' : '0.146.0'),
       versionVerdict: 'in-range',
       configPath: '/private/settings.json',
       declaredVerificationTier: 'config-only',
@@ -142,9 +138,7 @@ function plan(id: string): PlanReport {
     persisted: true,
   };
 }
-function fixture(
-  input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {},
-) {
+function fixture(input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {}) {
   const calls: string[][] = [];
   let clock = 0,
     sequence = 0,
@@ -220,9 +214,10 @@ describe('guided workflow', () => {
     const { service, calls } = fixture({ ids: ['codex'], doctor });
     const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.notEqual(preview.ticket, null);
-    assert.deepEqual(calls.filter((args) => args[0] === 'plan'), [
-      ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
-    ]);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
   });
 
   it('requires an exact reviewed row for optional provider setup', async () => {
@@ -277,13 +272,7 @@ describe('guided workflow', () => {
       if (command === 'budget') data = { harnesses: [] };
       if (command === 'status') data = { problemCount: 0, drift: [] };
       if (command === 'plan') {
-        assert.deepEqual(args, [
-          'plan',
-          '--harness',
-          'codex',
-          '--provider',
-          'harnesstrim',
-        ]);
+        assert.deepEqual(args, ['plan', '--harness', 'codex', '--provider', 'harnesstrim']);
         data = plan('stateful-' + ++sequence);
       }
       if (command === 'apply') {
@@ -293,7 +282,11 @@ describe('guided workflow', () => {
       if (command === 'verify') data = verification();
       return envelope(command, data as T);
     };
-    const service = new GuideService(call, () => 0, () => 'stateful-ticket');
+    const service = new GuideService(
+      call,
+      () => 0,
+      () => 'stateful-ticket',
+    );
 
     const before = await service.overview('all', true);
     const beforeCodex = before.agents.find((agent) => agent.id === 'codex');
@@ -308,7 +301,10 @@ describe('guided workflow', () => {
 
     const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.ok(preview.ticket);
-    assert.equal(calls.some((args) => args.includes('rtk')), false);
+    assert.equal(
+      calls.some((args) => args.includes('rtk')),
+      false,
+    );
     const applied = await service.apply({ ticket: preview.ticket });
     assert.equal(applied.ok, true);
 
@@ -318,7 +314,10 @@ describe('guided workflow', () => {
       afterCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
       'connected',
     );
-    assert.equal(afterCodex?.setup.some((target) => target.state === 'actionable'), false);
+    assert.equal(
+      afterCodex?.setup.some((target) => target.state === 'actionable'),
+      false,
+    );
   });
 
   it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {
