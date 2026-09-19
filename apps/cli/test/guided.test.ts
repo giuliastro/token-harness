@@ -34,7 +34,11 @@ const platform = {
   nodeVersion: '22.13.0',
   isWsl: false,
 } as const;
-const linuxPlatform = { ...platform, os: 'linux', osDisplayName: 'Linux' } as const;
+const linuxPlatform = {
+  ...platform,
+  os: 'linux',
+  osDisplayName: 'Linux',
+} as const;
 function envelope<T>(command: string, data: T, exitCode: 0 | 5 = 0): CliEnvelope<T> {
   return toEnvelope(commandResult({ command, data, exitCode }), 'test');
 }
@@ -138,7 +142,9 @@ function plan(id: string): PlanReport {
     persisted: true,
   };
 }
-function fixture(input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {}) {
+function fixture(
+  input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {},
+) {
   const calls: string[][] = [];
   let clock = 0,
     sequence = 0,
@@ -206,7 +212,9 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it('never plans an RTK connection for Codex and only previews the actionable baseline target', async () => {
+  it(
+    'never plans an RTK connection for Codex and only previews the actionable baseline target',
+    async () => {
     const doctor = inventory(['codex']);
     assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'not-applicable');
     assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
@@ -217,9 +225,12 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.filter((args) => args[0] === 'plan'), [
       ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
     ]);
-  });
+    },
+  );
 
-  it('shows an optional provider setup only on an exact reviewed provider/harness/platform row', async () => {
+  it(
+    'shows an optional provider setup only on an exact reviewed provider/harness/platform row',
+    async () => {
     const doctor = inventory(['claude'], {
       platform: linuxPlatform,
       harnessVersions: { claude: '2.1.269' },
@@ -238,7 +249,8 @@ describe('guided workflow', () => {
       calls.find((args) => args[0] === 'plan'),
       ['plan', '--harness', 'claude', '--provider', 'gitnexus'],
     );
-  });
+    },
+  );
 
   it('marks unsupported exact versions unavailable instead of advertising a setup action', () => {
     const doctor = inventory(['codex'], {
@@ -251,7 +263,9 @@ describe('guided workflow', () => {
     assert.match(target.reason, /not reviewed/i);
   });
 
-  it('moves an actionable Codex HarnessTrim setup to connected after apply and re-observation', async () => {
+  it(
+    'moves an actionable Codex HarnessTrim setup to connected after apply and re-observation',
+    async () => {
     let connected = false;
     let sequence = 0;
     const calls: string[][] = [];
@@ -271,7 +285,13 @@ describe('guided workflow', () => {
       if (command === 'budget') data = { harnesses: [] };
       if (command === 'status') data = { problemCount: 0, drift: [] };
       if (command === 'plan') {
-        assert.deepEqual(args, ['plan', '--harness', 'codex', '--provider', 'harnesstrim']);
+        assert.deepEqual(args, [
+          'plan',
+          '--harness',
+          'codex',
+          '--provider',
+          'harnesstrim',
+        ]);
         data = plan('stateful-' + ++sequence);
       }
       if (command === 'apply') {
@@ -306,11 +326,9 @@ describe('guided workflow', () => {
       afterCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
       'connected',
     );
-    assert.equal(
-      afterCodex?.setup.some((target) => target.state === 'actionable'),
-      false,
-    );
-  });
+    assert.equal(afterCodex?.setup.some((target) => target.state === 'actionable'), false);
+    },
+  );
 
   it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {
     const { service, advance } = fixture();
