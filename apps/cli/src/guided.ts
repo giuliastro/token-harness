@@ -1285,15 +1285,16 @@ export class GuideService {
           `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
           'working',
         );
-        let setupProviders: Array<string | null> = [null];
-        if (
-          data['action'] === 'setup' &&
-          data['provider'] === undefined &&
-          data['harness'] !== undefined
-        )
-          setupProviders = ['rtk', 'harnesstrim'];
-        else if (data['action'] === 'setup' && data['provider'] !== undefined)
-          setupProviders = [String(data['provider'])];
+        const setupProviders: Array<string | null> = [];
+        if (data['action'] === 'setup' && data['harness'] !== undefined) {
+          if (data['provider'] === undefined) {
+            setupProviders.push('rtk', 'harnesstrim');
+          } else {
+            setupProviders.push(String(data['provider']));
+          }
+        } else {
+          setupProviders.push(null);
+        }
         for (const setupProvider of setupProviders) {
           const args = ['plan', '--harness', agent.harnessId];
           if (setupProvider !== null) args.push('--provider', setupProvider);
