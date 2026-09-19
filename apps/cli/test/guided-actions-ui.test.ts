@@ -51,7 +51,10 @@ describe('guided setup UX', () => {
   });
 
   it('uses provider-specific recommended baselines and exposes remediation actions', () => {
-    assert.match(GUIDE_JS, /agentId === 'claude' \? \['rtk', 'harnesstrim'\] : agentId === 'codex' \? \['harnesstrim'\]/);
+    assert.match(
+      GUIDE_JS,
+      /agentId === 'claude' \? \['rtk', 'harnesstrim'\] : agentId === 'codex' \? \['harnesstrim'\]/,
+    );
     assert.match(GUIDE_JS, /providerId === 'rtk' \|\| providerId === 'gitnexus'/);
     assert.match(GUIDE_JS, /'Connect to '.*agent\.name/);
   });
