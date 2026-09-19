@@ -652,6 +652,21 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           wsl: context.platform.isWsl,
         });
         if (admission.state !== 'admitted') {
+          const dynamicallyAssignable =
+            assignable.get(adapter.manifest.id)?.has(harness) === true;
+          if (dynamicallyAssignable) {
+            diagnostics.push(
+              diagnostic({
+                severity: 'info',
+                code: 'managed-mutation-forward-compatible',
+                subject: adapter.manifest.id,
+                message:
+                  `${adapter.manifest.displayName} declares that it can configure ${harness} on the installed build. Token Harness will use the normal transactional apply path and verify the resulting state even though this exact version tuple is newer than the recorded compatibility evidence.`,
+                remediation: null,
+              }),
+            );
+            continue;
+          }
           admitted = false;
           blocked.push({
             provider: adapter.manifest.id,
