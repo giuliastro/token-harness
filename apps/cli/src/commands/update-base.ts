@@ -291,8 +291,7 @@ export async function runPackageChannelUpdate(
         severity: 'info',
         code: 'provider-update-target-unreviewed',
         message: `${blocked.providerId} ${blocked.target} is available but does not meet the provider update prerequisites; keeping ${blocked.installed ?? 'the installed version'}`,
-        remediation:
-          'Check the provider update floor or version format, then retry the update',
+        remediation: 'Check the provider update floor or version format, then retry the update',
       }),
     );
     diagnostics.push(
@@ -406,8 +405,7 @@ export async function runPackageChannelUpdate(
               severity: 'error',
               code: 'provider-update-version-not-observed',
               subject: target.adapter.manifest.id,
-              message:
-                `${target.providerId} update did not become active: requested ${target.target}, but the executable currently resolved on PATH reports ${detection.version ?? 'no readable version'}`,
+              message: `${target.providerId} update did not become active: requested ${target.target}, but the executable currently resolved on PATH reports ${detection.version ?? 'no readable version'}`,
               path: detection.executable,
               remediation:
                 'Review duplicate PATH installations. Token Harness will not report this update as successful while the old executable is still the one being resolved.',
