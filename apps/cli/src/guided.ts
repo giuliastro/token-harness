@@ -33,7 +33,12 @@ import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.j
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
-export type GuideManagedProvider = 'rtk' | 'harnesstrim' | 'mcptoon' | 'gitnexus' | 'headroom';
+export type GuideManagedProvider =
+  | 'rtk'
+  | 'harnesstrim'
+  | 'mcptoon'
+  | 'gitnexus'
+  | 'headroom';
 export type GuideSetupTargetState =
   | 'connected'
   | 'actionable'
@@ -232,7 +237,10 @@ const GUIDE_MANAGED_PROVIDERS: readonly GuideManagedProvider[] = [
   'gitnexus',
   'headroom',
 ];
-const RECOMMENDED_SETUP_PROVIDERS: readonly GuideManagedProvider[] = ['rtk', 'harnesstrim'];
+const RECOMMENDED_SETUP_PROVIDERS: readonly GuideManagedProvider[] = [
+  'rtk',
+  'harnesstrim',
+];
 
 export function guideSetupTarget(
   report: DoctorReport,
@@ -275,7 +283,9 @@ export function guideSetupTarget(
       providerId: provider,
       provider: label,
       state: 'not-applicable',
-      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(harness)}.`,
+      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(
+        harness,
+      )}.`,
     };
   }
   if (detection.state === 'absent' || detection.state === 'available') {
@@ -299,7 +309,9 @@ export function guideSetupTarget(
       providerId: provider,
       provider: label,
       state: 'unavailable',
-      reason: `The installed ${label} build does not expose a reviewed automatic setup for ${name(harness)}.`,
+      reason: `The installed ${label} build does not expose a reviewed automatic setup for ${name(
+        harness,
+      )}.`,
     };
   }
 
@@ -316,18 +328,25 @@ export function guideSetupTarget(
       providerId: provider,
       provider: label,
       state: 'unavailable',
-      reason: `Automatic ${label} setup is not reviewed for the installed ${name(harness)} / ${label} version combination on ${report.platform.os}.`,
+      reason: `Automatic ${label} setup is not reviewed for the installed ${name(
+        harness,
+      )} / ${label} version combination on ${report.platform.os}.`,
     };
   }
   return {
     providerId: provider,
     provider: label,
     state: 'actionable',
-    reason: `${label} can be configured automatically for ${name(harness)} with the reviewed transaction path.`,
+    reason: `${label} can be configured automatically for ${name(
+      harness,
+    )} with the reviewed transaction path.`,
   };
 }
 
-function guideSetupTargets(report: DoctorReport, harness: GuideHarness): GuideSetupTarget[] {
+function guideSetupTargets(
+  report: DoctorReport,
+  harness: GuideHarness,
+): GuideSetupTarget[] {
   return GUIDE_MANAGED_PROVIDERS.map((provider) => guideSetupTarget(report, harness, provider));
 }
 
@@ -1425,11 +1444,7 @@ export class GuideService {
             const target =
               inventory.data === null
                 ? null
-                : guideSetupTarget(
-                    inventory.data,
-                    agent.harnessId as GuideHarness,
-                    setupProvider,
-                  );
+                : guideSetupTarget(inventory.data, agent.harnessId as GuideHarness, setupProvider);
             if (target?.state === 'actionable') {
               setupProviders.push(setupProvider);
             } else if (target?.state === 'connected') {
