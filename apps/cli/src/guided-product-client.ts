@@ -599,7 +599,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'Safe preview first',
         provider
           ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + '. If setup is supported, the exact change appears before you confirm it.'
-          : 'Token Harness will prepare the recommended RTK + HarnessTrim setup for ' + agent.name + '. The exact files and changes appear before you confirm them.',
+          : 'Token Harness will prepare only the reviewed RTK/HarnessTrim changes that are actually available for ' + agent.name + ' on this version and platform. The exact files and changes appear before you confirm them.',
       ),
       messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
@@ -636,7 +636,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This approval covers only RTK + HarnessTrim for ' + agent.name + '. Optional optimizers stay separate.',
+              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Unsupported or already-complete baseline providers are left out. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length) {
