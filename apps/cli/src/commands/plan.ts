@@ -454,10 +454,9 @@ export interface ComputedPlan {
    */
   managedIntegrations: ManagedIntegration[];
   /**
-   * RFC 0009 §Compatibility matrix — managed mutations the gate refused, each with the missing
-   * config schema or provider fixture named. Present actions were dropped; the plan is empty and
-   * `runPlan` exits with the unsupported-environment code rather than propose what a row has not
-   * admitted.
+   * Managed mutations for which neither exact historical evidence nor a live assignable runtime
+   * surface is available. Present actions are dropped; `runPlan` exits with the
+   * unsupported-environment code when the missing capability leaves no safe managed path.
    */
   blocked: BlockedManagedMutation[];
 }
@@ -625,14 +624,12 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
       );
 
       /**
-       * RFC 0009 §Compatibility matrix — the managed-mutation gate.
+       * RFC 0009 compatibility rows are exact historical evidence, not a runtime permission list.
        *
-       * A provider plan is admitted as a whole only when every harness it would mutate is
-       * covered by a row for the observed provider × harness × version × platform combination.
-       * The harnesses are read from the scopes the resolver assigned, never from a wider list:
-       * gating a plan for a harness it does not touch would refuse a mutation that is not
-       * planned. A plan refused on any combination is dropped whole — proposing half of a
-       * mutation a row has not admitted is how a reviewer learns to trust the gate.
+       * Exact row evidence is accepted directly. When it is absent, a provider may still proceed
+       * if live detection explicitly marks this harness assignable. In either case the plan stays
+       * inside the same ownership, write-set, precondition, transaction and verification machinery.
+       * The harnesses are read from the scopes the resolver assigned, never from a wider list.
        */
       const touched =
         providerPlan.targetHarnesses !== undefined
