@@ -1314,6 +1314,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
   document.querySelectorAll('[data-view]').forEach(button => {
     button.addEventListener('click', () => selectView(button.dataset.view, true));
   });
+  window.tokenHarnessRefreshCurrentState = async () => {
+    await refresh(true);
+  };
   $('refresh').addEventListener('click', () => refresh(true));
   $('period').addEventListener('change', changePeriod);
   $('measurement-help').addEventListener('click', measurementHelp);
