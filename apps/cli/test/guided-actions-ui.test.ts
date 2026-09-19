@@ -18,7 +18,8 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_HTML, /managed agent support is not identical/);
     assert.match(GUIDE_JS, /Review recommended setup for /);
     assert.match(GUIDE_JS, /actionButton\('Review setup'/);
-    assert.match(GUIDE_JS, /'Connect to ' \+ agent\.name/);
+    assert.match(GUIDE_JS, /component\?\.installed \? 'Connect to ' : 'Set up for '/);
+    assert.match(GUIDE_JS, /\+ agent\.name/);
     assert.match(GUIDE_JS, /recommendedProviders/);
     assert.doesNotMatch(GUIDE_JS, /Setup incomplete/);
     assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
