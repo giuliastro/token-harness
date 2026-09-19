@@ -1215,7 +1215,10 @@ describe('planning', () => {
 
     const detection = await harnesstrimAdapter.detect(ctx);
     assert.equal(detection.versionVerdict, 'unknown-newer');
-    assert.equal(detection.assignableHarnesses.includes('claude' as never), false);
+    assert.equal(
+      detection.assignableHarnesses.includes('claude' as never),
+      false,
+    );
     assert.ok(
       detection.warnings.some((warning) => warning.code === 'provider-capabilities-drift'),
     );
