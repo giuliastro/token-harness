@@ -43,14 +43,17 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
   });
 
-  it('never automatically refreshes the whole overview after apply', () => {
-    assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
-    const applyStart = GUIDE_JS.indexOf('async function applyTicket(ticket)');
-    const manualRefresh = "$('refresh').addEventListener";
-    const refreshHandler = GUIDE_JS.indexOf(manualRefresh, applyStart);
-    assert.notEqual(applyStart, -1);
-    assert.notEqual(refreshHandler, -1);
-    assert.doesNotMatch(GUIDE_JS.slice(applyStart, refreshHandler), /refresh\(true\)/);
+  it('automatically refreshes current state after an approved mutation', () => {
+    assert.match(GUIDE_JS, /Refreshing current state/);
+    assert.match(GUIDE_JS, /\/api\/overview\?period=.*&refresh=1/);
+    assert.match(GUIDE_JS, /Completed and refreshed/);
+    assert.doesNotMatch(GUIDE_JS, /previous state until you choose Refresh/i);
+  });
+
+  it('uses provider-specific recommended baselines and exposes remediation actions', () => {
+    assert.match(GUIDE_JS, /agentId === 'claude' \? \['rtk', 'harnesstrim'\] : agentId === 'codex' \? \['harnesstrim'\]/);
+    assert.match(GUIDE_JS, /providerId === 'rtk' \|\| providerId === 'gitnexus'/);
+    assert.match(GUIDE_JS, /'Connect to '.*agent\.name/);
   });
 
   it('keeps advanced evaluation installation explicitly external and manual', () => {
