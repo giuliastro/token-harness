@@ -212,9 +212,7 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it(
-    'never plans an RTK connection for Codex and only previews the actionable baseline target',
-    async () => {
+  it('plans only actionable HarnessTrim setup for Codex', async () => {
     const doctor = inventory(['codex']);
     assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'not-applicable');
     assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
@@ -225,12 +223,9 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.filter((args) => args[0] === 'plan'), [
       ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
     ]);
-    },
-  );
+  });
 
-  it(
-    'shows an optional provider setup only on an exact reviewed provider/harness/platform row',
-    async () => {
+  it('requires an exact reviewed row for optional provider setup', async () => {
     const doctor = inventory(['claude'], {
       platform: linuxPlatform,
       harnessVersions: { claude: '2.1.269' },
@@ -249,8 +244,7 @@ describe('guided workflow', () => {
       calls.find((args) => args[0] === 'plan'),
       ['plan', '--harness', 'claude', '--provider', 'gitnexus'],
     );
-    },
-  );
+  });
 
   it('marks unsupported exact versions unavailable instead of advertising a setup action', () => {
     const doctor = inventory(['codex'], {
@@ -263,9 +257,7 @@ describe('guided workflow', () => {
     assert.match(target.reason, /not reviewed/i);
   });
 
-  it(
-    'moves an actionable Codex HarnessTrim setup to connected after apply and re-observation',
-    async () => {
+  it('moves Codex HarnessTrim from actionable to connected after apply', async () => {
     let connected = false;
     let sequence = 0;
     const calls: string[][] = [];
@@ -327,8 +319,7 @@ describe('guided workflow', () => {
       'connected',
     );
     assert.equal(afterCodex?.setup.some((target) => target.state === 'actionable'), false);
-    },
-  );
+  });
 
   it('rejects expired tickets, replacement previews, arbitrary commands and extra fields', async () => {
     const { service, advance } = fixture();
