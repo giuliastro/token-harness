@@ -41,7 +41,7 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>These are the harnesses Token Harness can configure today. A detected agent is not considered fully set up until the recommended RTK + HarnessTrim baseline is connected to it.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Token Harness shows setup actions only when it has a reviewed automatic change for that exact agent, provider version and platform. Unsupported combinations are shown as unavailable instead of as unfinished work.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
 <summary>Agent details and optional reasoning settings</summary>
