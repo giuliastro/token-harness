@@ -132,7 +132,7 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     const activeRun = runId;
     working = true;
     $('modal-actions').replaceChildren(closeButton('Applying…', true));
-    $('modal-content').append(progress('Applying the reviewed change', 'Only the approved transaction is being applied. Keep this window open until it finishes.'));
+    $('modal-content').append(progress('Applying the approved change', 'Only the approved transaction is being applied. Keep this window open until it finishes.'));
     try {
       const result = await request('/api/apply', { ticket });
       if (activeRun !== runId) return;
@@ -230,7 +230,7 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
       return preview(
         { action: 'skill', harness: action.harness },
         'Review in-session guidance for ' + (action.harness === 'claude' ? 'Claude Code' : 'Codex'),
-        'Enable reviewed guidance',
+        'Enable managed guidance',
         'Guidance enabled',
       );
     if (action.kind === 'refresh') return $('refresh')?.click();
@@ -319,7 +319,7 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
         actionButton('Review removal', () => preview(
           { action: 'remove', provider: component.providerId },
           'Review removal for ' + name,
-          'Remove reviewed integration',
+          'Remove managed integration',
           'Integration removed',
         ), 'secondary'),
       );
