@@ -135,11 +135,7 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
   // an exclusive surface, a version outside a tested range, or a verification
   // result below its declared tier". An installed-but-unwired provider is none
   // of those, so it does not count here.
-  const problemCount =
-    harnesses.filter(isBroken).length +
-    providers.filter(isBroken).length +
-    [...harnesses, ...providers].filter((detection) => detection.versionVerdict === 'unknown-newer')
-      .length;
+  const problemCount = harnesses.filter(isBroken).length + providers.filter(isBroken).length;
 
   /**
    * RFC 0009 §Compatibility matrix — no-row combinations are reported, not counted.
@@ -166,17 +162,19 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
         os: context.platform.os,
         wsl: context.platform.isWsl,
       });
-      if (admission.state === 'admitted') return [];
+      if (
+        admission.state === 'admitted' ||
+        detection.assignableHarnesses.includes(harness)
+      )
+        return [];
       return [
         diagnostic({
           severity: 'warning',
-          code: 'no-compatibility-row',
+          code: 'provider-surface-not-assignable',
           message:
-            `no compatibility row covers ${detection.providerId} on ${harness}` +
-            `${detection.version !== null ? ` at ${detection.version}` : ''} — ` +
-            `${admission.missing}`,
+            `${detection.providerId} is configured on ${harness}, but the currently installed provider build does not advertise that harness as an automatic setup target`,
           remediation:
-            'Add a compatibility row whose fixture proves this combination, or configure this integration by hand',
+            'Run the provider verification checks; keep the existing configuration if it is healthy, or update the provider if its automatic setup contract has changed',
         }),
       ];
     });
