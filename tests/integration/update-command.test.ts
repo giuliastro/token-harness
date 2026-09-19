@@ -531,7 +531,7 @@ describe('update', () => {
     );
   });
 
-  it('blocks an unreviewed future package target even when an old config row exists', async () => {
+  it('updates to a future RTK package target without requiring a new compatibility row', async () => {
     const result = await invoke(
       ['update', '--provider', 'rtk', '--yes'],
       world({ managedIntegrations: [{ providerId: 'rtk', harnessId: 'claude' }] }),
@@ -543,12 +543,13 @@ describe('update', () => {
     );
 
     assert.equal(result.exitCode, EXIT_CODES.ok);
-    assert.equal(row(result.data, 'rtk')?.verdict, 'blocked-unreviewed');
-    assert.equal(result.data?.execution?.outcome, 'nothing-to-do');
-    assert.ok(result.codes.includes('provider-update-target-unreviewed'));
-    assert.equal(
-      result.asked.some((line) => line.startsWith(`${CHANNEL} install`)),
-      false,
+    assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
+    assert.equal(result.data?.execution?.outcome, 'committed');
+    assert.equal(result.codes.includes('provider-update-target-unreviewed'), false);
+    assert.ok(
+      result.asked.some(
+        (line) => line.startsWith(`${CHANNEL} install`) && line.includes('--version 0.50.0'),
+      ),
       JSON.stringify(result.asked),
     );
   });
