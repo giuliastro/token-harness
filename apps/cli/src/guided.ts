@@ -33,17 +33,8 @@ import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.j
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
 export type GuideTask = 'mechanical' | 'standard' | 'hard' | 'critical';
-export type GuideManagedProvider =
-  | 'rtk'
-  | 'harnesstrim'
-  | 'mcptoon'
-  | 'gitnexus'
-  | 'headroom';
-export type GuideSetupTargetState =
-  | 'connected'
-  | 'actionable'
-  | 'unavailable'
-  | 'not-applicable';
+export type GuideManagedProvider = 'rtk' | 'harnesstrim' | 'mcptoon' | 'gitnexus' | 'headroom';
+export type GuideSetupTargetState = 'connected' | 'actionable' | 'unavailable' | 'not-applicable';
 export interface GuideSetupTarget {
   providerId: GuideManagedProvider;
   provider: string;
@@ -237,10 +228,7 @@ const GUIDE_MANAGED_PROVIDERS: readonly GuideManagedProvider[] = [
   'gitnexus',
   'headroom',
 ];
-const RECOMMENDED_SETUP_PROVIDERS: readonly GuideManagedProvider[] = [
-  'rtk',
-  'harnesstrim',
-];
+const RECOMMENDED_SETUP_PROVIDERS: readonly GuideManagedProvider[] = ['rtk', 'harnesstrim'];
 
 export function guideSetupTarget(
   report: DoctorReport,
@@ -283,9 +271,7 @@ export function guideSetupTarget(
       providerId: provider,
       provider: label,
       state: 'not-applicable',
-      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(
-        harness,
-      )}.`,
+      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(harness)}.`,
     };
   }
   if (detection.state === 'absent' || detection.state === 'available') {
@@ -343,10 +329,7 @@ export function guideSetupTarget(
   };
 }
 
-function guideSetupTargets(
-  report: DoctorReport,
-  harness: GuideHarness,
-): GuideSetupTarget[] {
+function guideSetupTargets(report: DoctorReport, harness: GuideHarness): GuideSetupTarget[] {
   return GUIDE_MANAGED_PROVIDERS.map((provider) => guideSetupTarget(report, harness, provider));
 }
 
@@ -1124,9 +1107,7 @@ export class GuideService {
       const usage = budget.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
       const observed = context.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
       const setup =
-        doctor.data === null
-          ? []
-          : guideSetupTargets(doctor.data, agent.harnessId as GuideHarness);
+        doctor.data === null ? [] : guideSetupTargets(doctor.data, agent.harnessId as GuideHarness);
       const hasActionableSetup = setup.some((target) => target.state === 'actionable');
       return {
         pending: [
@@ -1452,9 +1433,7 @@ export class GuideService {
                 `${name(agent.harnessId)} · ${name(setupProvider)}: already connected. No setup change is needed.`,
               );
             } else if (target !== null) {
-              notices.push(
-                `${name(agent.harnessId)} · ${name(setupProvider)}: ${target.reason}`,
-              );
+              notices.push(`${name(agent.harnessId)} · ${name(setupProvider)}: ${target.reason}`);
             }
           }
         } else {
