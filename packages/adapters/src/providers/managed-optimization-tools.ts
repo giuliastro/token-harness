@@ -190,22 +190,15 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
   }
   const warnings =
     !observation.absent && !observation.ready
-      ? [
-          warning(
-            'mcptoon-provider-capability-unavailable',
-            'mcptoon',
-            observation.detail,
-          ),
-        ]
+      ? [warning('mcptoon-provider-capability-unavailable', 'mcptoon', observation.detail)]
       : [];
   return {
     providerId: MCPTOON,
-    state:
-      observation.absent
-        ? 'absent'
-        : configuredHarnesses.length > 0
-          ? 'configured'
-          : 'installed',
+    state: observation.absent
+      ? 'absent'
+      : configuredHarnesses.length > 0
+        ? 'configured'
+        : 'installed',
     version: observation.version,
     executable: observation.executable,
     installationChannel: observation.absent ? 'pipx' : null,
@@ -228,22 +221,15 @@ async function gitnexusDetection(context: ProviderContext): Promise<ProviderDete
   const configuredHarnesses = verification?.state === 'verified' ? [CLAUDE] : [];
   const warnings =
     !observation.absent && !observation.ready
-      ? [
-          warning(
-            'gitnexus-provider-capability-unavailable',
-            'gitnexus',
-            observation.detail,
-          ),
-        ]
+      ? [warning('gitnexus-provider-capability-unavailable', 'gitnexus', observation.detail)]
       : [];
   return {
     providerId: GITNEXUS,
-    state:
-      observation.absent
-        ? 'absent'
-        : configuredHarnesses.length > 0
-          ? 'configured'
-          : 'installed',
+    state: observation.absent
+      ? 'absent'
+      : configuredHarnesses.length > 0
+        ? 'configured'
+        : 'installed',
     version: observation.version,
     executable: observation.executable,
     installationChannel: observation.absent ? 'npm' : null,
