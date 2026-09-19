@@ -12,11 +12,13 @@ import {
   MANIFEST_SCHEMA_VERSION,
   OPTIMIZATION_EVENT_SCHEMA_VERSION,
   classifyVersion,
+  compareVersions,
   diagnostic,
   digestText,
   evidence,
   harnessId,
   providerId,
+  parseSemanticVersion,
   type CapabilitySurface,
   type Diagnostic,
   type Evidence,
@@ -54,6 +56,7 @@ const PI = harnessId('pi');
  * the same seven artifacts with the same digests into a different directory.
  */
 const SKILLS_UPSTREAM = '0.0.7';
+const RUNTIME_SKILL_DIGESTS_MINIMUM = '0.3.0';
 
 const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'compact-handoff/SKILL.md':
@@ -535,6 +538,25 @@ function formatSurface(surface: CapabilitySurface): string {
  * `undefined` covers the build that could not be asked. It keeps the `0.0.5` verdict, which is the
  * conservative direction: a provider that cannot be asked is exactly the one RFC 0003 excludes.
  */
+function requiresRuntimeSkillDigests(capabilities: HarnessTrimCapabilities): boolean {
+  const observed = parseSemanticVersion(capabilities.version);
+  const minimum = parseSemanticVersion(RUNTIME_SKILL_DIGESTS_MINIMUM);
+  if (observed === null || minimum === null) return true;
+  return compareVersions(observed, minimum) >= 0;
+}
+
+function publishedSkillArtifactDigests(
+  capabilities: HarnessTrimCapabilities,
+  harness: string,
+): Array<[string, string]> {
+  const install = SKILLS_INSTALL[harness];
+  if (install === undefined) return [];
+  const prefix = `${install.directory}/skills/`;
+  return Object.entries(capabilities.digests?.[harness] ?? {}).filter(([path]) =>
+    path.startsWith(prefix),
+  );
+}
+
 function assignableOn(capabilities: HarnessTrimCapabilities | null): HarnessId[] {
   if (capabilities === null) return [];
   const reviews = MANIFEST.delegatedInstallReviews ?? {};
@@ -547,7 +569,9 @@ function assignableOn(capabilities: HarnessTrimCapabilities | null): HarnessId[]
       return (
         observed !== undefined &&
         observed.narrowing.length > 0 &&
-        writeSetStillReviewed(capabilities, harnessId(harness))
+        writeSetStillReviewed(capabilities, harnessId(harness)) &&
+        (!requiresRuntimeSkillDigests(capabilities) ||
+          publishedSkillArtifactDigests(capabilities, harness).length > 0)
       );
     })
     .map((harness) => harnessId(harness));
@@ -668,6 +692,19 @@ export function compareCapabilities(
       );
     }
   }
+  if (requiresRuntimeSkillDigests(capabilities)) {
+    for (const harness of Object.keys(manifest.delegatedInstallReviews ?? {})) {
+      if (capabilities.harnesses[harness] === undefined) continue;
+      if (publishedSkillArtifactDigests(capabilities, harness).length > 0) continue;
+      warnings.push(
+        driftWarning(
+          `HarnessTrim ${capabilities.version} does not publish the ${harness} skill artifact digests required by the managed install contract`,
+          `Use a HarnessTrim build that publishes per-harness artifact digests, or update Token Harness if the upstream capability contract changed`,
+        ),
+      );
+    }
+  }
+
   return warnings;
 }
 
@@ -1496,14 +1533,15 @@ function skillArtifacts(
   const install = SKILLS_INSTALL[harness];
   if (install === undefined) return [];
 
-  const prefix = `${install.directory}/skills/`;
-  const dynamic = Object.entries(capabilities?.digests?.[harness] ?? {})
-    .filter(([path]) => path.startsWith(prefix))
-    .map(([path, digest]) => ({
-      path: context.fs.join(context.projectRoot, ...path.split('/')),
-      digest,
-    }));
+  const dynamic =
+    capabilities === null
+      ? []
+      : publishedSkillArtifactDigests(capabilities, harness).map(([path, digest]) => ({
+          path: context.fs.join(context.projectRoot, ...path.split('/')),
+          digest,
+        }));
   if (dynamic.length > 0) return dynamic;
+  if (capabilities !== null && requiresRuntimeSkillDigests(capabilities)) return [];
 
   const skills = context.fs.join(context.projectRoot, install.directory, 'skills');
   return Object.entries(SKILL_ARTIFACT_DIGESTS).map(([path, digest]) => ({
@@ -1628,6 +1666,7 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     if (!reviewed) continue;
 
     const expectedArtifacts = skillArtifacts(context, harness, currentCapabilities);
+    if (expectedArtifacts.length === 0) continue;
     actions.push({
       kind: 'delegated-provider-install',
       id: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
