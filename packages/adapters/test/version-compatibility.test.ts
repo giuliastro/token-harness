@@ -130,7 +130,9 @@ describe('provider package update admission', () => {
     });
   });
 
-  it('keeps future HarnessTrim unattended package targets blocked before install-time validation', () => {
-    assert.equal(admitProviderPackageUpdate(HARNESSTRIM, '0.4.0').state, 'blocked');
+  it('admits future HarnessTrim targets because the update transaction validates the installed contract', () => {
+    assert.deepEqual(admitProviderPackageUpdate(HARNESSTRIM, '0.4.0'), {
+      state: 'admitted',
+    });
   });
 });
