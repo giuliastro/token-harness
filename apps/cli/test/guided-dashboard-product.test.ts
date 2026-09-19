@@ -76,8 +76,10 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /\$\('period'\)\.addEventListener\('change', changePeriod\)/);
   });
 
-  it('marks status stale after a change instead of hiding it behind an automatic reload', () => {
-    assert.match(GUIDE_JS, /previous state until you choose Refresh/);
-    assert.doesNotMatch(GUIDE_JS, /finally\s*\{[^}]*await refresh\(/);
+  it('refreshes status after an approved change without adding background polling', () => {
+    assert.doesNotMatch(GUIDE_JS, /previous state until you choose Refresh/);
+    assert.match(GUIDE_JS, /Refreshing the current setup/);
+    assert.match(GUIDE_JS, /waitForAutomaticRefresh/);
+    assert.match(GUIDE_JS, /refreshOverviewAfterMutation/);
   });
 });
