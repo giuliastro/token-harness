@@ -164,6 +164,19 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
+  it('plans the recommended baseline as explicit RTK and HarnessTrim changes for one agent', async () => {
+    const { service, calls } = fixture({ ids: ['codex'] });
+    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [
+        ['plan', '--harness', 'codex', '--provider', 'rtk'],
+        ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
+      ],
+    );
+  });
+
   it('scopes optional managed setup to the explicitly selected provider', async () => {
     const { service, calls } = fixture({ ids: ['claude'] });
     const preview = await service.preview({
