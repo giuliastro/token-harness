@@ -620,9 +620,14 @@ describe('update', () => {
     });
 
     assert.notEqual(result.exitCode, EXIT_CODES.ok);
-    assert.equal(result.data?.execution?.outcome, 'rolled-back');
+    assert.equal(result.data, null);
     assert.ok(result.codes.includes('provider-update-version-not-observed'));
     assert.equal(result.codes.includes('provider-update-version-verified'), false);
+    assert.ok(result.asked.includes('npm install --global harnesstrim@0.3.0'));
+    assert.ok(
+      result.asked.includes('npm install --global harnesstrim@0.2.1'),
+      `expected rollback to restore the previously active package: ${JSON.stringify(result.asked)}`,
+    );
   });
 
   it('captures the installed version so a later rollback can restore it', async () => {
