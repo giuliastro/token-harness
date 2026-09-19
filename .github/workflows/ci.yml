@@ -48,13 +48,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format diagnostic
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          pnpm exec prettier --write tests/integration/gate-rfc0009.test.ts
-          git diff -- tests/integration/gate-rfc0009.test.ts
-          exit 1
+      - name: Format check
+        run: pnpm format:check
 
       - name: Test
         run: pnpm test
