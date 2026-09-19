@@ -105,8 +105,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
         code: 'headroom-provider-capability-unavailable',
         subject: 'headroom',
         message: runtime.detail,
-        remediation:
-          `Update Headroom to ${HEADROOM_REVIEWED_MCP_VERSION} or newer with the MCP extra, then refresh Token Harness.`,
+        remediation: `Update Headroom to ${HEADROOM_REVIEWED_MCP_VERSION} or newer with the MCP extra, then refresh Token Harness.`,
       }),
     );
   }
