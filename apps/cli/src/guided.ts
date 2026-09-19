@@ -1,8 +1,6 @@
 /** Guided product workflow. Only fixed commands reach the existing transaction engine. */
 import {
-  admitManagedMutation,
   buildOptimizationStack,
-  COMPATIBILITY_ROWS,
   providerId,
   selectStackCombinationReview,
   type ApplyReport,
@@ -263,17 +261,6 @@ export function guideSetupTarget(
     };
   }
 
-  const hasReviewedHarnessSurface = COMPATIBILITY_ROWS.some(
-    (row) => row.provider === provider && row.harness === harnessDetection.harnessId,
-  );
-  if (!hasReviewedHarnessSurface) {
-    return {
-      providerId: provider,
-      provider: label,
-      state: 'not-applicable',
-      reason: `Token Harness does not manage a reviewed ${label} connection for ${name(harness)}.`,
-    };
-  }
   if (detection.state === 'absent' || detection.state === 'available') {
     return {
       providerId: provider,
@@ -294,38 +281,18 @@ export function guideSetupTarget(
     return {
       providerId: provider,
       provider: label,
-      state: 'unavailable',
-      reason: `The installed ${label} build does not expose a reviewed automatic setup for ${name(
-        harness,
-      )}.`,
+      state: 'not-applicable',
+      reason: `The installed ${label} build does not expose an automatic ${name(harness)} setup surface.`,
     };
   }
 
-  const admission = admitManagedMutation(COMPATIBILITY_ROWS, {
-    provider: detection.providerId,
-    providerVersion: detection.version,
-    harness: harnessDetection.harnessId,
-    harnessVersion: harnessDetection.version,
-    os: report.platform.os,
-    wsl: report.platform.isWsl,
-  });
-  if (admission.state !== 'admitted') {
-    return {
-      providerId: provider,
-      provider: label,
-      state: 'unavailable',
-      reason: `Automatic ${label} setup is not reviewed for the installed ${name(
-        harness,
-      )} / ${label} version combination on ${report.platform.os}.`,
-    };
-  }
   return {
     providerId: provider,
     provider: label,
     state: 'actionable',
     reason: `${label} can be configured automatically for ${name(
       harness,
-    )} with the reviewed transaction path.`,
+    )}. Token Harness will apply it transactionally and re-check the resulting state.`,
   };
 }
 
