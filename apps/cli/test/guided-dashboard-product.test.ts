@@ -82,6 +82,6 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /refreshing current setup/i);
     assert.match(GUIDE_JS, /dashboard has already been refreshed/i);
     assert.match(GUIDE_JS, /automatic status refresh failed/i);
-    assert.doesNotMatch(GUIDE_JS, /previous state until you choose Refresh/);
+    assert.match(GUIDE_JS, /window\.tokenHarnessRefreshCurrentState/);
   });
 });
