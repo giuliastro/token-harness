@@ -166,7 +166,23 @@ test('plans one owned Claude JSON entry and never invokes gitnexus setup or mcp'
   });
   assert.equal(action.rollbackData, 'file-snapshot');
   assert.equal(action.requiresNetwork, false);
-  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help', 'gitnexus status --help']);
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
+});
+
+test('keeps a newer GitNexus release usable when it still advertises MCP', async () => {
+  const fs = new MemoryFs();
+  setJson(fs, { theme: 'dark' });
+  const commands: string[] = [];
+  const base = context(fs, commands);
+
+  const plan = await planGitNexusManagedMcpActivation(
+    { ...base, runner: runner(commands, '1.9.0') },
+    harnessId('claude'),
+  );
+
+  assert.equal(plan.actions.length, 1);
+  assert.equal(plan.actions[0]?.kind, 'merge-json');
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
 });
 
 test('refuses to overwrite a brownfield GitNexus MCP entry', async () => {
@@ -210,7 +226,7 @@ test('verifies passively without starting MCP or indexing the repository', async
     harnessId('claude'),
   );
   assert.equal(verification.state, 'verified');
-  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help', 'gitnexus status --help']);
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
   assert.equal(
     commands.some((command) => /\b(setup|mcp|analyze)\b/.test(command)),
     false,

@@ -26,7 +26,7 @@ describe('first-run guided overview', () => {
     assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
   });
 
-  it('puts setup beside an agent only when a reviewed action is actually available', () => {
+  it('puts setup beside an agent only when a runtime-supported action is actually available', () => {
     assert.match(GUIDE_JS, /Setup incomplete/);
     assert.match(GUIDE_JS, /Finish setup for /);
     assert.match(GUIDE_JS, /Finish setup/);
@@ -60,7 +60,7 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Apply recommended setup/);
     assert.match(GUIDE_JS, /Set up ['"] \+ provider\.name/);
     assert.match(GUIDE_JS, /transactional engine with backups/);
-    assert.match(GUIDE_JS, /Applying the reviewed change/);
+    assert.match(GUIDE_JS, /Applying the approved change/);
   });
 
   it('makes Overview a real measured-impact summary', () => {

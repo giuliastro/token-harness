@@ -15,6 +15,7 @@ import {
 import type { ProviderContext } from './contract.js';
 import {
   HEADROOM_REVIEWED_BENCHMARK_VERSION,
+  headroomVersionAtLeast,
   observeHeadroomCandidate,
 } from './headroom-candidate.js';
 
@@ -66,17 +67,22 @@ function directoryAction(harness: HarnessId, path: string): PlannedAction {
   };
 }
 
-async function reviewedMcpCliAvailable(
+export async function headroomManagedMcpRuntime(
   context: ProviderContext,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ ok: boolean; version: string | null; executable: string | null; detail: string }> {
   const observation = await observeHeadroomCandidate(context);
-  if (observation.version !== HEADROOM_REVIEWED_MCP_VERSION) {
+  const compatible =
+    observation.version !== null &&
+    headroomVersionAtLeast(observation.version, HEADROOM_REVIEWED_MCP_VERSION);
+  if (!compatible) {
     return {
       ok: false,
+      version: observation.version,
+      executable: observation.executable,
       detail:
         observation.version === null
-          ? `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is not installed`
-          : `Headroom ${observation.version} is installed; managed MCP activation is reviewed only for ${HEADROOM_REVIEWED_MCP_VERSION}`,
+          ? `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} or newer is not installed`
+          : `Headroom ${observation.version} predates the managed MCP floor ${HEADROOM_REVIEWED_MCP_VERSION}`,
     };
   }
 
@@ -89,12 +95,16 @@ async function reviewedMcpCliAvailable(
   if (help.failure !== null || help.exitCode !== 0) {
     return {
       ok: false,
-      detail: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is installed but its reviewed MCP server command is unavailable`,
+      version: observation.version,
+      executable: observation.executable,
+      detail: `Headroom ${observation.version} is installed but its MCP server command is unavailable`,
     };
   }
   return {
     ok: true,
-    detail: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} exposes the reviewed local MCP server`,
+    version: observation.version,
+    executable: observation.executable,
+    detail: `Headroom ${observation.version} exposes the local MCP server required by the managed integration`,
   };
 }
 
@@ -109,7 +119,7 @@ function prerequisite(harness: HarnessId, detail: string): HeadroomManagedMcpPla
         code: 'headroom-managed-mcp-prerequisite',
         subject: harness,
         message: detail,
-        remediation: `Install the exact reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} MCP package with your existing Python/uv tooling, then refresh Token Harness. Token Harness will not install Python, uv, or system prerequisites implicitly.`,
+        remediation: `Install Headroom ${HEADROOM_REVIEWED_MCP_VERSION} or newer with its MCP extra using your existing Python/uv tooling, then refresh Token Harness. Token Harness will not install Python, uv, or system prerequisites implicitly.`,
       }),
     ],
   };
@@ -388,9 +398,9 @@ async function planCodex(
     affectedPaths: [target],
     affectedProcesses: [],
     preconditions: ['No Headroom MCP table or Token Harness Headroom marker block exists'],
-    postconditions: ['Codex config contains exactly one reviewed Headroom MCP server block'],
+    postconditions: ['Codex config contains exactly one Token Harness Headroom MCP server block'],
     rollbackData: 'file-snapshot',
-    explanation: 'Register the installed reviewed Headroom CLI as a Codex MCP server',
+    explanation: 'Register the installed Headroom CLI as a Codex MCP server',
     path: target,
     markerBegin: HEADROOM_CODEX_MARKER_BEGIN,
     markerEnd: HEADROOM_CODEX_MARKER_END,
@@ -424,7 +434,7 @@ export async function planHeadroomManagedMcpActivation(
     };
   }
 
-  const cli = await reviewedMcpCliAvailable(context);
+  const cli = await headroomManagedMcpRuntime(context);
   if (!cli.ok) return prerequisite(harness, cli.detail);
   return harness === 'claude' ? planClaude(context, harness) : planCodex(context, harness);
 }
@@ -458,7 +468,7 @@ export async function verifyHeadroomManagedMcpActivation(
   context: ProviderContext,
   harness: HarnessId,
 ): Promise<HeadroomManagedMcpVerification> {
-  const cli = await reviewedMcpCliAvailable(context);
+  const cli = await headroomManagedMcpRuntime(context);
   if (!cli.ok) return { state: 'candidate-unavailable', target: null, detail: cli.detail };
 
   if (harness === 'claude') {
@@ -481,13 +491,13 @@ export async function verifyHeadroomManagedMcpActivation(
       return {
         state: 'degraded',
         target,
-        detail: 'Headroom MCP entry differs from the reviewed command',
+        detail: 'Headroom MCP entry differs from the Token Harness managed command',
       };
     }
     return {
       state: 'verified',
       target,
-      detail: `${cli.detail}; Claude registration matches the reviewed entry`,
+      detail: `${cli.detail}; Claude registration matches the managed entry`,
     };
   }
 
@@ -507,12 +517,12 @@ export async function verifyHeadroomManagedMcpActivation(
       return {
         state: 'not-configured',
         target,
-        detail: 'Reviewed Headroom Codex MCP block is absent',
+        detail: 'Token Harness Headroom Codex MCP block is absent',
       };
     return {
       state: 'verified',
       target,
-      detail: `${cli.detail}; Codex registration matches the reviewed owned block`,
+      detail: `${cli.detail}; Codex registration matches the managed owned block`,
     };
   }
 

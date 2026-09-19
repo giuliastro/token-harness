@@ -23,24 +23,24 @@ export const GUIDE_PRODUCT_JS = String.raw`
     },
     harnesstrim: {
       name: 'HarnessTrim',
-      role: 'Adds reviewed instructions that help coding agents keep tool output and context lean.',
+      role: 'Adds version-aware instructions that help coding agents keep tool output and context lean.',
       managed: true,
     },
     mcptoon: {
       name: 'mcptoon',
-      role: 'Provides the reviewed compact MCP discovery integration on exact admitted versions.',
+      role: 'Provides compact MCP discovery integration and verifies the resulting setup.',
       managed: true,
       optional: true,
     },
     gitnexus: {
       name: 'GitNexus',
-      role: 'Registers an already-installed reviewed GitNexus CLI as a narrow Claude MCP integration.',
+      role: 'Registers an already-installed GitNexus CLI as a narrow Claude MCP integration and verifies the result.',
       managed: true,
       optional: true,
     },
     headroom: {
       name: 'Headroom',
-      role: 'Provides local MCP compression and retrieval through the reviewed Headroom server.',
+      role: 'Provides local MCP compression and retrieval through the installed Headroom server.',
       managed: true,
       optional: true,
     },
@@ -98,7 +98,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       element.disabled = value;
     });
     $('live-status').textContent = value
-      ? (applying ? 'Applying only the reviewed change…' : 'Reading current state…')
+      ? (applying ? 'Applying only the approved change…' : 'Reading current state…')
       : 'Nothing changes without your approval';
   }
 
@@ -252,7 +252,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (unavailable.length)
       return {
         state: 'limited',
-        label: 'Reviewed setup complete',
+        label: 'Setup complete',
         cls: 'good',
         actionable,
         unavailable,
@@ -345,7 +345,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Needs attention',
         cls: 'warn',
         title: 'One configured optimizer needs attention',
-        detail: 'Use Re-check health below to see whether the configured integration still matches its reviewed state.',
+        detail: 'Use Re-check health below to see whether the configured integration still matches the provider and agent state currently installed.',
         action: 'verify',
       };
     if (incomplete.length)
@@ -355,7 +355,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         title: incomplete.length === 1
           ? 'Finish setup for ' + incomplete[0].name
           : 'Finish the available recommended setup for your coding agents',
-        detail: 'Every Finish setup action below has at least one reviewed provider change available for that exact agent, version and platform.',
+        detail: 'Every Finish setup action below has a concrete change available from the installed provider. Newer version combinations are attempted transactionally and checked again after apply.',
         action: 'configure',
       };
     const unavailable = baselineUnavailableAgents();
@@ -363,8 +363,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       return {
         label: 'No automatic setup',
         cls: '',
-        title: 'No reviewed automatic setup is currently available',
-        detail: 'Token Harness will not show a setup button that cannot complete. The agent cards below explain which provider/version combination is not currently managed.',
+        title: 'No automatic setup surface is currently exposed',
+        detail: 'The installed provider does not currently expose the setup surface Token Harness needs. This is a capability limitation, not a missing review row.',
         action: 'none',
       };
     if (!(current?.savings?.rows || []).length)
@@ -465,7 +465,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       : actionableFor.length
         ? 'Setup available for ' + actionableFor.join(', ')
         : unavailableFor.length
-          ? 'No reviewed automatic connection is available'
+          ? 'No compatible automatic setup surface detected'
           : 'Not applicable to the detected coding agents';
     facts.append(node('span', 'Connection'), node('strong', configuredFor));
     if (component?.update === 'available')
@@ -474,7 +474,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('strong', 'v' + (component.updateAvailableVersion || 'new version') + ' available'),
       );
     else if (component?.update === 'blocked')
-      facts.append(node('span', 'Update'), node('strong', 'Newer version not reviewed yet'));
+      facts.append(node('span', 'Update'), node('strong', 'Newer package requires a provider-specific update path'));
     card.append(facts);
 
     if (
@@ -551,14 +551,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
       head.append(title, pill(baseline.label, baseline.cls));
       const detail =
         baseline.state === 'incomplete'
-          ? 'A reviewed automatic setup is available for ' +
+          ? 'An automatic setup is available for ' +
             baseline.actionable.map(target => target.provider).join(' + ') +
             '. Finish setup to review and apply it.'
           : baseline.state === 'unavailable'
-            ? 'No reviewed automatic baseline change is available for this exact agent, provider versions and platform. Token Harness will not offer a no-op setup button.'
+            ? 'The installed baseline providers do not currently expose an automatic setup surface for this agent. Token Harness will not offer a no-op button.'
             : baseline.state === 'limited'
-              ? 'All currently reviewed automatic baseline actions are complete. Other baseline combinations are not automatically changed on this version/platform.'
-              : 'All reviewed automatic baseline connections available for this coding agent are configured.';
+              ? 'All automatic baseline actions exposed by the installed providers are complete.'
+              : 'All automatic baseline connections exposed for this coding agent are configured.';
       card.append(head, node('p', detail));
       if (agent.providers?.length)
         card.append(
@@ -599,7 +599,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'Safe preview first',
         provider
           ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + '. If setup is supported, the exact change appears before you confirm it.'
-          : 'Token Harness will prepare only the reviewed RTK/HarnessTrim changes that are actually available for ' + agent.name + ' on this version and platform. The exact files and changes appear before you confirm them.',
+          : 'Token Harness will prepare the RTK/HarnessTrim changes exposed by the installed providers for ' + agent.name + '. Newer combinations use the same transactional path and are checked again after apply. The exact files and changes appear before you confirm them.',
       ),
       messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
@@ -636,7 +636,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Unsupported or already-complete baseline providers are left out. Optional optimizers stay separate.',
+              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Providers that do not expose the required setup surface, and already-complete providers, are left out. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length) {
@@ -644,7 +644,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             messageBox(
               'No setup change available',
               (data.notices || []).join(' ') ||
-                'No reviewed automatic change is available now. The dashboard is refreshing so an obsolete setup action is not left visible.',
+                'No automatic change is available from the provider’s current capability surface. The dashboard is refreshing so an obsolete setup action is not left visible.',
             ),
           );
         } else {
@@ -655,7 +655,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           }
           for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         }
-        $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
+        $('modal-content').append(messageBox('Safety', 'Apply uses the transactional engine with backups, ownership checks and rollback. A newer version tuple is allowed when the installed provider exposes the required capability, then the resulting state is checked again after apply.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket)
           $('modal-actions').append(
@@ -689,7 +689,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const run = modalRun;
     setBusy(true, true);
     $('modal-actions').replaceChildren(modalClose('Applying…', true));
-    $('modal-content').append(progress('Applying the reviewed change', 'Keep this window open until the transaction finishes.'));
+    $('modal-content').append(progress('Applying the approved change', 'Keep this window open until the transaction finishes.'));
     try {
       await ensureSession();
       const result = await request('/api/apply', { ticket });
@@ -1002,7 +1002,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         isVerify ? 'Troubleshooting check' : 'Update preview',
         isVerify
           ? 'Re-checks the configured optimizer integrations without repairing or changing them. Normal setup already performs its own safety checks.'
-          : 'Checks reviewed update channels first. If an installable update exists, you can approve it from this window.',
+          : 'Checks provider update channels first. If an installable update exists, you can approve it from this window; the active executable is re-checked after installation before success is reported.',
       ),
       progress(
         isVerify ? 'Checking configured optimizers' : 'Checking update channels',
@@ -1113,7 +1113,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'p',
         available.length
           ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
-          : 'Check installed optimizer versions. If a reviewed update is available, you can install it from the same dialog.',
+          : 'Check installed optimizer versions. If an update is available, you can install it from the same dialog; Token Harness verifies the active runtime after installation.',
         'caption',
       ),
     );

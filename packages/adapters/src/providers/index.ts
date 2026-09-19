@@ -175,9 +175,9 @@ const cliHarnessTrimAdapter: ProviderAdapter = {
 const PROVIDER_ADAPTERS: readonly ProviderAdapter[] = [
   rtkAdapter,
   cliHarnessTrimAdapter,
-  mcptoonManagedProviderAdapter,
-  gitnexusManagedProviderAdapter,
-  headroomManagedProviderAdapter,
+  withProviderVersionCompatibility(mcptoonManagedProviderAdapter),
+  withProviderVersionCompatibility(gitnexusManagedProviderAdapter),
+  withProviderVersionCompatibility(headroomManagedProviderAdapter),
 ];
 
 export function listProviderAdapters(): readonly ProviderAdapter[] {

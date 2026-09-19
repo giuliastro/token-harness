@@ -16,9 +16,9 @@ describe('guided agent capability state UI', () => {
     assert.match(GUIDE_JS, /More agent checks/);
   });
 
-  it('keeps optional in-session guidance behind the existing review and apply transaction', () => {
+  it('keeps optional in-session guidance behind the existing preview and apply transaction', () => {
     assert.match(GUIDE_JS, /\{ action: 'skill', harness: action\.harness \}/);
-    assert.match(GUIDE_JS, /Enable reviewed guidance/);
+    assert.match(GUIDE_JS, /Enable managed guidance/);
     assert.match(GUIDE_JS, /request\('\/api\/preview', body\)/);
     assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
   });

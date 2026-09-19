@@ -122,8 +122,9 @@ export interface ProviderUpdateRow {
     /** The provider declares no channel for this platform. */
     | 'no-channel'
     /**
-     * A newer version exists, but this provider is managed by Token Harness on at least one
-     * harness and no compatibility row admits that target version there.
+     * Legacy serialized verdict retained for compatibility. It now means the available target
+     * failed the provider update prerequisites (for example an invalid version or a release below
+     * the supported floor), not merely that the target lacks a reviewed compatibility row.
      */
     | 'blocked-unreviewed';
   /** The version the pin names, when `verdict` is `pinned`. */

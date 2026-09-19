@@ -289,14 +289,13 @@ describe('detection', () => {
     assert.equal(detection.warnings[0]?.path, WIRED.configPath);
   });
 
-  it('warns on a version newer than anything observed', async () => {
+  it('keeps a future RTK release usable when the managed runtime surface is still assignable', async () => {
     const detection = await rtkAdapter.detect(context({ version: 'rtk 9.9.9' }));
-    assert.equal(detection.versionVerdict, 'unknown-newer');
-    assert.deepEqual(
-      detection.warnings.map((entry) => entry.code),
-      ['provider-version-unknown-newer'],
+    assert.equal(detection.versionVerdict, 'in-range');
+    assert.equal(
+      detection.warnings.some((entry) => entry.code === 'provider-version-unknown-newer'),
+      false,
     );
-    assert.equal(detection.warnings[0]?.severity, 'warning');
   });
 
   it('reports below-range for an older rtk', async () => {

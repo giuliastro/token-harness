@@ -1,14 +1,14 @@
 /**
  * RFC 0009 §Compatibility matrix — the managed-mutation gate, end to end.
  *
- * The shipped row table is deliberately empty, so a plan on a real (or realistically faked)
- * machine refuses every managed mutation and names the missing config schema or provider
- * fixture. The exit code separates "nothing to do" (0) from "cannot do this safely" (9), and
- * `doctor` reports the uncovered combination as a warning on the provider it belongs to.
+ * Compatibility rows are historical evidence, not a runtime permission list. A missing or stale
+ * row must not block a managed mutation when the installed provider still advertises the harness
+ * as assignable; the ordinary ownership, transaction, precondition and verification machinery
+ * remains responsible for safety.
  *
- * The fixtures here are the same temporary-home shape the other suites use: `rtk` and `claude`
- * resolve to the running Node binary so versions are observed, and rows are injected to admit
- * exactly that observation when a test wants the machinery *past* the gate.
+ * The fixtures here use the same temporary-home shape as the other suites: `rtk` and `claude`
+ * resolve to the running Node binary so deliberately future-looking versions are observed. Rows
+ * are still injected where useful to prove that exact historical evidence remains accepted.
  */
 
 import assert from 'node:assert/strict';
@@ -46,6 +46,7 @@ let counter = 0;
 
 before(() => {
   sandbox = mkdtempSync(join(tmpdir(), 'th-gate-'));
+  mkdirSync(join(sandbox, 'project'), { recursive: true });
 });
 
 after(() => {
@@ -101,7 +102,7 @@ async function invoke<T>(
     argv: [...argv, '--json'],
     streams: { out: (text) => (stdout += text), err: () => undefined },
     platform: FACTS,
-    cwd: sandbox,
+    cwd: join(sandbox, 'project'),
     home,
     stateRoot: join(sandbox, 'state'),
     adapters: {
@@ -126,31 +127,20 @@ async function invoke<T>(
 }
 
 describe('plan with the shipped (empty) row table', () => {
-  it('refuses the managed mutation with exit 9 and names the missing schema and fixture', async () => {
+  it('uses the runtime-assignable surface when no exact compatibility row exists', async () => {
     const { exitCode, data, diagnostics } = await invoke<PlanReport>(['plan'], null);
 
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
+    assert.equal(exitCode, EXIT_CODES.ok);
+    assert.ok(data);
+    assert.ok(data.actions.some((action) => action.kind === 'merge-json'));
     assert.ok(
-      blocked,
-      `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
+      diagnostics.some((entry) => entry.code === 'managed-mutation-forward-compatible'),
+      `expected forward-compatible evidence, got ${JSON.stringify(diagnostics)}`,
     );
-    /**
-     * Which of the two refusals applies depends on the platform, so the assertion is on what any of
-     * them must say rather than on one wording.
-     *
-     * The shipped table now holds a Windows `rtk × claude` row. On a Windows runner the fake Claude
-     * version therefore lands *outside a row that exists* and the diagnostic names the nearest
-     * recording — "a provider fixture covering rtk at 24.13.1 (the nearest row's fixture is …)". On
-     * Linux and macOS no row matches the platform at all and the wording is the original "a reviewed
-     * config schema and fixture for rtk on claude". Pinning either one would make this test pass on
-     * one third of the matrix.
-     */
-    assert.match(blocked.message, /rtk/);
-    assert.match(blocked.message, /claude/);
-    assert.match(blocked.message, /fixture/);
-    // RFC 0006: an `error` diagnostic empties `data` — the refusal has no report to carry.
-    assert.equal(data, null);
+    assert.equal(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      false,
+    );
   });
 
   it('keeps exit 0 — "nothing to do" — distinct from the refusal', async () => {
@@ -177,10 +167,7 @@ describe('plan with an injected row table', () => {
     );
   });
 
-  it('refuses a harness version outside the row — the matching major still fails', async () => {
-    // The observed harness version is Node's, and the injected row admits only up to Node's
-    // major minus one minor line: same major as the row's maximum, still outside it. RFC 0009
-    // item 29 acceptance: "a matching major version" does not satisfy a row.
+  it('does not turn an older harness-version row into a runtime veto', async () => {
     const row = rowFor('rtk', 'claude', FACTS);
     const outside = [
       {
@@ -191,43 +178,42 @@ describe('plan with an injected row table', () => {
         },
       },
     ];
-    const { exitCode, diagnostics } = await invoke<PlanReport>(['plan'], outside);
+    const { exitCode, data, diagnostics } = await invoke<PlanReport>(['plan'], outside);
 
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
-    assert.ok(blocked);
-    // The row is present, so the refusal names the missing harness schema rather than the
-    // provider fixture.
-    assert.match(blocked.message, /harness schema/);
-    assert.match(blocked.message, /config-schema-claude/);
+    assert.equal(exitCode, EXIT_CODES.ok);
+    assert.ok(data?.actions.some((action) => action.kind === 'merge-json'));
+    assert.ok(diagnostics.some((entry) => entry.code === 'managed-mutation-forward-compatible'));
   });
 
-  it('refuses when the provider version matches no row, naming the nearest fixture', async () => {
-    // The row admits a provider version this machine does not have. The refusal names the
-    // provider fixture rather than a harness schema.
+  it('does not turn an older provider-version row into a runtime veto', async () => {
     const row = { ...rowFor('rtk', 'claude', FACTS), providerVersion: '0.44.0' };
-    const { exitCode, diagnostics } = await invoke<PlanReport>(['plan'], [row]);
+    const { exitCode, data, diagnostics } = await invoke<PlanReport>(['plan'], [row]);
 
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
-    assert.ok(blocked);
-    assert.match(blocked.message, /provider fixture covering rtk/);
+    assert.equal(exitCode, EXIT_CODES.ok);
+    assert.ok(data?.actions.some((action) => action.kind === 'merge-json'));
+    assert.ok(diagnostics.some((entry) => entry.code === 'managed-mutation-forward-compatible'));
   });
 });
 
 describe('apply refuses the same combinations', () => {
-  it('returns exit 9 rather than nothing-to-do when the gate refuses', async () => {
-    // Regression: `runApply` used to drop the refused actions and report `nothing-to-do` with
-    // exit 0, collapsing "already in the desired state" and "a row has not admitted this".
-    const { exitCode, data, diagnostics } = await invoke<ApplyReport>(['apply', '--yes'], null);
-
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    assert.equal(data, null);
-    const blocked = diagnostics.find((entry) => entry.code === 'managed-mutation-blocked');
-    assert.ok(
-      blocked,
-      `expected a managed-mutation-blocked diagnostic, got ${JSON.stringify(diagnostics)}`,
+  it('applies through the normal transaction when the runtime surface is assignable', async () => {
+    const home = bareHome();
+    const original = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
+    const { exitCode, data, diagnostics } = await invoke<ApplyReport>(
+      ['apply', '--yes'],
+      null,
+      home,
     );
+
+    assert.equal(exitCode, EXIT_CODES.ok);
+    assert.equal(data?.outcome, 'committed');
+    assert.equal(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      false,
+    );
+    const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
+    assert.notEqual(updated, original);
+    assert.match(updated, /rtk hook claude/);
   });
 
   it('reports a missing stored plan before resolving an unrelated default scope', async () => {
@@ -239,7 +225,7 @@ describe('apply refuses the same combinations', () => {
     assert.ok(diagnostics.some((entry) => entry.code === 'plan-not-found'));
   });
 
-  it('still refuses a valid stored plan when its reviewed compatibility row is removed', async () => {
+  it('keeps a valid stored plan usable when historical compatibility rows are removed', async () => {
     const home = bareHome();
     const original = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
     const planned = await invoke<PlanReport>(
@@ -249,42 +235,42 @@ describe('apply refuses the same combinations', () => {
     );
     const id = planned.data?.planId;
     assert.ok(id);
-    const { exitCode, diagnostics } = await invoke<ApplyReport>(
+    const { exitCode, data, diagnostics } = await invoke<ApplyReport>(
       ['apply', '--plan', id, '--yes'],
       [],
       home,
     );
-    assert.equal(exitCode, EXIT_CODES['unsupported-environment']);
-    assert.ok(diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'));
-    assert.equal(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'), original);
+    assert.equal(exitCode, EXIT_CODES.ok);
+    assert.equal(data?.outcome, 'committed');
+    assert.equal(
+      diagnostics.some((entry) => entry.code === 'managed-mutation-blocked'),
+      false,
+    );
+    const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
+    assert.notEqual(updated, original);
+    assert.match(updated, /rtk hook claude/);
   });
 });
 
 describe('doctor and the row table', () => {
-  it('reports an uncovered combination as a warning on the provider', async () => {
+  it('does not report a missing row as a problem when the provider is runtime-assignable', async () => {
     const { exitCode, data } = await invoke<DoctorReport>(['doctor'], null, wiredHome());
 
-    // The observed version (Node's) is outside the adapters' tested ranges, so doctor already
-    // reports `unknown-newer` problems — that exit is about the environment, not about rows.
-    assert.equal(exitCode, EXIT_CODES['problems-found']);
+    assert.equal(exitCode, EXIT_CODES.ok);
     assert.ok(data);
+    assert.equal(data.problemCount, 0);
     const rtk = data.providers.find((entry) => entry.providerId === 'rtk');
     assert.ok(rtk);
-    const warning = rtk.warnings.find((entry) => entry.code === 'no-compatibility-row');
-    assert.ok(
-      warning,
-      `expected a no-compatibility-row warning, got ${JSON.stringify(rtk.warnings)}`,
+    assert.equal(
+      rtk.warnings.some(
+        (entry) =>
+          entry.code === 'no-compatibility-row' || entry.code === 'provider-surface-not-assignable',
+      ),
+      false,
     );
-    // Same platform dependency as the refusal above: with a Windows `rtk × claude` row shipped, a
-    // Windows runner gets the nearest-fixture wording and the other two get the original. What the
-    // warning must do either way is name the provider and say a fixture is what is missing.
-    assert.match(warning.message, /rtk/);
-    assert.match(warning.message, /fixture/);
   });
 
-  it('reports without counting: problemCount is the same with a covering row', async () => {
-    // The no-row warning must not be a problem — the environment is fine, only the product's
-    // coverage is incomplete — so the count that drives the exit code ignores it entirely.
+  it('keeps doctor health independent of whether matching historical evidence exists', async () => {
     const wired = wiredHome();
     const uncovered = await invoke<DoctorReport>(['doctor'], null, wired);
     const covered = await invoke<DoctorReport>(['doctor'], nodeVersionRows(FACTS), wired);
@@ -292,13 +278,7 @@ describe('doctor and the row table', () => {
     assert.ok(uncovered.data);
     assert.ok(covered.data);
     assert.equal(covered.data.problemCount, uncovered.data.problemCount);
-    assert.equal(
-      covered.data.providers
-        .find((entry) => entry.providerId === 'rtk')
-        ?.warnings.some((entry) => entry.code === 'no-compatibility-row'),
-      false,
-      'a covering row must silence the warning',
-    );
+    assert.equal(covered.exitCode, uncovered.exitCode);
   });
 });
 
