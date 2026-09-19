@@ -1285,15 +1285,16 @@ export class GuideService {
           `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
           'working',
         );
-        const planRequests =
-          data['action'] === 'setup' && data['provider'] === undefined
-            ? agent.harnessId === 'claude'
+        let planRequests: string[][] = [[]];
+        if (data['action'] === 'setup' && data['provider'] === undefined) {
+          planRequests =
+            agent.harnessId === 'claude'
               ? [
                   ['plan', '--harness', agent.harnessId, '--provider', 'rtk'],
                   ['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim'],
                 ]
-              : [['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']]
-            : [[]];
+              : [['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']];
+        }
         let producedChange = false;
         for (const requested of planRequests) {
           const args =
@@ -1302,8 +1303,9 @@ export class GuideService {
             requested.length === 0 &&
             data['action'] === 'setup' &&
             data['provider'] !== undefined
-          )
+          ) {
             args.push('--provider', String(data['provider']));
+          }
           if (requested.length === 0 && data['action'] === 'skill') {
             args.push('--provider', 'none', '--agent-skill');
           } else if (requested.length === 0 && data['action'] === 'effort')
