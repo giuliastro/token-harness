@@ -3,12 +3,12 @@
  *
  * ## A row is evidence, not a semver guess
  *
- * RFC 0009: "Token Harness manages only a harness/provider/version combination represented by a
- * reviewed compatibility fixture. Detection is broad; mutation is intentionally narrower." A row
- * records one provider × harness × harness-version-range × provider-version × platform
- * combination that a fixture has actually been reviewed against, and nothing else may admit a
- * managed mutation: neither a lockfile, nor a successful executable probe, nor a version that
- * merely shares a major.
+ * A row records one provider × harness × harness-version-range × provider-version × platform
+ * combination that a fixture has actually exercised. It is historical evidence, not a runtime
+ * permission list. Ordinary managed setup may continue beyond the recorded tuple when the installed
+ * provider explicitly exposes the required runtime capability; the normal ownership, drift,
+ * containment, transaction and post-apply verification checks still decide whether the mutation
+ * succeeds.
  *
  * ## This is not RFC 0003's compatibility rule
  *
@@ -35,8 +35,9 @@
  *   covered by no single row: a gap between rows. The version is below the range of the next
  *   row above it.
  *
- * All three refuse a managed mutation; the refusal names the missing harness schema (for the
- * range verdicts) or the missing provider fixture (when the provider version matches no row).
+ * These verdicts describe only the historical row evidence. They do not by themselves prohibit a
+ * managed mutation when a live provider capability probe proves that the required integration
+ * surface is still assignable.
  */
 
 import type { VerificationTier } from './detection.js';
@@ -278,13 +279,12 @@ function rowsFor(
 }
 
 /**
- * The managed-mutation gate — RFC 0009 §Compatibility matrix.
+ * Exact historical-evidence lookup — RFC 0009 §Compatibility matrix.
  *
- * The only inputs are the row table and the observed combination. There is no input for a
- * lockfile, a probe, or a major version, and that is the point: RFC 0009 forbids treating any of
- * them as proof that a row applies, and a gate that accepted them would be the semver guess the
- * matrix exists to reject. When the gate refuses, the refusal names what a row would have to
- * carry — the missing config schema or provider fixture.
+ * This function answers only whether the observed tuple is represented by recorded fixture
+ * evidence. It deliberately does not inspect runtime capabilities. Callers that can prove the
+ * required managed surface through a provider capability probe may proceed through the normal
+ * transactional safety path even when this lookup returns `refused`.
  */
 export function admitManagedMutation(
   rows: readonly CompatibilityRow[],
