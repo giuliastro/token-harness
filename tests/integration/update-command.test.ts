@@ -214,8 +214,14 @@ function harnesstrimCapabilityAnswer(version: string): string {
       },
     },
     digests: {
-      claude: {},
-      codex: {},
+      claude: {
+        '.claude/skills/runtime/SKILL.md':
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+      codex: {
+        '.codex/skills/runtime/SKILL.md':
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      },
     },
   });
 }
