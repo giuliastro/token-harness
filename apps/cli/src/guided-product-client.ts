@@ -252,7 +252,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (unavailable.length)
       return {
         state: 'limited',
-        label: 'Reviewed setup complete',
+        label: 'Setup complete',
         cls: 'good',
         actionable,
         unavailable,
@@ -355,7 +355,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         title: incomplete.length === 1
           ? 'Finish setup for ' + incomplete[0].name
           : 'Finish the available recommended setup for your coding agents',
-        detail: 'Every Finish setup action below has at least one reviewed provider change available for that exact agent, version and platform.',
+        detail: 'Every Finish setup action below has a concrete change available from the installed provider. Newer version combinations are attempted transactionally and checked again after apply.',
         action: 'configure',
       };
     const unavailable = baselineUnavailableAgents();
@@ -363,8 +363,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       return {
         label: 'No automatic setup',
         cls: '',
-        title: 'No reviewed automatic setup is currently available',
-        detail: 'Token Harness will not show a setup button that cannot complete. The agent cards below explain which provider/version combination is not currently managed.',
+        title: 'No automatic setup surface is currently exposed',
+        detail: 'The installed provider does not currently expose the setup surface Token Harness needs. This is a capability limitation, not a missing review row.',
         action: 'none',
       };
     if (!(current?.savings?.rows || []).length)
@@ -465,7 +465,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       : actionableFor.length
         ? 'Setup available for ' + actionableFor.join(', ')
         : unavailableFor.length
-          ? 'No reviewed automatic connection is available'
+          ? 'No compatible automatic setup surface detected'
           : 'Not applicable to the detected coding agents';
     facts.append(node('span', 'Connection'), node('strong', configuredFor));
     if (component?.update === 'available')
@@ -474,7 +474,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('strong', 'v' + (component.updateAvailableVersion || 'new version') + ' available'),
       );
     else if (component?.update === 'blocked')
-      facts.append(node('span', 'Update'), node('strong', 'Newer version not reviewed yet'));
+      facts.append(node('span', 'Update'), node('strong', 'Newer package requires a provider-specific update path'));
     card.append(facts);
 
     if (
@@ -551,14 +551,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
       head.append(title, pill(baseline.label, baseline.cls));
       const detail =
         baseline.state === 'incomplete'
-          ? 'A reviewed automatic setup is available for ' +
+          ? 'An automatic setup is available for ' +
             baseline.actionable.map(target => target.provider).join(' + ') +
             '. Finish setup to review and apply it.'
           : baseline.state === 'unavailable'
-            ? 'No reviewed automatic baseline change is available for this exact agent, provider versions and platform. Token Harness will not offer a no-op setup button.'
+            ? 'The installed baseline providers do not currently expose an automatic setup surface for this agent. Token Harness will not offer a no-op button.'
             : baseline.state === 'limited'
               ? 'All currently reviewed automatic baseline actions are complete. Other baseline combinations are not automatically changed on this version/platform.'
-              : 'All reviewed automatic baseline connections available for this coding agent are configured.';
+              : 'All automatic baseline connections exposed for this coding agent are configured.';
       card.append(head, node('p', detail));
       if (agent.providers?.length)
         card.append(
@@ -636,7 +636,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Unsupported or already-complete baseline providers are left out. Optional optimizers stay separate.',
+              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Providers that do not expose the required setup surface, and already-complete providers, are left out. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length) {
@@ -644,7 +644,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             messageBox(
               'No setup change available',
               (data.notices || []).join(' ') ||
-                'No reviewed automatic change is available now. The dashboard is refreshing so an obsolete setup action is not left visible.',
+                'No automatic change is available from the provider’s current capability surface. The dashboard is refreshing so an obsolete setup action is not left visible.',
             ),
           );
         } else {
@@ -655,7 +655,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           }
           for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         }
-        $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
+        $('modal-content').append(messageBox('Safety', 'Apply uses the transactional engine with backups, ownership checks and rollback. A newer version tuple is allowed when the installed provider exposes the required capability, then the resulting state is checked again after apply.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket)
           $('modal-actions').append(
