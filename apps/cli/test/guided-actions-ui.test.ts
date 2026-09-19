@@ -20,12 +20,17 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
     assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
     assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
-    assert.match(GUIDE_JS, /'Connect to ' \+ agent\.name/);
+    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
+    assert.doesNotMatch(GUIDE_JS, /providerSupportsAgent/);
+    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
+    assert.match(GUIDE_JS, /Why there is no Connect button/);
     assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
     assert.match(GUIDE_JS, /Optional optimizers stay separate/);
     assert.match(GUIDE_JS, /Apply recommended setup/);
+    assert.match(GUIDE_JS, /No automatic setup/);
+    assert.match(GUIDE_JS, /Token Harness will not offer a no-op setup button/);
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
