@@ -1104,6 +1104,11 @@ export class GuideService {
         .map((p) => p.providerId);
       const usage = budget.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
       const observed = context.data?.harnesses.find((item) => item.harnessId === agent.harnessId);
+      const setup =
+        doctor.data === null
+          ? []
+          : guideSetupTargets(doctor.data, agent.harnessId as GuideHarness);
+      const hasActionableSetup = setup.some((target) => target.state === 'actionable');
       return {
         pending: [
           ...(!complete.rules ? ['reasoning' as const] : []),
@@ -1118,12 +1123,11 @@ export class GuideService {
             ? 'Needs attention'
             : providers.length > 0
               ? 'Integration configured'
-              : 'Ready to set up',
+              : hasActionableSetup
+                ? 'Ready to set up'
+                : 'No reviewed automatic setup available',
         providers: providers.map(name),
-        setup:
-          doctor.data === null
-            ? []
-            : guideSetupTargets(doctor.data, agent.harnessId as GuideHarness),
+        setup,
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
         ...(guidance?.[agent.harnessId as GuideHarness]
