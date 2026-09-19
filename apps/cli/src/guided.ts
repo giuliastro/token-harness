@@ -1287,15 +1287,22 @@ export class GuideService {
         );
         const planRequests =
           data['action'] === 'setup' && data['provider'] === undefined
-            ? (agent.harnessId === 'claude'
-                ? [['plan', '--harness', agent.harnessId, '--provider', 'rtk'], ['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']]
-                : [['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']])
+            ? agent.harnessId === 'claude'
+              ? [
+                  ['plan', '--harness', agent.harnessId, '--provider', 'rtk'],
+                  ['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim'],
+                ]
+              : [['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']]
             : [[]];
         let producedChange = false;
         for (const requested of planRequests) {
           const args =
             requested.length > 0 ? requested : ['plan', '--harness', agent.harnessId];
-          if (requested.length === 0 && data['action'] === 'setup' && data['provider'] !== undefined)
+          if (
+            requested.length === 0 &&
+            data['action'] === 'setup' &&
+            data['provider'] !== undefined
+          )
             args.push('--provider', String(data['provider']));
           if (requested.length === 0 && data['action'] === 'skill') {
             args.push('--provider', 'none', '--agent-skill');
