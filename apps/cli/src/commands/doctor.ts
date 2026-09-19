@@ -162,17 +162,13 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
         os: context.platform.os,
         wsl: context.platform.isWsl,
       });
-      if (
-        admission.state === 'admitted' ||
-        detection.assignableHarnesses.includes(harness)
-      )
+      if (admission.state === 'admitted' || detection.assignableHarnesses.includes(harness))
         return [];
       return [
         diagnostic({
           severity: 'warning',
           code: 'provider-surface-not-assignable',
-          message:
-            `${detection.providerId} is configured on ${harness}, but the currently installed provider build does not advertise that harness as an automatic setup target`,
+          message: `${detection.providerId} is configured on ${harness}, but the currently installed provider build does not advertise that harness as an automatic setup target`,
           remediation:
             'Run the provider verification checks; keep the existing configuration if it is healthy, or update the provider if its automatic setup contract has changed',
         }),
