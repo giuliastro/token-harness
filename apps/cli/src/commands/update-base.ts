@@ -164,6 +164,14 @@ export async function runPackageChannelUpdate(
   };
 
   const actions: PackageManagerInstallAction[] = [];
+  const updateTargets = new Map<
+    string,
+    {
+      providerId: string;
+      target: string;
+      adapter: (typeof providerAdapters)[number];
+    }
+  >();
   const blockedUpdates: Array<{
     providerId: string;
     installed: string | null;
@@ -258,17 +266,21 @@ export async function runPackageChannelUpdate(
 
     row.verdict = 'upgradable';
     report.providers.push(row);
-    actions.push(
-      upgradeAction({
-        providerId: adapter.manifest.id,
-        channel: channel.id,
-        packageName,
-        target: query.version,
-        requiresNetwork: channel.requiresNetwork,
-        requiresElevation: channel.requiresElevation,
-        installed: detection.version ?? 'an unknown version',
-      }),
-    );
+    const action = upgradeAction({
+      providerId: adapter.manifest.id,
+      channel: channel.id,
+      packageName,
+      target: query.version,
+      requiresNetwork: channel.requiresNetwork,
+      requiresElevation: channel.requiresElevation,
+      installed: detection.version ?? 'an unknown version',
+    });
+    actions.push(action);
+    updateTargets.set(action.id, {
+      providerId: adapter.manifest.id,
+      target: query.version,
+      adapter,
+    });
   }
 
   report.network = [...destinations].sort();
@@ -375,6 +387,71 @@ export async function runPackageChannelUpdate(
     }),
     runner: adapters.runner,
     now: context.now,
+    verifyPostconditions: async (applied) => {
+      const postconditions: Diagnostic[] = [];
+      for (const outcome of applied) {
+        if (outcome.status !== 'applied' && outcome.status !== 'already-satisfied') continue;
+        const target = updateTargets.get(outcome.actionId);
+        if (target === undefined) continue;
+
+        const detection = await target.adapter.detect(providerContext);
+        const observed =
+          detection.version === null ? null : parseSemanticVersion(detection.version);
+        const expected = parseSemanticVersion(target.target);
+        const exactTarget =
+          observed !== null && expected !== null && compareVersions(observed, expected) === 0;
+        if (!exactTarget) {
+          postconditions.push(
+            diagnostic({
+              severity: 'error',
+              code: 'provider-update-version-not-observed',
+              subject: target.adapter.manifest.id,
+              message:
+                `${target.providerId} update did not become active: requested ${target.target}, but the executable currently resolved on PATH reports ${detection.version ?? 'no readable version'}`,
+              path: detection.executable,
+              remediation:
+                'Review duplicate PATH installations. Token Harness will not report this update as successful while the old executable is still the one being resolved.',
+            }),
+          );
+          continue;
+        }
+
+        if (
+          target.adapter.manifest.id === 'harnesstrim' &&
+          detection.versionVerdict !== 'in-range'
+        ) {
+          const drift = detection.warnings.find(
+            (warning) => warning.code === 'provider-capabilities-drift',
+          );
+          postconditions.push(
+            diagnostic({
+              severity: 'error',
+              code: 'harnesstrim-update-contract-mismatch',
+              subject: target.adapter.manifest.id,
+              message:
+                `HarnessTrim ${target.target} was installed, but its machine-readable capability/artifact contract did not pass Token Harness validation` +
+                (drift === undefined ? '' : `: ${drift.message}`),
+              path: detection.executable,
+              remediation:
+                'Keep the previous working HarnessTrim release until the changed contract is understood.',
+            }),
+          );
+          continue;
+        }
+
+        postconditions.push(
+          diagnostic({
+            severity: 'info',
+            code: 'provider-update-version-verified',
+            subject: target.adapter.manifest.id,
+            message: `${target.providerId} ${target.target} is now the executable resolved on PATH and passed post-update detection`,
+            path: detection.executable,
+            remediation: null,
+          }),
+        );
+      }
+      return postconditions;
+    },
   });
   diagnostics.push(...transaction.diagnostics);
 
