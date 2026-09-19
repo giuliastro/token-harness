@@ -14,10 +14,7 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderContext } from './contract.js';
-import {
-  parseGitNexusCliCapabilities,
-  parseGitNexusVersion,
-} from './gitnexus-candidate.js';
+import { parseGitNexusCliCapabilities, parseGitNexusVersion } from './gitnexus-candidate.js';
 
 /**
  * First reviewed managed MCP slice for GitNexus.
@@ -91,8 +88,7 @@ export async function observeGitNexusManagedRuntime(
   const version = parseGitNexusVersion(`${versionOutcome.stdout}\n${versionOutcome.stderr}`);
   const actual = version === null ? null : parseSemanticVersion(version);
   const floor = parseSemanticVersion(GITNEXUS_REVIEWED_MCP_VERSION);
-  const newEnough =
-    actual !== null && floor !== null && compareVersions(actual, floor) >= 0;
+  const newEnough = actual !== null && floor !== null && compareVersions(actual, floor) >= 0;
   if (versionOutcome.exitCode !== 0 || !newEnough) {
     return {
       ready: false,
@@ -135,8 +131,7 @@ function prerequisiteDiagnostic(harness: HarnessId, detail: string): Diagnostic 
     code: 'gitnexus-managed-mcp-prerequisite',
     subject: harness,
     message: detail,
-    remediation:
-      `Install or update GitNexus to ${GITNEXUS_REVIEWED_MCP_VERSION} or newer with the MCP command, then refresh Token Harness`,
+    remediation: `Install or update GitNexus to ${GITNEXUS_REVIEWED_MCP_VERSION} or newer with the MCP command, then refresh Token Harness`,
   });
 }
 
