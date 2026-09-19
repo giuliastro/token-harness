@@ -49,7 +49,10 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /Applying the new configuration and refreshing status/);
     assert.match(GUIDE_JS, /Refreshing the current setup/);
     assert.match(GUIDE_JS, /\/api\/overview\?period=.*&refresh=1/);
-    assert.doesNotMatch(GUIDE_JS, /Displayed status is the previous state until you choose Refresh/);
+    assert.doesNotMatch(
+      GUIDE_JS,
+      /Displayed status is the previous state until you choose Refresh/,
+    );
   });
 
   it('keeps advanced evaluation installation explicitly external and manual', () => {
