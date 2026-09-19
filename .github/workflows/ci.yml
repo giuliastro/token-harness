@@ -48,33 +48,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format diagnostic
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          pnpm exec prettier --write \
-            apps/cli/src/commands/doctor.ts \
-            apps/cli/src/commands/plan.ts \
-            apps/cli/src/commands/update-base.ts \
-            packages/adapters/src/providers/gitnexus-managed.ts \
-            packages/adapters/src/providers/headroom-provider.ts \
-            packages/adapters/src/providers/managed-optimization-tools.ts \
-            packages/adapters/src/providers/mcptoon-managed.ts \
-            packages/adapters/src/providers/version-compatibility.ts \
-            packages/adapters/test/harnesstrim.test.ts \
-            tests/integration/update-command.test.ts
-          git diff -- \
-            apps/cli/src/commands/doctor.ts \
-            apps/cli/src/commands/plan.ts \
-            apps/cli/src/commands/update-base.ts \
-            packages/adapters/src/providers/gitnexus-managed.ts \
-            packages/adapters/src/providers/headroom-provider.ts \
-            packages/adapters/src/providers/managed-optimization-tools.ts \
-            packages/adapters/src/providers/mcptoon-managed.ts \
-            packages/adapters/src/providers/version-compatibility.ts \
-            packages/adapters/test/harnesstrim.test.ts \
-            tests/integration/update-command.test.ts
-          exit 1
+      - name: Format check
+        run: pnpm format:check
 
       - name: Test
         run: pnpm test
