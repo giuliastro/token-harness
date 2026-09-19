@@ -26,20 +26,25 @@ describe('first-run guided overview', () => {
     assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
   });
 
-  it('puts the next setup action beside an incomplete agent', () => {
+  it('puts setup beside an agent only when a reviewed action is actually available', () => {
     assert.match(GUIDE_JS, /Setup incomplete/);
     assert.match(GUIDE_JS, /Finish setup for /);
     assert.match(GUIDE_JS, /Finish setup/);
-    assert.match(GUIDE_JS, /baselineReadyFor/);
-    assert.match(GUIDE_JS, /componentConfiguredFor\('rtk'/);
-    assert.match(GUIDE_JS, /componentConfiguredFor\('harnesstrim'/);
+    assert.match(GUIDE_JS, /baselineStatusFor/);
+    assert.match(GUIDE_JS, /target\.state === 'actionable'/);
+    assert.match(GUIDE_JS, /No automatic setup/);
+    assert.doesNotMatch(GUIDE_JS, /baselineReadyFor/);
     assert.doesNotMatch(GUIDE_JS, /Review baseline for /);
     assert.doesNotMatch(GUIDE_JS, /Open setup/);
     assert.doesNotMatch(GUIDE_JS, /Manage setup/);
   });
 
-  it('puts contextual actions on optimizer cards instead of a detached action wall', () => {
-    assert.match(GUIDE_JS, /Installed · not connected/);
+  it('puts only actionable contextual setup controls on optimizer cards', () => {
+    assert.match(GUIDE_JS, /Installed · setup available/);
+    assert.match(GUIDE_JS, /Installed · no automatic setup/);
+    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
+    assert.match(GUIDE_JS, /Why there is no Connect button/);
+    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
     assert.match(GUIDE_JS, /Set up for /);
     assert.match(GUIDE_JS, /Install update/);
     assert.match(GUIDE_JS, /Re-check health/);

@@ -219,22 +219,61 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return (current?.stack?.components || []).filter(component => component.configured);
   }
 
-  function componentConfiguredFor(id, agentId) {
-    const component = managedComponent(id);
-    return Boolean(component?.configuredHarnesses?.includes(agentId));
+  function setupTarget(agentId, providerId) {
+    const agent = activeAgents().find(item => item.id === agentId);
+    return agent?.setup?.find(item => item.providerId === providerId) || null;
   }
 
-  function baselineReadyFor(agentId) {
-    return componentConfiguredFor('rtk', agentId) && componentConfiguredFor('harnesstrim', agentId);
+  function baselineStatusFor(agentId) {
+    const targets = ['rtk', 'harnesstrim']
+      .map(providerId => setupTarget(agentId, providerId))
+      .filter(Boolean);
+    const actionable = targets.filter(target => target.state === 'actionable');
+    const unavailable = targets.filter(target => target.state === 'unavailable');
+    const connected = targets.filter(target => target.state === 'connected');
+    if (actionable.length)
+      return {
+        state: 'incomplete',
+        label: 'Setup incomplete',
+        cls: 'warn',
+        actionable,
+        unavailable,
+        connected,
+      };
+    if (unavailable.length && connected.length === 0)
+      return {
+        state: 'unavailable',
+        label: 'No automatic setup',
+        cls: '',
+        actionable,
+        unavailable,
+        connected,
+      };
+    if (unavailable.length)
+      return {
+        state: 'limited',
+        label: 'Reviewed setup complete',
+        cls: 'good',
+        actionable,
+        unavailable,
+        connected,
+      };
+    return {
+      state: 'ready',
+      label: 'Ready',
+      cls: 'good',
+      actionable,
+      unavailable,
+      connected,
+    };
   }
 
   function baselineIncompleteAgents() {
-    return activeAgents().filter(agent => !baselineReadyFor(agent.id));
+    return activeAgents().filter(agent => baselineStatusFor(agent.id).state === 'incomplete');
   }
 
-  function providerSupportsAgent(providerId, agentId) {
-    if (providerId === 'gitnexus') return agentId === 'claude';
-    return agentId === 'claude' || agentId === 'codex';
+  function baselineUnavailableAgents() {
+    return activeAgents().filter(agent => baselineStatusFor(agent.id).state === 'unavailable');
   }
 
   function candidateObservation(id) {
@@ -315,9 +354,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
         cls: 'warn',
         title: incomplete.length === 1
           ? 'Finish setup for ' + incomplete[0].name
-          : 'Finish the recommended setup for your coding agents',
-        detail: 'The recommended baseline is RTK + HarnessTrim. Finish setup on each incomplete coding-agent card below; you will see the exact safe plan before anything changes.',
+          : 'Finish the available recommended setup for your coding agents',
+        detail: 'Every Finish setup action below has at least one reviewed provider change available for that exact agent, version and platform.',
         action: 'configure',
+      };
+    const unavailable = baselineUnavailableAgents();
+    if (unavailable.length)
+      return {
+        label: 'No automatic setup',
+        cls: '',
+        title: 'No reviewed automatic setup is currently available',
+        detail: 'Token Harness will not show a setup button that cannot complete. The agent cards below explain which provider/version combination is not currently managed.',
+        action: 'none',
       };
     if (!(current?.savings?.rows || []).length)
       return {
@@ -372,7 +420,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     );
   }
 
-  function componentState(component) {
+  function componentState(id, component) {
     if (!component || component.detectedState === 'absent') return { label: 'Not installed', cls: '' };
     if (component.health === 'attention') return { label: 'Needs attention', cls: 'warn' };
     if (component.configured)
@@ -380,14 +428,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: component.verification === 'verified' ? 'Connected · verified' : 'Connected',
         cls: 'good',
       };
-    if (component.installed) return { label: 'Installed · not connected', cls: '' };
+    const targets = activeAgents().map(agent => setupTarget(agent.id, id)).filter(Boolean);
+    if (component.installed && targets.some(target => target.state === 'actionable'))
+      return { label: 'Installed · setup available', cls: 'warn' };
+    if (component.installed && targets.some(target => target.state === 'unavailable'))
+      return { label: 'Installed · no automatic setup', cls: '' };
+    if (component.installed) return { label: 'Installed', cls: '' };
     return { label: 'Not installed', cls: '' };
   }
 
   function renderManagedTool(id) {
     const info = TOOL_INFO[id];
     const component = managedComponent(id);
-    const state = componentState(component);
+    const state = componentState(id, component);
     const card = node('article', undefined, 'tool-card');
     const head = node('div', undefined, 'tool-head');
     const title = node('div');
@@ -400,9 +453,20 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
     const facts = node('div', undefined, 'tool-facts');
     if (component?.version) facts.append(node('span', 'Installed version'), node('strong', 'v' + component.version));
+    const providerTargets = activeAgents()
+      .map(agent => ({ agent, target: setupTarget(agent.id, id) }))
+      .filter(item => item.target);
+    const actionableFor = providerTargets
+      .filter(item => item.target.state === 'actionable')
+      .map(item => item.agent.name);
+    const unavailableFor = providerTargets.filter(item => item.target.state === 'unavailable');
     const configuredFor = component?.configuredHarnesses?.length
       ? component.configuredHarnesses.map(agentName).join(', ')
-      : 'Not connected to a coding agent';
+      : actionableFor.length
+        ? 'Setup available for ' + actionableFor.join(', ')
+        : unavailableFor.length
+          ? 'No reviewed automatic connection is available'
+          : 'Not applicable to the detected coding agents';
     facts.append(node('span', 'Connection'), node('strong', configuredFor));
     if (component?.update === 'available')
       facts.append(
@@ -412,6 +476,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
     else if (component?.update === 'blocked')
       facts.append(node('span', 'Update'), node('strong', 'Newer version not reviewed yet'));
     card.append(facts);
+
+    if (
+      component?.installed &&
+      !(component?.configuredHarnesses?.length) &&
+      actionableFor.length === 0 &&
+      unavailableFor.length > 0
+    )
+      card.append(
+        messageBox(
+          'Why there is no Connect button',
+          unavailableFor[0].target.reason,
+        ),
+      );
 
     if (component?.warnings?.length) {
       const attention = component.health === 'attention';
@@ -428,25 +505,15 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
     const actions = node('div', undefined, 'inline-actions');
     for (const agent of activeAgents()) {
-      if (!providerSupportsAgent(id, agent.id)) continue;
-      if (component?.configuredHarnesses?.includes(agent.id)) continue;
-      if (info.optional) {
-        actions.append(
-          actionButton(
-            'Set up for ' + agent.name,
-            () => reviewSetup(agent.id, id),
-            'secondary',
-          ),
-        );
-      } else {
-        actions.append(
-          actionButton(
-            component?.installed ? 'Connect to ' + agent.name : 'Set up for ' + agent.name,
-            () => reviewSetup(agent.id, id),
-            'secondary',
-          ),
-        );
-      }
+      const target = setupTarget(agent.id, id);
+      if (target?.state !== 'actionable') continue;
+      actions.append(
+        actionButton(
+          component?.installed ? 'Connect to ' + agent.name : 'Set up for ' + agent.name,
+          () => reviewSetup(agent.id, id),
+          'secondary',
+        ),
+      );
     }
     if (component?.update === 'available')
       actions.append(actionButton('Install update', () => readOnlyOperation('updates'), 'secondary'));
@@ -473,7 +540,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       return;
     }
     for (const agent of activeAgents()) {
-      const ready = baselineReadyFor(agent.id);
+      const baseline = baselineStatusFor(agent.id);
       const card = node('article', undefined, 'tool-card compact');
       const head = node('div', undefined, 'tool-head');
       const title = node('div');
@@ -481,16 +548,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('h3', agent.name),
         node('span', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
       );
-      head.append(title, pill(ready ? 'Ready' : 'Setup incomplete', ready ? 'good' : 'warn'));
-      card.append(
-        head,
-        node(
-          'p',
-          ready
-            ? 'RTK + HarnessTrim are configured for this coding agent.'
-            : 'The agent is detected. Finish the recommended RTK + HarnessTrim setup to complete onboarding.',
-        ),
-      );
+      head.append(title, pill(baseline.label, baseline.cls));
+      const detail =
+        baseline.state === 'incomplete'
+          ? 'A reviewed automatic setup is available for ' +
+            baseline.actionable.map(target => target.provider).join(' + ') +
+            '. Finish setup to review and apply it.'
+          : baseline.state === 'unavailable'
+            ? 'No reviewed automatic baseline change is available for this exact agent, provider versions and platform. Token Harness will not offer a no-op setup button.'
+            : baseline.state === 'limited'
+              ? 'All currently reviewed automatic baseline actions are complete. Other baseline combinations are not automatically changed on this version/platform.'
+              : 'All reviewed automatic baseline connections available for this coding agent are configured.';
+      card.append(head, node('p', detail));
       if (agent.providers?.length)
         card.append(
           node(
@@ -499,10 +568,16 @@ export const GUIDE_PRODUCT_JS = String.raw`
             'caption',
           ),
         );
-      if (!ready) {
+      if (baseline.state === 'incomplete') {
         const actions = node('div', undefined, 'inline-actions');
         actions.append(actionButton('Finish setup', () => reviewSetup(agent.id)));
         card.append(actions);
+      } else if (baseline.unavailable.length) {
+        const details = node('details', undefined, 'agent-details');
+        details.append(node('summary', 'Why some automatic connections are unavailable'));
+        for (const target of baseline.unavailable)
+          details.append(node('p', target.provider + ': ' + target.reason, 'caption'));
+        card.append(details);
       }
       root.append(card);
     }
@@ -524,7 +599,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'Safe preview first',
         provider
           ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + '. If setup is supported, the exact change appears before you confirm it.'
-          : 'Token Harness will prepare the recommended RTK + HarnessTrim setup for ' + agent.name + '. The exact files and changes appear before you confirm them.',
+          : 'Token Harness will prepare only the reviewed RTK/HarnessTrim changes that are actually available for ' + agent.name + ' on this version and platform. The exact files and changes appear before you confirm them.',
       ),
       messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
@@ -550,13 +625,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
       .then(data => {
         if (run !== modalRun || !$('modal').open) return;
         pendingTicket = data.ticket;
+        if (!data.ticket) {
+          refreshOverviewAfterMutation('Refreshing setup availability after the review…').catch(
+            () => undefined,
+          );
+        }
         $('modal-content').replaceChildren();
         $('modal-content').append(
           messageBox(
             provider ? 'This optimizer only' : 'Recommended setup',
             provider
               ? 'This approval changes only ' + provider.name + ' for ' + agent.name + '. Other optimizers are left unchanged.'
-              : 'This approval covers only RTK + HarnessTrim for ' + agent.name + '. Optional optimizers stay separate.',
+              : 'This review includes only the currently actionable RTK/HarnessTrim changes for ' + agent.name + '. Unsupported or already-complete baseline providers are left out. Optional optimizers stay separate.',
           ),
         );
         if (!data.changes.length) {
@@ -564,7 +644,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             messageBox(
               'No setup change available',
               (data.notices || []).join(' ') ||
-                'This setup is already complete, or a prerequisite/version prevents Token Harness from changing it safely.',
+                'No reviewed automatic change is available now. The dashboard is refreshing so an obsolete setup action is not left visible.',
             ),
           );
         } else {
