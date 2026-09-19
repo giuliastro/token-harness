@@ -17,11 +17,9 @@ import type {
   ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
+import { GITNEXUS_REVIEWED_BENCHMARK_VERSION } from './gitnexus-candidate.js';
 import {
-  GITNEXUS_REVIEWED_BENCHMARK_VERSION,
-  observeGitNexusCandidate,
-} from './gitnexus-candidate.js';
-import {
+  observeGitNexusManagedRuntime,
   planGitNexusManagedMcpActivation,
   verifyGitNexusManagedMcpActivation,
 } from './gitnexus-managed.js';
@@ -29,11 +27,12 @@ import {
   HEADROOM_REVIEWED_BENCHMARK_VERSION,
   observeHeadroomCandidate,
 } from './headroom-candidate.js';
+import { MCPTOON_REVIEWED_BENCHMARK_VERSION } from './mcptoon-candidate.js';
 import {
-  MCPTOON_REVIEWED_BENCHMARK_VERSION,
-  observeMcptoonCandidate,
-} from './mcptoon-candidate.js';
-import { planMcptoonManagedActivation, verifyMcptoonManagedActivation } from './mcptoon-managed.js';
+  observeMcptoonManagedRuntime,
+  planMcptoonManagedActivation,
+  verifyMcptoonManagedActivation,
+} from './mcptoon-managed.js';
 
 const MCPTOON = providerId('mcptoon');
 const GITNEXUS = providerId('gitnexus');
@@ -180,84 +179,79 @@ function unavailableMetrics(provider: ReturnType<typeof providerId>): MetricsImp
 }
 
 async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetection> {
-  const observation = await observeMcptoonCandidate(context);
+  const observation = await observeMcptoonManagedRuntime(context);
   const configuredHarnesses: HarnessId[] = [];
-  if (observation.version === MCPTOON_REVIEWED_BENCHMARK_VERSION) {
+  if (observation.ready) {
     for (const harness of [CLAUDE, CODEX]) {
       const verification = await verifyMcptoonManagedActivation(context, harness);
       if (verification.state === 'verified') configuredHarnesses.push(harness);
     }
   }
   const warnings =
-    observation.state === 'unsupported-version'
+    !observation.absent && !observation.ready
       ? [
           warning(
-            'mcptoon-provider-version-unreviewed',
+            'mcptoon-provider-capability-unavailable',
             'mcptoon',
-            observation.reasons[0] ?? 'The installed mcptoon version is outside the reviewed row.',
+            observation.detail,
           ),
         ]
       : [];
   return {
     providerId: MCPTOON,
     state:
-      observation.state === 'absent'
+      observation.absent
         ? 'absent'
         : configuredHarnesses.length > 0
           ? 'configured'
           : 'installed',
     version: observation.version,
     executable: observation.executable,
-    installationChannel: observation.state === 'absent' ? 'pipx' : null,
+    installationChannel: observation.absent ? 'pipx' : null,
     versionVerdict: versionVerdict(observation.version, MCPTOON_REVIEWED_BENCHMARK_VERSION),
     configuredHarnesses,
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses:
-      observation.version === MCPTOON_REVIEWED_BENCHMARK_VERSION ? [CLAUDE, CODEX] : [],
+    assignableHarnesses: observation.ready ? [CLAUDE, CODEX] : [],
     evidence: [],
     warnings,
   };
 }
 
 async function gitnexusDetection(context: ProviderContext): Promise<ProviderDetection> {
-  const observation = await observeGitNexusCandidate(context);
-  const verification =
-    observation.version === GITNEXUS_REVIEWED_BENCHMARK_VERSION
-      ? await verifyGitNexusManagedMcpActivation(context, CLAUDE)
-      : null;
+  const observation = await observeGitNexusManagedRuntime(context);
+  const verification = observation.ready
+    ? await verifyGitNexusManagedMcpActivation(context, CLAUDE)
+    : null;
   const configuredHarnesses = verification?.state === 'verified' ? [CLAUDE] : [];
   const warnings =
-    observation.state === 'unsupported-version'
+    !observation.absent && !observation.ready
       ? [
           warning(
-            'gitnexus-provider-version-unreviewed',
+            'gitnexus-provider-capability-unavailable',
             'gitnexus',
-            observation.reasons[0] ?? 'The installed GitNexus version is outside the reviewed row.',
+            observation.detail,
           ),
         ]
       : [];
   return {
     providerId: GITNEXUS,
     state:
-      observation.state === 'absent'
+      observation.absent
         ? 'absent'
         : configuredHarnesses.length > 0
           ? 'configured'
           : 'installed',
     version: observation.version,
     executable: observation.executable,
-    installationChannel: observation.state === 'absent' ? 'npm' : null,
+    installationChannel: observation.absent ? 'npm' : null,
     versionVerdict: versionVerdict(observation.version, GITNEXUS_REVIEWED_BENCHMARK_VERSION),
     configuredHarnesses,
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses:
-      observation.version === GITNEXUS_REVIEWED_BENCHMARK_VERSION && observation.supportsMcp
-        ? [CLAUDE]
-        : [],
+    assignableHarnesses: observation.ready ? [CLAUDE] : [],
     evidence: [],
     warnings,
   };
