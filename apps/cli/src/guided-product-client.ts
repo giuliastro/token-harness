@@ -23,24 +23,24 @@ export const GUIDE_PRODUCT_JS = String.raw`
     },
     harnesstrim: {
       name: 'HarnessTrim',
-      role: 'Adds reviewed instructions that help coding agents keep tool output and context lean.',
+      role: 'Adds version-aware instructions that help coding agents keep tool output and context lean.',
       managed: true,
     },
     mcptoon: {
       name: 'mcptoon',
-      role: 'Provides the reviewed compact MCP discovery integration on exact admitted versions.',
+      role: 'Provides compact MCP discovery integration and verifies the resulting setup.',
       managed: true,
       optional: true,
     },
     gitnexus: {
       name: 'GitNexus',
-      role: 'Registers an already-installed reviewed GitNexus CLI as a narrow Claude MCP integration.',
+      role: 'Registers an already-installed GitNexus CLI as a narrow Claude MCP integration and verifies the result.',
       managed: true,
       optional: true,
     },
     headroom: {
       name: 'Headroom',
-      role: 'Provides local MCP compression and retrieval through the reviewed Headroom server.',
+      role: 'Provides local MCP compression and retrieval through the installed Headroom server.',
       managed: true,
       optional: true,
     },
@@ -98,7 +98,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       element.disabled = value;
     });
     $('live-status').textContent = value
-      ? (applying ? 'Applying only the reviewed change…' : 'Reading current state…')
+      ? (applying ? 'Applying only the approved change…' : 'Reading current state…')
       : 'Nothing changes without your approval';
   }
 
@@ -345,7 +345,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Needs attention',
         cls: 'warn',
         title: 'One configured optimizer needs attention',
-        detail: 'Use Re-check health below to see whether the configured integration still matches its reviewed state.',
+        detail: 'Use Re-check health below to see whether the configured integration still matches the provider and agent state currently installed.',
         action: 'verify',
       };
     if (incomplete.length)
@@ -557,7 +557,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           : baseline.state === 'unavailable'
             ? 'The installed baseline providers do not currently expose an automatic setup surface for this agent. Token Harness will not offer a no-op button.'
             : baseline.state === 'limited'
-              ? 'All currently reviewed automatic baseline actions are complete. Other baseline combinations are not automatically changed on this version/platform.'
+              ? 'All automatic baseline actions exposed by the installed providers are complete.'
               : 'All automatic baseline connections exposed for this coding agent are configured.';
       card.append(head, node('p', detail));
       if (agent.providers?.length)
@@ -599,7 +599,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'Safe preview first',
         provider
           ? 'Token Harness will inspect only ' + provider.name + ' for ' + agent.name + '. If setup is supported, the exact change appears before you confirm it.'
-          : 'Token Harness will prepare only the reviewed RTK/HarnessTrim changes that are actually available for ' + agent.name + ' on this version and platform. The exact files and changes appear before you confirm them.',
+          : 'Token Harness will prepare the RTK/HarnessTrim changes exposed by the installed providers for ' + agent.name + '. Newer combinations use the same transactional path and are checked again after apply. The exact files and changes appear before you confirm them.',
       ),
       messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
       progress('Checking ' + agent.name, 'Reading installed optimizer versions and current integration state.'),
@@ -689,7 +689,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const run = modalRun;
     setBusy(true, true);
     $('modal-actions').replaceChildren(modalClose('Applying…', true));
-    $('modal-content').append(progress('Applying the reviewed change', 'Keep this window open until the transaction finishes.'));
+    $('modal-content').append(progress('Applying the approved change', 'Keep this window open until the transaction finishes.'));
     try {
       await ensureSession();
       const result = await request('/api/apply', { ticket });
@@ -1002,7 +1002,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         isVerify ? 'Troubleshooting check' : 'Update preview',
         isVerify
           ? 'Re-checks the configured optimizer integrations without repairing or changing them. Normal setup already performs its own safety checks.'
-          : 'Checks reviewed update channels first. If an installable update exists, you can approve it from this window.',
+          : 'Checks provider update channels first. If an installable update exists, you can approve it from this window; the active executable is re-checked after installation before success is reported.',
       ),
       progress(
         isVerify ? 'Checking configured optimizers' : 'Checking update channels',
