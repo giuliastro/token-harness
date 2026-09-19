@@ -20,6 +20,7 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
     assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
     assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
+    assert.match(GUIDE_JS, /'Connect to ' \+ agent\.name/);
     assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
@@ -43,14 +44,12 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
   });
 
-  it('never automatically refreshes the whole overview after apply', () => {
-    assert.match(GUIDE_JS, /choose Refresh when you want to re-read the complete setup/i);
-    const applyStart = GUIDE_JS.indexOf('async function applyTicket(ticket)');
-    const manualRefresh = "$('refresh').addEventListener";
-    const refreshHandler = GUIDE_JS.indexOf(manualRefresh, applyStart);
-    assert.notEqual(applyStart, -1);
-    assert.notEqual(refreshHandler, -1);
-    assert.doesNotMatch(GUIDE_JS.slice(applyStart, refreshHandler), /refresh\(true\)/);
+  it('automatically re-reads the overview after an approved mutation', () => {
+    assert.match(GUIDE_JS, /refreshOverviewAfterMutation/);
+    assert.match(GUIDE_JS, /Applying the new configuration and refreshing status/);
+    assert.match(GUIDE_JS, /Refreshing the current setup/);
+    assert.match(GUIDE_JS, /\/api\/overview\?period=.*&refresh=1/);
+    assert.doesNotMatch(GUIDE_JS, /Displayed status is the previous state until you choose Refresh/);
   });
 
   it('keeps advanced evaluation installation explicitly external and manual', () => {
