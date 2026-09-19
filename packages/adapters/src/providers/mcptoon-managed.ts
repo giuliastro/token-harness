@@ -6,7 +6,11 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderContext } from './contract.js';
-import { observeMcptoonCandidate } from './mcptoon-candidate.js';
+import {
+  mcptoonVersionAtLeast,
+  parseMcptoonManifestCapabilities,
+  parseMcptoonVersion,
+} from './mcptoon-candidate.js';
 
 /**
  * Reviewed instruction-only activation for mcptoon.
@@ -57,6 +61,72 @@ export interface McptoonManagedVerification {
   state: McptoonManagedVerificationState;
   target: string | null;
   detail: string;
+}
+
+export interface McptoonManagedRuntime {
+  ready: boolean;
+  absent: boolean;
+  version: string | null;
+  executable: string | null;
+  detail: string;
+}
+
+export async function observeMcptoonManagedRuntime(
+  context: ProviderContext,
+): Promise<McptoonManagedRuntime> {
+  const versionOutcome = await context.runner.run({
+    executable: 'mcptoon',
+    args: ['--version'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+  if (versionOutcome.failure !== null) {
+    return {
+      ready: false,
+      absent: versionOutcome.failure.reason === 'executable-not-found',
+      version: null,
+      executable: versionOutcome.executablePath,
+      detail: `mcptoon --version failed: ${versionOutcome.failure.reason}`,
+    };
+  }
+  const version = parseMcptoonVersion(`${versionOutcome.stdout}\n${versionOutcome.stderr}`);
+  if (
+    versionOutcome.exitCode !== 0 ||
+    version === null ||
+    !mcptoonVersionAtLeast(version, MCPTOON_MANAGED_MINIMUM_VERSION)
+  ) {
+    return {
+      ready: false,
+      absent: false,
+      version,
+      executable: versionOutcome.executablePath,
+      detail:
+        version === null
+          ? 'mcptoon did not report a semantic version'
+          : `mcptoon ${version} predates the managed runtime floor ${MCPTOON_MANAGED_MINIMUM_VERSION}`,
+    };
+  }
+
+  const help = await context.runner.run({
+    executable: 'mcptoon',
+    args: ['--help'],
+    cwd: context.projectRoot,
+    timeoutMs: 20_000,
+  });
+  const capabilities =
+    help.failure === null && help.exitCode === 0
+      ? parseMcptoonManifestCapabilities(`${help.stdout}\n${help.stderr}`)
+      : { compact: false, json: false };
+  const ready = capabilities.compact && capabilities.json;
+  return {
+    ready,
+    absent: false,
+    version,
+    executable: versionOutcome.executablePath,
+    detail: ready
+      ? `mcptoon ${version} exposes the compact/JSON CLI surfaces used by the managed integration`
+      : `mcptoon ${version} no longer advertises the compact/JSON CLI surfaces required by the managed integration`,
+  };
 }
 
 const DECODER = new TextDecoder();
@@ -317,15 +387,15 @@ export async function planMcptoonManagedActivation(
     };
   }
 
-  const observation = await observeMcptoonCandidate(context);
+  const observation = await observeMcptoonManagedRuntime(context);
   const activation =
     harness === 'claude'
       ? await planClaudeActivation(context, harness)
       : await planCodexActivation(context, harness);
 
-  if (observation.state === 'benchmark-ready') return activation;
+  if (observation.ready) return activation;
 
-  if (observation.state === 'absent') {
+  if (observation.absent) {
     const activationSatisfied = activation.diagnostics.some(
       (entry) => entry.code === 'mcptoon-guidance-already-present',
     );
@@ -383,8 +453,9 @@ export async function planMcptoonManagedActivation(
         code: 'mcptoon-managed-prerequisite',
         subject: harness,
         message:
-          `mcptoon ${observation.version ?? ''} is runnable but not on the reviewed managed-activation surface`.trim(),
-        remediation: `Keep the existing installation user-owned, or move to the exact reviewed mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} build`,
+          observation.detail,
+        remediation:
+          `Update mcptoon to ${MCPTOON_MANAGED_MINIMUM_VERSION} or newer with the required compact/JSON CLI surfaces, then refresh Token Harness`,
       }),
     ],
   };
@@ -394,12 +465,12 @@ export async function verifyMcptoonManagedActivation(
   context: ProviderContext,
   harness: HarnessId,
 ): Promise<McptoonManagedVerification> {
-  const observation = await observeMcptoonCandidate(context);
-  if (observation.state !== 'benchmark-ready') {
+  const observation = await observeMcptoonManagedRuntime(context);
+  if (!observation.ready) {
     return {
       state: 'candidate-unavailable',
       target: null,
-      detail: observation.reasons.join('; '),
+      detail: observation.detail,
     };
   }
 
@@ -433,7 +504,7 @@ export async function verifyMcptoonManagedActivation(
     return {
       state: 'not-configured',
       target,
-      detail: 'The reviewed mcptoon agent instructions are not present',
+      detail: 'The Token Harness mcptoon agent instructions are not present',
     };
   }
 
@@ -441,6 +512,6 @@ export async function verifyMcptoonManagedActivation(
     state: 'verified',
     target,
     detail:
-      'Reviewed agent instructions are present and mcptoon exposes the reviewed passive CLI capabilities',
+      `Agent instructions are present and mcptoon ${observation.version ?? ''} exposes the required passive CLI capabilities`,
   };
 }
