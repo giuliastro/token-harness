@@ -1113,7 +1113,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'p',
         available.length
           ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
-          : 'Check installed optimizer versions. If a reviewed update is available, you can install it from the same dialog.',
+          : 'Check installed optimizer versions. If an update is available, you can install it from the same dialog; Token Harness verifies the active runtime after installation.',
         'caption',
       ),
     );
