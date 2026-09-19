@@ -21,7 +21,7 @@ import {
  * `mcptoon init`, `mcptoon add`, starts a server, or rewrites ~/.mcptoon/config.json.
  */
 export const MCPTOON_REVIEWED_INSTALL_VERSION = '0.7.10';
-/** Backwards-compatible alias. Managed admission is exact, not a semver floor. */
+/** Managed runtime floor; newer releases are admitted when the required CLI capabilities remain. */
 export const MCPTOON_MANAGED_MINIMUM_VERSION = MCPTOON_REVIEWED_INSTALL_VERSION;
 export const MCPTOON_MARKER_BEGIN = 'TOKEN-HARNESS:MCPTOON:BEGIN';
 export const MCPTOON_MARKER_END = 'TOKEN-HARNESS:MCPTOON:END';
