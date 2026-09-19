@@ -22,6 +22,7 @@ import type {
 import { observeHeadroomCandidate } from './headroom-candidate.js';
 import {
   HEADROOM_REVIEWED_MCP_VERSION,
+  headroomManagedMcpRuntime,
   headroomOwnedArtifact,
   planHeadroomManagedMcpActivation,
   verifyHeadroomManagedMcpActivation,
@@ -79,15 +80,16 @@ function manualInstallWarning() {
     severity: 'warning',
     code: 'headroom-uv-install-prerequisite',
     subject: 'headroom',
-    message: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is not installed. Token Harness can manage its MCP configuration after the reviewed CLI is present.`,
-    remediation: `With your existing uv and a compatible system Python >=3.10, run: uv tool install --no-managed-python --no-python-downloads "headroom-ai[mcp]==${HEADROOM_REVIEWED_MCP_VERSION}". Token Harness does not install uv, Python, or admin prerequisites.`,
+    message: `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} or newer is not installed. Token Harness can manage its MCP configuration after a compatible CLI is present.`,
+    remediation: `With your existing uv and a compatible system Python >=3.10, install headroom-ai[mcp] ${HEADROOM_REVIEWED_MCP_VERSION} or newer. Token Harness does not install uv, Python, or admin prerequisites.`,
   });
 }
 
 async function detect(context: ProviderContext): Promise<ProviderDetection> {
   const observation = await observeHeadroomCandidate(context);
+  const runtime = await headroomManagedMcpRuntime(context);
   const configuredHarnesses: HarnessId[] = [];
-  if (observation.version === HEADROOM_REVIEWED_MCP_VERSION) {
+  if (runtime.ok) {
     for (const harness of [CLAUDE, CODEX]) {
       const verification = await verifyHeadroomManagedMcpActivation(context, harness);
       if (verification.state === 'verified') configuredHarnesses.push(harness);
@@ -96,16 +98,15 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
 
   const warnings = [];
   if (observation.state === 'absent') warnings.push(manualInstallWarning());
-  if (observation.state === 'unsupported-version') {
+  else if (!runtime.ok) {
     warnings.push(
       diagnostic({
         severity: 'warning',
-        code: 'headroom-provider-version-unreviewed',
+        code: 'headroom-provider-capability-unavailable',
         subject: 'headroom',
-        message:
-          observation.reasons[0] ??
-          `The installed Headroom version is outside the reviewed ${HEADROOM_REVIEWED_MCP_VERSION} row.`,
-        remediation: `Keep that installation user-owned or use the exact reviewed ${HEADROOM_REVIEWED_MCP_VERSION} build.`,
+        message: runtime.detail,
+        remediation:
+          `Update Headroom to ${HEADROOM_REVIEWED_MCP_VERSION} or newer with the MCP extra, then refresh Token Harness.`,
       }),
     );
   }
@@ -132,8 +133,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses:
-      observation.version === HEADROOM_REVIEWED_MCP_VERSION ? [CLAUDE, CODEX] : [],
+    assignableHarnesses: runtime.ok ? [CLAUDE, CODEX] : [],
     evidence: [],
     warnings,
   };
@@ -224,7 +224,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
       evidence: [],
       remediation:
         result.state === 'candidate-unavailable'
-          ? `Install reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} with its MCP extra first.`
+          ? `Install Headroom ${HEADROOM_REVIEWED_MCP_VERSION} or newer with its MCP extra first.`
           : null,
     });
   }
