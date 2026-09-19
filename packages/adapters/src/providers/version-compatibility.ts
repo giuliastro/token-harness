@@ -29,9 +29,10 @@ const SOURCE_REVIEWED_RTK_RELEASES = new Set(['0.49.0']);
  * to replace one installed release with another. They do not authorize writing Claude, Codex or
  * OpenCode configuration; those writes still require their exact compatibility rows.
  *
- * HarnessTrim can validate a newer *installed* build dynamically through `capabilities`, but an
- * updater has to decide before that build is installed. Until an install-and-verify transaction can
- * roll a contract mismatch back atomically, unattended updates stop at the latest reviewed target.
+ * HarnessTrim publishes a machine-readable per-version capability and artifact-digest contract.
+ * Its updater is therefore latest-forward: install the offered semantic version transactionally,
+ * then require the newly resolved executable to report that exact version and a compatible
+ * capability contract before the transaction may commit.
  */
 const REVIEWED_PACKAGE_UPDATE_RANGES: ReadonlyMap<
   ProviderId,
@@ -82,7 +83,21 @@ export function admitProviderPackageUpdate(
     };
   }
 
-  if (compareVersions(target, minimum) < 0 || compareVersions(target, maximum) > 0) {
+  if (compareVersions(target, minimum) < 0) {
+    return {
+      state: 'blocked',
+      reason: `${targetVersion} predates the supported provider update floor ${range.minimum}`,
+    };
+  }
+
+  if (provider === HARNESSTRIM) {
+    // HarnessTrim >=0.3 publishes its own exact capability/write-set/artifact contract. The update
+    // transaction re-detects the actual PATH executable after installation and rolls back unless
+    // that exact target version passes the dynamic contract check.
+    return { state: 'admitted' };
+  }
+
+  if (compareVersions(target, maximum) > 0) {
     return {
       state: 'blocked',
       reason: `${targetVersion} is outside the reviewed package-update range ${range.minimum}..${range.maximum}`,
