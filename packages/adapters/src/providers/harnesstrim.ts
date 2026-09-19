@@ -1622,9 +1622,9 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     if (review === undefined || install === undefined) continue;
 
     const reviewed =
-      observed.capabilities === null
+      currentCapabilities === null
         ? installed.version === review.upstreamVersion
-        : writeSetStillReviewed(observed.capabilities, harnessId(harness));
+        : writeSetStillReviewed(currentCapabilities, harnessId(harness));
     if (!reviewed) continue;
 
     const expectedArtifacts = skillArtifacts(context, harness, currentCapabilities);
