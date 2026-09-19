@@ -1285,59 +1285,75 @@ export class GuideService {
           `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,
           'working',
         );
-        const args = ['plan', '--harness', agent.harnessId];
-        if (data['action'] === 'setup' && data['provider'] !== undefined)
-          args.push('--provider', String(data['provider']));
-        if (data['action'] === 'skill') {
-          args.push('--provider', 'none', '--agent-skill');
-        } else if (data['action'] === 'effort')
-          args.push(
-            '--provider',
-            'none',
-            '--native-policy',
-            '--task',
-            String(data['task']),
-            '--profile',
-            data['task'] === 'mechanical'
-              ? 'economy'
-              : data['task'] === 'standard'
-                ? 'balanced'
-                : 'quality',
-          );
-        const result = await this.call<PlanReport>(args);
-        const report = result.data;
-        if (
-          report === null ||
-          result.exitCode !== 0 ||
-          report.conflicts.length > 0 ||
-          report.actions.length === 0 ||
-          !report.persisted ||
-          report.planId === null
-        ) {
+        const planRequests =
+          data['action'] === 'setup' && data['provider'] === undefined
+            ? (agent.harnessId === 'claude'
+                ? [['plan', '--harness', agent.harnessId, '--provider', 'rtk'], ['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']]
+                : [['plan', '--harness', agent.harnessId, '--provider', 'harnesstrim']])
+            : [[]];
+        let producedChange = false;
+        for (const requested of planRequests) {
+          const args =
+            requested.length > 0 ? requested : ['plan', '--harness', agent.harnessId];
+          if (requested.length === 0 && data['action'] === 'setup' && data['provider'] !== undefined)
+            args.push('--provider', String(data['provider']));
+          if (requested.length === 0 && data['action'] === 'skill') {
+            args.push('--provider', 'none', '--agent-skill');
+          } else if (requested.length === 0 && data['action'] === 'effort')
+            args.push(
+              '--provider',
+              'none',
+              '--native-policy',
+              '--task',
+              String(data['task']),
+              '--profile',
+              data['task'] === 'mechanical'
+                ? 'economy'
+                : data['task'] === 'standard'
+                  ? 'balanced'
+                  : 'quality',
+            );
+          const result = await this.call<PlanReport>(args);
+          const report = result.data;
+          if (
+            report === null ||
+            result.exitCode !== 0 ||
+            report.conflicts.length > 0 ||
+            report.actions.length === 0 ||
+            !report.persisted ||
+            report.planId === null
+          ) {
+            if (planRequests.length === 1)
+              notices.push(
+                `${name(agent.harnessId)}: ${explainGuideIssue(
+                  result.diagnostics,
+                  data['action'] === 'effort'
+                    ? 'No supported preference change is needed or available. Your current preference is kept.'
+                    : data['action'] === 'skill'
+                      ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
+                      : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
+                )}`,
+              );
+            continue;
+          }
+          producedChange = true;
+          plans.push(report.planId);
+          if (data['action'] === 'skill') {
+            changes.push({
+              title: `${name(agent.harnessId)}: enable in-session guidance`,
+              description:
+                'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
+              files: 1,
+            });
+          } else {
+            changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
+          }
+          network ||= report.network.length > 0;
+        }
+        if (planRequests.length > 1 && !producedChange)
           notices.push(
-            `${name(agent.harnessId)}: ${explainGuideIssue(
-              result.diagnostics,
-              data['action'] === 'effort'
-                ? 'No supported preference change is needed or available. Your current preference is kept.'
-                : data['action'] === 'skill'
-                  ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
-                  : 'No safe setup change is available. The integration may already be configured, or a required provider is not installed.',
-            )}`,
+            `${name(agent.harnessId)}: The recommended setup is already complete or no remaining baseline change is safely available.`,
           );
-          continue;
-        }
-        plans.push(report.planId);
-        if (data['action'] === 'skill') {
-          changes.push({
-            title: `${name(agent.harnessId)}: enable in-session guidance`,
-            description:
-              'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
-            files: 1,
-          });
-        } else {
-          changes.push(...report.actions.map((action) => describeChange(action, agent.harnessId)));
-        }
-        network ||= report.network.length > 0;
       }
       if (selected.length === 0)
         notices.push(
