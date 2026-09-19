@@ -248,7 +248,6 @@ describe('GitNexus managed candidate lifecycle', () => {
       'gitnexus --version',
       'gitnexus --version',
       'gitnexus --help',
-      'gitnexus status --help',
     ]);
   });
 
