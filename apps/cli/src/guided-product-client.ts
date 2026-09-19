@@ -427,17 +427,25 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
 
     const actions = node('div', undefined, 'inline-actions');
-    if (info.optional) {
-      for (const agent of activeAgents()) {
-        if (!providerSupportsAgent(id, agent.id)) continue;
-        if (!component?.configuredHarnesses?.includes(agent.id))
-          actions.append(
-            actionButton(
-              'Set up for ' + agent.name,
-              () => reviewSetup(agent.id, id),
-              'secondary',
-            ),
-          );
+    for (const agent of activeAgents()) {
+      if (!providerSupportsAgent(id, agent.id)) continue;
+      if (component?.configuredHarnesses?.includes(agent.id)) continue;
+      if (info.optional) {
+        actions.append(
+          actionButton(
+            'Set up for ' + agent.name,
+            () => reviewSetup(agent.id, id),
+            'secondary',
+          ),
+        );
+      } else {
+        actions.append(
+          actionButton(
+            component?.installed ? 'Connect to ' + agent.name : 'Set up for ' + agent.name,
+            () => reviewSetup(agent.id, id),
+            'secondary',
+          ),
+        );
       }
     }
     if (component?.update === 'available')
@@ -551,7 +559,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
               : 'This approval covers only RTK + HarnessTrim for ' + agent.name + '. Optional optimizers stay separate.',
           ),
         );
-        if (!data.changes.length)
+        if (!data.changes.length) {
           $('modal-content').append(
             messageBox(
               'No setup change available',
@@ -559,12 +567,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
                 'This setup is already complete, or a prerequisite/version prevents Token Harness from changing it safely.',
             ),
           );
-        for (const change of data.changes) {
-          const item = node('article', undefined, 'preview-change');
-          item.append(node('h3', change.title), node('p', change.description));
-          $('modal-content').append(item);
+        } else {
+          for (const change of data.changes) {
+            const item = node('article', undefined, 'preview-change');
+            item.append(node('h3', change.title), node('p', change.description));
+            $('modal-content').append(item);
+          }
+          for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         }
-        for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
         $('modal-content').append(messageBox('Safety', 'Apply uses the existing transactional engine with backups, compatibility checks, ownership checks and rollback. Unsupported versions are not forced.', 'safe'));
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket)
@@ -582,6 +592,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
       });
   }
 
+  async function refreshOverviewAfterMutation(message = 'Refreshing setup after the approved change…') {
+    setStatus(message, true);
+    $('stale-state').hidden = true;
+    $('stale-state').textContent = '';
+    const period = $('period').value;
+    current = await request('/api/overview?period=' + encodeURIComponent(period) + '&refresh=1');
+    periodCache.set(period, current);
+    render();
+    await loadActivity();
+    setStatus('Updated at ' + new Date(current.generatedAt).toLocaleTimeString() + '.', false);
+  }
+
   async function applyTicket(ticket) {
     if (!ticket || busy) return;
     const run = modalRun;
@@ -593,12 +615,39 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return;
       $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
-      $('modal-content').replaceChildren(messageBox(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'));
-      $('modal-content').append(node('p', 'The dashboard is now marked as previous state. Choose Refresh when you want to re-read the complete setup.', 'caption'));
-      $('stale-state').hidden = false;
-      $('stale-state').textContent = 'A setup change was applied. Displayed status is the previous state until you choose Refresh.';
+      $('modal-content').replaceChildren(
+        messageBox(result.ok ? 'Applied' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'),
+        progress('Refreshing the current setup', 'Please wait while Token Harness re-reads agents, optimizer connections and health after the change.'),
+      );
+      $('modal-actions').replaceChildren(modalClose('Refreshing…', true));
+      try {
+        await refreshOverviewAfterMutation('Applying the new configuration and refreshing status…');
+        if (run !== modalRun) return;
+        $('modal-content').replaceChildren(
+          messageBox(
+            result.ok ? 'Completed and refreshed' : 'Action finished; status refreshed',
+            (result.messages || []).join(' ') || 'The latest setup state is now shown on the dashboard.',
+            result.ok ? 'safe' : 'warn',
+          ),
+        );
+      } catch (refreshError) {
+        if (run !== modalRun) return;
+        $('stale-state').hidden = false;
+        $('stale-state').textContent = 'The action finished, but Token Harness could not automatically refresh the latest setup state.';
+        $('modal-content').replaceChildren(
+          messageBox(
+            result.ok ? 'Change applied' : 'Action finished',
+            (result.messages || []).join(' ') || 'The action completed.',
+            result.ok ? 'safe' : 'warn',
+          ),
+          messageBox(
+            'Automatic refresh failed',
+            refreshError.message || 'The latest setup state could not be read automatically. Use Refresh to retry the status check.',
+            'warn',
+          ),
+        );
+      }
       $('modal-actions').replaceChildren(modalClose('Done'));
-      loadActivity();
     } catch (error) {
       if (run !== modalRun) return;
       $('modal-error').textContent = error.message;

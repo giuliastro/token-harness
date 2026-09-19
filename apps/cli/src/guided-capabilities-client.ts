@@ -111,9 +111,20 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     return data;
   }
 
-  function markStale() {
-    $('stale-state').hidden = false;
-    $('stale-state').textContent = 'A reviewed change was applied. Displayed status is the previous state until you choose Refresh.';
+  async function waitForAutomaticRefresh() {
+    $('stale-state').hidden = true;
+    $('stale-state').textContent = '';
+    const spinner = $('reading-spinner');
+    const refresh = $('refresh');
+    let observedRefresh = false;
+    refresh.click();
+    const deadline = Date.now() + 120000;
+    while (Date.now() < deadline) {
+      if (!spinner.hidden) observedRefresh = true;
+      if (observedRefresh && spinner.hidden) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('The latest setup state could not be read automatically.');
   }
 
   async function applyTicket(ticket, title) {
@@ -126,11 +137,33 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
       const result = await request('/api/apply', { ticket });
       if (activeRun !== runId) return;
       $('modal-title').textContent = result.ok ? title : 'Change needs attention';
-      $('modal-content').replaceChildren(message(result.ok ? 'Completed' : 'Needs attention', (result.messages || []).join(' ') || 'The transaction finished.', result.ok ? 'safe' : 'warn'));
-      if (result.ok) markStale();
+      $('modal-content').replaceChildren(
+        message(
+          result.ok ? 'Applied' : 'Needs attention',
+          (result.messages || []).join(' ') || 'The transaction finished.',
+          result.ok ? 'safe' : 'warn',
+        ),
+        progress(
+          'Refreshing the current setup',
+          'Please wait while Token Harness re-reads the latest agent and optimizer state.',
+        ),
+      );
+      $('modal-actions').replaceChildren(closeButton('Refreshing…', true));
+      await waitForAutomaticRefresh();
+      if (activeRun !== runId) return;
+      $('modal-content').replaceChildren(
+        message(
+          result.ok ? 'Completed and refreshed' : 'Action finished; status refreshed',
+          (result.messages || []).join(' ') || 'The latest setup state is now displayed.',
+          result.ok ? 'safe' : 'warn',
+        ),
+      );
       $('modal-actions').replaceChildren(closeButton('Done'));
     } catch (error) {
       if (activeRun !== runId) return;
+      $('stale-state').hidden = false;
+      $('stale-state').textContent =
+        'The action finished, but Token Harness could not automatically refresh the latest setup state.';
       $('modal-error').textContent = error.message;
       $('modal-error').hidden = false;
       $('modal-actions').replaceChildren(closeButton('Close'));
@@ -152,14 +185,22 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
       const data = await request('/api/preview', body);
       if (activeRun !== runId || !$('modal').open) return;
       $('modal-content').replaceChildren();
-      if (!(data.changes || []).length)
-        $('modal-content').append(message('No managed change proposed', (data.notices || []).join(' ') || 'Nothing needs to be changed.'));
-      for (const change of data.changes || []) {
-        const item = node('article', undefined, 'preview-change');
-        item.append(node('h3', change.title), node('p', change.description));
-        $('modal-content').append(item);
+      if (!(data.changes || []).length) {
+        $('modal-content').append(
+          message(
+            'No managed change proposed',
+            (data.notices || []).join(' ') || 'Nothing needs to be changed.',
+          ),
+        );
+      } else {
+        for (const change of data.changes || []) {
+          const item = node('article', undefined, 'preview-change');
+          item.append(node('h3', change.title), node('p', change.description));
+          $('modal-content').append(item);
+        }
+        for (const notice of data.notices || [])
+          $('modal-content').append(node('p', notice, 'notice-row'));
       }
-      for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
       $('modal-content').append(message('Safety', 'Only Token Harness-owned changes can be applied or removed. User-owned provider installations and unrelated configuration are left untouched.', 'safe'));
       $('modal-actions').replaceChildren(closeButton(data.ticket ? 'Cancel' : 'Done'));
       if (data.ticket)
