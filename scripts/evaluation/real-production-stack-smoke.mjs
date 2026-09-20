@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const root = process.cwd();
 const cli = join(root, 'dist', 'bundle', 'token-harness.mjs');
-const home = mkdtempSync(join(root, '.token-harness-real-home-'));
+// Keep the machine-local state outside the scratch project exactly as a normal user home would be.
+const home = mkdtempSync(join(dirname(root), '.token-harness-real-home-'));
+const projectRoot = join(root, '.real-production-project');
+mkdirSync(projectRoot, { recursive: true });
 const env = {
   ...process.env,
   HOME: home,
@@ -18,7 +21,7 @@ function run(args, { allowFailure = false } = {}) {
   process.stdout.write(`\n$ token-harness ${args.join(' ')}\n`);
   try {
     const stdout = execFileSync(process.execPath, [cli, ...args, '--json'], {
-      cwd: root,
+      cwd: projectRoot,
       env,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'inherit'],
