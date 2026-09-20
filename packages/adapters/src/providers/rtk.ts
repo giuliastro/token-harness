@@ -67,10 +67,16 @@ import type {
   ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
-import { buildRtkPlan } from './rtk-plan.js';
+import {
+  buildRtkPlan,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
+} from './rtk-plan.js';
 
 const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const OPENCODE = harnessId('opencode');
 
 /**
@@ -111,6 +117,29 @@ const MANIFEST: ProviderManifest = {
       evidence: {
         sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
         upstreamVersion: '0.48.0',
+      },
+    },
+    {
+      capability: 'shell.command.rewrite',
+      mode: 'exclusive',
+      harnesses: [CODEX],
+      // RTK upstream documents Codex as a rules-file integration rather than a native hook.
+      // The scope identifies the shell route the instructions govern; verification remains
+      // config-only because the model, not a pre-tool hook, decides whether to follow them.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      evidence: {
+        sourceReference: 'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
+        upstreamVersion: '0.49.0',
+      },
+    },
+    {
+      capability: 'shell.output.reduce',
+      mode: 'exclusive',
+      harnesses: [CODEX],
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      evidence: {
+        sourceReference: 'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
+        upstreamVersion: '0.49.0',
       },
     },
     /**
@@ -169,6 +198,13 @@ const MANIFEST: ProviderManifest = {
       harness: CLAUDE,
       testedVersions: { minimum: '2.0.0', maximum: '2.1.251' },
       verificationTier: 'canary',
+    },
+    {
+      harness: CODEX,
+      testedVersions: { minimum: '0.40.0', maximum: null },
+      // Codex integration is instruction-mediated in RTK 0.44-0.49. Configuration can be
+      // proven, but a provider-wide RTK history row cannot be attributed to Codex alone.
+      verificationTier: 'config-only',
     },
     {
       harness: OPENCODE,
@@ -238,7 +274,7 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReviews: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.48.0' };
+const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.49.0' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */
@@ -406,6 +442,38 @@ async function readAnalytics(
   };
 }
 
+
+const DECODER = new TextDecoder();
+
+async function codexInstructionConfigured(context: ProviderContext): Promise<{
+  configured: boolean;
+  path: string;
+  source: 'token-harness' | 'upstream' | null;
+}> {
+  const agentsPath = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+  const stat = await context.fs.stat(agentsPath);
+  if (stat === null || stat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
+
+  const text = DECODER.decode(await context.fs.readFile(agentsPath));
+  const managedBlock = [
+    `<!-- ${RTK_CODEX_MARKER_BEGIN} -->`,
+    RTK_CODEX_INSTRUCTIONS,
+    `<!-- ${RTK_CODEX_MARKER_END} -->`,
+  ].join('\n');
+  if (text.includes(managedBlock))
+    return { configured: true, path: agentsPath, source: 'token-harness' };
+
+  // Adopt RTK's own documented global Codex setup without taking ownership of it.
+  const rtkPath = context.fs.join(context.paths.home, '.codex', 'RTK.md');
+  const rtkStat = await context.fs.stat(rtkPath);
+  if (rtkStat === null || rtkStat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const absoluteRef = '@' + rtkPath;
+  if (lines.includes('@RTK.md') || lines.includes(absoluteRef))
+    return { configured: true, path: agentsPath, source: 'upstream' };
+  return { configured: false, path: agentsPath, source: null };
+}
+
 async function detect(context: ProviderContext): Promise<ProviderDetection> {
   const evidenceItems: Evidence[] = [];
   const warnings: Diagnostic[] = [];
@@ -414,7 +482,23 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
   evidenceItems.push(...version.evidence);
 
   const configured = harnessesWiredToRtk(context.harnessConfigs);
+  const codex = await codexInstructionConfigured(context);
+  if (codex.configured && !configured.includes(CODEX)) configured.push(CODEX);
   for (const harness of configured) {
+    if (harness === CODEX) {
+      evidenceItems.push(
+        evidence({
+          kind: 'config-entry',
+          source: codex.source === 'upstream' ? 'rtk Codex global instructions' : 'Token Harness RTK Codex instructions',
+          path: codex.path,
+          detail:
+            codex.source === 'upstream'
+              ? 'Codex AGENTS.md references RTK.md using RTK upstream documented setup'
+              : 'Codex AGENTS.md contains the reviewed Token Harness RTK instruction block',
+        }),
+      );
+      continue;
+    }
     evidenceItems.push(
       evidence({
         kind: 'config-entry',
@@ -503,7 +587,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
      * module `rtk init -g --opencode` installs globally, which this build has no action for. Saying
      * so here is what stops the resolver assigning a scope nothing can produce.
      */
-    assignableHarnesses: [CLAUDE],
+    assignableHarnesses: [CLAUDE, CODEX],
     evidence: evidenceItems,
     warnings,
   };
@@ -533,6 +617,8 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   });
 
   const configured = harnessesWiredToRtk(context.harnessConfigs);
+  const codex = await codexInstructionConfigured(context);
+  if (codex.configured && !configured.includes(CODEX)) configured.push(CODEX);
   checks.push({
     id: 'hook-registered',
     status: configured.length > 0 ? 'pass' : 'not-exercised',
