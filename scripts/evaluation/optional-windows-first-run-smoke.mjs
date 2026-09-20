@@ -48,6 +48,8 @@ env.NPM_CONFIG_PREFIX = prefix;
 env.Path = [prefix, nodeDir].join(delimiter);
 env.NO_COLOR = '1';
 
+const cmd = (name) => `${name}.cmd`;
+
 function fail(label, detail = '') {
   console.error(`FAIL  ${label}${detail ? `\n      ${detail}` : ''}`);
   process.exit(1);
@@ -105,7 +107,7 @@ const guide = new GuideService(
 );
 
 try {
-  const installClaude = run('npm', [
+  const installClaude = run(cmd('npm'), [
     'install',
     '--global',
     '--no-audit',
@@ -114,7 +116,7 @@ try {
   ]);
   assert(installClaude.status === 0, 'current Claude Code installs into isolated npm prefix');
 
-  const claude = run('claude', ['--version']);
+  const claude = run(cmd('claude'), ['--version']);
   assert(claude.stdout.trim().length > 0, 'current Claude Code executable starts');
 
   const before = thJson(['doctor']);
@@ -164,7 +166,7 @@ try {
     JSON.stringify(applied),
   );
 
-  const gitnexus = run('gitnexus', ['--version']);
+  const gitnexus = run(cmd('gitnexus'), ['--version']);
   assert(
     /1\.6\.12/.test(`${gitnexus.stdout}\n${gitnexus.stderr}`),
     'active PATH resolves the exact reviewed GitNexus 1.6.12 runtime',
