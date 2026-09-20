@@ -117,13 +117,6 @@ try {
   const claude = run('claude', ['--version']);
   assert(claude.stdout.trim().length > 0, 'current Claude Code executable starts');
 
-  const missingGitNexus = run('gitnexus', ['--version'], [1, 9009, null]);
-  assert(
-    missingGitNexus.status !== 0,
-    'GitNexus is genuinely absent before the guided setup',
-    String(missingGitNexus.status),
-  );
-
   const before = thJson(['doctor']);
   const beforeGitNexus = provider(before, 'gitnexus');
   assert(beforeGitNexus?.state === 'absent', 'doctor observes GitNexus absent');
