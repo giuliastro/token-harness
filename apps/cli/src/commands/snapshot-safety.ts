@@ -25,6 +25,14 @@ export async function repositoryRootForBackupSafety(
       if ((await fs.stat(fs.join(current, marker))) !== null) return current;
     }
 
+    if (
+      context.home !== null &&
+      fs.isInside(current, context.home) &&
+      fs.isInside(context.home, current)
+    ) {
+      return null;
+    }
+
     const parent = fs.dirname(current);
     if (parent === current) return null;
     current = parent;
