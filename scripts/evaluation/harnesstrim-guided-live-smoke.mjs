@@ -131,8 +131,29 @@ function assert(condition, label, detail = '') {
 }
 
 let ticketCounter = 0;
+async function guidedCall(args) {
+  // The browser guide deliberately swaps the mutating CLI update command for runUpdateCheck until
+  // the user has approved a concrete target. The live smoke runs out-of-process through the bundle,
+  // so reproduce that read-only boundary here instead of accidentally treating the CLI's expected
+  // confirmation-required exit as a guide failure.
+  if (args[0] === 'update' && !args.includes('--yes')) {
+    const report = thJson([...args], [0, 8]);
+    if (report.exitCode === 8 && report.data !== null) {
+      return {
+        ...report,
+        exitCode: 0,
+        diagnostics: (report.diagnostics || []).filter(
+          (entry) => entry.code !== 'confirmation-required',
+        ),
+      };
+    }
+    return report;
+  }
+  return thJson([...args]);
+}
+
 const guide = new GuideService(
-  async (args) => thJson([...args]),
+  guidedCall,
   () => Date.now(),
   () => `live-ticket-${++ticketCounter}`,
 );
