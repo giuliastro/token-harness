@@ -96,9 +96,21 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     }
   }
 
+  const uv =
+    observation.state === 'absent'
+      ? await context.runner.run({
+          executable: 'uv',
+          args: ['--version'],
+          cwd: context.projectRoot,
+          timeoutMs: 20_000,
+        })
+      : null;
+  const canInstall =
+    observation.state === 'absent' && uv !== null && uv.failure === null && uv.exitCode === 0;
+
   const warnings = [];
-  if (observation.state === 'absent') warnings.push(manualInstallWarning());
-  else if (!runtime.ok) {
+  if (observation.state === 'absent' && !canInstall) warnings.push(manualInstallWarning());
+  else if (!runtime.ok && observation.state !== 'absent') {
     warnings.push(
       diagnostic({
         severity: 'warning',
@@ -132,7 +144,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses: runtime.ok ? [CLAUDE, CODEX] : [],
+    assignableHarnesses: runtime.ok || canInstall ? [CLAUDE, CODEX] : [],
     evidence: [],
     warnings,
   };
