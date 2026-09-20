@@ -56,7 +56,7 @@ const PI = harnessId('pi');
  * the same seven artifacts with the same digests into a different directory.
  */
 const SKILLS_UPSTREAM = '0.0.7';
-const RUNTIME_SKILL_DIGESTS_MINIMUM = '0.3.0';
+const RUNTIME_SKILL_DIGESTS_MINIMUM = '0.2.0';
 
 const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
   'compact-handoff/SKILL.md':
@@ -327,8 +327,8 @@ export interface HarnessTrimCapabilities {
   /**
    * Per-version artifact digests published by HarnessTrim itself.
    *
-   * HarnessTrim >=0.3.0 computes these from the exact assets its installer will write. Older
-   * releases do not expose this field, so an empty map keeps the historical fixture fallback.
+   * HarnessTrim >=0.2.0 computes these from the exact assets its installer will write. Releases
+   * before 0.2.0 do not expose this field, so an empty map keeps the historical fixture fallback.
    */
   digests?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
@@ -1550,6 +1550,55 @@ function skillArtifacts(
   }));
 }
 
+/**
+ * Snapshot only the skill directories this narrowed install is allowed to own, plus the two
+ * protected files it must leave unchanged.
+ *
+ * The old boundary was the whole `.claude` / `.codex` directory. When the UI is started from the
+ * user's home directory that includes agent history, caches and unrelated user configuration, so a
+ * perfectly ordinary profile can exceed the delegated install's 1 MiB rollback cap before the
+ * installer runs. Those bytes are not part of this action's reviewed write set. Keeping them in the
+ * transaction boundary made Finish setup fail for real users while empty test fixtures passed.
+ *
+ * This is not an OS sandbox either way: delegated installers are trusted only for the machine-
+ * readable write contract they publish. The rollback boundary should therefore cover exactly the
+ * reviewed artifacts and protected files rather than unrelated agent state.
+ */
+function skillInstallContainmentBoundary(
+  context: ProviderContext,
+  harness: string,
+  capabilities: HarnessTrimCapabilities | null,
+  protectedPaths: readonly string[],
+): string[] {
+  const install = SKILLS_INSTALL[harness];
+  if (install === undefined) return [...protectedPaths];
+
+  const prefix = `${install.directory}/skills/`;
+  const relativeArtifacts =
+    capabilities === null
+      ? []
+      : publishedSkillArtifactDigests(capabilities, harness).map(([path]) => path);
+  const fallbackArtifacts = Object.keys(SKILL_ARTIFACT_DIGESTS).map(
+    (path) => `${install.directory}/skills/${path}`,
+  );
+  const contract =
+    relativeArtifacts.length > 0
+      ? relativeArtifacts
+      : capabilities !== null && requiresRuntimeSkillDigests(capabilities)
+        ? []
+        : fallbackArtifacts;
+
+  const skillRoots = new Set<string>();
+  for (const relative of contract) {
+    if (!relative.startsWith(prefix)) continue;
+    const first = relative.slice(prefix.length).split('/')[0];
+    if (first) {
+      skillRoots.add(context.fs.join(context.projectRoot, install.directory, 'skills', first));
+    }
+  }
+  return [...skillRoots, ...protectedPaths];
+}
+
 async function harnessTrimSkillsConfigured(
   context: ProviderContext,
   harness: HarnessId,
@@ -1667,6 +1716,16 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
 
     const expectedArtifacts = skillArtifacts(context, harness, currentCapabilities);
     if (expectedArtifacts.length === 0) continue;
+    const protectedPaths = [
+      context.fs.join(context.projectRoot, install.directory, install.hook),
+      context.fs.join(context.projectRoot, install.instructions),
+    ];
+    const containmentBoundary = skillInstallContainmentBoundary(
+      context,
+      harness,
+      currentCapabilities,
+      protectedPaths,
+    );
     actions.push({
       kind: 'delegated-provider-install',
       id: `harnesstrim-${harness}-skills-${digestText(context.projectRoot).slice(7, 15)}`,
@@ -1687,15 +1746,10 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
       explanation: `Install HarnessTrim ${harness} skills without a hook or reduce-pipe instruction`,
       executable: 'harnesstrim',
       args: ['install', harness, context.projectRoot, '--apply', ...install.args],
-      containmentBoundary: review.containmentBoundary.map((path) =>
-        context.fs.join(context.projectRoot, path),
-      ),
+      containmentBoundary,
       expectedArtifacts,
       // The two files each installer reports skipping. Named here because they must not appear.
-      protectedPaths: [
-        context.fs.join(context.projectRoot, install.directory, install.hook),
-        context.fs.join(context.projectRoot, install.instructions),
-      ],
+      protectedPaths,
       rollbackStrategy: 'restore-snapshot',
       snapshotSizeCapBytes: 1_048_576,
       upstreamUninstallAvailable: review.upstreamUninstallAvailable,
