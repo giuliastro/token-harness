@@ -241,6 +241,47 @@ describe('guided workflow', () => {
     );
   });
 
+  it('offers an absent optional provider when its reviewed installer can reach the agent', () => {
+    const doctor = inventory(['claude']);
+    const gitnexus = doctor.providers.find((item) => item.providerId === providerId('gitnexus'));
+    assert.ok(gitnexus);
+    gitnexus.state = 'absent';
+    gitnexus.version = null;
+    gitnexus.executable = null;
+    gitnexus.installationChannel = 'npm';
+    gitnexus.assignableHarnesses = [harnessId('claude')];
+
+    const target = guideSetupTarget(doctor, 'claude', 'gitnexus');
+    assert.equal(target.state, 'actionable');
+    assert.match(target.reason, /automatic install/i);
+  });
+
+  it('shows the real missing installer prerequisite instead of a generic setup-surface message', () => {
+    const doctor = inventory(['claude']);
+    const gitnexus = doctor.providers.find((item) => item.providerId === providerId('gitnexus'));
+    assert.ok(gitnexus);
+    gitnexus.state = 'absent';
+    gitnexus.version = null;
+    gitnexus.executable = null;
+    gitnexus.installationChannel = 'npm';
+    gitnexus.assignableHarnesses = [];
+    gitnexus.warnings = [
+      {
+        severity: 'warning',
+        code: 'gitnexus-npm-unavailable',
+        subject: 'gitnexus',
+        message: 'GitNexus is not installed and npm is not available in this terminal',
+        path: null,
+        remediation: 'Make npm available on PATH, then refresh.',
+      },
+    ];
+
+    const target = guideSetupTarget(doctor, 'claude', 'gitnexus');
+    assert.equal(target.state, 'unavailable');
+    assert.match(target.reason, /npm is not available/i);
+    assert.doesNotMatch(target.reason, /No compatible automatic setup surface/i);
+  });
+
   it('treats newer HarnessTrim/Codex tuples as actionable when the provider still declares Codex', () => {
     const doctor = inventory(['codex'], {
       platform: linuxPlatform,
