@@ -46,7 +46,8 @@ mkdirSync(prefix, { recursive: true });
 
 const baseEnv = { ...process.env };
 for (const key of Object.keys(baseEnv)) {
-  if (key.toLowerCase() === 'path' || key.toLowerCase() === 'npm_config_prefix') delete baseEnv[key];
+  if (key.toLowerCase() === 'path' || key.toLowerCase() === 'npm_config_prefix')
+    delete baseEnv[key];
 }
 baseEnv.HOME = home;
 baseEnv.USERPROFILE = home;
@@ -434,8 +435,7 @@ try {
   );
   assert(
     claudeConfig?.mcpServers?.headroom?.command === 'headroom' &&
-      JSON.stringify(claudeConfig?.mcpServers?.headroom?.args) ===
-        JSON.stringify(['mcp', 'serve']),
+      JSON.stringify(claudeConfig?.mcpServers?.headroom?.args) === JSON.stringify(['mcp', 'serve']),
     'Claude user config contains exactly the reviewed Headroom MCP registration',
     JSON.stringify(claudeConfig?.mcpServers?.headroom),
   );
@@ -464,7 +464,9 @@ try {
     'Codex config contains the reviewed managed Headroom MCP block',
   );
 
-  console.log('\nWindows optional-provider first-run smoke passed for GitNexus, mcptoon and Headroom.');
+  console.log(
+    '\nWindows optional-provider first-run smoke passed for GitNexus, mcptoon and Headroom.',
+  );
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
