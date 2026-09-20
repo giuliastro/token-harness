@@ -92,10 +92,15 @@ const latest = execFileSync('npm', ['view', 'harnesstrim', 'version'], {
 }).trim();
 if (!latest || latest === '0.2.1') throw new Error(`Expected a newer HarnessTrim than 0.2.1, npm returned ${latest}`);
 
-const preview = run(['update', '--provider', 'harnesstrim']);
-const updateRow = preview?.data?.providers?.find((entry) => entry.providerId === 'harnesstrim');
-if (updateRow?.verdict !== 'upgradable' || updateRow?.available !== latest) {
-  throw new Error(`Expected HarnessTrim update preview to ${latest}: ${JSON.stringify(preview)}`);
+const preview = run(['update', '--provider', 'harnesstrim'], { allowFailure: true });
+const confirmation = preview?.diagnostics?.find((entry) => entry.code === 'confirmation-required');
+if (
+  preview?.exitCode !== 8 ||
+  typeof confirmation?.message !== 'string' ||
+  !confirmation.message.includes('0.2.1') ||
+  !confirmation.message.includes(latest)
+) {
+  throw new Error(`Expected a reviewed HarnessTrim 0.2.1 → ${latest} update preview: ${JSON.stringify(preview)}`);
 }
 
 const updated = run(['update', '--provider', 'harnesstrim', '--yes']);
