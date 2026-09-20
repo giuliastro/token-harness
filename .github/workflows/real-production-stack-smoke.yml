@@ -1,0 +1,52 @@
+name: Real production stack smoke
+
+on:
+  push:
+    branches: [fix/reliability-real-e2e-2026-09-20]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-production-stack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-real-stack:
+    name: Ubuntu real Claude/Codex/RTK/HarnessTrim
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+
+      - name: Install Token Harness workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Token Harness
+        run: pnpm build
+
+      - name: Install the exact user-reported coding-agent/provider baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @openai/codex@0.153.0 @anthropic-ai/claude-code@2.1.274 harnesstrim@0.2.1
+          cargo install rtk --version 0.44.0 --locked
+          codex --version
+          claude --version
+          harnesstrim --version
+          rtk --version
+
+      - name: Exercise real setup and provider update end to end
+        shell: bash
+        env:
+          TOKEN_HARNESS_REAL_STACK: '1'
+        run: node scripts/evaluation/real-production-stack-smoke.mjs
