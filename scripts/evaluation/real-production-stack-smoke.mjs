@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = process.cwd();
 const cli = join(root, 'dist', 'bundle', 'token-harness.mjs');
-const home = mkdtempSync(join(tmpdir(), 'token-harness-real-home-'));
+const home = mkdtempSync(join(root, '.token-harness-real-home-'));
 const env = {
   ...process.env,
   HOME: home,
