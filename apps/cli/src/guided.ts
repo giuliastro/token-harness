@@ -441,7 +441,9 @@ function stackFingerprint(report: DoctorReport): string {
 export function createGuideCall(base: Omit<RunOptions, 'argv' | 'streams'>): GuideCall {
   return async <T>(args: readonly string[]): Promise<CliEnvelope<T>> => {
     const savings = args[0] === 'savings';
-    const updateCheck = args[0] === 'update';
+    // The browser's read-only update check must use runUpdateCheck, but an approved
+    // "update --yes" is the mutation itself and must reach the real update command.
+    const updateCheck = args[0] === 'update' && !args.includes('--yes');
     const translated = savings ? ['metrics', ...args.slice(1)] : [...args];
     let stdout = '';
     await run({
