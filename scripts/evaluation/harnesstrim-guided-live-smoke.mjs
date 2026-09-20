@@ -21,10 +21,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGuideCall, GuideService } from '../../apps/cli/dist/src/guided.js';
-import {
-  NodeFileSystem,
-  resolveHostEnvironment,
-} from '../../packages/platform/dist/src/index.js';
+import { NodeFileSystem, resolveHostEnvironment } from '../../packages/platform/dist/src/index.js';
 
 if (process.platform !== 'linux') {
   console.error('This live smoke is intentionally Linux-only in CI.');
@@ -142,7 +139,8 @@ for (const [key, value] of Object.entries(env)) {
   else process.env[key] = value;
 }
 const resolution = resolveHostEnvironment();
-if (!resolution.ok) fail('isolated Token Harness host environment resolves', JSON.stringify(resolution));
+if (!resolution.ok)
+  fail('isolated Token Harness host environment resolves', JSON.stringify(resolution));
 const localFs = new NodeFileSystem(resolution.environment.facts);
 const guideCall = createGuideCall({
   platform: resolution.environment.facts,
