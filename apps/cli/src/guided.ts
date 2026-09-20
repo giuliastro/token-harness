@@ -1540,9 +1540,15 @@ export class GuideService {
       if (approval.operation === 'update') {
         const approvedUpdates = approval.updateTargets ?? [];
         if (approvedUpdates.length === 0)
-          throw new GuideError(409, 'This update preview contains no concrete provider version. Review it again.');
+          throw new GuideError(
+            409,
+            'This update preview contains no concrete provider version. Review it again.',
+          );
 
-        this.record('Re-checking the exact provider versions you approved before installing them.', 'working');
+        this.record(
+          'Re-checking the exact provider versions you approved before installing them.',
+          'working',
+        );
 
         let fresh: CliEnvelope<UpdateReport>;
         try {
@@ -1688,7 +1694,10 @@ export class GuideService {
           return {
             ok: false,
             title: 'Update was not verified',
-            messages: [message, 'Refresh after correcting PATH or the package installation; no automatic retry was made.'],
+            messages: [
+              message,
+              'Refresh after correcting PATH or the package installation; no automatic retry was made.',
+            ],
             appliedPlans: appliedCount,
           };
         }
