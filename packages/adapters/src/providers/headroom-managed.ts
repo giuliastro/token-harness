@@ -108,6 +108,31 @@ export async function headroomManagedMcpRuntime(
   };
 }
 
+function headroomInstallAction(): PlannedAction {
+  return {
+    kind: 'package-manager-install',
+    id: `headroom:install:${HEADROOM_REVIEWED_MCP_VERSION}`,
+    riskClass: 'delegated',
+    requiresNetwork: true,
+    requiresElevation: false,
+    affectedPaths: [],
+    affectedProcesses: ['uv'],
+    preconditions: [
+      'uv remains runnable',
+      `the reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} MCP package remains installable`,
+    ],
+    postconditions: [
+      `Headroom ${HEADROOM_REVIEWED_MCP_VERSION} is installed with the MCP extra`,
+      'headroom mcp serve --help succeeds',
+    ],
+    rollbackData: 'package-inventory',
+    explanation: `Install reviewed Headroom ${HEADROOM_REVIEWED_MCP_VERSION} with its MCP extra through uv`,
+    packageManager: 'uv',
+    packageName: 'headroom-ai[mcp]',
+    version: HEADROOM_REVIEWED_MCP_VERSION,
+  };
+}
+
 function prerequisite(harness: HarnessId, detail: string): HeadroomManagedMcpPlan {
   return {
     harness,
@@ -435,8 +460,29 @@ export async function planHeadroomManagedMcpActivation(
   }
 
   const cli = await headroomManagedMcpRuntime(context);
-  if (!cli.ok) return prerequisite(harness, cli.detail);
-  return harness === 'claude' ? planClaude(context, harness) : planCodex(context, harness);
+  const installActions: PlannedAction[] = [];
+  if (!cli.ok) {
+    const observation = await observeHeadroomCandidate(context);
+    if (observation.state !== 'absent') return prerequisite(harness, cli.detail);
+
+    const uv = await context.runner.run({
+      executable: 'uv',
+      args: ['--version'],
+      cwd: context.projectRoot,
+      timeoutMs: 20_000,
+    });
+    if (uv.failure !== null || uv.exitCode !== 0) {
+      return prerequisite(
+        harness,
+        'Headroom is absent and uv is not available in this terminal. Install uv or make it available on PATH; Token Harness will not bootstrap Python or uv itself.',
+      );
+    }
+    installActions.push(headroomInstallAction());
+  }
+
+  const activation =
+    harness === 'claude' ? await planClaude(context, harness) : await planCodex(context, harness);
+  return { ...activation, actions: [...installActions, ...activation.actions] };
 }
 
 export function headroomOwnedArtifact(

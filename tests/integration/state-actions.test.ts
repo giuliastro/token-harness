@@ -1211,6 +1211,30 @@ describe('installing a package', () => {
     claim('package-manager-install', 'apply');
   });
 
+  it('installs a Headroom-style uv tool spec without shell interpolation', async () => {
+    const h = harness();
+    const { spawned, runner } = installer();
+    const outcome = await applyAction(
+      installAction({
+        packageManager: 'uv',
+        packageName: 'headroom-ai[mcp]',
+        version: '0.37.0',
+        rollbackData: 'package-inventory',
+      }),
+      { ...h.context, runner, cwd: '/work' },
+    );
+
+    assert.equal(outcome.status, 'applied');
+    assert.deepEqual(spawned.at(-1), {
+      executable: 'uv',
+      args: ['tool', 'install', '--force', 'headroom-ai[mcp]==0.37.0'],
+    });
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'install-channel-unverified'),
+      false,
+    );
+  });
+
   it('takes no snapshot and claims no ownership', async () => {
     const h = harness();
     const { runner } = installer();

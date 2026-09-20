@@ -187,8 +187,8 @@ it('checks updates on demand and applies only after the returned approval ticket
     assert.equal(appliedResult.appliedPlans, 1);
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
-      [['update'], ['update', '--yes']],
-      'only an approved ticket may turn the update preview into a mutation',
+      [['update'], ['update'], ['update', '--yes']],
+      'apply must re-check the exact approved targets before mutating',
     );
 
     const refreshed = await fetch(`${origin}/api/overview?period=all&refresh=1`);
@@ -204,6 +204,92 @@ it('checks updates on demand and applies only after the returned approval ticket
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+it('never reports a green update when the approved version is still not active', async () => {
+  let updateCalls = 0;
+  const doctor = (): DoctorReport => ({
+    platform,
+    problemCount: 0,
+    providers: [
+      {
+        providerId: RTK,
+        state: 'configured',
+        version: '0.44.0',
+        executable: '/tools/rtk',
+        installationChannel: 'cargo',
+        versionVerdict: 'in-range',
+        configuredHarnesses: [CLAUDE],
+        unmanagedHarnessesConfigured: [],
+        supportsUnmanagedHarnesses: false,
+        managedByTokenHarness: false,
+        assignableHarnesses: [CLAUDE],
+        evidence: [],
+        warnings: [],
+      },
+    ],
+    harnesses: [
+      {
+        harnessId: CLAUDE,
+        state: 'configured',
+        version: '2.1.261',
+        versionVerdict: 'in-range',
+        configPath: null,
+        declaredVerificationTier: 'config-only',
+        evidence: [],
+        warnings: [],
+      },
+    ],
+  });
+  const report = (confirmed: boolean): UpdateReport => ({
+    providers: [
+      {
+        providerId: RTK,
+        installed: '0.44.0',
+        available: '0.45.0',
+        channel: 'cargo',
+        verdict: 'upgradable',
+        pin: null,
+      },
+    ],
+    network: ['crates.io'],
+    execution: confirmed
+      ? {
+          planId: null,
+          transactionId: null,
+          fromStoredPlan: false,
+          outcome: 'nothing-to-do',
+          results: [],
+          unrestored: [],
+          receiptId: null,
+        }
+      : null,
+  });
+  const call: GuideCall = async <T>(args: readonly string[]) => {
+    const command = args[0] ?? '';
+    if (command === 'doctor') return envelope(command, doctor() as T);
+    if (command === 'update') {
+      updateCalls += 1;
+      return envelope(command, report(args.includes('--yes')) as T);
+    }
+    return envelope(command, null as T);
+  };
+
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'update-ticket',
+  );
+  const checked = await service.checkUpdates();
+  assert.equal(checked.ok, true);
+  assert.equal(checked.ticket, 'update-ticket');
+
+  const applied = await service.apply({ ticket: 'update-ticket' });
+  assert.equal(applied.ok, false);
+  assert.equal(applied.title, 'Update was not verified');
+  assert.match(applied.messages[0] ?? '', /0\.45\.0/);
+  assert.doesNotMatch(applied.messages.join(' '), /Already up to date/i);
+  assert.equal(updateCalls, 3, 'check, preflight and approved mutation all ran');
 });
 
 it('presents updates as one complete check then install flow', () => {

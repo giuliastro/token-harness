@@ -585,7 +585,9 @@ describe('update', () => {
       installed: { harnesstrim: '0.2.1' },
       channelStdout: { npm: '0.3.0\n' },
       inventoryStdout: {
-        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.2.1\n',
+        'npm ls --global --depth=0 --json': JSON.stringify({
+          dependencies: { harnesstrim: { version: '0.2.1' } },
+        }),
       },
     });
 
@@ -604,7 +606,9 @@ describe('update', () => {
       installed: { harnesstrim: '0.3.0' },
       channelStdout: { npm: '0.4.0\n' },
       inventoryStdout: {
-        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.3.0\n',
+        'npm ls --global --depth=0 --json': JSON.stringify({
+          dependencies: { harnesstrim: { version: '0.3.0' } },
+        }),
       },
     });
 
@@ -620,7 +624,9 @@ describe('update', () => {
       installed: { harnesstrim: '0.2.1' },
       channelStdout: { npm: '0.3.0\n' },
       inventoryStdout: {
-        'npm ls -g harnesstrim --depth=0': '/usr/lib\n└── harnesstrim@0.2.1\n',
+        'npm ls --global --depth=0 --json': JSON.stringify({
+          dependencies: { harnesstrim: { version: '0.2.1' } },
+        }),
       },
       installDoesNotChangeResolvedVersion: true,
     });

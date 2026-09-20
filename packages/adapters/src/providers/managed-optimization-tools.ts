@@ -188,10 +188,31 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
       if (verification.state === 'verified') configuredHarnesses.push(harness);
     }
   }
+  const pipx = observation.absent
+    ? await context.runner.run({
+        executable: 'pipx',
+        args: ['--version'],
+        cwd: context.projectRoot,
+        timeoutMs: 20_000,
+      })
+    : null;
+  const canInstall =
+    observation.absent && pipx !== null && pipx.failure === null && pipx.exitCode === 0;
   const warnings =
-    !observation.absent && !observation.ready
-      ? [warning('mcptoon-provider-capability-unavailable', 'mcptoon', observation.detail)]
-      : [];
+    observation.absent && !canInstall
+      ? [
+          diagnostic({
+            severity: 'warning',
+            code: 'mcptoon-pipx-unavailable',
+            subject: 'mcptoon',
+            message: 'mcptoon is not installed and pipx is not available in this terminal',
+            remediation:
+              'Install pipx or make it available on PATH, then refresh. Token Harness will use it to install the reviewed mcptoon build.',
+          }),
+        ]
+      : !observation.absent && !observation.ready
+        ? [warning('mcptoon-provider-capability-unavailable', 'mcptoon', observation.detail)]
+        : [];
   return {
     providerId: MCPTOON,
     state: observation.absent
@@ -207,7 +228,7 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses: observation.ready ? [CLAUDE, CODEX] : [],
+    assignableHarnesses: observation.ready || canInstall ? [CLAUDE, CODEX] : [],
     evidence: [],
     warnings,
   };
@@ -219,10 +240,31 @@ async function gitnexusDetection(context: ProviderContext): Promise<ProviderDete
     ? await verifyGitNexusManagedMcpActivation(context, CLAUDE)
     : null;
   const configuredHarnesses = verification?.state === 'verified' ? [CLAUDE] : [];
+  const npm = observation.absent
+    ? await context.runner.run({
+        executable: 'npm',
+        args: ['--version'],
+        cwd: context.projectRoot,
+        timeoutMs: 20_000,
+      })
+    : null;
+  const canInstall =
+    observation.absent && npm !== null && npm.failure === null && npm.exitCode === 0;
   const warnings =
-    !observation.absent && !observation.ready
-      ? [warning('gitnexus-provider-capability-unavailable', 'gitnexus', observation.detail)]
-      : [];
+    observation.absent && !canInstall
+      ? [
+          diagnostic({
+            severity: 'warning',
+            code: 'gitnexus-npm-unavailable',
+            subject: 'gitnexus',
+            message: 'GitNexus is not installed and npm is not available in this terminal',
+            remediation:
+              'Make npm available on PATH, then refresh. Token Harness can install the reviewed GitNexus build after explicit approval.',
+          }),
+        ]
+      : !observation.absent && !observation.ready
+        ? [warning('gitnexus-provider-capability-unavailable', 'gitnexus', observation.detail)]
+        : [];
   return {
     providerId: GITNEXUS,
     state: observation.absent
@@ -238,7 +280,7 @@ async function gitnexusDetection(context: ProviderContext): Promise<ProviderDete
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses: observation.ready ? [CLAUDE] : [],
+    assignableHarnesses: observation.ready || canInstall ? [CLAUDE] : [],
     evidence: [],
     warnings,
   };

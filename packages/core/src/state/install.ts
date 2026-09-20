@@ -99,6 +99,18 @@ const INSTALL_COMMANDS: Readonly<
     ],
     verified: true,
   },
+  uv: {
+    executable: 'uv',
+    // Headroom uses uv's isolated tool installer. Token Harness invokes an existing uv only;
+    // it never bootstraps uv, Python, or administrator prerequisites.
+    args: (packageName, version) => [
+      'tool',
+      'install',
+      '--force',
+      version === null ? packageName : `${packageName}==${version}`,
+    ],
+    verified: true,
+  },
 };
 
 /**
@@ -110,9 +122,18 @@ const INSTALL_COMMANDS: Readonly<
 const UNINSTALL_COMMANDS: Readonly<
   Record<string, { executable: string; args: (packageName: string) => string[] }>
 > = {
+  npm: {
+    executable: 'npm',
+    args: (packageName) => ['uninstall', '--global', packageName],
+  },
   pipx: {
     executable: 'pipx',
     args: (packageName) => ['uninstall', packageName],
+  },
+  uv: {
+    executable: 'uv',
+    // Extras are install-time selectors; uv tool uninstall expects the distribution name.
+    args: (packageName) => ['tool', 'uninstall', packageName.replace(/\[.*\]$/, '')],
   },
 };
 
@@ -340,17 +361,42 @@ const INVENTORY_COMMANDS: Readonly<
   },
   npm: {
     executable: 'npm',
-    args: (packageName) => ['ls', '-g', packageName, '--depth=0'],
+    // Listing the global root as JSON proves both presence and absence without depending on
+    // localized human output or npm's exit behavior for a package-name filter.
+    args: () => ['ls', '--global', '--depth=0', '--json'],
     parse: (stdout, packageName) => {
-      const pattern = new RegExp(`(?:^|[^@\\w.-])${packageName}@(\\d[^\\s]*)`);
-      const match = pattern.exec(stdout);
-      const candidate = match?.[1] ?? null;
-      if (candidate === null || parseSemanticVersion(candidate) === null) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stdout) as unknown;
+      } catch {
+        return { status: 'unknown', version: null };
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { status: 'unknown', version: null };
+      }
+      const dependencies = (parsed as Record<string, unknown>)['dependencies'];
+      if (dependencies === undefined) return { status: 'absent', version: null };
+      if (
+        typeof dependencies !== 'object' ||
+        dependencies === null ||
+        Array.isArray(dependencies)
+      ) {
+        return { status: 'unknown', version: null };
+      }
+      const dependency = (dependencies as Record<string, unknown>)[packageName];
+      if (dependency === undefined) return { status: 'absent', version: null };
+      const candidate =
+        typeof dependency === 'string'
+          ? dependency
+          : typeof dependency === 'object' && dependency !== null && !Array.isArray(dependency)
+            ? (dependency as Record<string, unknown>)['version']
+            : null;
+      if (typeof candidate !== 'string' || parseSemanticVersion(candidate) === null) {
         return { status: 'unknown', version: null };
       }
       return { status: 'captured', version: candidate };
     },
-    verified: false,
+    verified: true,
   },
   pnpm: {
     executable: 'pnpm',
@@ -408,14 +454,22 @@ const INVENTORY_COMMANDS: Readonly<
     executable: 'uv',
     args: () => ['tool', 'list'],
     parse: (stdout, packageName) => {
-      const pattern = new RegExp(`^${packageName}\\s+v?(\\S+)`, 'm');
-      const match = pattern.exec(stdout);
-      if (match === null) return { status: 'absent', version: null };
-      const candidate = match[1] ?? '';
-      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
-      return { status: 'captured', version: candidate };
+      // Installation specs can include extras such as headroom-ai[mcp], while uv inventories the
+      // base distribution. Parse the first two whitespace-separated fields instead of building a
+      // regular expression from a package spec.
+      const distribution = packageName.replace(/\[.*\]$/, '');
+      for (const line of stdout.split(/\r?\n/)) {
+        const fields = line.trim().split(/\s+/);
+        if (fields[0] !== distribution) continue;
+        const candidate = (fields[1] ?? '').replace(/^v/i, '');
+        if (parseSemanticVersion(candidate) === null) {
+          return { status: 'unknown', version: null };
+        }
+        return { status: 'captured', version: candidate };
+      }
+      return { status: 'absent', version: null };
     },
-    verified: false,
+    verified: true,
   },
   pipx: {
     executable: 'pipx',

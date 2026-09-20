@@ -256,6 +256,20 @@ describe('where backups may live', () => {
     assert.notEqual(created.diagnostics[0]?.remediation, null);
   });
 
+  it('allows machine-local backups when the working scope is not a repository', () => {
+    const workingScope = join(sandbox, 'home-scope');
+    const state = join(workingScope, '.local', 'state', 'token-harness');
+    mkdirSync(state, { recursive: true });
+    const created = TransactionSnapshotStore.create({
+      fs: new NodeFileSystem(FACTS),
+      backupRoot: join(state, 'backups'),
+      transactionId: 't-home',
+      projectRoot: null,
+      now: () => CLOCK,
+    });
+    assert.equal(created.ok, true);
+  });
+
   it('stores backups under the transaction id', async () => {
     const { store, project } = harness();
     writeFileSync(join(project, 'a.md'), 'a\n');

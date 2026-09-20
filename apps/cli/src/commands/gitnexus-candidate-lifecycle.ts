@@ -28,6 +28,7 @@ import {
 
 import { validateCandidateCampaignRuntimeSurface } from './candidate-campaign-surface.js';
 import type { CommandContext } from './context.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 const ACTIVATION_ACTION_ID = 'gitnexus:claude:mcp-server';
 const REMOVAL_ACTION_ID = 'gitnexus:claude:mcp-server:remove';
@@ -121,14 +122,14 @@ function selectorProblem(context: CommandContext, command: MutationCommand): Dia
   return null;
 }
 
-function stores(context: CommandContext, id: string) {
+async function stores(context: CommandContext, id: string) {
   if (context.adapters === null || context.stateRoot === null) return null;
   const fs = context.adapters.fs;
   const creation = TransactionSnapshotStore.create({
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId: id,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) return { fs, failure: creation.diagnostics } as const;
@@ -389,7 +390,7 @@ export async function runGitNexusCandidateApply(
   }
 
   const id = transactionId('gitnexus-activate-claude', context);
-  const built = stores(context, id);
+  const built = await stores(context, id);
   if (built === null || !('snapshots' in built)) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(
@@ -535,7 +536,7 @@ export async function runGitNexusCandidateUninstall(
   }
 
   const id = transactionId('gitnexus-deactivate-claude', context);
-  const built = stores(context, id);
+  const built = await stores(context, id);
   if (built === null || !('snapshots' in built)) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(

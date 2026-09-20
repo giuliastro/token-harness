@@ -32,6 +32,7 @@ import {
 import { RTK_RELEASE_ASSET_DESTINATION } from '@token-harness/platform';
 
 import type { CommandContext } from './context.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 import { runPackageChannelUpdate, runPackageChannelUpdateCheck } from './update-base.js';
 import {
   planDirectRtkWindowsRelease,
@@ -261,7 +262,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!snapshotCreation.ok) {

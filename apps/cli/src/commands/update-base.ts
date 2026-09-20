@@ -19,6 +19,7 @@ import {
   parseSemanticVersion,
   preferredInstallationChannel,
   queryAvailableVersion,
+  queryPackageInventory,
   readPins,
   statusForExitCode,
   type ApplyReport,
@@ -37,6 +38,7 @@ import {
 } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 function transactionIdFor(seed: string, at: string): string {
   const digest = digestText(`${seed} ${at}`);
@@ -169,6 +171,8 @@ export async function runPackageChannelUpdate(
     {
       providerId: string;
       target: string;
+      channel: string;
+      packageName: string;
       adapter: (typeof providerAdapters)[number];
     }
   >();
@@ -279,6 +283,8 @@ export async function runPackageChannelUpdate(
     updateTargets.set(action.id, {
       providerId: adapter.manifest.id,
       target: query.version,
+      channel: channel.id,
+      packageName,
       adapter,
     });
   }
@@ -363,7 +369,7 @@ export async function runPackageChannelUpdate(
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) {
@@ -400,15 +406,42 @@ export async function runPackageChannelUpdate(
         const exactTarget =
           observed !== null && expected !== null && compareVersions(observed, expected) === 0;
         if (!exactTarget) {
+          const inventory = await queryPackageInventory({
+            channel: target.channel,
+            packageName: target.packageName,
+            runner: adapters.runner,
+            cwd: context.projectRoot,
+          });
+          const inventoryDetail =
+            inventory.status === 'captured' && inventory.version !== null
+              ? ` The ${target.channel} global inventory reports ${inventory.version}.`
+              : ` The ${target.channel} inventory could not confirm the installed target (status: ${inventory.status}).`;
+          const prefix =
+            target.channel === 'npm'
+              ? await adapters.runner.run({
+                  executable: 'npm',
+                  args: ['config', 'get', 'prefix'],
+                  cwd: context.projectRoot,
+                  timeoutMs: 20_000,
+                })
+              : null;
+          const prefixDetail =
+            prefix !== null && prefix.failure === null && prefix.exitCode === 0
+              ? ` npm prefix: ${prefix.stdout.trim() || '(empty)'}.`
+              : '';
+
           postconditions.push(
             diagnostic({
               severity: 'error',
               code: 'provider-update-version-not-observed',
               subject: target.adapter.manifest.id,
-              message: `${target.providerId} update did not become active: requested ${target.target}, but the executable currently resolved on PATH reports ${detection.version ?? 'no readable version'}`,
+              message:
+                `${target.providerId} update did not become active: requested ${target.target}, but the executable currently resolved on PATH reports ${detection.version ?? 'no readable version'}.` +
+                inventoryDetail +
+                prefixDetail,
               path: detection.executable,
               remediation:
-                'Review duplicate PATH installations. Token Harness will not report this update as successful while the old executable is still the one being resolved.',
+                'Review duplicate PATH installations and the package-manager global prefix. Token Harness will not report this update as successful while the requested runtime is not the one being resolved.',
             }),
           );
           continue;

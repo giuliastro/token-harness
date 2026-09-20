@@ -29,6 +29,10 @@ const WINDOWS_ALLOWLIST: readonly string[] = [
   'HOMEPATH',
   'LOCALAPPDATA',
   'NUMBER_OF_PROCESSORS',
+  // npm global installs must stay in the same prefix the parent process is using. This value is
+  // a filesystem location, not a credential; dropping it can update a different global npm tree
+  // while PATH continues to resolve the old executable.
+  'NPM_CONFIG_PREFIX',
   'PATH',
   'PATHEXT',
   'PROCESSOR_ARCHITECTURE',
@@ -61,6 +65,10 @@ const POSIX_ALLOWLIST: readonly string[] = [
   'LC_ALL',
   'LC_CTYPE',
   'LOGNAME',
+  // npm documents config environment variables with the lowercase npm_config_ prefix on POSIX.
+  // Keep both common spellings because POSIX environment names are case-sensitive.
+  'NPM_CONFIG_PREFIX',
+  'npm_config_prefix',
   'PATH',
   'SHELL',
   'TMPDIR',

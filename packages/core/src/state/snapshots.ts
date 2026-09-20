@@ -48,8 +48,8 @@ export interface TransactionSnapshotStoreInput {
   backupRoot: string;
   /** RFC 0006 §Plan persistence gives transactions an ID; backups are stored under it. */
   transactionId: string;
-  /** The project being operated on, used only to refuse to write backups inside it. */
-  projectRoot: string;
+  /** The actual VCS repository root, used only to refuse backups inside it. Null when the working scope is not a repository. */
+  projectRoot: string | null;
   /** ISO 8601 instant. Injected so a snapshot record is deterministic in tests. */
   now(): string;
 }
@@ -76,7 +76,7 @@ export class TransactionSnapshotStore implements SnapshotStore {
    * calling a constructor directly.
    */
   static create(input: TransactionSnapshotStoreInput): SnapshotStoreCreation {
-    if (input.fs.isInside(input.backupRoot, input.projectRoot)) {
+    if (input.projectRoot !== null && input.fs.isInside(input.backupRoot, input.projectRoot)) {
       return {
         ok: false,
         diagnostics: [

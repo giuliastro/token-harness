@@ -62,6 +62,20 @@ describe('minimal child environment', () => {
     assert.equal(env['HOME'], '/home/dev');
   });
 
+  it('preserves npm global prefix so managed updates replace the executable already on PATH', () => {
+    const posix = minimalChildEnvironment({
+      facts: facts('linux'),
+      ambient: { PATH: '/opt/tools/bin:/usr/bin', npm_config_prefix: '/opt/tools' },
+    });
+    assert.equal(posix['npm_config_prefix'], '/opt/tools');
+
+    const windows = minimalChildEnvironment({
+      facts: facts('windows'),
+      ambient: { Path: 'C:\\Tools;C:\\Windows', npm_config_prefix: 'C:\\Tools' },
+    });
+    assert.equal(windows['npm_config_prefix'], 'C:\\Tools');
+  });
+
   it('sets NO_COLOR, because a child that colours its output breaks every importer', () => {
     const env = minimalChildEnvironment({ facts: facts('linux'), ambient: {} });
     assert.equal(env['NO_COLOR'], '1');

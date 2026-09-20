@@ -158,7 +158,7 @@ describe('asking a channel what it has installed', () => {
       {
         channel: 'npm',
         packageName: 'rtk',
-        stdout: 'rtk@0.42.0 /usr/lib/node_modules/rtk',
+        stdout: JSON.stringify({ dependencies: { rtk: { version: '0.42.0' } } }),
         version: '0.42.0',
       },
       { channel: 'homebrew', packageName: 'rtk', stdout: 'rtk 0.42.0', version: '0.42.0' },
@@ -175,6 +175,42 @@ describe('asking a channel what it has installed', () => {
       assert.equal(outcome.status, 'captured', entry.channel);
       assert.equal(outcome.version, entry.version, entry.channel);
     }
+  });
+
+  it('uses npm global JSON inventory to distinguish a missing package from an unreadable answer', async () => {
+    const { commands, runner: process } = runner({
+      stdout: JSON.stringify({ dependencies: { other: { version: '1.0.0' } } }),
+    });
+    const outcome = await queryPackageInventory({
+      channel: 'npm',
+      packageName: 'gitnexus',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'absent');
+    assert.equal(outcome.version, null);
+    assert.deepEqual(commands, ['npm ls --global --depth=0 --json']);
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
+      false,
+    );
+  });
+
+  it('matches uv inventory by base distribution when the install spec contains extras', async () => {
+    const { commands, runner: process } = runner({ stdout: 'headroom-ai v0.37.0\n- headroom\n' });
+    const outcome = await queryPackageInventory({
+      channel: 'uv',
+      packageName: 'headroom-ai[mcp]',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'captured');
+    assert.equal(outcome.version, '0.37.0');
+    assert.deepEqual(commands, ['uv tool list']);
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
+      false,
+    );
   });
 
   it('reads pipx machine-readable inventory and distinguishes absence', async () => {
@@ -385,6 +421,55 @@ describe('restoring a captured inventory', () => {
     ]);
   });
 
+  it('restores an npm package absence by uninstalling the first-run package and re-reading JSON inventory', async () => {
+    let installed = true;
+    const commands: string[] = [];
+    const process: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        if (request.args[0] === 'uninstall' && request.args[1] === '--global') installed = false;
+        const isList = request.args[0] === 'ls';
+        const stdout = isList
+          ? JSON.stringify({
+              dependencies: installed ? { gitnexus: { version: '1.6.12' } } : {},
+            })
+          : '';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'npm',
+        packageName: 'gitnexus',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, [
+      'npm ls --global --depth=0 --json',
+      'npm uninstall --global gitnexus',
+      'npm ls --global --depth=0 --json',
+    ]);
+  });
+
   it('restores a pipx absence by uninstalling and re-reading inventory', async () => {
     let installed = true;
     const commands: string[] = [];
@@ -438,6 +523,49 @@ describe('restoring a captured inventory', () => {
     assert.equal(outcome.restored, true);
     assert.deepEqual(commands, ['pipx list --json', 'pipx uninstall mcptoon', 'pipx list --json']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
+  });
+
+  it('restores a uv tool absence using the base distribution name and verifies it', async () => {
+    let installed = true;
+    const commands: string[] = [];
+    const process: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        if (request.args[0] === 'tool' && request.args[1] === 'uninstall') installed = false;
+        const stdout =
+          request.args[0] === 'tool' && request.args[1] === 'list' && installed
+            ? 'headroom-ai v0.37.0\n- headroom\n'
+            : '';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'uv',
+        packageName: 'headroom-ai[mcp]',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, ['uv tool list', 'uv tool uninstall headroom-ai', 'uv tool list']);
   });
 
   it('does not uninstall pipx when the live inventory is unreadable', async () => {
