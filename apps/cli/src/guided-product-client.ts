@@ -229,7 +229,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
       .map(providerId => setupTarget(agentId, providerId))
       .filter(Boolean);
     const actionable = targets.filter(target => target.state === 'actionable');
-    const unavailable = targets.filter(target => target.state === 'unavailable');
+    const unavailable = targets.filter(
+      target => target.state === 'unavailable' || target.state === 'not-applicable',
+    );
     const connected = targets.filter(target => target.state === 'connected');
     if (actionable.length)
       return {
@@ -423,16 +425,37 @@ export const GUIDE_PRODUCT_JS = String.raw`
   function componentState(id, component) {
     if (!component || component.detectedState === 'absent') return { label: 'Not installed', cls: '' };
     if (component.health === 'attention') return { label: 'Needs attention', cls: 'warn' };
+
+    const targets = activeAgents().map(agent => setupTarget(agent.id, id)).filter(Boolean);
+    const connected = targets.filter(target => target.state === 'connected');
+    const actionable = targets.filter(target => target.state === 'actionable');
+    const unavailable = targets.filter(
+      target => target.state === 'unavailable' || target.state === 'not-applicable',
+    );
+
+    // A provider being configured for some *other* harness (for example Hermes/Pi) must not make
+    // Claude/Codex look connected. Status is relative to the coding agents shown on this page.
+    if (targets.length > 0 && connected.length === targets.length)
+      return {
+        label: component.verification === 'verified' ? 'Connected · verified' : 'Connected',
+        cls: 'good',
+      };
+    if (component.installed && actionable.length > 0 && connected.length > 0)
+      return { label: 'Partially connected · setup available', cls: 'warn' };
+    if (component.installed && actionable.length > 0 && component.configured)
+      return { label: 'Connected elsewhere · setup available', cls: 'warn' };
+    if (component.installed && actionable.length > 0)
+      return { label: 'Installed · setup available', cls: 'warn' };
+    if (component.installed && unavailable.length > 0)
+      return {
+        label: connected.length > 0 || component.configured ? 'Partially connected' : 'Installed · no automatic setup',
+        cls: connected.length > 0 ? 'warn' : '',
+      };
     if (component.configured)
       return {
         label: component.verification === 'verified' ? 'Connected · verified' : 'Connected',
         cls: 'good',
       };
-    const targets = activeAgents().map(agent => setupTarget(agent.id, id)).filter(Boolean);
-    if (component.installed && targets.some(target => target.state === 'actionable'))
-      return { label: 'Installed · setup available', cls: 'warn' };
-    if (component.installed && targets.some(target => target.state === 'unavailable'))
-      return { label: 'Installed · no automatic setup', cls: '' };
     if (component.installed) return { label: 'Installed', cls: '' };
     return { label: 'Not installed', cls: '' };
   }
@@ -456,17 +479,31 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const providerTargets = activeAgents()
       .map(agent => ({ agent, target: setupTarget(agent.id, id) }))
       .filter(item => item.target);
+    const connectedFor = providerTargets
+      .filter(item => item.target.state === 'connected')
+      .map(item => item.agent.name);
     const actionableFor = providerTargets
       .filter(item => item.target.state === 'actionable')
       .map(item => item.agent.name);
-    const unavailableFor = providerTargets.filter(item => item.target.state === 'unavailable');
-    const configuredFor = component?.configuredHarnesses?.length
-      ? component.configuredHarnesses.map(agentName).join(', ')
-      : actionableFor.length
-        ? 'Setup available for ' + actionableFor.join(', ')
-        : unavailableFor.length
-          ? 'No compatible automatic setup surface detected'
-          : 'Not applicable to the detected coding agents';
+    const unavailableFor = providerTargets.filter(
+      item => item.target.state === 'unavailable' || item.target.state === 'not-applicable',
+    );
+    const otherConfigured = (component?.configuredHarnesses || [])
+      .map(agentName)
+      .filter(name => !connectedFor.includes(name));
+    const connectionParts = [];
+    if (connectedFor.length) connectionParts.push('Connected to ' + connectedFor.join(', '));
+    if (otherConfigured.length) connectionParts.push('Also configured for ' + otherConfigured.join(', '));
+    if (actionableFor.length) connectionParts.push('Setup available for ' + actionableFor.join(', '));
+    if (unavailableFor.length)
+      connectionParts.push(
+        unavailableFor
+          .map(item => item.agent.name + ': no automatic setup')
+          .join(' · '),
+      );
+    const configuredFor = connectionParts.length
+      ? connectionParts.join(' · ')
+      : 'Not applicable to the detected coding agents';
     facts.append(node('span', 'Connection'), node('strong', configuredFor));
     if (component?.update === 'available')
       facts.append(
@@ -477,16 +514,15 @@ export const GUIDE_PRODUCT_JS = String.raw`
       facts.append(node('span', 'Update'), node('strong', 'Newer package requires a provider-specific update path'));
     card.append(facts);
 
-    if (
-      component?.installed &&
-      !(component?.configuredHarnesses?.length) &&
-      actionableFor.length === 0 &&
-      unavailableFor.length > 0
-    )
+    if (component?.installed && unavailableFor.length > 0)
       card.append(
         messageBox(
-          'Why there is no Connect button',
-          unavailableFor[0].target.reason,
+          actionableFor.length > 0 || connectedFor.length > 0
+            ? 'Compatibility note'
+            : 'Why there is no Connect button',
+          unavailableFor
+            .map(item => item.agent.name + ': ' + item.target.reason)
+            .join(' '),
         ),
       );
 
