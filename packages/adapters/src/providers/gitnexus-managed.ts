@@ -159,7 +159,6 @@ function gitnexusInstallAction(): PlannedAction {
   };
 }
 
-
 export async function planGitNexusManagedMcpActivation(
   context: ProviderContext,
   harness: HarnessId,
