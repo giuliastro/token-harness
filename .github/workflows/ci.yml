@@ -89,6 +89,10 @@ jobs:
         if: runner.os == 'Linux'
         run: node scripts/evaluation/harnesstrim-guided-live-smoke.mjs
 
+      - name: RTK to Codex live guided smoke
+        if: runner.os == 'Linux'
+        run: node scripts/evaluation/rtk-codex-guided-live-smoke.mjs
+
       - name: Bundle smoke test
         run: pnpm smoke
 
