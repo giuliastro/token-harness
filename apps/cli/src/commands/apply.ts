@@ -48,6 +48,7 @@ import {
   type ExitCode,
   type PlanReport,
   type StoredPlan,
+  type ManagedIntegration,
 } from '@token-harness/core';
 import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 
@@ -68,7 +69,7 @@ export const PLANS_DIRECTORY = 'plans';
  */
 async function verifyManagedIntegrationPostconditions(
   context: CommandContext,
-  integrations: readonly { providerId: ReturnType<typeof providerId>; harnessId: string }[],
+  integrations: readonly ManagedIntegration[],
 ): Promise<Diagnostic[]> {
   if (integrations.length === 0) return [];
   if (context.adapters === null) {
