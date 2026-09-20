@@ -267,11 +267,25 @@ export function guideSetupTarget(
   }
 
   if (detection.state === 'absent' || detection.state === 'available') {
+    if (detection.assignableHarnesses.includes(harnessDetection.harnessId)) {
+      return {
+        providerId: provider,
+        provider: label,
+        state: 'actionable',
+        reason: `${label} is not installed yet, but Token Harness has a reviewed automatic install + ${name(harness)} setup path. The exact package and configuration changes are shown before approval.`,
+      };
+    }
+    const prerequisite = detection.warnings.find(
+      (entry) => entry.severity === 'warning' || entry.severity === 'error',
+    );
     return {
       providerId: provider,
       provider: label,
       state: 'unavailable',
-      reason: `${label} is not installed in a state Token Harness can configure automatically.`,
+      reason:
+        prerequisite === undefined
+          ? `${label} is not installed and no automatic installer prerequisite is available in this terminal.`
+          : `${prerequisite.message}${prerequisite.remediation === null ? '' : ` ${prerequisite.remediation}`}`,
     };
   }
   if (detection.state === 'broken') {
@@ -283,11 +297,17 @@ export function guideSetupTarget(
     };
   }
   if (!detection.assignableHarnesses.includes(harnessDetection.harnessId)) {
+    const capability = detection.warnings.find(
+      (entry) => entry.severity === 'warning' || entry.severity === 'error',
+    );
     return {
       providerId: provider,
       provider: label,
       state: 'not-applicable',
-      reason: `The installed ${label} build does not expose an automatic ${name(harness)} setup surface.`,
+      reason:
+        capability === undefined
+          ? `The installed ${label} build does not expose an automatic ${name(harness)} setup surface.`
+          : `${capability.message}${capability.remediation === null ? '' : ` ${capability.remediation}`}`,
     };
   }
 
