@@ -25,8 +25,6 @@ permissions:
 jobs:
   passive-package-contract:
     name: passive package contract (${{ matrix.os }})
-    env:
-      UV_TOOL_BIN_DIR: ${{ runner.temp }}/uv-tool-bin
     strategy:
       fail-fast: false
       matrix:
@@ -41,9 +39,8 @@ jobs:
         shell: bash
         run: |
           python -m pip install --disable-pip-version-check uv
-          mkdir -p "$UV_TOOL_BIN_DIR"
-          echo "$UV_TOOL_BIN_DIR" >> "$GITHUB_PATH"
           uv tool install --force 'headroom-ai[mcp]==0.37.0'
+          uv tool dir --bin >> "$GITHUB_PATH"
 
       - name: Verify passive managed MCP CLI contract
         shell: bash
