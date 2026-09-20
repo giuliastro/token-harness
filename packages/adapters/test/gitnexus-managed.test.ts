@@ -16,6 +16,7 @@ import {
   GITNEXUS_CLAUDE_MCP_POINTER,
   GITNEXUS_MCP_SERVER,
   GITNEXUS_REVIEWED_MCP_VERSION,
+  gitnexusManagedProviderAdapter,
   planGitNexusManagedMcpActivation,
   planGitNexusManagedMcpRemoval,
   verifyGitNexusManagedMcpActivation,
@@ -119,6 +120,23 @@ function runner(commands: string[] = [], version = GITNEXUS_REVIEWED_MCP_VERSION
   };
 }
 
+function absentGitNexusRunner(commands: string[] = [], npmAvailable = true): ProcessRunner {
+  return {
+    run: (request) => {
+      commands.push(`${request.executable} ${request.args.join(' ')}`);
+      if (request.executable === 'npm' && request.args[0] === '--version' && npmAvailable) {
+        return Promise.resolve(processOutcome(request, '11.6.0'));
+      }
+      return Promise.resolve({
+        ...processOutcome(request, ''),
+        executablePath: null,
+        exitCode: null,
+        failure: { reason: 'executable-not-found' as const, message: `${request.executable} missing` },
+      });
+    },
+  };
+}
+
 function context(fs: MemoryFs, commands: string[] = []): ProviderContext {
   return {
     fs,
@@ -167,6 +185,48 @@ test('plans one owned Claude JSON entry and never invokes gitnexus setup or mcp'
   assert.equal(action.rollbackData, 'file-snapshot');
   assert.equal(action.requiresNetwork, false);
   assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
+});
+
+test('Windows first-run can install reviewed GitNexus through npm and then register Claude MCP', async () => {
+  const fs = new MemoryFs();
+  setJson(fs, { theme: 'dark' });
+  const commands: string[] = [];
+  const base = context(fs, commands);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentGitNexusRunner(commands),
+  };
+
+  const detection = await gitnexusManagedProviderAdapter.detect(windows);
+  assert.equal(detection.state, 'absent');
+  assert.deepEqual(detection.assignableHarnesses, [harnessId('claude')]);
+
+  const plan = await planGitNexusManagedMcpActivation(windows, harnessId('claude'));
+  assert.equal(plan.actions.length, 2);
+  const install = plan.actions[0];
+  assert.ok(install?.kind === 'package-manager-install');
+  assert.equal(install.packageManager, 'npm');
+  assert.equal(install.packageName, 'gitnexus');
+  assert.equal(install.version, GITNEXUS_REVIEWED_MCP_VERSION);
+  assert.equal(plan.actions[1]?.kind, 'merge-json');
+  assert.ok(commands.includes('npm --version'));
+});
+
+test('Windows first-run explains npm as the missing prerequisite instead of a generic setup surface', async () => {
+  const fs = new MemoryFs();
+  const commands: string[] = [];
+  const base = context(fs, commands);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentGitNexusRunner(commands, false),
+  };
+
+  const detection = await gitnexusManagedProviderAdapter.detect(windows);
+  assert.deepEqual(detection.assignableHarnesses, []);
+  assert.equal(detection.warnings[0]?.code, 'gitnexus-npm-unavailable');
+  assert.match(detection.warnings[0]?.message ?? '', /npm is not available/i);
 });
 
 test('keeps a newer GitNexus release usable when it still advertises MCP', async () => {
