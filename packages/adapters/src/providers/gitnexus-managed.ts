@@ -135,6 +135,31 @@ function prerequisiteDiagnostic(harness: HarnessId, detail: string): Diagnostic 
   });
 }
 
+function gitnexusInstallAction(): PlannedAction {
+  return {
+    kind: 'package-manager-install',
+    id: `gitnexus:install:${GITNEXUS_REVIEWED_MCP_VERSION}`,
+    riskClass: 'delegated',
+    requiresNetwork: true,
+    requiresElevation: false,
+    affectedPaths: [],
+    affectedProcesses: ['npm'],
+    preconditions: [
+      'npm remains runnable',
+      `the reviewed GitNexus ${GITNEXUS_REVIEWED_MCP_VERSION} package remains installable`,
+    ],
+    postconditions: [
+      `GitNexus ${GITNEXUS_REVIEWED_MCP_VERSION} is installed and exposes the mcp command`,
+    ],
+    rollbackData: 'package-inventory',
+    explanation: `Install the reviewed GitNexus ${GITNEXUS_REVIEWED_MCP_VERSION} CLI through npm`,
+    packageManager: 'npm',
+    packageName: 'gitnexus',
+    version: GITNEXUS_REVIEWED_MCP_VERSION,
+  };
+}
+
+
 export async function planGitNexusManagedMcpActivation(
   context: ProviderContext,
   harness: HarnessId,
@@ -159,13 +184,41 @@ export async function planGitNexusManagedMcpActivation(
   }
 
   const observation = await observeGitNexusManagedRuntime(context);
+  const installActions: PlannedAction[] = [];
   if (!observation.ready) {
-    return {
-      harness,
-      target: null,
-      actions: [],
-      diagnostics: [prerequisiteDiagnostic(harness, observation.detail)],
-    };
+    if (!observation.absent) {
+      return {
+        harness,
+        target: null,
+        actions: [],
+        diagnostics: [prerequisiteDiagnostic(harness, observation.detail)],
+      };
+    }
+
+    const npm = await context.runner.run({
+      executable: 'npm',
+      args: ['--version'],
+      cwd: context.projectRoot,
+      timeoutMs: 20_000,
+    });
+    if (npm.failure !== null || npm.exitCode !== 0) {
+      return {
+        harness,
+        target: null,
+        actions: [],
+        diagnostics: [
+          diagnostic({
+            severity: 'warning',
+            code: 'gitnexus-npm-unavailable',
+            subject: harness,
+            message: 'GitNexus is absent and npm is not available in this terminal',
+            remediation:
+              'Make npm available on PATH, then refresh Token Harness. Token Harness will not bootstrap Node.js or administrator prerequisites.',
+          }),
+        ],
+      };
+    }
+    installActions.push(gitnexusInstallAction());
   }
 
   const target = claudeTarget(context);
@@ -299,7 +352,7 @@ export async function planGitNexusManagedMcpActivation(
     createIfMissing: true,
   };
 
-  return { harness, target, actions: [action], diagnostics: [] };
+  return { harness, target, actions: [...installActions, action], diagnostics: [] };
 }
 
 /**
