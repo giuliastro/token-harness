@@ -1,15 +1,15 @@
-# Release checkpoint — 2026-09-19
+# Release checkpoint — 2026-09-20
 
-Token Harness `0.1.15` is the next incremental stable release candidate.
+Token Harness `0.1.16` is the next incremental stable release candidate.
 
-PR #324 merged to `main` as `6bad1b5d932d5a953a2881b6179965921d12cae5` after CI run `35433245433` passed on Ubuntu, macOS and Windows and Headroom managed compatibility smoke `35433245436` passed all platforms.
+PR #327 merged to `main` as `c615356cb289700a511cbbe13c9c38c3c7567815` after CI run `35471424233` passed on Ubuntu, macOS and Windows and Headroom managed compatibility smoke `35471424232` passed all platforms.
 
-This release fixes the guided setup model rather than only its button wiring. Setup availability is now derived from the provider's real detected assignability plus the exact reviewed provider × agent-version × platform compatibility admission. The browser no longer assumes RTK is configurable for Codex, no longer assumes every provider supports every coding agent, and no longer shows **Finish setup** or **Connect to …** when the backend cannot produce a reviewed automatic change.
+This release changes compatibility policy from static version admission to runtime capability admission. Compatibility rows remain historical evidence, but a newer provider or harness version is no longer rejected merely because its exact tuple has not been recorded yet. When the installed provider still exposes the required managed surface, Token Harness uses the ordinary transactional path and verifies the result after apply.
 
-A recommended-agent card is marked **Setup incomplete** only when at least one concrete recommended setup action is actionable. Unsupported or unreviewed combinations are shown as unavailable instead of unfinished. Provider cards distinguish **setup available** from **no automatic setup**, and explain why a Connect button is absent.
+Provider updates are latest-forward above the supported floor. After installation, Token Harness re-detects the executable actually resolved on PATH and checks the required capability surface. A PATH mismatch or runtime contract regression fails the postcondition and rolls the transaction back instead of reporting a false success.
 
-Coverage now includes a stateful Codex + HarnessTrim path that verifies actionable → preview → apply → re-observe → connected and confirms the setup action is gone afterward. It also asserts RTK is never planned for Codex and exact unreviewed version combinations do not advertise setup controls.
+HarnessTrim 0.3 and newer use the machine-readable `harnesstrim capabilities` contract and runtime-published skill artifact digests. Modern releases that stop publishing the required digest contract fail closed instead of silently falling back to the historical 0.0.7 artifact set. mcptoon, GitNexus and Headroom likewise accept newer releases only while the CLI capability surface required by the managed integration remains observable.
 
-No compatibility row was widened. Existing preview → approval → apply transactions, ownership checks, backups, rollback and fail-closed compatibility behavior remain unchanged.
+Historical benchmark and performance evidence remains version-specific and is not automatically projected onto future releases. Ownership checks, containment/write-set checks, drift detection, backups, rollback, preview/approval and post-apply verification remain unchanged.
 
-Release preparation aligns workspace, publishable CLI and embedded version at `0.1.15`. After this release-prep PR is green and merged, create `release/v0.1.15` from its exact merge commit; the existing release bridge will create the immutable tag, dispatch the trusted release workflow, attest the tarball/SBOM, publish to npm via OIDC trusted publishing, and create the GitHub Release.
+Release preparation aligns workspace, publishable CLI and embedded version at `0.1.16`. After this release-prep PR is green and merged, create `release/v0.1.16` from its exact merge commit; the existing release bridge will create the immutable tag, dispatch the trusted release workflow, attest the tarball/SBOM, publish to npm via OIDC Trusted Publishing, and create the GitHub Release.
