@@ -59,6 +59,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Temporary format diagnostic
+        run: |
+          pnpm exec prettier --write scripts/evaluation/optional-windows-first-run-smoke.mjs
+          git diff -- scripts/evaluation/optional-windows-first-run-smoke.mjs
+
       - name: Format check
         run: pnpm format:check
 
