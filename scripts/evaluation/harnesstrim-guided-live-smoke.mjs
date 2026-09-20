@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GuideService } from '../../apps/cli/src/guided.ts';
 
 if (process.platform !== 'linux') {
   console.error('This live smoke is intentionally Linux-only in CI.');
@@ -129,26 +130,57 @@ function assert(condition, label, detail = '') {
   ok(label);
 }
 
-function planAndApply(agent) {
-  const plan = thJson(['plan', '--harness', agent, '--provider', 'harnesstrim']);
-  const planId = plan.data?.planId;
+let ticketCounter = 0;
+const guide = new GuideService(
+  async (args) => thJson([...args]),
+  () => Date.now(),
+  () => `live-ticket-${++ticketCounter}`,
+);
+
+async function guidedSetup(agent) {
+  const preview = await guide.preview({
+    action: 'setup',
+    harness: agent,
+    provider: 'harnesstrim',
+  });
   assert(
-    typeof planId === 'string' && planId.length > 0,
-    `${agent}: setup produced a stored plan`,
-    JSON.stringify(plan),
+    typeof preview.ticket === 'string' && preview.ticket.length > 0,
+    `${agent}: guided Finish setup produces an approval ticket`,
+    JSON.stringify(preview),
   );
   assert(
-    (plan.data?.actions?.length ?? 0) > 0,
-    `${agent}: setup plan contains a real action`,
-    JSON.stringify(plan.data),
+    preview.changes.length > 0,
+    `${agent}: guided Finish setup previews a concrete HarnessTrim change`,
+    JSON.stringify(preview),
   );
 
-  const applied = thJson(['apply', '--plan', planId, '--yes']);
+  const applied = await guide.apply({ ticket: preview.ticket });
   assert(
-    applied.data?.outcome === 'committed',
-    `${agent}: approved setup committed`,
+    applied.ok === true && applied.appliedPlans > 0,
+    `${agent}: guided Finish setup applies and verifies instead of returning Needs attention`,
     JSON.stringify(applied),
   );
+}
+
+async function guidedUpdate() {
+  const preview = await guide.checkUpdates();
+  assert(
+    preview.ok === true && typeof preview.ticket === 'string' && preview.ticket.length > 0,
+    'guided Check for updates returns a concrete install approval',
+    JSON.stringify(preview),
+  );
+  const applied = await guide.apply({ ticket: preview.ticket });
+  assert(
+    applied.ok === true && applied.appliedPlans > 0,
+    'guided Install updates verifies the active runtime before reporting success',
+    JSON.stringify(applied),
+  );
+  assert(
+    !applied.messages.some((message) => message.includes('No optimizer needed an update')),
+    'guided update does not emit the stale false-green "No optimizer needed an update" message',
+    JSON.stringify(applied.messages),
+  );
+  return applied;
 }
 
 function verifyHarness(agent) {
@@ -213,8 +245,8 @@ try {
     JSON.stringify(provider(before, 'harnesstrim')),
   );
 
-  planAndApply('claude');
-  planAndApply('codex');
+  await guidedSetup('claude');
+  await guidedSetup('codex');
 
   for (const [path, expected] of protectedFiles) {
     assert(
@@ -251,17 +283,7 @@ try {
     `registry latest is ${latest}`,
   );
 
-  const update = thJson(['update', '--provider', 'harnesstrim', '--yes']);
-  assert(
-    update.data?.execution?.outcome === 'committed',
-    'real HarnessTrim npm update commits',
-    JSON.stringify(update),
-  );
-  assert(
-    update.data?.execution?.results?.some((item) => item.status === 'applied'),
-    'real HarnessTrim update records an applied action',
-    JSON.stringify(update.data?.execution),
-  );
+  await guidedUpdate();
 
   const activeAfterUpdate = run('harnesstrim', ['--version']);
   expectExit('updated HarnessTrim executable starts from the active PATH', activeAfterUpdate);
@@ -309,7 +331,7 @@ try {
     JSON.stringify(afterRemovalHt),
   );
 
-  planAndApply('claude');
+  await guidedSetup('claude');
   const finalDoctor = doctor();
   const finalHt = provider(finalDoctor, 'harnesstrim');
   assert(
