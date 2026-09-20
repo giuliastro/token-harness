@@ -17,6 +17,7 @@ import {
   MCPTOON_MARKER_BEGIN,
   MCPTOON_MARKER_END,
   MCPTOON_REVIEWED_INSTALL_VERSION,
+  mcptoonManagedProviderAdapter,
   planMcptoonManagedActivation,
   verifyMcptoonManagedActivation,
   type ProviderContext,
@@ -238,6 +239,35 @@ test('verifies reviewed Codex instructions without querying configured MCP serve
   assert.equal(verification.state, 'verified');
   assert.equal(verification.target, '/work/demo/AGENTS.md');
   assert.deepEqual(commands, ['mcptoon --version', 'mcptoon --help']);
+});
+
+test('Windows first-run exposes mcptoon setup when pipx is already available', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentMcptoonRunner(true),
+  };
+
+  const detection = await mcptoonManagedProviderAdapter.detect(windows);
+  assert.equal(detection.state, 'absent');
+  assert.deepEqual(detection.assignableHarnesses, [harnessId('claude'), harnessId('codex')]);
+});
+
+test('Windows first-run names pipx when mcptoon cannot be installed automatically', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentMcptoonRunner(false),
+  };
+
+  const detection = await mcptoonManagedProviderAdapter.detect(windows);
+  assert.deepEqual(detection.assignableHarnesses, []);
+  assert.equal(detection.warnings[0]?.code, 'mcptoon-pipx-unavailable');
+  assert.match(detection.warnings[0]?.message ?? '', /pipx is not available/i);
 });
 
 test('plans reviewed pipx installation before Codex guidance when mcptoon is absent', async () => {
