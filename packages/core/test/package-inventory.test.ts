@@ -497,11 +497,7 @@ describe('restoring a captured inventory', () => {
     });
 
     assert.equal(outcome.restored, true);
-    assert.deepEqual(commands, [
-      'uv tool list',
-      'uv tool uninstall headroom-ai',
-      'uv tool list',
-    ]);
+    assert.deepEqual(commands, ['uv tool list', 'uv tool uninstall headroom-ai', 'uv tool list']);
   });
 
   it('does not uninstall pipx when the live inventory is unreadable', async () => {
