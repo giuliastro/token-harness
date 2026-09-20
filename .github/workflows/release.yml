@@ -61,6 +61,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Release-blocking real-machine gate for the exact guided paths users click. This installs
+      # public HarnessTrim 0.2.1 plus current Claude Code/Codex in an isolated HOME, runs guided
+      # Finish setup for both agents, updates HarnessTrim through the guided approval flow, verifies
+      # the active PATH runtime, removes one integration and reconnects it on the latest release.
+      - name: Guided real-runtime setup and update smoke
+        run: node scripts/evaluation/harnesstrim-guided-live-smoke.mjs
+
       - name: Bundle smoke test
         run: pnpm smoke
 
