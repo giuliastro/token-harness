@@ -662,7 +662,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (busy) return;
     const agent = activeAgents().find(item => item.id === agentId);
     if (!agent) return;
-    const provider = providerId ? TOOL_INFO[providerId] : null;
+    const provider = providerId ? toolInfo(providerId) : null;
     if (providerId && !provider) return;
     const run = modal(
       provider
