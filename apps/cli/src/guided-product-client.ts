@@ -423,16 +423,21 @@ export const GUIDE_PRODUCT_JS = String.raw`
   function componentState(id, component) {
     if (!component || component.detectedState === 'absent') return { label: 'Not installed', cls: '' };
     if (component.health === 'attention') return { label: 'Needs attention', cls: 'warn' };
-    if (component.configured)
+    const targets = activeAgents().map(agent => setupTarget(agent.id, id)).filter(Boolean);
+    const connectedHere = targets.some(target => target.state === 'connected');
+    const actionableHere = targets.some(target => target.state === 'actionable');
+    if (component.installed && actionableHere && connectedHere)
+      return { label: 'Partially connected · setup available', cls: 'warn' };
+    if (component.installed && actionableHere)
+      return { label: 'Installed · setup available', cls: 'warn' };
+    if (connectedHere)
       return {
         label: component.verification === 'verified' ? 'Connected · verified' : 'Connected',
         cls: 'good',
       };
-    const targets = activeAgents().map(agent => setupTarget(agent.id, id)).filter(Boolean);
-    if (component.installed && targets.some(target => target.state === 'actionable'))
-      return { label: 'Installed · setup available', cls: 'warn' };
     if (component.installed && targets.some(target => target.state === 'unavailable'))
       return { label: 'Installed · no automatic setup', cls: '' };
+    if (component.configured) return { label: 'Connected elsewhere', cls: '' };
     if (component.installed) return { label: 'Installed', cls: '' };
     return { label: 'Not installed', cls: '' };
   }
@@ -459,15 +464,25 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const actionableFor = providerTargets
       .filter(item => item.target.state === 'actionable')
       .map(item => item.agent.name);
-    const unavailableFor = providerTargets.filter(item => item.target.state === 'unavailable');
-    const configuredFor = component?.configuredHarnesses?.length
-      ? component.configuredHarnesses.map(agentName).join(', ')
-      : actionableFor.length
-        ? 'Setup available for ' + actionableFor.join(', ')
-        : unavailableFor.length
-          ? 'No compatible automatic setup surface detected'
-          : 'Not applicable to the detected coding agents';
-    facts.append(node('span', 'Connection'), node('strong', configuredFor));
+    const unavailableFor = providerTargets
+      .filter(item => item.target.state === 'unavailable')
+      .map(item => item.agent.name);
+    const notApplicableFor = providerTargets
+      .filter(item => item.target.state === 'not-applicable')
+      .map(item => item.agent.name);
+    const connectedFor = component?.configuredHarnesses?.length
+      ? component.configuredHarnesses.map(agentName)
+      : [];
+    if (connectedFor.length)
+      facts.append(node('span', 'Connected to'), node('strong', connectedFor.join(', ')));
+    if (actionableFor.length)
+      facts.append(node('span', 'Setup available'), node('strong', actionableFor.join(', ')));
+    if (unavailableFor.length)
+      facts.append(node('span', 'Automatic setup unavailable'), node('strong', unavailableFor.join(', ')));
+    if (notApplicableFor.length)
+      facts.append(node('span', 'Not applicable'), node('strong', notApplicableFor.join(', ')));
+    if (!connectedFor.length && !actionableFor.length && !unavailableFor.length && !notApplicableFor.length)
+      facts.append(node('span', 'Connection'), node('strong', 'No detected coding agent target'));
     if (component?.update === 'available')
       facts.append(
         node('span', 'Update'),
@@ -486,7 +501,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       card.append(
         messageBox(
           'Why there is no Connect button',
-          unavailableFor[0].target.reason,
+          providerTargets.find(item => item.target.state === 'unavailable')?.target.reason ||
+            'The installed provider does not expose an automatic setup surface for this coding agent.',
         ),
       );
 
