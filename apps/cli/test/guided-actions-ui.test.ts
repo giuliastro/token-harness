@@ -13,24 +13,22 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /choice-grid/);
   });
 
-  it('uses one obvious first-run baseline action per incomplete coding agent', () => {
+  it('uses one connection manager per optimizer instead of setup buttons per harness', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
     assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
+    assert.match(GUIDE_JS, /Manage connections/);
+    assert.match(GUIDE_JS, /reviewConnections/);
+    assert.match(GUIDE_JS, /Review selected connection/);
     assert.match(GUIDE_JS, /Set up recommended optimizers for /);
-    assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
-    assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
-    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
-    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
-    assert.doesNotMatch(GUIDE_JS, /providerSupportsAgent/);
-    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
-    assert.match(GUIDE_JS, /Why there is no Connect button/);
+    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.doesNotMatch(GUIDE_JS, /'Connect to ' \+ agent\.name/);
+    assert.doesNotMatch(GUIDE_JS, /'Set up for ' \+ agent\.name/);
     assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
     assert.match(GUIDE_JS, /Optional optimizers stay separate/);
     assert.match(GUIDE_JS, /Apply recommended setup/);
     assert.match(GUIDE_JS, /No automatic setup/);
-    assert.match(GUIDE_JS, /Token Harness will not offer a no-op button/);
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
