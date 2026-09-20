@@ -164,6 +164,12 @@ function provider(report, id) {
   return report.data?.providers?.find((item) => item.providerId === id) ?? null;
 }
 
+function normalizeVersion(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/^v/i, '');
+}
+
 function createGuide(projectId) {
   activate(activeEnv);
   const resolution = resolveHostEnvironment();
@@ -464,8 +470,95 @@ try {
     'Codex config contains the reviewed managed Headroom MCP block',
   );
 
+  // Reproduce the original Windows guided HarnessTrim regression on the same isolated machine:
+  // start from 0.2.1, finish setup for both real harnesses, update through the guided UI boundary,
+  // prove the active executable changed, and verify both integrations survived the package update.
+  const installHarnessTrim = runBatchShim(join(nodeDir, 'npm.cmd'), [
+    'install',
+    '--global',
+    '--no-audit',
+    '--no-fund',
+    'harnesstrim@0.2.1',
+  ]);
+  assert(installHarnessTrim.status === 0, 'HarnessTrim 0.2.1 installs into the isolated npm prefix');
+
+  const harnesstrim021 = runBatchShim(join(prefix, 'harnesstrim.cmd'), ['--version']);
+  assert(
+    normalizeVersion(harnesstrim021.stdout) === '0.2.1',
+    'active Windows PATH starts with HarnessTrim 0.2.1',
+    harnesstrim021.stdout.trim(),
+  );
+
+  const harnessTrimGuide = createGuide('p_windows_harnesstrim_lifecycle');
+  await guidedSetup(harnessTrimGuide, 'claude', 'harnesstrim', 1, false);
+  await guidedSetup(harnessTrimGuide, 'codex', 'harnesstrim', 1, false);
+
+  let harnessTrimDoctor = thJson(['doctor']);
+  let harnessTrim = provider(harnessTrimDoctor, 'harnesstrim');
+  assert(
+    normalizeVersion(harnessTrim?.version) === '0.2.1' &&
+      harnessTrim?.configuredHarnesses?.includes('claude') &&
+      harnessTrim?.configuredHarnesses?.includes('codex'),
+    'doctor observes HarnessTrim 0.2.1 connected to both real Windows harnesses',
+    JSON.stringify(harnessTrim),
+  );
+  verifyManaged('harnesstrim', 'claude');
+  verifyManaged('harnesstrim', 'codex');
+
+  const latestHarnessTrimResult = runBatchShim(join(nodeDir, 'npm.cmd'), [
+    'view',
+    'harnesstrim',
+    'version',
+    '--json',
+  ]);
+  const latestHarnessTrim = normalizeVersion(JSON.parse(latestHarnessTrimResult.stdout));
+  assert(
+    latestHarnessTrim !== '' && latestHarnessTrim !== '0.2.1',
+    'npm exposes a newer HarnessTrim release for the Windows guided update',
+    latestHarnessTrimResult.stdout,
+  );
+
+  const updatePreview = await harnessTrimGuide.checkUpdates();
+  assert(
+    updatePreview.ok === true &&
+      typeof updatePreview.ticket === 'string' &&
+      updatePreview.ticket.length > 0,
+    'Windows guided Check for updates returns a concrete HarnessTrim approval ticket',
+    JSON.stringify(updatePreview),
+  );
+  const updateApplied = await harnessTrimGuide.apply({ ticket: updatePreview.ticket });
+  assert(
+    updateApplied.ok === true && updateApplied.appliedPlans > 0,
+    'Windows guided HarnessTrim update commits and verifies instead of returning a false green',
+    JSON.stringify(updateApplied),
+  );
+  assert(
+    !updateApplied.messages.some((message) => message.includes('No optimizer needed an update')),
+    'Windows guided HarnessTrim update never emits the stale "No optimizer needed an update" result',
+    JSON.stringify(updateApplied.messages),
+  );
+
+  const activeHarnessTrim = runBatchShim(join(prefix, 'harnesstrim.cmd'), ['--version']);
+  assert(
+    normalizeVersion(activeHarnessTrim.stdout) === latestHarnessTrim,
+    'active Windows PATH resolves the registry HarnessTrim version after guided update',
+    `${activeHarnessTrim.stdout.trim()} vs ${latestHarnessTrim}`,
+  );
+
+  harnessTrimDoctor = thJson(['doctor']);
+  harnessTrim = provider(harnessTrimDoctor, 'harnesstrim');
+  assert(
+    normalizeVersion(harnessTrim?.version) === latestHarnessTrim &&
+      harnessTrim?.configuredHarnesses?.includes('claude') &&
+      harnessTrim?.configuredHarnesses?.includes('codex'),
+    'doctor refresh observes the updated HarnessTrim runtime and both connections',
+    JSON.stringify(harnessTrim),
+  );
+  verifyManaged('harnesstrim', 'claude');
+  verifyManaged('harnesstrim', 'codex');
+
   console.log(
-    '\nWindows optional-provider first-run smoke passed for GitNexus, mcptoon and Headroom.',
+    '\nWindows live guided smoke passed for GitNexus, mcptoon, Headroom and HarnessTrim on Claude Code/Codex.',
   );
 } finally {
   rmSync(root, { recursive: true, force: true });
