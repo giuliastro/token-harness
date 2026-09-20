@@ -1166,24 +1166,17 @@ describe('planning', () => {
       false,
       'fallback skill contracts must also avoid snapshotting unrelated Claude state',
     );
-    assert.ok(
-      action.containmentBoundary.includes(
-        `${PROJECT}\\.claude\\skills\\delta-response`,
-      ),
-    );
+    assert.ok(action.containmentBoundary.includes(`${PROJECT}\\.claude\\skills\\delta-response`));
   });
 
   it('uses HarnessTrim 0.2.1 runtime digests and excludes unrelated agent-home data from rollback', async () => {
     const skill = '# HarnessTrim 0.2.1 runtime skill\n';
     const capabilities = dynamicCapabilities('0.2.1', skill);
-    const result = await harnesstrimAdapter.plan(
-      context({ version: '0.2.1', capabilities }),
-      {
-        ownership: [],
-        harnesses: [claudeAdapter.manifest],
-        desiredState: 'configured',
-      },
-    );
+    const result = await harnesstrimAdapter.plan(context({ version: '0.2.1', capabilities }), {
+      ownership: [],
+      harnesses: [claudeAdapter.manifest],
+      desiredState: 'configured',
+    });
 
     const action = result.actions[0];
     assert.ok(action !== undefined && action.kind === 'delegated-provider-install');
@@ -1198,12 +1191,8 @@ describe('planning', () => {
       false,
       'the delegated rollback boundary must not snapshot the whole Claude home',
     );
-    assert.ok(
-      action.containmentBoundary.includes(`${PROJECT}\\.claude\\skills\\latest`),
-    );
-    assert.ok(
-      action.containmentBoundary.includes(`${PROJECT}\\.claude\\settings.json`),
-    );
+    assert.ok(action.containmentBoundary.includes(`${PROJECT}\\.claude\\skills\\latest`));
+    assert.ok(action.containmentBoundary.includes(`${PROJECT}\\.claude\\settings.json`));
     assert.ok(action.containmentBoundary.includes(CLAUDE_MD));
   });
 
