@@ -28,6 +28,9 @@ import {
   harnessesWiredToRtk,
   parseRtkAnalytics,
   rtkAdapter,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
   type ProviderContext,
 } from '../src/index.js';
 
@@ -69,10 +72,9 @@ const NO_FILESYSTEM: FileSystemPort = {
   dirname: (path) => path,
   basename: (path) => path,
   isInside: () => false,
-  // RTK detection reads no files: everything comes from the runner and from what the
-  // harness adapters already reported. A port that throws proves it.
-  stat: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
-  readFile: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
+  // RTK also checks the narrow Codex global instruction surface. Missing files are the normal case.
+  stat: () => Promise.resolve(null),
+  readFile: () => Promise.reject(new Error('missing test file')),
   writeFile: () => Promise.reject(new Error('the rtk adapter must not write')),
   appendFile: () => Promise.reject(new Error('the rtk adapter must not write')),
   createDirectory: () => Promise.reject(new Error('the rtk adapter must not write')),
@@ -135,10 +137,27 @@ function context(
     configs?: HarnessConfigSummary[];
     now?: string;
     localDatabase?: LocalDatabasePort | null;
+    files?: Record<string, string>;
   },
 ): ProviderContext {
   return {
-    fs: NO_FILESYSTEM,
+    fs:
+      options.files === undefined
+        ? NO_FILESYSTEM
+        : {
+            ...NO_FILESYSTEM,
+            stat: (path) =>
+              Promise.resolve(
+                Object.hasOwn(options.files!, path)
+                  ? { kind: 'file' as const, mode: null, size: options.files![path]!.length }
+                  : null,
+              ),
+            readFile: (path) => {
+              const value = options.files![path];
+              if (value === undefined) return Promise.reject(new Error('missing test file'));
+              return Promise.resolve(new TextEncoder().encode(value));
+            },
+          },
     runner: runner(options),
     facts: FACTS,
     paths: {
@@ -229,6 +248,35 @@ describe('recognising itself in a harness configuration', () => {
 });
 
 describe('detection', () => {
+
+  it('advertises Codex as an assignable RTK target', async () => {
+    const detection = await rtkAdapter.detect(context({}));
+    assert.ok(detection.assignableHarnesses.includes('codex' as typeof detection.assignableHarnesses[number]));
+  });
+
+  it('detects the Token Harness-owned Codex RTK instruction block', async () => {
+    const agents = 'C:\\Users\\dev/.codex/AGENTS.md';
+    const block = [
+      `<!-- ${RTK_CODEX_MARKER_BEGIN} -->`,
+      RTK_CODEX_INSTRUCTIONS,
+      `<!-- ${RTK_CODEX_MARKER_END} -->`,
+    ].join('\n');
+    const detection = await rtkAdapter.detect(context({ files: { [agents]: block } }));
+    assert.equal(detection.state, 'configured');
+    assert.ok(detection.configuredHarnesses.includes('codex' as typeof detection.configuredHarnesses[number]));
+  });
+
+  it('adopts RTK upstream global Codex setup without claiming ownership', async () => {
+    const agents = 'C:\\Users\\dev/.codex/AGENTS.md';
+    const rtk = 'C:\\Users\\dev/.codex/RTK.md';
+    const detection = await rtkAdapter.detect(
+      context({ files: { [agents]: `# User rules\n@${rtk}\n`, [rtk]: '# RTK\n' } }),
+    );
+    assert.equal(detection.state, 'configured');
+    assert.ok(detection.configuredHarnesses.includes('codex' as typeof detection.configuredHarnesses[number]));
+    assert.ok(detection.evidence.some((item) => item.source === 'rtk Codex global instructions'));
+  });
+
   it('reports absent when rtk cannot be run and nothing is wired to it', async () => {
     const detection = await rtkAdapter.detect(context({ version: null, analytics: null }));
     assert.equal(detection.state, 'absent');
