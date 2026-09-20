@@ -297,7 +297,7 @@ describe('guided workflow', () => {
     assert.doesNotMatch(target.reason, /reviewed|version combination/i);
   });
 
-  it('moves Codex HarnessTrim from actionable to connected after apply', async () => {
+  it('moves the Codex recommended optimizer set from actionable to connected after apply', async () => {
     let connected = false;
     let sequence = 0;
     const calls: string[][] = [];
@@ -306,7 +306,7 @@ describe('guided workflow', () => {
         platform: linuxPlatform,
         harnessVersions: { codex: '0.152.1' },
         providerVersions: { harnesstrim: '0.2.1' },
-        configured: connected ? { harnesstrim: ['codex'] } : {},
+        configured: connected ? { rtk: ['codex'], harnesstrim: ['codex'] } : {},
       });
     const call: GuideCall = async <T>(args: readonly string[]) => {
       calls.push([...args]);
@@ -317,7 +317,10 @@ describe('guided workflow', () => {
       if (command === 'budget') data = { harnesses: [] };
       if (command === 'status') data = { problemCount: 0, drift: [] };
       if (command === 'plan') {
-        assert.deepEqual(args, ['plan', '--harness', 'codex', '--provider', 'harnesstrim']);
+        assert.equal(args[1], '--harness');
+        assert.equal(args[2], 'codex');
+        assert.equal(args[3], '--provider');
+        assert.ok(args[4] === 'rtk' || args[4] === 'harnesstrim');
         data = plan('stateful-' + ++sequence);
       }
       if (command === 'apply') {
