@@ -179,6 +179,8 @@ interface Approval {
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
+  /** Exact provider versions the user approved in an update preview. */
+  updateTargets?: Array<{ provider: ReturnType<typeof providerId>; target: string }>;
 }
 type GuideUndoTarget =
   | { kind: 'plan'; plan: string; network: boolean }
@@ -1551,6 +1553,60 @@ export class GuideService {
             appliedPlans: 0,
           };
         }
+
+        /*
+         * The transaction result is not enough to declare the update successful in the UI.
+         * A previous implementation treated "no applied action" as "already up to date", which
+         * could turn a stale/no-op execution into a green success while the old executable was
+         * still the one on PATH. Re-read the machine and prove every version the user approved.
+         */
+        let refreshedInventory: CliEnvelope<DoctorReport>;
+        try {
+          refreshedInventory = await this.call<DoctorReport>(['doctor']);
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The update command finished, but Token Harness could not re-read the active optimizer versions. Success was not assumed.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Update result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+
+        const targets = approval.updateTargets ?? [];
+        const missingTargets = targets.filter(({ provider, target }) => {
+          const detected = refreshedInventory.data?.providers.find(
+            (entry) => entry.providerId === provider,
+          );
+          return detected?.version !== target;
+        });
+        if (refreshedInventory.data === null || missingTargets.length > 0) {
+          const detail =
+            missingTargets.length === 0
+              ? 'The active optimizer versions could not be confirmed.'
+              : missingTargets
+                  .map(({ provider, target }) => {
+                    const active = refreshedInventory.data?.providers.find(
+                      (entry) => entry.providerId === provider,
+                    )?.version;
+                    return `${name(provider)} is still ${active ?? 'unreadable'}; the approved target was ${target}.`;
+                  })
+                  .join(' ');
+          const message =
+            `The update did not reach the version that was approved. ${detail} Token Harness will not report this as completed.`;
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Optimizer update was not applied',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+
         const applied =
           result.data.execution?.results.filter((row) => row.status === 'applied') ?? [];
         this.lastApplied = null;
@@ -1558,18 +1614,18 @@ export class GuideService {
         const messages =
           applied.length > 0
             ? [
-                'The optimizer update completed successfully and the active runtime was verified.',
-                'Token Harness re-ran the update transaction safety checks before changing software.',
-                'Choose Refresh to read the installed versions again. Reopen a coding agent if the updated optimizer requires it.',
+                'The optimizer update completed successfully and the approved version is the active runtime.',
+                'Token Harness re-ran the update transaction safety checks before changing software and re-read the installed version afterwards.',
+                'Reopen a coding agent if the updated optimizer requires it.',
               ]
             : [
-                'No optimizer needed an update by the time the approved action ran.',
-                'Nothing was forced. Choose Refresh to read the current versions.',
+                'The approved optimizer version is already active.',
+                'Token Harness re-read the installed runtime before reporting success; no additional package change was needed.',
               ];
         this.record(
           applied.length > 0
             ? 'Optimizer update installed and verified.'
-            : 'Optimizer update no longer needed.',
+            : 'Approved optimizer version already active.',
           'success',
         );
         return {
@@ -1892,6 +1948,9 @@ export class GuideService {
           description: 'Optimizer updates',
           operation: 'update',
           network: updateResult.data.network.length > 0,
+          updateTargets: available.flatMap((row) =>
+            row.available === null ? [] : [{ provider: row.providerId, target: row.available }],
+          ),
         };
         messages.push(
           'Review the versions above, then choose Install updates. Token Harness will re-check the update channels and transaction safety rules before changing software.',
