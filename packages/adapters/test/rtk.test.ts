@@ -149,7 +149,7 @@ function context(
             stat: (path) =>
               Promise.resolve(
                 Object.hasOwn(options.files!, path)
-                  ? { kind: 'file' as const, mode: null, size: options.files![path]!.length }
+                  ? { kind: 'file' as const, mode: null, byteLength: options.files![path]!.length }
                   : null,
               ),
             readFile: (path) => {
