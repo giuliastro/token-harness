@@ -16,6 +16,8 @@ import {
   HEADROOM_CODEX_MARKER_BEGIN,
   HEADROOM_CODEX_MCP_BODY,
   HEADROOM_MCP_SERVER,
+  HEADROOM_REVIEWED_MCP_VERSION,
+  headroomManagedProviderAdapter,
   planHeadroomManagedMcpActivation,
   verifyHeadroomManagedMcpActivation,
   type ProviderContext,
@@ -117,6 +119,23 @@ function runner(commands: string[] = [], version = '0.37.0'): ProcessRunner {
   };
 }
 
+function absentHeadroomRunner(commands: string[] = [], uvAvailable = true): ProcessRunner {
+  return {
+    run: (request) => {
+      commands.push(`${request.executable} ${request.args.join(' ')}`);
+      if (request.executable === 'uv' && request.args[0] === '--version' && uvAvailable) {
+        return Promise.resolve(successfulOutcome(request, 'uv 0.8.17'));
+      }
+      return Promise.resolve({
+        ...successfulOutcome(request, ''),
+        executablePath: null,
+        exitCode: null,
+        failure: { reason: 'executable-not-found' as const, message: `${request.executable} missing` },
+      });
+    },
+  };
+}
+
 function context(fs: MemoryFs, commands: string[] = []): ProviderContext {
   return {
     fs,
@@ -161,6 +180,48 @@ test('plans the reviewed Headroom MCP entry in the modern Claude Code user confi
     plan.actions.some((entry) => entry.affectedPaths.includes('/home/dev/.claude/mcp.json')),
     false,
   );
+});
+
+test('Windows first-run can install reviewed Headroom through uv and configure Claude', async () => {
+  const fs = new MemoryFs();
+  const commands: string[] = [];
+  const base = context(fs, commands);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentHeadroomRunner(commands),
+  };
+
+  const detection = await headroomManagedProviderAdapter.detect(windows);
+  assert.equal(detection.state, 'absent');
+  assert.deepEqual(detection.assignableHarnesses, [harnessId('claude'), harnessId('codex')]);
+
+  const plan = await planHeadroomManagedMcpActivation(windows, harnessId('claude'));
+  assert.equal(plan.actions.length, 2);
+  const install = plan.actions[0];
+  assert.ok(install?.kind === 'package-manager-install');
+  assert.equal(install.packageManager, 'uv');
+  assert.equal(install.packageName, 'headroom-ai[mcp]');
+  assert.equal(install.version, HEADROOM_REVIEWED_MCP_VERSION);
+  assert.equal(install.rollbackData, 'package-inventory');
+  assert.equal(plan.actions[1]?.kind, 'merge-json');
+  assert.ok(commands.includes('uv --version'));
+});
+
+test('Windows first-run names uv when Headroom cannot be installed automatically', async () => {
+  const fs = new MemoryFs();
+  const commands: string[] = [];
+  const base = context(fs, commands);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const, osDisplayName: 'Windows 11' },
+    runner: absentHeadroomRunner(commands, false),
+  };
+
+  const detection = await headroomManagedProviderAdapter.detect(windows);
+  assert.deepEqual(detection.assignableHarnesses, []);
+  assert.equal(detection.warnings[0]?.code, 'headroom-uv-install-prerequisite');
+  assert.match(detection.warnings[0]?.remediation ?? '', /uv/i);
 });
 
 test('keeps a newer Headroom release usable when its MCP server command still exists', async () => {
