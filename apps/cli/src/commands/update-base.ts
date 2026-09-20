@@ -16,6 +16,7 @@ import {
   diagnostic,
   digestText,
   executeTransaction,
+  harnessId,
   parseSemanticVersion,
   preferredInstallationChannel,
   queryAvailableVersion,
@@ -421,7 +422,7 @@ export async function runPackageChannelUpdate(
         );
 
         if (target.adapter.manifest.id === 'harnesstrim') {
-          const requiredManagedHarnesses = ['claude', 'codex'];
+          const requiredManagedHarnesses = [harnessId('claude'), harnessId('codex')];
           const missingManagedHarnesses = requiredManagedHarnesses.filter(
             (harness) => !detection.assignableHarnesses.includes(harness),
           );
