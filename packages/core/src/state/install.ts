@@ -426,27 +426,19 @@ const INVENTORY_COMMANDS: Readonly<
     args: () => ['tool', 'list'],
     parse: (stdout, packageName) => {
       // Installation specs can include extras such as headroom-ai[mcp], while uv inventories the
-      // base distribution. Escape the distribution name before building the matcher.
+      // base distribution. Parse the first two whitespace-separated fields instead of building a
+      // regular expression from a package spec.
       const distribution = packageName.replace(/\[.*\]$/, '');
-      const escaped = distribution.replace(/[.*+?^${}()|[\]\\]/g, '\\  uv: {
-    executable: 'uv',
-    args: () => ['tool', 'list'],
-    parse: (stdout, packageName) => {
-      const pattern = new RegExp(`^${packageName}\\s+v?(\\S+)`, 'm');
-      const match = pattern.exec(stdout);
-      if (match === null) return { status: 'absent', version: null };
-      const candidate = match[1] ?? '';
-      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
-      return { status: 'captured', version: candidate };
-    },
-    verified: false,
-  },');
-      const pattern = new RegExp(`^${escaped}\\s+v?(\\S+)`, 'm');
-      const match = pattern.exec(stdout);
-      if (match === null) return { status: 'absent', version: null };
-      const candidate = match[1] ?? '';
-      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
-      return { status: 'captured', version: candidate };
+      for (const line of stdout.split(/\r?\n/)) {
+        const fields = line.trim().split(/\s+/);
+        if (fields[0] !== distribution) continue;
+        const candidate = (fields[1] ?? '').replace(/^v/i, '');
+        if (parseSemanticVersion(candidate) === null) {
+          return { status: 'unknown', version: null };
+        }
+        return { status: 'captured', version: candidate };
+      }
+      return { status: 'absent', version: null };
     },
     verified: true,
   },
