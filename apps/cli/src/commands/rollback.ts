@@ -43,6 +43,7 @@ import {
 import type { CommandContext } from './context.js';
 import { runCandidateUninstall } from './candidate-lifecycle.js';
 import { computePlan } from './plan.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 /**
  * A stable identity for an owned artifact.
@@ -122,14 +123,14 @@ function finish(
   });
 }
 
-function stores(context: CommandContext, transactionId: string) {
+async function stores(context: CommandContext, transactionId: string) {
   if (context.adapters === null || context.stateRoot === null) return null;
   const fs = context.adapters.fs;
   const creation = TransactionSnapshotStore.create({
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) return { fs, failure: creation.diagnostics };
@@ -262,7 +263,7 @@ export async function runRollback(context: CommandContext): Promise<CommandResul
     );
   }
 
-  const built = stores(context, target.transactionId);
+  const built = await stores(context, target.transactionId);
   if (built === null || built.store === undefined) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(
@@ -490,7 +491,7 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     .now()
     .replace(/[^0-9]/g, '')
     .slice(0, 14)}`;
-  const built = stores(context, transactionId);
+  const built = await stores(context, transactionId);
   if (built === null || built.store === undefined) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(
