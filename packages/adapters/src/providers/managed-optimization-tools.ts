@@ -188,15 +188,14 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
       if (verification.state === 'verified') configuredHarnesses.push(harness);
     }
   }
-  const pipx =
-    observation.absent
-      ? await context.runner.run({
-          executable: 'pipx',
-          args: ['--version'],
-          cwd: context.projectRoot,
-          timeoutMs: 20_000,
-        })
-      : null;
+  const pipx = observation.absent
+    ? await context.runner.run({
+        executable: 'pipx',
+        args: ['--version'],
+        cwd: context.projectRoot,
+        timeoutMs: 20_000,
+      })
+    : null;
   const canInstall =
     observation.absent && pipx !== null && pipx.failure === null && pipx.exitCode === 0;
   const warnings =
@@ -241,15 +240,14 @@ async function gitnexusDetection(context: ProviderContext): Promise<ProviderDete
     ? await verifyGitNexusManagedMcpActivation(context, CLAUDE)
     : null;
   const configuredHarnesses = verification?.state === 'verified' ? [CLAUDE] : [];
-  const npm =
-    observation.absent
-      ? await context.runner.run({
-          executable: 'npm',
-          args: ['--version'],
-          cwd: context.projectRoot,
-          timeoutMs: 20_000,
-        })
-      : null;
+  const npm = observation.absent
+    ? await context.runner.run({
+        executable: 'npm',
+        args: ['--version'],
+        cwd: context.projectRoot,
+        timeoutMs: 20_000,
+      })
+    : null;
   const canInstall =
     observation.absent && npm !== null && npm.failure === null && npm.exitCode === 0;
   const warnings =
