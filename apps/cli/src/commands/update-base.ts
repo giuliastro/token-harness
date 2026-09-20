@@ -420,24 +420,39 @@ export async function runPackageChannelUpdate(
             /(unavailable|drift|mismatch|unsupported)/i.test(warning.code),
         );
 
-        if (
-          target.adapter.manifest.id === 'harnesstrim' &&
-          (detection.versionVerdict !== 'in-range' || capabilityProblem !== undefined)
-        ) {
-          postconditions.push(
-            diagnostic({
-              severity: 'error',
-              code: 'harnesstrim-update-contract-mismatch',
-              subject: target.adapter.manifest.id,
-              message:
-                `HarnessTrim ${target.target} was installed, but its machine-readable capability/artifact contract did not pass Token Harness validation` +
-                (capabilityProblem === undefined ? '' : `: ${capabilityProblem.message}`),
-              path: detection.executable,
-              remediation:
-                'Keep the previous working HarnessTrim release until the changed contract is understood.',
-            }),
+        if (target.adapter.manifest.id === 'harnesstrim') {
+          const requiredManagedHarnesses = ['claude', 'codex'];
+          const missingManagedHarnesses = requiredManagedHarnesses.filter(
+            (harness) => !detection.assignableHarnesses.includes(harness),
           );
-          continue;
+
+          /*
+           * HarnessTrim is intentionally forward-compatible when the installed build proves the
+           * same managed mutation contract at runtime. A newer semantic version is not itself a
+           * failure: the adapter reads `harnesstrim capabilities`, validates the reviewed write
+           * sets and (for builds that publish them) the exact artifact digests. Rejecting every
+           * `unknown-newer` version here made a successfully installed 0.3+ release roll back to
+           * 0.2.1 even after that runtime contract had passed.
+           */
+          if (capabilityProblem !== undefined || missingManagedHarnesses.length > 0) {
+            postconditions.push(
+              diagnostic({
+                severity: 'error',
+                code: 'harnesstrim-update-contract-mismatch',
+                subject: target.adapter.manifest.id,
+                message:
+                  `HarnessTrim ${target.target} was installed, but its machine-readable capability/artifact contract did not pass Token Harness validation` +
+                  (capabilityProblem === undefined ? '' : `: ${capabilityProblem.message}`) +
+                  (missingManagedHarnesses.length === 0
+                    ? ''
+                    : `; managed setup is unavailable for ${missingManagedHarnesses.join(', ')}`),
+                path: detection.executable,
+                remediation:
+                  'Keep the previous working HarnessTrim release until the changed contract is understood.',
+              }),
+            );
+            continue;
+          }
         }
 
         if (
