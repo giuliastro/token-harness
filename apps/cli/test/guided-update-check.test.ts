@@ -206,7 +206,6 @@ it('checks updates on demand and applies only after the returned approval ticket
   }
 });
 
-
 it('never reports a green update when the approved version is still not active', async () => {
   let updateCalls = 0;
   const doctor = (): DoctorReport => ({
@@ -276,7 +275,11 @@ it('never reports a green update when the approved version is still not active',
     return envelope(command, null as T);
   };
 
-  const service = new GuideService(call, () => 0, () => 'update-ticket');
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'update-ticket',
+  );
   const checked = await service.checkUpdates();
   assert.equal(checked.ok, true);
   assert.equal(checked.ticket, 'update-ticket');
