@@ -13,10 +13,14 @@
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { GuideService } from '../../apps/cli/dist/src/guided.js';
+import {
+  buildCommandInterpreterCommandLine,
+  resolveCommandInterpreter,
+} from '../../packages/platform/dist/src/index.js';
 
 if (process.platform !== 'win32') {
   console.error('This live smoke is intentionally Windows-only.');
@@ -76,14 +80,28 @@ function run(executable, args, accepted = [0], timeout = 600_000) {
   return result;
 }
 
-function runCmd(command, args, accepted = [0], timeout = 600_000) {
-  const comspec = env.ComSpec ?? env.COMSPEC ?? 'cmd.exe';
-  // Windows .cmd shims are scripts, not native executables. Launch them through cmd.exe exactly as
-  // an interactive Windows terminal does. All arguments in this smoke are fixed test data.
-  const quoted = [command, ...args]
-    .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-    .join(' ');
-  return run(comspec, ['/d', '/s', '/c', quoted], accepted, timeout);
+function runBatchShim(path, args, accepted = [0], timeout = 600_000) {
+  const interpreter = resolveCommandInterpreter(env, win32.join);
+  if (interpreter === null) fail('Windows command interpreter resolves');
+  const built = buildCommandInterpreterCommandLine(interpreter, path, args);
+  if (!built.ok) fail('Windows batch-shim command line is safe', JSON.stringify(built));
+  const result = spawnSync(built.invocation.interpreter, [...built.invocation.args], {
+    cwd: home,
+    env,
+    encoding: 'utf8',
+    timeout,
+    maxBuffer: 16 * 1024 * 1024,
+    windowsHide: true,
+    windowsVerbatimArguments: true,
+  });
+  if (result.error) fail(`${path} ${args.join(' ')} starts`, result.error.message);
+  if (!accepted.includes(result.status)) {
+    fail(
+      `${path} ${args.join(' ')} exits as expected`,
+      `exit ${String(result.status)}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+  }
+  return result;
 }
 
 function thJson(args, accepted = [0]) {
@@ -115,7 +133,7 @@ const guide = new GuideService(
 );
 
 try {
-  const installClaude = runCmd('npm', [
+  const installClaude = runBatchShim(join(nodeDir, 'npm.cmd'), [
     'install',
     '--global',
     '--no-audit',
@@ -124,7 +142,7 @@ try {
   ]);
   assert(installClaude.status === 0, 'current Claude Code installs into isolated npm prefix');
 
-  const claude = runCmd('claude', ['--version']);
+  const claude = runBatchShim(join(prefix, 'claude.cmd'), ['--version']);
   assert(claude.stdout.trim().length > 0, 'current Claude Code executable starts');
 
   const before = thJson(['doctor']);
@@ -174,7 +192,7 @@ try {
     JSON.stringify(applied),
   );
 
-  const gitnexus = runCmd('gitnexus', ['--version']);
+  const gitnexus = runBatchShim(join(prefix, 'gitnexus.cmd'), ['--version']);
   assert(
     /1\.6\.12/.test(`${gitnexus.stdout}\n${gitnexus.stderr}`),
     'active PATH resolves the exact reviewed GitNexus 1.6.12 runtime',
