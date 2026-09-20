@@ -45,6 +45,19 @@ export const GUIDE_PRODUCT_JS = String.raw`
       optional: true,
     },
   };
+  const RECOMMENDED_OPTIMIZERS = new Set(['rtk', 'harnesstrim']);
+  function toolInfo(id) {
+    const known = TOOL_INFO[id];
+    if (known) return known;
+    const component = (current?.stack?.components || []).find(item => item.providerId === id);
+    return {
+      name: component?.displayName || id,
+      role: component?.category ? 'Optimizer category: ' + component.category.replaceAll('-', ' ') + '.' : 'Managed optimization provider.',
+      managed: true,
+      optional: !RECOMMENDED_OPTIMIZERS.has(id),
+    };
+  }
+
   const EXPERIMENTAL = [];
   const CATEGORY = {
     'command-output-reduction': 'Command output',
@@ -441,7 +454,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function renderManagedTool(id) {
-    const info = TOOL_INFO[id];
+    const info = toolInfo(id);
     const component = managedComponent(id);
     const state = componentState(id, component);
     const card = node('article', undefined, 'tool-card');
@@ -591,7 +604,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function reviewConnections(providerId) {
     if (busy) return;
-    const info = TOOL_INFO[providerId];
+    const info = toolInfo(providerId);
     if (!info) return;
     const targets = activeAgents()
       .map(agent => ({ agent, target: setupTarget(agent.id, providerId) }))
@@ -801,18 +814,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function renderManagedSetup() {
-    $('managed-tools').replaceChildren(
-      renderManagedTool('rtk'),
-      renderManagedTool('harnesstrim'),
-    );
+    const componentIds = (current?.stack?.components || []).map(component => component.providerId);
+    const knownIds = Object.keys(TOOL_INFO);
+    const ids = [...new Set([...componentIds, ...knownIds])];
+    const recommended = ids.filter(id => RECOMMENDED_OPTIMIZERS.has(id));
+    const optional = ids.filter(id => !RECOMMENDED_OPTIMIZERS.has(id));
+    $('managed-tools').replaceChildren(...recommended.map(renderManagedTool));
     const optionalRoot = $('optional-tools');
     if (optionalRoot)
       optionalRoot.replaceChildren(
-        renderManagedTool('mcptoon'),
-        renderManagedTool('gitnexus'),
-        renderManagedTool('headroom'),
+        ...(optional.length ? optional.map(renderManagedTool) : [sectionEmpty('No optional optimizers are currently registered.')]),
       );
-
   }
 
   function candidateState(observation) {
@@ -1174,7 +1186,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       node(
         'p',
         available.length
-          ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
+          ? available.map(component => toolInfo(component.providerId).name + ' has an update ready.').join(' ')
           : 'Check installed optimizer versions. If an update is available, you can install it from the same dialog; Token Harness verifies the active runtime after installation.',
         'caption',
       ),
