@@ -20,7 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GuideService } from '../../apps/cli/dist/src/guided.js';
+import { createGuideCall, GuideService } from '../../apps/cli/dist/src/guided.js';
+import {
+  NodeFileSystem,
+  resolveHostEnvironment,
+} from '../../packages/platform/dist/src/index.js';
 
 if (process.platform !== 'linux') {
   console.error('This live smoke is intentionally Linux-only in CI.');
@@ -130,30 +134,38 @@ function assert(condition, label, detail = '') {
   ok(label);
 }
 
-let ticketCounter = 0;
-async function guidedCall(args) {
-  // The browser guide deliberately swaps the mutating CLI update command for runUpdateCheck until
-  // the user has approved a concrete target. The live smoke runs out-of-process through the bundle,
-  // so reproduce that read-only boundary here instead of accidentally treating the CLI's expected
-  // confirmation-required exit as a guide failure.
-  if (args[0] === 'update' && !args.includes('--yes')) {
-    const report = thJson([...args], [0, 8]);
-    if (report.exitCode === 8 && report.data !== null) {
-      return {
-        ...report,
-        exitCode: 0,
-        diagnostics: (report.diagnostics || []).filter(
-          (entry) => entry.code !== 'confirmation-required',
-        ),
-      };
-    }
-    return report;
-  }
-  return thJson([...args]);
+// Build the same in-process call boundary the browser uses. In particular createGuideCall swaps
+// a read-only update request to runUpdateCheck, while an approved update still reaches the normal
+// mutating command. This is the exact distinction that the earlier subprocess-only smoke missed.
+for (const [key, value] of Object.entries(env)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
 }
+const resolution = resolveHostEnvironment();
+if (!resolution.ok) fail('isolated Token Harness host environment resolves', JSON.stringify(resolution));
+const localFs = new NodeFileSystem(resolution.environment.facts);
+const guideCall = createGuideCall({
+  platform: resolution.environment.facts,
+  cwd: home,
+  home: resolution.environment.paths.home,
+  stateRoot: resolution.environment.paths.state,
+  environmentDiagnostics: [],
+  adapters: {
+    fs: localFs,
+    runner: resolution.environment.runner,
+    resolveExecutables: resolution.environment.resolveExecutables,
+    paths: resolution.environment.paths,
+    localDatabase: null,
+    projectIdFor: () => 'p_harnesstrim_live_smoke',
+  },
+  metrics: null,
+  env: process.env,
+  stdoutIsTty: false,
+});
 
+let ticketCounter = 0;
 const guide = new GuideService(
-  guidedCall,
+  guideCall,
   () => Date.now(),
   () => `live-ticket-${++ticketCounter}`,
 );
