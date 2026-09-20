@@ -21,16 +21,25 @@ import {
   type HarnessConfigSummary,
   type HarnessManifest,
   type MergeJsonAction,
+  type PatchMarkerBlockAction,
   type PlatformFacts,
   type ProcessRequest,
   type RemoveOwnedChangeAction,
   type ResolvedCapability,
 } from '@token-harness/core';
 
-import { buildRtkPlan, hookEntryFor, hookListPointer } from '../src/index.js';
+import {
+  buildRtkPlan,
+  hookEntryFor,
+  hookListPointer,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
+} from '../src/index.js';
 import type { ProviderContext, ProviderPlanRequest } from '../src/index.js';
 
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const RTK = providerId('rtk');
 
 const CLAUDE_MANIFEST: HarnessManifest = {
@@ -56,6 +65,29 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   requiresEnablement: false,
   enablementNote: null,
   receiptFamily: 'provider-telemetry',
+};
+
+
+const CODEX_MANIFEST: HarnessManifest = {
+  schemaVersion: MANIFEST_SCHEMA_VERSION,
+  id: CODEX,
+  displayName: 'Codex',
+  homepage: 'https://developers.openai.com/codex',
+  testedVersions: { minimum: '0.146.0', maximum: null },
+  verificationTier: 'config-only',
+  versionCommand: { executable: 'codex', args: ['--version'] },
+  interceptionPoints: [
+    { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
+    { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+  ],
+  configFiles: [
+    { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
+    { path: '.codex/hooks.json', scope: 'user', parser: 'json', primary: false },
+  ],
+  toolFamilies: [{ id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true }],
+  requiresEnablement: true,
+  enablementNote: 'Codex hook trust is separate; RTK Codex setup here is instruction-mediated.',
+  receiptFamily: 'harness-event-stream',
 };
 
 /**
@@ -537,6 +569,57 @@ describe('the uninstall plan', () => {
       result.actions.some((action) => action.kind === 'package-manager-install'),
       false,
     );
+  });
+});
+
+
+describe('Codex rules-file integration', () => {
+  const codexOwnership: ResolvedCapability[] = [
+    {
+      scope: {
+        harness: CODEX,
+        toolFamily: 'Bash',
+        interceptionPoint: 'pre-tool-use',
+        capability: 'shell.output.reduce',
+      },
+      owner: RTK,
+      mode: 'exclusive',
+      order: 0,
+    },
+  ];
+
+  it('connects RTK to Codex through one owned global instruction block', () => {
+    const result = plan({
+      installed: true,
+      request: request({ ownership: codexOwnership, harnesses: [CODEX_MANIFEST] }),
+    });
+    assert.equal(result.actions.length, 1);
+    const action = result.actions[0] as PatchMarkerBlockAction;
+    assert.equal(action.kind, 'patch-marker-block');
+    assert.equal(action.path, 'C:\\Users\\dev\\.codex\\AGENTS.md');
+    assert.equal(action.markerBegin, RTK_CODEX_MARKER_BEGIN);
+    assert.equal(action.markerEnd, RTK_CODEX_MARKER_END);
+    assert.equal(action.body, RTK_CODEX_INSTRUCTIONS);
+    assert.deepEqual(result.targetHarnesses, [CODEX]);
+  });
+
+  it('removes only the Token Harness-owned RTK Codex block', () => {
+    const result = plan({
+      installed: true,
+      request: request({
+        ownership: codexOwnership,
+        harnesses: [CODEX_MANIFEST],
+        desiredState: 'absent',
+      }),
+    });
+    assert.equal(result.actions.length, 1);
+    const action = result.actions[0] as RemoveOwnedChangeAction;
+    assert.equal(action.kind, 'remove-owned-change');
+    assert.equal(action.target.kind, 'owned-marker-block');
+    if (action.target.kind !== 'owned-marker-block') return;
+    assert.equal(action.target.markerBegin, RTK_CODEX_MARKER_BEGIN);
+    assert.equal(action.target.markerEnd, RTK_CODEX_MARKER_END);
+    assert.match(action.target.bodyDigest, /^sha256:/);
   });
 });
 
