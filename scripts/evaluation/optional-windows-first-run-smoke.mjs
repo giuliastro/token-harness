@@ -480,7 +480,10 @@ try {
     '--no-fund',
     'harnesstrim@0.2.1',
   ]);
-  assert(installHarnessTrim.status === 0, 'HarnessTrim 0.2.1 installs into the isolated npm prefix');
+  assert(
+    installHarnessTrim.status === 0,
+    'HarnessTrim 0.2.1 installs into the isolated npm prefix',
+  );
 
   const harnesstrim021 = runBatchShim(join(prefix, 'harnesstrim.cmd'), ['--version']);
   assert(
