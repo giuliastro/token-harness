@@ -75,6 +75,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Real first-run regression gate: no mocks. Install the public HarnessTrim 0.2.1 package,
+      # current Claude Code and Codex CLIs into an isolated HOME, reproduce large existing agent
+      # state, then exercise setup, verify, update, uninstall and re-setup through the built CLI.
+      - name: HarnessTrim live setup and update smoke
+        if: runner.os == 'Linux'
+        run: node scripts/evaluation/harnesstrim-guided-live-smoke.mjs
+
       - name: Bundle smoke test
         run: pnpm smoke
 
