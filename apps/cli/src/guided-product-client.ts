@@ -1246,6 +1246,66 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
+  function renderResultCoverage() {
+    const root = $('result-coverage');
+    if (!root) return;
+    root.replaceChildren();
+    const components = current?.stack?.components || [];
+    if (!components.length) {
+      root.append(sectionEmpty('No optimizers are currently registered in the stack.'));
+      return;
+    }
+    for (const component of components) {
+      const info = toolInfo(component.providerId);
+      const card = node('article', undefined, 'tool-card result-coverage-card');
+      const head = node('div', undefined, 'tool-head');
+      const title = node('div');
+      title.append(
+        node('h3', info.name),
+        node('span', component.version ? 'v' + component.version : 'Version unavailable', 'caption'),
+      );
+      const state =
+        component.health === 'attention'
+          ? { label: 'Needs attention', cls: 'warn' }
+          : component.configured
+            ? { label: component.verification === 'verified' ? 'Active · verified' : 'Active', cls: 'good' }
+            : component.installed
+              ? { label: 'Installed', cls: '' }
+              : { label: 'Not installed', cls: '' };
+      head.append(title, pill(state.label, state.cls));
+      card.append(head);
+
+      const matrix = node('div', undefined, 'connection-matrix');
+      for (const agent of activeAgents()) {
+        const target = setupTarget(agent.id, component.providerId);
+        const row = node('div', undefined, 'connection-matrix-row');
+        const connected = component.configuredHarnesses?.includes(agent.id);
+        const label = connected
+          ? 'Connected'
+          : target?.state === 'actionable'
+            ? 'Available'
+            : target?.state === 'not-applicable'
+              ? 'Not applicable'
+              : 'Unavailable';
+        row.append(
+          node('span', agent.name),
+          pill(label, connected ? 'good' : target?.state === 'actionable' ? 'warn' : ''),
+        );
+        matrix.append(row);
+      }
+      if (!activeAgents().length) matrix.append(sectionEmpty('No detected harnesses.'));
+      card.append(matrix);
+
+      const measuredRows = component.savings || [];
+      const footer = node('p', undefined, 'caption');
+      footer.textContent = measuredRows.length
+        ? measuredRows.length + ' measured result row' + (measuredRows.length === 1 ? '' : 's') + ' attributed to this optimizer.'
+        : 'No measured result is attributed to this optimizer yet; connection state is still shown.';
+      card.append(footer);
+      root.append(card);
+    }
+  }
+
   function measurementHelp() {
     modal('How Token Harness measures results');
     $('modal-content').append(
@@ -1279,7 +1339,22 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const allowance = allowanceSummary();
     const quality = qualitySummary();
     const reduction = bestReduction();
+    const components = current?.stack?.components || [];
+    const active = components.filter(component => component.configured);
+    const connections = components.reduce(
+      (total, component) => total + (component.configuredHarnesses?.length || 0),
+      0,
+    );
+    const measured = components.filter(component => (component.savings || []).length > 0);
+    const attention = components.filter(component => component.health === 'attention');
     $('result-summary').replaceChildren(
+      metricCard('Active optimizers', String(active.length), components.length + ' optimizer' + (components.length === 1 ? '' : 's') + ' tracked in this stack.', active.length ? 'good' : ''),
+      metricCard('Harness connections', String(connections), activeAgents().length + ' detected harness' + (activeAgents().length === 1 ? '' : 'es') + ' included in the coverage matrix.', connections ? 'good' : ''),
+      metricCard('Measured optimizers', String(measured.length), 'Only providers with attributable evidence are counted here.', measured.length ? 'positive' : ''),
+      metricCard('Health', attention.length ? attention.length + ' need attention' : 'No known issue', attention.length ? 'Review the affected optimizer before trusting its integration.' : 'No configured optimizer currently reports an attention state.', attention.length ? 'warn' : 'good'),
+    );
+    renderResultCoverage();
+    $('result-impact').replaceChildren(
       reduction ? metricCard('Measured output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement, 'positive') : metricCard('Measured output', 'No result yet', 'No measured optimizer output is available for this period.'),
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
       metricCard('API cost', 'Not measured yet', 'Requires billed-token evidence and a verified price basis.'),
