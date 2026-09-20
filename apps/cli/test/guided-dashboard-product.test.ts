@@ -41,7 +41,12 @@ describe('first-run guided overview', () => {
 
   it('puts only actionable contextual setup controls on optimizer cards', () => {
     assert.match(GUIDE_JS, /Installed · setup available/);
+    assert.match(GUIDE_JS, /Partially connected · setup available/);
+    assert.match(GUIDE_JS, /Connected elsewhere/);
     assert.match(GUIDE_JS, /Installed · no automatic setup/);
+    assert.match(GUIDE_JS, /Connected to/);
+    assert.match(GUIDE_JS, /Setup available/);
+    assert.match(GUIDE_JS, /Not applicable/);
     assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
     assert.match(GUIDE_JS, /Why there is no Connect button/);
     assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
