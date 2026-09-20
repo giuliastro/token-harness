@@ -131,7 +131,10 @@ function absentGitNexusRunner(commands: string[] = [], npmAvailable = true): Pro
         ...processOutcome(request, ''),
         executablePath: null,
         exitCode: null,
-        failure: { reason: 'executable-not-found' as const, message: `${request.executable} missing` },
+        failure: {
+          reason: 'executable-not-found' as const,
+          message: `${request.executable} missing`,
+        },
       });
     },
   };
