@@ -48,8 +48,6 @@ env.NPM_CONFIG_PREFIX = prefix;
 env.Path = [prefix, nodeDir].join(delimiter);
 env.NO_COLOR = '1';
 
-const cmd = (name) => `${name}.cmd`;
-
 function fail(label, detail = '') {
   console.error(`FAIL  ${label}${detail ? `\n      ${detail}` : ''}`);
   process.exit(1);
@@ -76,6 +74,16 @@ function run(executable, args, accepted = [0], timeout = 600_000) {
     );
   }
   return result;
+}
+
+function runCmd(command, args, accepted = [0], timeout = 600_000) {
+  const comspec = env.ComSpec ?? env.COMSPEC ?? 'cmd.exe';
+  // Windows .cmd shims are scripts, not native executables. Launch them through cmd.exe exactly as
+  // an interactive Windows terminal does. All arguments in this smoke are fixed test data.
+  const quoted = [command, ...args]
+    .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+    .join(' ');
+  return run(comspec, ['/d', '/s', '/c', quoted], accepted, timeout);
 }
 
 function thJson(args, accepted = [0]) {
@@ -107,7 +115,7 @@ const guide = new GuideService(
 );
 
 try {
-  const installClaude = run(cmd('npm'), [
+  const installClaude = runCmd('npm', [
     'install',
     '--global',
     '--no-audit',
@@ -116,7 +124,7 @@ try {
   ]);
   assert(installClaude.status === 0, 'current Claude Code installs into isolated npm prefix');
 
-  const claude = run(cmd('claude'), ['--version']);
+  const claude = runCmd('claude', ['--version']);
   assert(claude.stdout.trim().length > 0, 'current Claude Code executable starts');
 
   const before = thJson(['doctor']);
@@ -166,7 +174,7 @@ try {
     JSON.stringify(applied),
   );
 
-  const gitnexus = run(cmd('gitnexus'), ['--version']);
+  const gitnexus = runCmd('gitnexus', ['--version']);
   assert(
     /1\.6\.12/.test(`${gitnexus.stdout}\n${gitnexus.stderr}`),
     'active PATH resolves the exact reviewed GitNexus 1.6.12 runtime',
