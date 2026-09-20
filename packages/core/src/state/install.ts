@@ -99,6 +99,18 @@ const INSTALL_COMMANDS: Readonly<
     ],
     verified: true,
   },
+  uv: {
+    executable: 'uv',
+    // Headroom uses uv's isolated tool installer. Token Harness invokes an existing uv only;
+    // it never bootstraps uv, Python, or administrator prerequisites.
+    args: (packageName, version) => [
+      'tool',
+      'install',
+      '--force',
+      version === null ? packageName : `${packageName}==${version}`,
+    ],
+    verified: true,
+  },
 };
 
 /**
@@ -113,6 +125,11 @@ const UNINSTALL_COMMANDS: Readonly<
   pipx: {
     executable: 'pipx',
     args: (packageName) => ['uninstall', packageName],
+  },
+  uv: {
+    executable: 'uv',
+    // Extras are install-time selectors; uv tool uninstall expects the distribution name.
+    args: (packageName) => ['tool', 'uninstall', packageName.replace(/\[.*\]$/, '')],
   },
 };
 
@@ -408,6 +425,13 @@ const INVENTORY_COMMANDS: Readonly<
     executable: 'uv',
     args: () => ['tool', 'list'],
     parse: (stdout, packageName) => {
+      // Installation specs can include extras such as headroom-ai[mcp], while uv inventories the
+      // base distribution. Escape the distribution name before building the matcher.
+      const distribution = packageName.replace(/\[.*\]$/, '');
+      const escaped = distribution.replace(/[.*+?^${}()|[\]\\]/g, '\\  uv: {
+    executable: 'uv',
+    args: () => ['tool', 'list'],
+    parse: (stdout, packageName) => {
       const pattern = new RegExp(`^${packageName}\\s+v?(\\S+)`, 'm');
       const match = pattern.exec(stdout);
       if (match === null) return { status: 'absent', version: null };
@@ -416,6 +440,15 @@ const INVENTORY_COMMANDS: Readonly<
       return { status: 'captured', version: candidate };
     },
     verified: false,
+  },');
+      const pattern = new RegExp(`^${escaped}\\s+v?(\\S+)`, 'm');
+      const match = pattern.exec(stdout);
+      if (match === null) return { status: 'absent', version: null };
+      const candidate = match[1] ?? '';
+      if (parseSemanticVersion(candidate) === null) return { status: 'unknown', version: null };
+      return { status: 'captured', version: candidate };
+    },
+    verified: true,
   },
   pipx: {
     executable: 'pipx',
