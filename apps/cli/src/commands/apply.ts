@@ -77,7 +77,8 @@ async function verifyManagedIntegrationPostconditions(
       diagnostic({
         severity: 'error',
         code: 'managed-setup-postcondition-unavailable',
-        message: 'The managed integration could not be re-observed because platform adapters are unavailable',
+        message:
+          'The managed integration could not be re-observed because platform adapters are unavailable',
         remediation: 'Refresh the current setup before retrying',
       }),
     ];
@@ -92,7 +93,9 @@ async function verifyManagedIntegrationPostconditions(
   };
   const harnessConfigs = (
     await Promise.all(
-      listHarnessAdapters().map(async (adapter) => (await adapter.inspect(detectionContext)).summaries),
+      listHarnessAdapters().map(
+        async (adapter) => (await adapter.inspect(detectionContext)).summaries,
+      ),
     )
   ).flat();
   const providerContext = {
