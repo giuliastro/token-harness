@@ -116,7 +116,7 @@ function normalizeVersion(value) {
 }
 
 function doctor() {
-  return thJson(['doctor'], [0, 3]);
+  return thJson(['doctor']);
 }
 
 function provider(report, id) {
@@ -155,11 +155,13 @@ function planAndApply(agent) {
 }
 
 function verifyHarness(agent) {
-  const result = thJson(['verify', '--harness', agent, '--provider', 'harnesstrim'], [0, 3]);
-  const verification = result.data?.providers?.find?.((item) => item.providerId === 'harnesstrim');
+  const result = thJson(['verify', '--harness', agent, '--provider', 'harnesstrim']);
+  const row = result.data?.results?.find(
+    (item) => item.providerId === 'harnesstrim' && item.harnessId === agent,
+  );
   assert(
-    result.exitCode === 0 || verification?.achievedTier === 'config-only',
-    `${agent}: HarnessTrim verification completes`,
+    result.data?.healthyAtDeclaredTier === true && row !== undefined,
+    `${agent}: HarnessTrim verification is healthy at its declared tier`,
     JSON.stringify(result),
   );
 }
