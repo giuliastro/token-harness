@@ -25,6 +25,7 @@ import {
 
 import { validateCandidateCampaignRuntimeSurface } from './candidate-campaign-surface.js';
 import type { CommandContext } from './context.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 type CandidateMutationCommand = 'apply' | 'uninstall';
 
@@ -116,14 +117,14 @@ function selectorProblem(
   return null;
 }
 
-function stores(context: CommandContext, transactionId: string) {
+async function stores(context: CommandContext, transactionId: string) {
   if (context.adapters === null || context.stateRoot === null) return null;
   const fs = context.adapters.fs;
   const creation = TransactionSnapshotStore.create({
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) return { fs, failure: creation.diagnostics } as const;
@@ -255,7 +256,7 @@ export async function runCandidateApply(
   }
 
   const transactionId = candidateTransactionId(`mcptoon-activate-${harness}`, context);
-  const built = stores(context, transactionId);
+  const built = await stores(context, transactionId);
   if (built === null || !('snapshots' in built)) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(
@@ -463,7 +464,7 @@ export async function runCandidateUninstall(
   }
 
   const transactionId = candidateTransactionId(`mcptoon-deactivate-${harness}`, context);
-  const built = stores(context, transactionId);
+  const built = await stores(context, transactionId);
   if (built === null || !('snapshots' in built)) {
     diagnostics.push(...(built?.failure ?? []));
     return finish(
