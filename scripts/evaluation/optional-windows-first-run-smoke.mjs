@@ -16,10 +16,12 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { delimiter, dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { GuideService } from '../../apps/cli/dist/src/guided.js';
+import { createGuideCall, GuideService } from '../../apps/cli/dist/src/guided.js';
 import {
   buildCommandInterpreterCommandLine,
+  NodeFileSystem,
   resolveCommandInterpreter,
+  resolveHostEnvironment,
 } from '../../packages/platform/dist/src/index.js';
 
 if (process.platform !== 'win32') {
@@ -125,9 +127,44 @@ function assert(condition, label, detail = '') {
   ok(label);
 }
 
+// Use the same in-process browser boundary as the real guided application. In particular this
+// preserves read-only update/savings translation while letting approved mutations reach the normal
+// transaction commands.
+for (const key of Object.keys(process.env)) {
+  if (key.toLowerCase() === 'path' || key.toLowerCase() === 'npm_config_prefix') {
+    delete process.env[key];
+  }
+}
+for (const [key, value] of Object.entries(env)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
+const resolution = resolveHostEnvironment();
+if (!resolution.ok)
+  fail('isolated Windows Token Harness host environment resolves', JSON.stringify(resolution));
+const localFs = new NodeFileSystem(resolution.environment.facts);
+const guideCall = createGuideCall({
+  platform: resolution.environment.facts,
+  cwd: home,
+  home: resolution.environment.paths.home,
+  stateRoot: resolution.environment.paths.state,
+  environmentDiagnostics: [],
+  adapters: {
+    fs: localFs,
+    runner: resolution.environment.runner,
+    resolveExecutables: resolution.environment.resolveExecutables,
+    paths: resolution.environment.paths,
+    localDatabase: null,
+    projectIdFor: () => 'p_optional_windows_first_run',
+  },
+  metrics: null,
+  env: process.env,
+  stdoutIsTty: false,
+});
+
 let ticketCounter = 0;
 const guide = new GuideService(
-  async (args) => thJson([...args]),
+  guideCall,
   () => Date.now(),
   () => `windows-live-ticket-${++ticketCounter}`,
 );
