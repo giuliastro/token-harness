@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GuideService } from '../../apps/cli/src/guided.ts';
+import { GuideService } from '../../apps/cli/dist/src/guided.js';
 
 if (process.platform !== 'linux') {
   console.error('This live smoke is intentionally Linux-only in CI.');
