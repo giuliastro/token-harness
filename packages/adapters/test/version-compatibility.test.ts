@@ -118,9 +118,9 @@ describe('provider version compatibility', () => {
     assert.equal(result.versionVerdict, 'unknown-newer');
   });
 
-  it('accepts HarnessTrim 0.3.0 when its installed capability contract agrees', () => {
+  it('accepts HarnessTrim 0.3.1 when its installed capability contract agrees', () => {
     const result = applyProviderVersionCompatibility(
-      detection('harnesstrim', '0.3.0', { evidence: [capabilitiesEvidence('0.3.0')] }),
+      detection('harnesstrim', '0.3.1', { evidence: [capabilitiesEvidence('0.3.1')] }),
     );
 
     assert.equal(result.versionVerdict, 'in-range');
@@ -171,8 +171,8 @@ describe('provider package update admission', () => {
     assert.deepEqual(admitProviderPackageUpdate(RTK, '0.50.0'), { state: 'admitted' });
   });
 
-  it('admits the current reviewed HarnessTrim package target', () => {
-    assert.deepEqual(admitProviderPackageUpdate(HARNESSTRIM, '0.3.0'), {
+  it('admits the current reviewed HarnessTrim 0.3.1 package target', () => {
+    assert.deepEqual(admitProviderPackageUpdate(HARNESSTRIM, '0.3.1'), {
       state: 'admitted',
     });
   });
