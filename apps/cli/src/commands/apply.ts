@@ -49,6 +49,7 @@ import {
   type PlanReport,
   type StoredPlan,
 } from '@token-harness/core';
+import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
 import { runCandidateApply } from './candidate-lifecycle.js';
@@ -57,6 +58,102 @@ import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 /** Where plans live inside the state root. */
 export const PLANS_DIRECTORY = 'plans';
+
+/**
+ * Re-observe the provider/harness relationship after all approved actions have run but before the
+ * transaction commits. A package-manager exit code and a config-file write are not enough to claim
+ * setup succeeded: the newly installed executable must be the one this process can actually resolve
+ * and the provider must observe the requested harness as configured. Returning an error here makes
+ * the transaction restore both files and any captured package inventory.
+ */
+async function verifyManagedIntegrationPostconditions(
+  context: CommandContext,
+  integrations: readonly { providerId: ReturnType<typeof providerId>; harnessId: string }[],
+): Promise<Diagnostic[]> {
+  if (integrations.length === 0) return [];
+  if (context.adapters === null) {
+    return [
+      diagnostic({
+        severity: 'error',
+        code: 'managed-setup-postcondition-unavailable',
+        message: 'The managed integration could not be re-observed because platform adapters are unavailable',
+        remediation: 'Refresh the current setup before retrying',
+      }),
+    ];
+  }
+
+  const detectionContext = {
+    fs: context.adapters.fs,
+    runner: context.adapters.runner,
+    facts: context.platform,
+    paths: context.adapters.paths,
+    projectRoot: context.projectRoot,
+  };
+  const harnessConfigs = (
+    await Promise.all(
+      listHarnessAdapters().map(async (adapter) => (await adapter.inspect(detectionContext)).summaries),
+    )
+  ).flat();
+  const providerContext = {
+    ...detectionContext,
+    harnessConfigs,
+    now: context.now,
+    localDatabase: context.adapters.localDatabase,
+    projectIdFor: context.adapters.projectIdFor,
+  };
+  const adapters = new Map(listProviderAdapters().map((adapter) => [adapter.manifest.id, adapter]));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const integration of integrations) {
+    const adapter = adapters.get(integration.providerId);
+    if (adapter === undefined) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'error',
+          code: 'managed-setup-postcondition-unavailable',
+          subject: integration.providerId,
+          message: `The provider adapter disappeared before ${integration.harnessId} setup could be verified`,
+          remediation: 'Refresh Token Harness and review a new setup preview',
+        }),
+      );
+      continue;
+    }
+
+    try {
+      const detection = await adapter.detect(providerContext);
+      if (!detection.configuredHarnesses.some((harness) => harness === integration.harnessId)) {
+        const runtimeProblem = detection.warnings.find(
+          (entry) => entry.severity === 'error' || entry.severity === 'warning',
+        );
+        diagnostics.push(
+          diagnostic({
+            severity: 'error',
+            code: 'managed-setup-postcondition-unmet',
+            subject: integration.providerId,
+            message:
+              `${adapter.manifest.displayName} setup did not become active for ${integration.harnessId} after the approved actions` +
+              (runtimeProblem === undefined ? '' : `: ${runtimeProblem.message}`),
+            path: detection.executable,
+            remediation:
+              runtimeProblem?.remediation ??
+              'Check that the newly installed provider executable is on PATH, then review a fresh setup preview',
+          }),
+        );
+      }
+    } catch (error) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'error',
+          code: 'managed-setup-postcondition-unavailable',
+          subject: integration.providerId,
+          message: `The provider could not be re-observed after setup: ${error instanceof Error ? error.message : String(error)}`,
+          remediation: 'Refresh and inspect the provider runtime before retrying',
+        }),
+      );
+    }
+  }
+  return diagnostics;
+}
 
 /**
  * The transaction ID.
@@ -416,6 +513,8 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     // RFC 0004 §Process policy: an installer reaches the machine through the runner or not at all.
     runner: context.adapters.runner,
     now: context.now,
+    verifyPostconditions: async () =>
+      verifyManagedIntegrationPostconditions(context, computed.managedIntegrations),
   });
   diagnostics.push(...transaction.diagnostics);
 
