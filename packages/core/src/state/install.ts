@@ -376,7 +376,11 @@ const INVENTORY_COMMANDS: Readonly<
       }
       const dependencies = (parsed as Record<string, unknown>)['dependencies'];
       if (dependencies === undefined) return { status: 'absent', version: null };
-      if (typeof dependencies !== 'object' || dependencies === null || Array.isArray(dependencies)) {
+      if (
+        typeof dependencies !== 'object' ||
+        dependencies === null ||
+        Array.isArray(dependencies)
+      ) {
         return { status: 'unknown', version: null };
       }
       const dependency = (dependencies as Record<string, unknown>)[packageName];
