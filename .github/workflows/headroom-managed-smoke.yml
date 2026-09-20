@@ -32,9 +32,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install exact reviewed Headroom MCP build
+      - name: Install exact reviewed Headroom MCP build through Token Harness' uv channel
         shell: bash
-        run: python -m pip install --disable-pip-version-check 'headroom-ai[mcp]==0.37.0'
+        run: |
+          python -m pip install --disable-pip-version-check uv
+          uv tool install --force 'headroom-ai[mcp]==0.37.0'
 
       - name: Verify passive managed MCP CLI contract
         shell: bash
