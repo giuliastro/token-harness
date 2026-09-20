@@ -122,6 +122,10 @@ const INSTALL_COMMANDS: Readonly<
 const UNINSTALL_COMMANDS: Readonly<
   Record<string, { executable: string; args: (packageName: string) => string[] }>
 > = {
+  npm: {
+    executable: 'npm',
+    args: (packageName) => ['uninstall', '--global', packageName],
+  },
   pipx: {
     executable: 'pipx',
     args: (packageName) => ['uninstall', packageName],
@@ -357,17 +361,38 @@ const INVENTORY_COMMANDS: Readonly<
   },
   npm: {
     executable: 'npm',
-    args: (packageName) => ['ls', '-g', packageName, '--depth=0'],
+    // Listing the global root as JSON proves both presence and absence without depending on
+    // localized human output or npm's exit behavior for a package-name filter.
+    args: () => ['ls', '--global', '--depth=0', '--json'],
     parse: (stdout, packageName) => {
-      const pattern = new RegExp(`(?:^|[^@\\w.-])${packageName}@(\\d[^\\s]*)`);
-      const match = pattern.exec(stdout);
-      const candidate = match?.[1] ?? null;
-      if (candidate === null || parseSemanticVersion(candidate) === null) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stdout) as unknown;
+      } catch {
+        return { status: 'unknown', version: null };
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { status: 'unknown', version: null };
+      }
+      const dependencies = (parsed as Record<string, unknown>)['dependencies'];
+      if (dependencies === undefined) return { status: 'absent', version: null };
+      if (typeof dependencies !== 'object' || dependencies === null || Array.isArray(dependencies)) {
+        return { status: 'unknown', version: null };
+      }
+      const dependency = (dependencies as Record<string, unknown>)[packageName];
+      if (dependency === undefined) return { status: 'absent', version: null };
+      const candidate =
+        typeof dependency === 'string'
+          ? dependency
+          : typeof dependency === 'object' && dependency !== null && !Array.isArray(dependency)
+            ? (dependency as Record<string, unknown>)['version']
+            : null;
+      if (typeof candidate !== 'string' || parseSemanticVersion(candidate) === null) {
         return { status: 'unknown', version: null };
       }
       return { status: 'captured', version: candidate };
     },
-    verified: false,
+    verified: true,
   },
   pnpm: {
     executable: 'pnpm',
