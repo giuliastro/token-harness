@@ -53,6 +53,7 @@ import {
 import type { CommandContext } from './context.js';
 import { runCandidateApply } from './candidate-lifecycle.js';
 import { computePlan } from './plan.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 /** Where plans live inside the state root. */
 export const PLANS_DIRECTORY = 'plans';
@@ -378,7 +379,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) {
