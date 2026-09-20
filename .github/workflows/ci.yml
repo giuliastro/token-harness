@@ -48,24 +48,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format changed files for branch diagnostics
-        shell: bash
-        run: |
-          pnpm exec prettier --write \
-            apps/cli/src/commands/apply.ts \
-            packages/adapters/src/providers/gitnexus-managed.ts \
-            packages/adapters/src/providers/managed-optimization-tools.ts \
-            packages/adapters/test/gitnexus-managed.test.ts \
-            packages/adapters/test/headroom-managed.test.ts \
-            packages/core/test/package-inventory.test.ts
-          git diff -- \
-            apps/cli/src/commands/apply.ts \
-            packages/adapters/src/providers/gitnexus-managed.ts \
-            packages/adapters/src/providers/managed-optimization-tools.ts \
-            packages/adapters/test/gitnexus-managed.test.ts \
-            packages/adapters/test/headroom-managed.test.ts \
-            packages/core/test/package-inventory.test.ts
-
       - name: Format check
         run: pnpm format:check
 
