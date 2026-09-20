@@ -37,6 +37,7 @@ import {
 } from '@token-harness/adapters';
 
 import type { CommandContext } from './context.js';
+import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 
 function transactionIdFor(seed: string, at: string): string {
   const digest = digestText(`${seed} ${at}`);
@@ -363,7 +364,7 @@ export async function runPackageChannelUpdate(
     fs,
     backupRoot: fs.join(context.stateRoot, 'backups'),
     transactionId,
-    projectRoot: context.projectRoot,
+    projectRoot: await repositoryRootForBackupSafety(context),
     now: context.now,
   });
   if (!creation.ok) {
