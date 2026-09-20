@@ -179,6 +179,7 @@ interface Approval {
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
+  updateTargets?: Array<{ provider: ReturnType<typeof providerId>; version: string }>;
 }
 type GuideUndoTarget =
   | { kind: 'plan'; plan: string; network: boolean }
@@ -219,6 +220,10 @@ const NAMES: Readonly<Record<string, string>> = {
   headroom: 'Headroom',
 };
 const name = (id: string): string => NAMES[id] ?? id;
+const sameGuideVersion = (left: string | null, right: string | null): boolean =>
+  left !== null &&
+  right !== null &&
+  left.replace(/^v/i, '').trim() === right.replace(/^v/i, '').trim();
 const GUIDE_MANAGED_PROVIDERS: readonly GuideManagedProvider[] = [
   'rtk',
   'harnesstrim',
@@ -355,6 +360,18 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'no-providers-registered': 'No optimization provider was selected for this operation.',
   'already-in-desired-state':
     'The supported integration is already configured. Nothing needs to be changed.',
+  'delegated-install-snapshot-too-large':
+    'The optimizer setup found too much unrelated data inside its rollback boundary. Nothing was changed. Update Token Harness or use a narrower project directory before retrying.',
+  'delegated-install-failed':
+    'The optimizer installer itself did not complete successfully. Nothing was kept from the failed transaction.',
+  'delegated-install-artifact-mismatch':
+    'The optimizer installer completed but did not produce the artifact contract it advertised. The transaction was rolled back.',
+  'delegated-install-protected-path-changed':
+    'The optimizer installer touched a file this setup promised to leave alone. The transaction was rolled back.',
+  'delegated-install-undeclared-write':
+    'The optimizer installer changed a path outside the approved write set. The transaction was rolled back.',
+  'action-precondition-drift':
+    'A file changed after the preview was created. Review a fresh preview before applying anything.',
   'managed-mutation-unsupported':
     'Automatic setup is unavailable because the installed provider does not expose the required managed surface. Existing integrations are left untouched.',
   'plan-ownership-drift':
@@ -1521,62 +1538,184 @@ export class GuideService {
         );
       this.approval = null;
       if (approval.operation === 'update') {
-        this.record('Installing only the provider updates you approved.', 'working');
-        let result: CliEnvelope<UpdateReport>;
+        const approvedUpdates = approval.updateTargets ?? [];
+        if (approvedUpdates.length === 0)
+          throw new GuideError(409, 'This update preview contains no concrete provider version. Review it again.');
+
+        this.record('Re-checking the exact provider versions you approved before installing them.', 'working');
+
+        let fresh: CliEnvelope<UpdateReport>;
         try {
-          result = await this.call<UpdateReport>(['update', '--yes']);
+          fresh = await this.call<UpdateReport>(['update']);
         } catch {
           this.invalidateObservedState();
           const message =
-            'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect the installed optimizer versions before retrying.';
+            'The update channels could not be re-checked immediately before installation. Nothing was changed. Review a fresh update preview.';
           this.record(message, 'attention');
           return {
             ok: false,
-            title: 'Update result needs checking',
+            title: 'Update preview changed',
             messages: [message],
             appliedPlans: 0,
           };
         }
-        if (result.exitCode !== 0 || result.data === null) {
+        if (fresh.exitCode !== 0 || fresh.data === null) {
           const message = explainGuideIssue(
-            result.diagnostics,
-            'The optimizer update was not applied. The installed version, update channel or runtime capability state changed after the preview, so nothing was forced.',
+            fresh.diagnostics,
+            'The update channels changed or could not be re-checked after approval. Nothing was changed; review a fresh update preview.',
           );
           this.invalidateObservedState();
           this.record(message, 'attention');
           return {
             ok: false,
-            title: 'Optimizer update was not applied',
+            title: 'Update preview changed',
             messages: [message],
             appliedPlans: 0,
           };
         }
-        const applied =
-          result.data.execution?.results.filter((row) => row.status === 'applied') ?? [];
+
+        const approvedByProvider = new Map(
+          approvedUpdates.map((target) => [String(target.provider), target.version] as const),
+        );
+        const freshUpgradable = fresh.data.providers.filter((row) => row.verdict === 'upgradable');
+        const unexpected = freshUpgradable.find((row) => {
+          const approved = approvedByProvider.get(String(row.providerId)) ?? null;
+          return approved === null || !sameGuideVersion(row.available, approved);
+        });
+        const unresolved = approvedUpdates.find((target) => {
+          const row = fresh.data?.providers.find(
+            (candidate) => candidate.providerId === target.provider,
+          );
+          return !(
+            row !== undefined &&
+            ((row.verdict === 'upgradable' && sameGuideVersion(row.available, target.version)) ||
+              (row.verdict === 'current' && sameGuideVersion(row.installed, target.version)))
+          );
+        });
+
+        if (unexpected !== undefined || unresolved !== undefined) {
+          const changed =
+            unexpected !== undefined
+              ? `${name(unexpected.providerId)} now offers ${unexpected.available ?? 'a different version'}.`
+              : `${name(unresolved!.provider)} no longer reports the approved target ${unresolved!.version}.`;
+          const message =
+            changed +
+            ' Nothing was installed because the live update state no longer matches the preview. Review a fresh update preview.';
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Update preview changed',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+
+        const pending = approvedUpdates.filter((target) => {
+          const row = fresh.data?.providers.find(
+            (candidate) => candidate.providerId === target.provider,
+          );
+          return row?.verdict === 'upgradable';
+        });
+
+        let appliedCount = 0;
+        if (pending.length > 0) {
+          this.record('Installing the provider versions from the approved preview.', 'working');
+          let result: CliEnvelope<UpdateReport>;
+          try {
+            result = await this.call<UpdateReport>(['update', '--yes']);
+          } catch {
+            this.invalidateObservedState();
+            const message =
+              'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect the installed optimizer versions before retrying.';
+            this.record(message, 'attention');
+            return {
+              ok: false,
+              title: 'Update result needs checking',
+              messages: [message],
+              appliedPlans: 0,
+            };
+          }
+          if (result.exitCode !== 0 || result.data === null) {
+            const message = explainGuideIssue(
+              result.diagnostics,
+              'The optimizer update was not applied. The installed version, update channel or runtime capability state changed after the preview, so nothing was forced.',
+            );
+            this.invalidateObservedState();
+            this.record(message, 'attention');
+            return {
+              ok: false,
+              title: 'Optimizer update was not applied',
+              messages: [message],
+              appliedPlans: 0,
+            };
+          }
+          appliedCount =
+            result.data.execution?.results.filter((row) => row.status === 'applied').length ?? 0;
+        }
+
+        let inventory: CliEnvelope<DoctorReport>;
+        try {
+          inventory = await this.call<DoctorReport>(['doctor']);
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The installer returned, but Token Harness could not re-read the active optimizer runtimes. The update is not being reported as successful. Refresh and inspect the installed versions.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Update result needs checking',
+            messages: [message],
+            appliedPlans: appliedCount,
+          };
+        }
+
+        const missing = approvedUpdates.filter((target) => {
+          const detection = inventory.data?.providers.find(
+            (candidate) => candidate.providerId === target.provider,
+          );
+          return !sameGuideVersion(detection?.version ?? null, target.version);
+        });
+        if (inventory.data === null || missing.length > 0) {
+          const message =
+            missing.length > 0
+              ? 'The approved update target was not observed on the active PATH after installation: ' +
+                missing.map((target) => `${name(target.provider)} ${target.version}`).join(', ') +
+                '. This is not being reported as a successful update.'
+              : 'The active optimizer versions could not be verified after installation. This is not being reported as a successful update.';
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Update was not verified',
+            messages: [message, 'Refresh after correcting PATH or the package installation; no automatic retry was made.'],
+            appliedPlans: appliedCount,
+          };
+        }
+
         this.lastApplied = null;
         this.invalidateObservedState();
-        const messages =
-          applied.length > 0
-            ? [
-                'The optimizer update completed successfully and the active runtime was verified.',
-                'Token Harness re-ran the update transaction safety checks before changing software.',
-                'Choose Refresh to read the installed versions again. Reopen a coding agent if the updated optimizer requires it.',
-              ]
-            : [
-                'No optimizer needed an update by the time the approved action ran.',
-                'Nothing was forced. Choose Refresh to read the current versions.',
-              ];
+        const versions = approvedUpdates
+          .map((target) => `${name(target.provider)} ${target.version}`)
+          .join(', ');
+        const messages = [
+          appliedCount > 0
+            ? `Installed and verified the approved optimizer version${approvedUpdates.length === 1 ? '' : 's'}: ${versions}.`
+            : `The approved optimizer version${approvedUpdates.length === 1 ? ' was' : 's were'} already active when the final check ran: ${versions}.`,
+          'The active runtime was re-read after the operation; success is shown only because it matches the approved target.',
+          'Reopen a coding agent if the updated optimizer requires it.',
+        ];
         this.record(
-          applied.length > 0
+          appliedCount > 0
             ? 'Optimizer update installed and verified.'
-            : 'Optimizer update no longer needed.',
+            : 'Approved optimizer version already active and verified.',
           'success',
         );
         return {
           ok: true,
-          title: applied.length > 0 ? 'Optimizer updated' : 'Already up to date',
+          title: appliedCount > 0 ? 'Optimizer updated' : 'Approved version already active',
           messages,
-          appliedPlans: applied.length,
+          appliedPlans: appliedCount,
         };
       }
       if (
@@ -1856,6 +1995,9 @@ export class GuideService {
 
       this.updates = { fingerprint, report: updateResult.data };
       const available = updateResult.data.providers.filter((row) => row.verdict === 'upgradable');
+      const updateTargets = available.flatMap((row) =>
+        row.available === null ? [] : [{ provider: row.providerId, version: row.available }],
+      );
       const blocked = updateResult.data.providers.filter(
         (row) => row.verdict === 'blocked-unreviewed',
       );
@@ -1880,7 +2022,11 @@ export class GuideService {
         messages.push('Your managed optimizers are up to date on their configured channels.');
 
       let ticket: string | null = null;
-      if (available.length > 0) {
+      if (available.length > 0 && updateTargets.length !== available.length) {
+        messages.push(
+          'An update channel reported an upgradable optimizer without a concrete target version. No install approval was created.',
+        );
+      } else if (updateTargets.length > 0) {
         ticket = this.random();
         const expires = this.now() + 10 * 60_000;
         this.approval = {
@@ -1892,6 +2038,7 @@ export class GuideService {
           description: 'Optimizer updates',
           operation: 'update',
           network: updateResult.data.network.length > 0,
+          updateTargets,
         };
         messages.push(
           'Review the versions above, then choose Install updates. Token Harness will re-check the update channels and transaction safety rules before changing software.',
@@ -1903,14 +2050,21 @@ export class GuideService {
       const stack = this.stackSnapshot();
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record(
-        available.length > 0
+        ticket !== null
           ? 'Optimizer update available. Waiting for your approval.'
-          : 'Provider update check completed. No update is pending.',
+          : available.length > 0
+            ? 'Provider update check could not produce an exact install target.'
+            : 'Provider update check completed. No update is pending.',
         'success',
       );
       return {
         ok: true,
-        title: available.length > 0 ? 'Updates available' : 'Optimizers up to date',
+        title:
+          ticket !== null
+            ? 'Updates available'
+            : available.length > 0
+              ? 'Update check needs attention'
+              : 'Optimizers up to date',
         messages,
         appliedPlans: 0,
         stack,
