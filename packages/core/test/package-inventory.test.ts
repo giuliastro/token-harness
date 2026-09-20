@@ -158,7 +158,7 @@ describe('asking a channel what it has installed', () => {
       {
         channel: 'npm',
         packageName: 'rtk',
-        stdout: 'rtk@0.42.0 /usr/lib/node_modules/rtk',
+        stdout: JSON.stringify({ dependencies: { rtk: { version: '0.42.0' } } }),
         version: '0.42.0',
       },
       { channel: 'homebrew', packageName: 'rtk', stdout: 'rtk 0.42.0', version: '0.42.0' },
@@ -175,6 +175,25 @@ describe('asking a channel what it has installed', () => {
       assert.equal(outcome.status, 'captured', entry.channel);
       assert.equal(outcome.version, entry.version, entry.channel);
     }
+  });
+
+  it('uses npm global JSON inventory to distinguish a missing package from an unreadable answer', async () => {
+    const { commands, runner: process } = runner({
+      stdout: JSON.stringify({ dependencies: { other: { version: '1.0.0' } } }),
+    });
+    const outcome = await queryPackageInventory({
+      channel: 'npm',
+      packageName: 'gitnexus',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'absent');
+    assert.equal(outcome.version, null);
+    assert.deepEqual(commands, ['npm ls --global --depth=0 --json']);
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
+      false,
+    );
   });
 
   it('matches uv inventory by base distribution when the install spec contains extras', async () => {
@@ -399,6 +418,55 @@ describe('restoring a captured inventory', () => {
     assert.deepEqual(commands, [
       'pnpm add --global harnesstrim@0.1.0',
       'pnpm list --global harnesstrim --depth 0 --json',
+    ]);
+  });
+
+  it('restores an npm package absence by uninstalling the first-run package and re-reading JSON inventory', async () => {
+    let installed = true;
+    const commands: string[] = [];
+    const process: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        if (request.args[0] === 'uninstall' && request.args[1] === '--global') installed = false;
+        const isList = request.args[0] === 'ls';
+        const stdout = isList
+          ? JSON.stringify({
+              dependencies: installed ? { gitnexus: { version: '1.6.12' } } : {},
+            })
+          : '';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'npm',
+        packageName: 'gitnexus',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, [
+      'npm ls --global --depth=0 --json',
+      'npm uninstall --global gitnexus',
+      'npm ls --global --depth=0 --json',
     ]);
   });
 
