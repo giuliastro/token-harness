@@ -48,6 +48,20 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Format changed files for branch diagnostics
+        shell: bash
+        run: |
+          pnpm exec prettier --write \
+            apps/cli/src/guided.ts \
+            apps/cli/test/guided-update-check.test.ts \
+            packages/adapters/test/harnesstrim.test.ts \
+            scripts/evaluation/harnesstrim-guided-live-smoke.mjs
+          git diff -- \
+            apps/cli/src/guided.ts \
+            apps/cli/test/guided-update-check.test.ts \
+            packages/adapters/test/harnesstrim.test.ts \
+            scripts/evaluation/harnesstrim-guided-live-smoke.mjs
+
       - name: Format check
         run: pnpm format:check
 
