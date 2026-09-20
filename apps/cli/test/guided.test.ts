@@ -78,7 +78,7 @@ function inventory(
     platform: options.platform ?? platform,
     problemCount: 0,
     providers: [
-      provider('rtk', ['claude']),
+      provider('rtk', ['claude', 'codex']),
       provider('harnesstrim', ['claude', 'codex']),
       provider('gitnexus', ['claude']),
     ],
@@ -206,9 +206,9 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it('plans only actionable HarnessTrim setup for Codex', async () => {
+  it('plans both recommended optimizers for Codex when RTK and HarnessTrim are actionable', async () => {
     const doctor = inventory(['codex']);
-    assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'not-applicable');
+    assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'actionable');
     assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
 
     const { service, calls } = fixture({ ids: ['codex'], doctor });
@@ -216,7 +216,10 @@ describe('guided workflow', () => {
     assert.notEqual(preview.ticket, null);
     assert.deepEqual(
       calls.filter((args) => args[0] === 'plan'),
-      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+      [
+        ['plan', '--harness', 'codex', '--provider', 'rtk'],
+        ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
+      ],
     );
   });
 
@@ -334,7 +337,7 @@ describe('guided workflow', () => {
     const beforeCodex = before.agents.find((agent) => agent.id === 'codex');
     assert.equal(
       beforeCodex?.setup.find((target) => target.providerId === 'rtk')?.state,
-      'not-applicable',
+      'actionable',
     );
     assert.equal(
       beforeCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
@@ -344,8 +347,8 @@ describe('guided workflow', () => {
     const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.ok(preview.ticket);
     assert.equal(
-      calls.some((args) => args.includes('rtk')),
-      false,
+      calls.some((args) => args[0] === 'plan' && args.includes('rtk')),
+      true,
     );
     const applied = await service.apply({ ticket: preview.ticket });
     assert.equal(applied.ok, true);
