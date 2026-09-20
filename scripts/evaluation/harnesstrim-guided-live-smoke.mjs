@@ -17,12 +17,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import {
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -112,7 +107,9 @@ function thJson(args, accepted = [0]) {
 }
 
 function normalizeVersion(value) {
-  return String(value ?? '').trim().replace(/^v/i, '');
+  return String(value ?? '')
+    .trim()
+    .replace(/^v/i, '');
 }
 
 function doctor() {
@@ -316,7 +313,8 @@ try {
   const finalDoctor = doctor();
   const finalHt = provider(finalDoctor, 'harnesstrim');
   assert(
-    finalHt?.configuredHarnesses?.includes('claude') && finalHt?.configuredHarnesses?.includes('codex'),
+    finalHt?.configuredHarnesses?.includes('claude') &&
+      finalHt?.configuredHarnesses?.includes('codex'),
     'latest HarnessTrim can reconnect Claude after removal',
     JSON.stringify(finalHt),
   );
@@ -328,7 +326,9 @@ try {
     );
   }
 
-  console.log('\nlive smoke: real first-run setup, update, verification, removal and re-setup passed');
+  console.log(
+    '\nlive smoke: real first-run setup, update, verification, removal and re-setup passed',
+  );
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
