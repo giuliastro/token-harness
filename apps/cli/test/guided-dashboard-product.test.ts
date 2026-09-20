@@ -26,20 +26,18 @@ describe('first-run guided overview', () => {
     assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
   });
 
-  it('puts setup beside an agent only when a runtime-supported action is actually available', () => {
-    assert.match(GUIDE_JS, /Setup incomplete/);
-    assert.match(GUIDE_JS, /Finish setup for /);
-    assert.match(GUIDE_JS, /Finish setup/);
-    assert.match(GUIDE_JS, /baselineStatusFor/);
+  it('keeps harness cards informational and routes setup through optimizer connection managers', () => {
+    assert.match(GUIDE_JS, /Connections available/);
+    assert.match(GUIDE_JS, /Manage connections/);
+    assert.match(GUIDE_JS, /reviewConnections/);
+    assert.match(GUIDE_JS, /Connection to review/);
     assert.match(GUIDE_JS, /target\.state === 'actionable'/);
     assert.match(GUIDE_JS, /No automatic setup/);
-    assert.doesNotMatch(GUIDE_JS, /baselineReadyFor/);
-    assert.doesNotMatch(GUIDE_JS, /Review baseline for /);
-    assert.doesNotMatch(GUIDE_JS, /Open setup/);
-    assert.doesNotMatch(GUIDE_JS, /Manage setup/);
+    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.doesNotMatch(GUIDE_JS, /'Connect to ' \+ agent\.name/);
   });
 
-  it('puts only actionable contextual setup controls on optimizer cards', () => {
+  it('uses one scalable connection control per optimizer card', () => {
     assert.match(GUIDE_JS, /Installed · setup available/);
     assert.match(GUIDE_JS, /Partially connected · setup available/);
     assert.match(GUIDE_JS, /Connected elsewhere/);
@@ -47,16 +45,12 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Connected to/);
     assert.match(GUIDE_JS, /Setup available/);
     assert.match(GUIDE_JS, /Not applicable/);
-    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
-    assert.match(GUIDE_JS, /Why there is no Connect button/);
-    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
-    assert.match(GUIDE_JS, /Set up for /);
+    assert.match(GUIDE_JS, /Manage connections/);
+    assert.match(GUIDE_JS, /providerTargets\.length/);
     assert.match(GUIDE_JS, /Install update/);
     assert.match(GUIDE_JS, /Re-check health/);
-    assert.doesNotMatch(GUIDE_JS, /No agent yet/);
-    assert.doesNotMatch(GUIDE_JS, /Review mcptoon for /);
-    assert.doesNotMatch(GUIDE_JS, /Review GitNexus for /);
-    assert.doesNotMatch(GUIDE_JS, /Review Headroom for /);
+    assert.doesNotMatch(GUIDE_JS, /'Set up for ' \+ agent\.name/);
+    assert.doesNotMatch(GUIDE_JS, /'Connect to ' \+ agent\.name/);
   });
 
   it('keeps preview and explicit approval for setup changes', () => {
@@ -75,6 +69,18 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
     assert.match(GUIDE_JS, /billed-token evidence/);
     assert.match(GUIDE_JS, /Quality is never inferred from token savings alone/);
+  });
+
+
+  it('renders Results as a dynamic optimizer-by-harness dashboard', () => {
+    assert.match(GUIDE_HTML, /Connection coverage/);
+    assert.match(GUIDE_HTML, /id="result-coverage"/);
+    assert.match(GUIDE_HTML, /id="result-impact"/);
+    assert.match(GUIDE_JS, /renderResultCoverage/);
+    assert.match(GUIDE_JS, /current\?\.stack\?\.components/);
+    assert.match(GUIDE_JS, /Harness connections/);
+    assert.match(GUIDE_JS, /Measured optimizers/);
+    assert.match(GUIDE_JS, /connection-matrix-row/);
   });
 
   it('never schedules a full overview refresh in the background', () => {
