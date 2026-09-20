@@ -48,12 +48,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format two changed files for diagnostics
-        shell: bash
-        run: |
-          pnpm exec prettier --write packages/core/src/state/install.ts scripts/evaluation/harnesstrim-guided-live-smoke.mjs
-          git diff -- packages/core/src/state/install.ts scripts/evaluation/harnesstrim-guided-live-smoke.mjs
-
       - name: Format check
         run: pnpm format:check
 
