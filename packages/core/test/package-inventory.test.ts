@@ -177,6 +177,23 @@ describe('asking a channel what it has installed', () => {
     }
   });
 
+  it('matches uv inventory by base distribution when the install spec contains extras', async () => {
+    const { commands, runner: process } = runner({ stdout: 'headroom-ai v0.37.0\n- headroom\n' });
+    const outcome = await queryPackageInventory({
+      channel: 'uv',
+      packageName: 'headroom-ai[mcp]',
+      runner: process,
+      cwd: '/work',
+    });
+    assert.equal(outcome.status, 'captured');
+    assert.equal(outcome.version, '0.37.0');
+    assert.deepEqual(commands, ['uv tool list']);
+    assert.equal(
+      outcome.diagnostics.some((entry) => entry.code === 'inventory-query-unverified'),
+      false,
+    );
+  });
+
   it('reads pipx machine-readable inventory and distinguishes absence', async () => {
     const stdout = JSON.stringify({
       pipx_spec_version: '0.1',
@@ -438,6 +455,53 @@ describe('restoring a captured inventory', () => {
     assert.equal(outcome.restored, true);
     assert.deepEqual(commands, ['pipx list --json', 'pipx uninstall mcptoon', 'pipx list --json']);
     assert.ok(outcome.diagnostics.some((entry) => entry.code === 'package-inventory-restored'));
+  });
+
+  it('restores a uv tool absence using the base distribution name and verifies it', async () => {
+    let installed = true;
+    const commands: string[] = [];
+    const process: ProcessRunner = {
+      run: (request) => {
+        commands.push(`${request.executable} ${request.args.join(' ')}`);
+        if (request.args[0] === 'tool' && request.args[1] === 'uninstall') installed = false;
+        const stdout =
+          request.args[0] === 'tool' && request.args[1] === 'list' && installed
+            ? 'headroom-ai v0.37.0\n- headroom\n'
+            : '';
+        return Promise.resolve({
+          displayCommand: `${request.executable} ${request.args.join(' ')}`,
+          interpreter: 'direct' as const,
+          executablePath: `/usr/bin/${request.executable}`,
+          exitCode: 0,
+          signal: null,
+          stdout,
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 1,
+          timedOut: false,
+          failure: null,
+        });
+      },
+    };
+
+    const outcome = await restorePackageInventory({
+      capture: capture({
+        channel: 'uv',
+        packageName: 'headroom-ai[mcp]',
+        status: 'absent',
+        version: null,
+      }),
+      runner: process,
+      cwd: '/work',
+    });
+
+    assert.equal(outcome.restored, true);
+    assert.deepEqual(commands, [
+      'uv tool list',
+      'uv tool uninstall headroom-ai',
+      'uv tool list',
+    ]);
   });
 
   it('does not uninstall pipx when the live inventory is unreadable', async () => {
