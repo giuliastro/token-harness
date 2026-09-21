@@ -34,7 +34,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     },
     gitnexus: {
       name: 'GitNexus',
-      role: 'Registers an already-installed GitNexus CLI as a narrow Claude MCP integration and verifies the result.',
+      role: 'Connects GitNexus as a narrow Claude MCP integration, installing the reviewed package first when the existing npm runtime can do so.',
       managed: true,
       optional: true,
     },
