@@ -128,7 +128,7 @@ const MANIFEST: ProviderManifest = {
       // unlike Claude, this does not claim a transparent native RTK hook.
       surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
-        sourceReference: 'hooks/codex/rtk-awareness.md',
+        sourceReference: 'docs/spikes/rtk-codex-released-integration.md',
         upstreamVersion: '0.44.0',
       },
     },
