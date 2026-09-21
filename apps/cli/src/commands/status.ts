@@ -64,6 +64,7 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
   };
 
   const harnessAdapters = listHarnessAdapters().filter(

@@ -353,6 +353,7 @@ export async function runUninstall(context: CommandContext): Promise<CommandResu
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
     harnessConfigs: computed.harnessConfigs,
     now: context.now,
     localDatabase: context.adapters.localDatabase,

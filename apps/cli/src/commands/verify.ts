@@ -72,6 +72,7 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
   };
 
   /**

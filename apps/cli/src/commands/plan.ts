@@ -518,6 +518,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
           facts: context.platform,
           paths: context.adapters.paths,
           projectRoot: context.projectRoot,
+          env: context.env,
         };
 
   if (detectionContext !== null) {

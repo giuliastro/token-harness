@@ -90,6 +90,7 @@ async function verifyManagedIntegrationPostconditions(
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
   };
   const harnessConfigs = (
     await Promise.all(
