@@ -491,8 +491,7 @@ describe('Codex hook-list integration', () => {
     assert.equal(result.actions.length, 1);
     const action = result.actions[0] as RemoveOwnedChangeAction;
     assert.equal(action.target.kind, 'owned-json-entry');
-    if (action.target.kind !== 'owned-json-entry')
-      assert.fail('expected an owned JSON entry');
+    if (action.target.kind !== 'owned-json-entry') assert.fail('expected an owned JSON entry');
     assert.equal(action.target.path, CODEX_HOOKS);
     assert.equal(action.target.pointer, 'hooks.PreToolUse');
     assert.equal(action.target.placement, 'array-element');
