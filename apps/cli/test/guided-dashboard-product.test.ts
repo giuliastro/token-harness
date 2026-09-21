@@ -15,49 +15,42 @@ describe('first-run guided overview', () => {
     );
   });
 
-  it('keeps coding agents and optimizers as the two visible setup entities', () => {
+  it('keeps coding agents and optimizers as distinct scalable entities', () => {
     assert.match(GUIDE_HTML, /<h2>Coding agents<\/h2>/);
     assert.match(GUIDE_HTML, /<h2>Optimizers<\/h2>/);
     assert.match(GUIDE_HTML, /Recommended baseline/);
     assert.match(GUIDE_HTML, /Optional optimizers/);
-    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
+    assert.match(GUIDE_HTML, /RTK and HarnessTrim/);
     assert.match(GUIDE_HTML, /Health and updates/);
-    assert.doesNotMatch(GUIDE_HTML, /Checks and maintenance/);
-    assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
+    assert.match(GUIDE_HTML, /Optimizer connections are managed from the Optimizers section/);
   });
 
-  it('puts setup beside an agent only when a runtime-supported action is actually available', () => {
-    assert.match(GUIDE_JS, /Setup incomplete/);
-    assert.match(GUIDE_JS, /Finish setup for /);
-    assert.match(GUIDE_JS, /Finish setup/);
-    assert.match(GUIDE_JS, /baselineStatusFor/);
-    assert.match(GUIDE_JS, /target\.state === 'actionable'/);
-    assert.match(GUIDE_JS, /No automatic setup/);
-    assert.doesNotMatch(GUIDE_JS, /baselineReadyFor/);
-    assert.doesNotMatch(GUIDE_JS, /Review baseline for /);
-    assert.doesNotMatch(GUIDE_JS, /Open setup/);
-    assert.doesNotMatch(GUIDE_JS, /Manage setup/);
+  it('keeps harness cards status-only instead of duplicating optimizer setup', () => {
+    assert.match(GUIDE_JS, /Connected optimizers:/);
+    assert.match(GUIDE_JS, /Manage additional optimizer connections from the Optimizers section/);
+    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.doesNotMatch(GUIDE_JS, /Finish setup for /);
   });
 
-  it('puts only actionable contextual setup controls on optimizer cards', () => {
-    assert.match(GUIDE_JS, /Installed · setup available/);
-    assert.match(GUIDE_JS, /Partially connected · setup available/);
-    assert.match(GUIDE_JS, /Connected elsewhere/);
-    assert.match(GUIDE_JS, /Installed · no automatic setup/);
-    assert.match(GUIDE_JS, /Connected to/);
-    assert.match(GUIDE_JS, /Setup available/);
-    assert.match(GUIDE_JS, /Not applicable/);
-    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
-    assert.match(GUIDE_JS, /Why there is no Connect button/);
-    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
-    assert.match(GUIDE_JS, /Set up for /);
-    assert.match(GUIDE_JS, /Install update/);
-    assert.match(GUIDE_JS, /Re-check health/);
-    assert.doesNotMatch(GUIDE_JS, /No agent yet/);
-    assert.doesNotMatch(GUIDE_JS, /Review mcptoon for /);
-    assert.doesNotMatch(GUIDE_JS, /Review GitNexus for /);
-    assert.doesNotMatch(GUIDE_JS, /Review Headroom for /);
+  it('uses one connection control per optimizer no matter how many harnesses are detected', () => {
+    assert.match(GUIDE_JS, /function manageOptimizerConnections/);
+    assert.match(GUIDE_JS, /Manage connections/);
+    assert.match(GUIDE_JS, /View connections/);
+    assert.match(GUIDE_JS, /Harness to connect/);
+    assert.match(GUIDE_JS, /Review connection/);
+    assert.doesNotMatch(GUIDE_JS, /'Connect to ' \+ agent\.name/);
+    assert.doesNotMatch(GUIDE_JS, /'Set up for ' \+ agent\.name/);
   });
+
+  it('derives optimizer cards from the observed stack instead of a fixed render list', () => {
+    assert.match(GUIDE_JS, /function managedProviderIds/);
+    assert.match(GUIDE_JS, /current\?\.stack\?\.components/);
+    assert.match(GUIDE_JS, /recommended\.map\(renderManagedTool\)/);
+    assert.match(GUIDE_JS, /optional\.map\(renderManagedTool\)/);
+    assert.doesNotMatch(GUIDE_JS, /renderManagedTool\('rtk'\)/);
+    assert.doesNotMatch(GUIDE_JS, /renderManagedTool\('harnesstrim'\)/);
+  });
+
 
   it('keeps preview and explicit approval for setup changes', () => {
     assert.match(GUIDE_JS, /Safe preview first/);
@@ -66,6 +59,18 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Set up ['"] \+ provider\.name/);
     assert.match(GUIDE_JS, /transactional engine with backups/);
     assert.match(GUIDE_JS, /Applying the approved change/);
+  });
+
+  it('makes Results a complete optimizer and harness overview before measured evidence', () => {
+    assert.match(GUIDE_HTML, /Results overview/);
+    assert.match(GUIDE_HTML, /Optimizer × harness coverage/);
+    assert.match(GUIDE_HTML, /id="result-coverage"/);
+    assert.match(GUIDE_HTML, /id="result-optimizers"/);
+    assert.match(GUIDE_HTML, /id="result-harnesses"/);
+    assert.match(GUIDE_JS, /function renderResultCoverage/);
+    assert.match(GUIDE_JS, /function renderResultOptimizers/);
+    assert.match(GUIDE_JS, /function renderResultHarnesses/);
+    assert.match(GUIDE_JS, /No measured telemetry/);
   });
 
   it('makes Overview a real measured-impact summary', () => {
