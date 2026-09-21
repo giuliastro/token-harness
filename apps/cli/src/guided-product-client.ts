@@ -1207,7 +1207,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       node(
         'p',
         available.length
-          ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
+          ? available.map(component => toolInfo(component.providerId).name + ' has an update ready.').join(' ')
           : 'Check installed optimizer versions. If an update is available, you can install it from the same dialog; Token Harness verifies the active runtime after installation.',
         'caption',
       ),
@@ -1267,6 +1267,148 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
+  function connectionLabel(target) {
+    if (!target) return { label: 'Not detected', cls: '' };
+    if (target.state === 'connected') return { label: 'Connected', cls: 'good' };
+    if (target.state === 'actionable') return { label: 'Available', cls: 'warn' };
+    if (target.state === 'unavailable') return { label: 'Unavailable', cls: '' };
+    return { label: 'Not applicable', cls: '' };
+  }
+
+  function resultRowsForProvider(id) {
+    const info = toolInfo(id);
+    const names = new Set([String(id).toLowerCase(), String(info.name).toLowerCase()]);
+    return (current?.savings?.rows || []).filter(row => names.has(String(row.provider).toLowerCase()));
+  }
+
+  function renderResultCoverage() {
+    const root = $('result-coverage');
+    root.replaceChildren();
+    const ids = managedProviderIds();
+    if (!ids.length) {
+      root.append(sectionEmpty('No managed optimizer is registered in the current overview.'));
+      return;
+    }
+    for (const id of ids) {
+      const info = toolInfo(id);
+      const card = node('article', undefined, 'tool-card compact');
+      card.append(node('h3', info.name));
+      const facts = node('div', undefined, 'tool-facts');
+      for (const agent of activeAgents()) {
+        const state = connectionLabel(setupTarget(agent.id, id));
+        const value = node('span');
+        value.append(pill(state.label, state.cls));
+        facts.append(node('span', agent.name), value);
+      }
+      if (!activeAgents().length)
+        facts.append(node('span', 'Harness targets'), node('strong', 'None detected'));
+      card.append(facts);
+      root.append(card);
+    }
+  }
+
+  function renderResultOptimizers() {
+    const root = $('result-optimizers');
+    root.replaceChildren();
+    const ids = managedProviderIds();
+    if (!ids.length) {
+      root.append(sectionEmpty('No managed optimizer is registered in the current overview.'));
+      return;
+    }
+    for (const id of ids) {
+      const info = toolInfo(id);
+      const component = managedComponent(id);
+      const rows = resultRowsForProvider(id);
+      const card = node('article', undefined, 'tool-card compact');
+      const head = node('div', undefined, 'tool-head');
+      const title = node('div');
+      title.append(
+        node('h3', info.name),
+        node('span', component?.version ? 'v' + component.version : 'Version unavailable', 'caption'),
+      );
+      const health =
+        component?.health === 'healthy'
+          ? { label: 'Healthy', cls: 'good' }
+          : component?.health === 'attention'
+            ? { label: 'Needs attention', cls: 'warn' }
+            : { label: component?.detectedState === 'absent' ? 'Not installed' : 'Not verified', cls: '' };
+      head.append(title, pill(health.label, health.cls));
+      card.append(head);
+      const facts = node('div', undefined, 'tool-facts');
+      facts.append(
+        node('span', 'Connected harnesses'),
+        node(
+          'strong',
+          component?.configuredHarnesses?.length
+            ? component.configuredHarnesses.map(agentName).join(', ')
+            : 'None',
+        ),
+        node('span', 'Verification'),
+        node('strong', component?.verification || 'not checked'),
+        node('span', 'Evidence this period'),
+        node('strong', rows.length ? count(rows.length) + ' measured row' + (rows.length === 1 ? '' : 's') : 'No measured telemetry'),
+      );
+      if (component?.update === 'available')
+        facts.append(node('span', 'Update'), node('strong', 'Available'));
+      card.append(facts);
+      if (rows.length)
+        card.append(
+          node(
+            'p',
+            rows.map(row => row.measurement + ': ' + (row.impact?.headline || count(Math.abs(row.saved)) + ' ' + row.unit)).join(' · '),
+            'caption',
+          ),
+        );
+      root.append(card);
+    }
+  }
+
+  function rowBelongsToAgent(row, agent) {
+    const names = new Set([String(agent.id).toLowerCase(), String(agent.name).toLowerCase()]);
+    return (row.agents || []).some(value => names.has(String(value).toLowerCase()));
+  }
+
+  function renderResultHarnesses() {
+    const root = $('result-harnesses');
+    root.replaceChildren();
+    if (!activeAgents().length) {
+      root.append(sectionEmpty('No supported coding harness is currently detected.'));
+      return;
+    }
+    for (const agent of activeAgents()) {
+      const connected = (agent.setup || [])
+        .filter(target => target.state === 'connected')
+        .map(target => target.provider);
+      const rows = (current?.savings?.rows || []).filter(row => rowBelongsToAgent(row, agent));
+      const card = node('article', undefined, 'tool-card compact');
+      const head = node('div', undefined, 'tool-head');
+      const title = node('div');
+      title.append(
+        node('h3', agent.name),
+        node('span', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
+      );
+      head.append(title, pill(connected.length + ' connected', connected.length ? 'good' : ''));
+      card.append(head);
+      const facts = node('div', undefined, 'tool-facts');
+      facts.append(
+        node('span', 'Optimizers'),
+        node('strong', connected.length ? connected.join(', ') : 'None'),
+        node('span', 'Measured evidence'),
+        node('strong', rows.length ? count(rows.length) + ' attributed row' + (rows.length === 1 ? '' : 's') : 'None attributed'),
+      );
+      card.append(facts);
+      if (rows.length)
+        card.append(
+          node(
+            'p',
+            rows.map(row => row.provider + ': ' + (row.impact?.headline || row.measurement)).join(' · '),
+            'caption',
+          ),
+        );
+      root.append(card);
+    }
+  }
+
   function measurementHelp() {
     modal('How Token Harness measures results');
     $('modal-content').append(
@@ -1306,6 +1448,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
       metricCard('API cost', 'Not measured yet', 'Requires billed-token evidence and a verified price basis.'),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
+    renderResultCoverage();
+    renderResultOptimizers();
+    renderResultHarnesses();
     renderSavings();
     renderCandidateResults();
     $('results-period-note').textContent = current?.savings?.firstRecordedAt
