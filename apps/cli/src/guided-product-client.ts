@@ -493,7 +493,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       $('modal-content').append(facts);
 
     if (actionable.length) {
-      const chooser = node('div', undefined, 'field-row');
+      const chooser = node('div', undefined, 'filter-row');
       const label = node('label', 'Connect to');
       const select = node('select');
       select.setAttribute('aria-label', 'Harness to connect');
