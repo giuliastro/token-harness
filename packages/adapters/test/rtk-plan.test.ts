@@ -31,6 +31,7 @@ import { buildRtkPlan, hookEntryFor, hookListPointer } from '../src/index.js';
 import type { ProviderContext, ProviderPlanRequest } from '../src/index.js';
 
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const RTK = providerId('rtk');
 
 const CLAUDE_MANIFEST: HarnessManifest = {
@@ -46,7 +47,14 @@ const CLAUDE_MANIFEST: HarnessManifest = {
     { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
   ],
   configFiles: [
-    { path: '.claude/settings.json', scope: 'user', parser: 'json', primary: true },
+    {
+      path: '.claude/settings.json',
+      scope: 'user',
+      parser: 'json',
+      primary: true,
+      interceptionFormat: 'hooks-event-command-list',
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+    },
     { path: '.claude/settings.local.json', scope: 'project', parser: 'json', primary: false },
   ],
   toolFamilies: [
@@ -56,6 +64,37 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   requiresEnablement: false,
   enablementNote: null,
   receiptFamily: 'provider-telemetry',
+};
+
+const CODEX_MANIFEST: HarnessManifest = {
+  schemaVersion: MANIFEST_SCHEMA_VERSION,
+  id: CODEX,
+  displayName: 'Codex',
+  homepage: 'https://developers.openai.com/codex/',
+  testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
+  verificationTier: 'config-only',
+  versionCommand: { executable: 'codex', args: ['--version'] },
+  interceptionPoints: [
+    { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
+    { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+  ],
+  configFiles: [
+    { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
+    {
+      path: '.codex/hooks.json',
+      scope: 'user',
+      parser: 'json',
+      primary: false,
+      interceptionFormat: 'hooks-event-command-list',
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+    },
+  ],
+  toolFamilies: [
+    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+  ],
+  requiresEnablement: true,
+  enablementNote: 'Codex persists hook enablement and trust separately from hooks.json',
+  receiptFamily: 'harness-event-stream',
 };
 
 /**
@@ -89,6 +128,7 @@ const OPENCODE_MANIFEST: HarnessManifest = {
 };
 
 const SETTINGS = 'C:\\Users\\dev\\.claude\\settings.json';
+const CODEX_HOOKS = 'C:\\Users\\dev\\.codex\\hooks.json';
 
 const CHANNELS = [
   {
@@ -135,6 +175,20 @@ function ownership(capabilities: readonly string[], toolFamily = 'Bash'): Resolv
   }));
 }
 
+function codexOwnership(capabilities: readonly string[]): ResolvedCapability[] {
+  return capabilities.map((capability) => ({
+    scope: {
+      harness: CODEX,
+      toolFamily: 'Bash',
+      interceptionPoint: 'pre-tool-use',
+      capability: capability as ResolvedCapability['scope']['capability'],
+    },
+    owner: RTK,
+    mode: 'exclusive',
+    order: 0,
+  }));
+}
+
 /** The live configuration as the harness adapter would report it. */
 function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
   return {
@@ -144,6 +198,17 @@ function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary 
     interceptionPoints: ['pre-tool-use'],
     matchers,
     commands: ['rtk hook claude'],
+  };
+}
+
+function configuredCodexWithRtk(): HarnessConfigSummary {
+  return {
+    harnessId: CODEX,
+    configPath: CODEX_HOOKS,
+    scope: 'user',
+    interceptionPoints: ['pre-tool-use'],
+    matchers: ['Bash'],
+    commands: ['rtk hook codex'],
   };
 }
 
@@ -191,6 +256,14 @@ function request(overrides: Partial<ProviderPlanRequest> = {}): ProviderPlanRequ
   return {
     ownership: overrides.ownership ?? ownership(['shell.output.reduce']),
     harnesses: overrides.harnesses ?? [CLAUDE_MANIFEST],
+    desiredState: overrides.desiredState ?? 'configured',
+  };
+}
+
+function codexRequest(overrides: Partial<ProviderPlanRequest> = {}): ProviderPlanRequest {
+  return {
+    ownership: overrides.ownership ?? codexOwnership(['shell.output.reduce']),
+    harnesses: overrides.harnesses ?? [CODEX_MANIFEST],
     desiredState: overrides.desiredState ?? 'configured',
   };
 }
@@ -382,6 +455,46 @@ describe('installed but not wired', () => {
       request: request({ ownership: ownership(['shell.output.reduce'], 'PowerShell') }),
     });
     assert.notEqual(bash.actions[0]?.id, powershell.actions[0]?.id);
+  });
+});
+
+describe('Codex hook-list integration', () => {
+  it('targets Codex hooks.json instead of its primary config.toml', () => {
+    const result = plan({ installed: true, request: codexRequest() });
+    assert.equal(result.actions.length, 1);
+    const action = result.actions[0] as MergeJsonAction;
+    assert.deepEqual(action.affectedPaths, [CODEX_HOOKS]);
+    assert.equal(action.path, CODEX_HOOKS);
+    assert.equal(action.operations[0]?.pointer, 'hooks.PreToolUse');
+    assert.deepEqual(action.operations[0]?.value, {
+      matcher: 'Bash',
+      hooks: [{ type: 'command', command: 'rtk hook codex' }],
+    });
+    assert.deepEqual(result.targetHarnesses, [CODEX]);
+  });
+
+  it('does not duplicate a brownfield Codex RTK hook', () => {
+    const result = plan({
+      installed: true,
+      configs: [configuredCodexWithRtk()],
+      request: codexRequest(),
+    });
+    assert.deepEqual(result.actions, []);
+  });
+
+  it('removes only the exact Codex hook entry it owns', () => {
+    const result = plan({
+      installed: true,
+      configs: [configuredCodexWithRtk()],
+      request: codexRequest({ desiredState: 'absent' }),
+    });
+    assert.equal(result.actions.length, 1);
+    const action = result.actions[0] as RemoveOwnedChangeAction;
+    assert.equal(action.target.kind, 'owned-json-entry');
+    if (action.target.kind !== 'owned-json-entry') assert.fail('expected an owned JSON entry');
+    assert.equal(action.target.path, CODEX_HOOKS);
+    assert.equal(action.target.pointer, 'hooks.PreToolUse');
+    assert.equal(action.target.placement, 'array-element');
   });
 });
 

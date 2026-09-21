@@ -71,6 +71,7 @@ import { buildRtkPlan } from './rtk-plan.js';
 
 const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const OPENCODE = harnessId('opencode');
 
 /**
@@ -111,6 +112,33 @@ const MANIFEST: ProviderManifest = {
       evidence: {
         sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
         upstreamVersion: '0.48.0',
+      },
+    },
+    /**
+     * Codex, from RTK 0.49.0's published hook contract.
+     *
+     * RTK exposes the same pre-execution command-rewrite model through `rtk hook codex`, with a
+     * Bash matcher stored in Codex hooks.json. Token Harness writes only that reviewed hook entry;
+     * it does not run `rtk init`, touch AGENTS.md/RTK.md, or change Codex sandbox/approval policy.
+     */
+    {
+      capability: 'shell.command.rewrite',
+      mode: 'exclusive',
+      harnesses: [CODEX],
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      evidence: {
+        sourceReference: 'docs/spikes/rtk-codex-upstream-contract.md',
+        upstreamVersion: '0.49.0',
+      },
+    },
+    {
+      capability: 'shell.output.reduce',
+      mode: 'exclusive',
+      harnesses: [CODEX],
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      evidence: {
+        sourceReference: 'docs/spikes/rtk-codex-upstream-contract.md',
+        upstreamVersion: '0.49.0',
       },
     },
     /**
@@ -169,6 +197,14 @@ const MANIFEST: ProviderManifest = {
       harness: CLAUDE,
       testedVersions: { minimum: '2.0.0', maximum: '2.1.251' },
       verificationTier: 'canary',
+    },
+    {
+      harness: CODEX,
+      // The hook-list schema was observed by the Codex adapter at 0.146.0. RTK 0.49.0 publishes
+      // the corresponding Bash/PreToolUse protocol. Verification stays config-only because RTK's
+      // aggregate analytics cannot attribute a receipt to one harness when several use RTK.
+      testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
+      verificationTier: 'config-only',
     },
     {
       harness: OPENCODE,
@@ -475,8 +511,8 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     /**
      * RFC 0002 §Providers may exceed the managed surface.
      *
-     * The field asks whether this manifest names a harness with no adapter behind it. It names two,
-     * Claude Code and OpenCode, and both are managed — so the qualifier RFC 0006's doctor transcript
+     * The field asks whether this manifest names a harness with no adapter behind it. It names
+     * Claude Code, Codex and OpenCode, and all are managed — so the qualifier RFC 0006's doctor transcript
      * uses for HarnessTrim does not apply, and the report says "not configured for any harness"
      * without hedging.
      *
@@ -490,20 +526,13 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // every installation it finds is the user's.
     managedByTokenHarness: false,
     /**
-     * Claude Code alone, and independent of the observed version.
-     *
-     * RTK's assignment is produced by this build writing the hook itself — `rtk-plan.ts` appends the
-     * entry — so nothing about the installed `rtk` decides whether the state is reachable. What does
-     * decide it is which harness schema that builder knows, and it knows one: `HOOK_LIST_HARNESSES`
-     * holds `claude` and the builder refuses anything else, because a `{matcher, hooks:[…]}` object
-     * at `hooks.<event>` is Claude Code's schema and nothing else's.
-     *
-     * RTK claims OpenCode too, from spike 9.1, and that claim is real — detected, adopted, verified
-     * and measured there. It is simply not *written* there: its OpenCode integration is a plugin
-     * module `rtk init -g --opencode` installs globally, which this build has no action for. Saying
-     * so here is what stops the resolver assigning a scope nothing can produce.
+     * Assignment follows the harness-declared command-hook surface. Claude Code and Codex both
+     * expose the reviewed hooks-event command-list contract, so this build can produce their RTK
+     * configuration transactionally. OpenCode remains detectable/verifiable but not assignable:
+     * its integration is a plugin module installed by `rtk init -g --opencode`, which this build
+     * deliberately does not delegate without a reviewed write set.
      */
-    assignableHarnesses: [CLAUDE],
+    assignableHarnesses: [CLAUDE, CODEX],
     evidence: evidenceItems,
     warnings,
   };

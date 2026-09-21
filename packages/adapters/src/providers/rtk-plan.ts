@@ -58,16 +58,6 @@ import type { ProviderContext, ProviderPlanRequest } from './contract.js';
 /** The command RTK's own hook uses, as observed in a configured installation. */
 export const RTK_HOOK_COMMAND_PREFIX = 'rtk hook';
 
-/**
- * Harnesses whose primary configuration is a hook list this builder knows how to append to.
- *
- * A set rather than a check on the manifest, because there is nothing in a `HarnessManifest` that
- * says "this file's interception points are a `hooks` map" — `configFiles` carries a parser, and
- * `jsonc` is equally true of Claude Code's settings and OpenCode's plugin array. Adding a harness
- * here is a statement that someone has looked at its schema and that the append above produces a
- * valid document in it.
- */
-const HOOK_LIST_HARNESSES = new Set<string>(['claude']);
 const CLAUDE = 'claude';
 const BASH = 'Bash';
 const POWERSHELL = 'PowerShell';
@@ -96,7 +86,7 @@ interface PlanTarget {
   harness: HarnessManifest;
   /** The harness's own event name for the scope's interception point. */
   eventName: string;
-  /** Absolute path to the primary configuration file. */
+  /** Absolute path to the harness-declared command-hook configuration file. */
   configPath: string;
 }
 
@@ -136,30 +126,21 @@ export function planTargets(context: ProviderContext, request: ProviderPlanReque
     const harness = request.harnesses.find((entry) => entry.id === owned.scope.harness);
     if (harness === undefined) continue;
 
-    /**
-     * Only a harness whose configuration is the hook-list shape this file writes.
-     *
-     * Everything below builds one thing: a `{matcher, hooks:[{type:'command'}]}` object appended
-     * at `hooks.<eventName>`. That is Claude Code's schema. OpenCode has no `hooks` document at
-     * all — RTK reaches it by dropping a plugin module into `.config/opencode/plugins/`, which
-     * `rtk init -g --opencode` writes and this builder has no action for.
-     *
-     * RTK claims OpenCode as of spike 9.1, so the resolver can now hand this function a scope on
-     * it. Without this guard the loop would happily produce a target and append a Claude-shaped
-     * hook entry to `opencode.jsonc` — a file OpenCode would then load with a `hooks` key it does
-     * not read, from a plan whose diff looked plausible to a reviewer.
-     *
-     * The compatibility gate decides when a plan may run. This guard decides whether the action is
-     * structurally correct in the first place.
-     */
-    if (!HOOK_LIST_HARNESSES.has(harness.id)) continue;
-
     const point = harness.interceptionPoints.find(
       (entry) => entry.scopeId === owned.scope.interceptionPoint,
     );
     if (point === undefined) continue;
 
-    const file = harness.configFiles.find((entry) => entry.primary);
+    /**
+     * The harness owns the path/format declaration. RTK only knows the common command-hook
+     * contract it can populate. This keeps Codex's non-primary hooks.json (and future harnesses
+     * using the same shape) behind the harness manifest instead of teaching this provider paths.
+     */
+    const file = harness.configFiles.find(
+      (entry) =>
+        entry.interceptionFormat === 'hooks-event-command-list' &&
+        entry.interceptionPoints?.includes(owned.scope.interceptionPoint),
+    );
     if (file === undefined) continue;
 
     // A `user`-scoped file hangs off the home directory; a `project` one off the project root.

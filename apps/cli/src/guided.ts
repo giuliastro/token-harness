@@ -116,6 +116,7 @@ export interface GuideSavings {
   firstRecordedAt: string | null;
   lastRecordedAt: string | null;
   rows: Array<{
+    providerId: string;
     provider: string;
     measurement: string;
     unit: string;
@@ -123,6 +124,7 @@ export interface GuideSavings {
     before: number | null;
     after: number | null;
     operations: number;
+    harnesses: string[];
     agents: string[];
     impact: GuideImpact;
   }>;
@@ -493,6 +495,7 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
     rows: (report?.providers ?? [])
       .filter((row) => row.class !== 'counterfactual')
       .map((row) => ({
+        providerId: row.providerId,
         provider: name(row.providerId),
         measurement: labels[row.class] ?? row.class,
         unit: row.unit === 'tokens' ? 'tokens' : 'characters',
@@ -500,6 +503,7 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
         before: row.before ?? null,
         after: row.after ?? null,
         operations: row.operations,
+        harnesses: [...row.harnesses],
         agents: row.harnesses.map(name),
         impact: savingsImpact(row, {
           start: report?.windowStart ?? '',

@@ -78,7 +78,7 @@ function inventory(
     platform: options.platform ?? platform,
     problemCount: 0,
     providers: [
-      provider('rtk', ['claude']),
+      provider('rtk', ['claude', 'codex']),
       provider('harnesstrim', ['claude', 'codex']),
       provider('gitnexus', ['claude']),
     ],
@@ -206,17 +206,35 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it('plans only actionable HarnessTrim setup for Codex', async () => {
+  it('plans only the selected optimizer connection for Codex', async () => {
     const doctor = inventory(['codex']);
-    assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'not-applicable');
+    assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'actionable');
     assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
 
+    const { service, calls } = fixture({ ids: ['codex'], doctor });
+    const preview = await service.preview({
+      action: 'setup',
+      harness: 'codex',
+      provider: 'harnesstrim',
+    });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
+  });
+
+  it('plans the whole recommended stack when no optimizer is selected', async () => {
+    const doctor = inventory(['codex']);
     const { service, calls } = fixture({ ids: ['codex'], doctor });
     const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.notEqual(preview.ticket, null);
     assert.deepEqual(
       calls.filter((args) => args[0] === 'plan'),
-      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+      [
+        ['plan', '--harness', 'codex', '--provider', 'rtk'],
+        ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
+      ],
     );
   });
 
@@ -334,14 +352,18 @@ describe('guided workflow', () => {
     const beforeCodex = before.agents.find((agent) => agent.id === 'codex');
     assert.equal(
       beforeCodex?.setup.find((target) => target.providerId === 'rtk')?.state,
-      'not-applicable',
+      'actionable',
     );
     assert.equal(
       beforeCodex?.setup.find((target) => target.providerId === 'harnesstrim')?.state,
       'actionable',
     );
 
-    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    const preview = await service.preview({
+      action: 'setup',
+      harness: 'codex',
+      provider: 'harnesstrim',
+    });
     assert.ok(preview.ticket);
     assert.equal(
       calls.some((args) => args.includes('rtk')),
@@ -357,8 +379,8 @@ describe('guided workflow', () => {
       'connected',
     );
     assert.equal(
-      afterCodex?.setup.some((target) => target.state === 'actionable'),
-      false,
+      afterCodex?.setup.find((target) => target.providerId === 'rtk')?.state,
+      'actionable',
     );
   });
 
@@ -468,6 +490,8 @@ describe('guided workflow', () => {
     };
     const view = savingsView(report, 'all');
     assert.equal(view.rows.length, 2);
+    assert.equal(view.rows[0]?.providerId, 'rtk');
+    assert.deepEqual(view.rows[0]?.harnesses, []);
     assert.equal(view.rows[0]?.saved, -5);
     assert.equal(view.rows[1]?.unit, 'characters');
     assert.equal(view.rows[1]?.measurement, 'Local estimate');
@@ -666,7 +690,8 @@ describe('reasoning explanations and contextual actions', () => {
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
     assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
-    assert.ok(GUIDE_HTML.includes('<h2>Optimizers</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Optimization stack</h2>'));
+    assert.ok(GUIDE_HTML.includes('id="connection-overview"'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));

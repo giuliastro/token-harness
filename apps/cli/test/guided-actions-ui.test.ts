@@ -13,30 +13,30 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /choice-grid/);
   });
 
-  it('uses one obvious first-run baseline action per incomplete coding agent', () => {
+  it('uses one central connection action per optimizer instead of per coding agent', () => {
     assert.match(GUIDE_HTML, /Recommended baseline/);
     assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
-    assert.match(GUIDE_JS, /Set up recommended optimizers for /);
-    assert.match(GUIDE_JS, /actionButton\('Finish setup'/);
+    assert.match(GUIDE_HTML, /<h2>Optimization stack<\/h2>/);
+    assert.match(GUIDE_HTML, /id="connection-overview"/);
+    assert.match(GUIDE_JS, /renderConnectionOverview/);
+    assert.match(GUIDE_JS, /actionButton\('Set up recommended stack'/);
+    assert.match(GUIDE_JS, /reviewSetup\(null, id\)/);
     assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
-    assert.doesNotMatch(GUIDE_JS, /actionButton\('Finish setup for '/);
-    assert.match(GUIDE_JS, /target\?\.state !== 'actionable'/);
-    assert.doesNotMatch(GUIDE_JS, /providerSupportsAgent/);
-    assert.doesNotMatch(GUIDE_JS, /Installed · not connected/);
-    assert.match(GUIDE_JS, /Why there is no Connect button/);
+    assert.doesNotMatch(GUIDE_JS, /Finish setup/);
+    assert.doesNotMatch(GUIDE_JS, /Connect to ['"] \+ agent\.name/);
+    assert.doesNotMatch(GUIDE_JS, /Set up for ['"] \+ agent\.name/);
     assert.match(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
     assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /This first step only prepares the safe plan/);
-    assert.match(GUIDE_JS, /Optional optimizers stay separate/);
+    assert.match(GUIDE_JS, /One optimizer, all compatible agents/);
     assert.match(GUIDE_JS, /Apply recommended setup/);
-    assert.match(GUIDE_JS, /No automatic setup/);
-    assert.match(GUIDE_JS, /Token Harness will not offer a no-op button/);
+    assert.match(GUIDE_JS, /No automatic change is available/);
   });
 
   it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
     assert.match(
       GUIDE_JS,
-      /request\('\/api\/preview', \{\s*action: 'setup',\s*harness: agentId,\s*\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\),\s*\}\)/,
+      /request\('\/api\/preview', \{\s*action: 'setup',\s*\.\.\.\(agentId \? \{ harness: agentId \} : \{\}\),\s*\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\),\s*\}\)/,
     );
     assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
     assert.match(GUIDE_JS, /transactional engine with backups, ownership checks and rollback/i);

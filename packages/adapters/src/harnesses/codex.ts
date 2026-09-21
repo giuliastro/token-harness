@@ -66,7 +66,14 @@ const MANIFEST: HarnessManifest = {
   ],
   configFiles: [
     { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
-    { path: '.codex/hooks.json', scope: 'user', parser: 'json', primary: false },
+    {
+      path: '.codex/hooks.json',
+      scope: 'user',
+      parser: 'json',
+      primary: false,
+      interceptionFormat: 'hooks-event-command-list',
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+    },
   ],
   toolFamilies: [
     { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },

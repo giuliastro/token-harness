@@ -162,6 +162,16 @@ export interface HarnessConfigFile {
   parser: HarnessConfigParser;
   /** The file `doctor` names when it reports the harness as detected. */
   primary: boolean;
+  /**
+   * Optional semantic declaration for files that host harness command hooks.
+   *
+   * Provider planners consume this instead of hard-coding harness paths. The format means
+   * `hooks.<eventName>` is an array of matcher entries whose nested `hooks` contain command
+   * hooks. Harnesses using another integration mechanism simply omit it.
+   */
+  interceptionFormat?: 'hooks-event-command-list';
+  /** Capability interception points physically stored in this file, by scopeId. */
+  interceptionPoints?: string[];
 }
 
 /**
