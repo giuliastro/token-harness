@@ -88,7 +88,8 @@ try {
   assert(/0\.49\.0/.test(`${rtk.stdout}\n${rtk.stderr}`), 'RTK 0.49.0 executable starts');
 
   const resolution = resolveHostEnvironment();
-  if (!resolution.ok) fail('isolated Token Harness host environment resolves', JSON.stringify(resolution));
+  if (!resolution.ok)
+    fail('isolated Token Harness host environment resolves', JSON.stringify(resolution));
   const localFs = new NodeFileSystem(resolution.environment.facts);
   const guideCall = createGuideCall({
     platform: resolution.environment.facts,
@@ -109,15 +110,27 @@ try {
     stdoutIsTty: false,
   });
   let ticketCounter = 0;
-  const guide = new GuideService(guideCall, () => Date.now(), () => `rtk-codex-live-${++ticketCounter}`);
+  const guide = new GuideService(
+    guideCall,
+    () => Date.now(),
+    () => `rtk-codex-live-${++ticketCounter}`,
+  );
 
   const before = await guide.overview('all', true);
   const codexAgent = before.agents.find((agent) => agent.id === 'codex');
   const target = codexAgent?.setup.find((item) => item.providerId === 'rtk');
-  assert(target?.state === 'actionable', 'guided UI exposes RTK -> Codex as actionable', JSON.stringify(target));
+  assert(
+    target?.state === 'actionable',
+    'guided UI exposes RTK -> Codex as actionable',
+    JSON.stringify(target),
+  );
 
   const preview = await guide.preview({ action: 'setup', harness: 'codex', provider: 'rtk' });
-  assert(typeof preview.ticket === 'string', 'RTK -> Codex preview produces approval ticket', JSON.stringify(preview));
+  assert(
+    typeof preview.ticket === 'string',
+    'RTK -> Codex preview produces approval ticket',
+    JSON.stringify(preview),
+  );
   assert(
     preview.changes.some((change) => /Codex/i.test(change.title + ' ' + change.description)),
     'preview names the Codex configuration change',
@@ -140,7 +153,11 @@ try {
   const after = await guide.overview('all', true);
   const afterCodex = after.agents.find((agent) => agent.id === 'codex');
   const afterTarget = afterCodex?.setup.find((item) => item.providerId === 'rtk');
-  assert(afterTarget?.state === 'connected', 'doctor/guided refresh observes RTK connected to Codex', JSON.stringify(afterTarget));
+  assert(
+    afterTarget?.state === 'connected',
+    'doctor/guided refresh observes RTK connected to Codex',
+    JSON.stringify(afterTarget),
+  );
 
   console.log('\nRTK -> Codex guided live smoke passed.');
 } finally {

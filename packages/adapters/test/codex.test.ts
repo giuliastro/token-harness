@@ -97,7 +97,7 @@ describe('Codex adapter', () => {
       context({ [customConfig]: '[projects]\n' }, '0.146.0', { CODEX_HOME: customHome }),
     );
     assert.equal(detection.configPath, customConfig);
-    assert.equal(detection.state, 'configured');
+    assert.equal(detection.state, 'detected');
   });
 
   it('detects a declared hook only with executable corroboration', async () => {

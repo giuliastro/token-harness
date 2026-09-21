@@ -67,7 +67,6 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   receiptFamily: 'provider-telemetry',
 };
 
-
 const CODEX_MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
   id: CODEX,
@@ -84,7 +83,9 @@ const CODEX_MANIFEST: HarnessManifest = {
     { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
     { path: '.codex/hooks.json', scope: 'user', parser: 'json', primary: false },
   ],
-  toolFamilies: [{ id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true }],
+  toolFamilies: [
+    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+  ],
   requiresEnablement: true,
   enablementNote: 'Codex hook trust is separate; RTK Codex setup here is instruction-mediated.',
   receiptFamily: 'harness-event-stream',
@@ -579,7 +580,6 @@ describe('the uninstall plan', () => {
     );
   });
 });
-
 
 describe('Codex rules-file integration', () => {
   const codexOwnership: ResolvedCapability[] = [

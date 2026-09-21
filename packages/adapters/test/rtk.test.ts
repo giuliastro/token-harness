@@ -250,10 +250,13 @@ describe('recognising itself in a harness configuration', () => {
 });
 
 describe('detection', () => {
-
   it('advertises Codex as an assignable RTK target', async () => {
     const detection = await rtkAdapter.detect(context({}));
-    assert.ok(detection.assignableHarnesses.includes('codex' as typeof detection.assignableHarnesses[number]));
+    assert.ok(
+      detection.assignableHarnesses.includes(
+        'codex' as (typeof detection.assignableHarnesses)[number],
+      ),
+    );
   });
 
   it('detects the Token Harness-owned Codex RTK instruction block', async () => {
@@ -265,7 +268,11 @@ describe('detection', () => {
     ].join('\n');
     const detection = await rtkAdapter.detect(context({ files: { [agents]: block } }));
     assert.equal(detection.state, 'configured');
-    assert.ok(detection.configuredHarnesses.includes('codex' as typeof detection.configuredHarnesses[number]));
+    assert.ok(
+      detection.configuredHarnesses.includes(
+        'codex' as (typeof detection.configuredHarnesses)[number],
+      ),
+    );
   });
 
   it('respects CODEX_HOME when detecting the managed Codex integration', async () => {
@@ -281,7 +288,7 @@ describe('detection', () => {
     assert.equal(detection.state, 'configured');
     assert.ok(
       detection.configuredHarnesses.includes(
-        'codex' as typeof detection.configuredHarnesses[number],
+        'codex' as (typeof detection.configuredHarnesses)[number],
       ),
     );
     assert.ok(detection.evidence.some((item) => item.path === agents));
@@ -294,7 +301,11 @@ describe('detection', () => {
       context({ files: { [agents]: `# User rules\n@${rtk}\n`, [rtk]: '# RTK\n' } }),
     );
     assert.equal(detection.state, 'configured');
-    assert.ok(detection.configuredHarnesses.includes('codex' as typeof detection.configuredHarnesses[number]));
+    assert.ok(
+      detection.configuredHarnesses.includes(
+        'codex' as (typeof detection.configuredHarnesses)[number],
+      ),
+    );
     assert.ok(detection.evidence.some((item) => item.source === 'rtk Codex global instructions'));
   });
 
