@@ -63,7 +63,6 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Applying the approved change/);
   });
 
-
   it('makes Results a dynamic optimizer and harness dashboard', () => {
     assert.match(GUIDE_HTML, /Results dashboard/);
     assert.match(GUIDE_HTML, /<h2>By optimizer<\/h2>/);
