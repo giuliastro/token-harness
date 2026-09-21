@@ -138,6 +138,7 @@ function context(
     now?: string;
     localDatabase?: LocalDatabasePort | null;
     files?: Record<string, string>;
+    env?: Readonly<Record<string, string | undefined>>;
   },
 ): ProviderContext {
   return {
@@ -168,6 +169,7 @@ function context(
       cache: 'C:\\Users\\dev\\AppData\\Local\\TokenHarness\\Cache',
     },
     projectRoot: 'C:\\work\\demo',
+    env: options.env,
     harnessConfigs: options.configs ?? [],
     now: () => options.now ?? '2026-07-30T12:00:00.000Z',
     localDatabase: options.localDatabase ?? null,
@@ -264,6 +266,25 @@ describe('detection', () => {
     const detection = await rtkAdapter.detect(context({ files: { [agents]: block } }));
     assert.equal(detection.state, 'configured');
     assert.ok(detection.configuredHarnesses.includes('codex' as typeof detection.configuredHarnesses[number]));
+  });
+
+  it('respects CODEX_HOME when detecting the managed Codex integration', async () => {
+    const agents = 'D:\\codex-home/AGENTS.md';
+    const block = [
+      `<!-- ${RTK_CODEX_MARKER_BEGIN} -->`,
+      RTK_CODEX_INSTRUCTIONS,
+      `<!-- ${RTK_CODEX_MARKER_END} -->`,
+    ].join('\n');
+    const detection = await rtkAdapter.detect(
+      context({ env: { CODEX_HOME: 'D:\\codex-home' }, files: { [agents]: block } }),
+    );
+    assert.equal(detection.state, 'configured');
+    assert.ok(
+      detection.configuredHarnesses.includes(
+        'codex' as typeof detection.configuredHarnesses[number],
+      ),
+    );
+    assert.ok(detection.evidence.some((item) => item.path === agents));
   });
 
   it('adopts RTK upstream global Codex setup without claiming ownership', async () => {

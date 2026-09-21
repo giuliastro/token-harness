@@ -450,7 +450,9 @@ async function codexInstructionConfigured(context: ProviderContext): Promise<{
   path: string;
   source: 'token-harness' | 'upstream' | null;
 }> {
-  const agentsPath = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+  const codexHome =
+    context.env?.['CODEX_HOME']?.trim() || context.fs.join(context.paths.home, '.codex');
+  const agentsPath = context.fs.join(codexHome, 'AGENTS.md');
   const stat = await context.fs.stat(agentsPath);
   if (stat === null || stat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
 
@@ -464,7 +466,7 @@ async function codexInstructionConfigured(context: ProviderContext): Promise<{
     return { configured: true, path: agentsPath, source: 'token-harness' };
 
   // Adopt RTK's own documented global Codex setup without taking ownership of it.
-  const rtkPath = context.fs.join(context.paths.home, '.codex', 'RTK.md');
+  const rtkPath = context.fs.join(codexHome, 'RTK.md');
   const rtkStat = await context.fs.stat(rtkPath);
   if (rtkStat === null || rtkStat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
   const lines = text.split(/\r?\n/).map((line) => line.trim());
@@ -1122,12 +1124,14 @@ function identifiesCommand(command: string): boolean {
  */
 async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
   const version = await readVersion(context);
+  const codexInstruction = await codexInstructionConfigured(context);
   return buildRtkPlan({
     context,
     request,
     installed: version.version !== null,
     identifiesCommand,
     installationChannels: MANIFEST.installationChannels,
+    codexInstruction,
   });
 }
 

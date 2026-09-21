@@ -26,6 +26,7 @@ const FACTS: PlatformFacts = {
 function context(
   files: Record<string, string> = {},
   version: string | null = '0.146.0',
+  env?: Readonly<Record<string, string | undefined>>,
 ): HarnessContext {
   const encoder = new TextEncoder();
   return {
@@ -78,6 +79,7 @@ function context(
       cache: `${HOME}/.cache/token-harness`,
     },
     projectRoot: PROJECT,
+    env,
   };
 }
 
@@ -88,6 +90,16 @@ const DECLARED = JSON.stringify({
 });
 
 describe('Codex adapter', () => {
+  it('resolves user configuration from CODEX_HOME when set', async () => {
+    const customHome = '/custom/codex';
+    const customConfig = customHome + '/config.toml';
+    const detection = await codexAdapter.detect(
+      context({ [customConfig]: '[projects]\n' }, '0.146.0', { CODEX_HOME: customHome }),
+    );
+    assert.equal(detection.configPath, customConfig);
+    assert.equal(detection.state, 'configured');
+  });
+
   it('detects a declared hook only with executable corroboration', async () => {
     assert.equal(
       (await codexAdapter.detect(context({ [HOOKS]: DECLARED, [CONFIG]: '[projects]\n' }))).state,

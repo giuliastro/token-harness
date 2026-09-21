@@ -183,6 +183,7 @@ function context(
   options: {
     os?: PlatformFacts['os'];
     configs?: HarnessConfigSummary[];
+    env?: Readonly<Record<string, string | undefined>>;
   } = {},
 ): ProviderContext {
   return {
@@ -212,6 +213,7 @@ function context(
       cache: 'C:\\Users\\dev\\AppData\\Local\\TokenHarness\\Cache',
     },
     projectRoot: 'C:\\work\\demo',
+    env: options.env,
     harnessConfigs: options.configs ?? [],
     now: () => '2026-07-31T12:00:00.000Z',
     localDatabase: null,
@@ -235,16 +237,22 @@ function plan(options: {
   configs?: HarnessConfigSummary[];
   os?: PlatformFacts['os'];
   request?: ProviderPlanRequest;
+  env?: Readonly<Record<string, string | undefined>>;
+  codexInstruction?: { path: string; source: 'token-harness' | 'upstream' | null };
 }) {
   return buildRtkPlan({
     context: context({
       ...(options.os === undefined ? {} : { os: options.os }),
       ...(options.configs === undefined ? {} : { configs: options.configs }),
+      ...(options.env === undefined ? {} : { env: options.env }),
     }),
     request: options.request ?? request(),
     installed: options.installed ?? true,
     identifiesCommand,
     installationChannels: CHANNELS,
+    ...(options.codexInstruction === undefined
+      ? {}
+      : { codexInstruction: options.codexInstruction }),
   });
 }
 
@@ -603,9 +611,51 @@ describe('Codex rules-file integration', () => {
     assert.deepEqual(result.targetHarnesses, [CODEX]);
   });
 
+  it('respects CODEX_HOME when planning a new Codex connection', () => {
+    const result = plan({
+      installed: true,
+      env: { CODEX_HOME: 'D:\\codex-home' },
+      request: request({ ownership: codexOwnership, harnesses: [CODEX_MANIFEST] }),
+    });
+    const action = result.actions[0] as PatchMarkerBlockAction;
+    assert.equal(action.path, 'D:\\codex-home\\AGENTS.md');
+  });
+
+  it('adopts upstream Codex setup without rewriting it', () => {
+    const result = plan({
+      installed: true,
+      codexInstruction: {
+        path: 'C:\\Users\\dev\\.codex\\AGENTS.md',
+        source: 'upstream',
+      },
+      request: request({ ownership: codexOwnership, harnesses: [CODEX_MANIFEST] }),
+    });
+    assert.deepEqual(result.actions, []);
+  });
+
+  it('does not remove upstream-owned Codex setup', () => {
+    const result = plan({
+      installed: true,
+      codexInstruction: {
+        path: 'C:\\Users\\dev\\.codex\\AGENTS.md',
+        source: 'upstream',
+      },
+      request: request({
+        ownership: codexOwnership,
+        harnesses: [CODEX_MANIFEST],
+        desiredState: 'absent',
+      }),
+    });
+    assert.deepEqual(result.actions, []);
+  });
+
   it('removes only the Token Harness-owned RTK Codex block', () => {
     const result = plan({
       installed: true,
+      codexInstruction: {
+        path: 'C:\\Users\\dev\\.codex\\AGENTS.md',
+        source: 'token-harness',
+      },
       request: request({
         ownership: codexOwnership,
         harnesses: [CODEX_MANIFEST],

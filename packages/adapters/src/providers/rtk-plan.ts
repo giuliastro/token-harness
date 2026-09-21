@@ -336,8 +336,7 @@ function removalAction(target: PlanTarget, entry: JsonValue): PlannedAction {
   };
 }
 
-function codexInstructionAction(context: ProviderContext): PlannedAction {
-  const path = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+function codexInstructionAction(path: string): PlannedAction {
   return {
     kind: 'patch-marker-block',
     id: deterministicId(['rtk', 'codex', 'instructions', path]),
@@ -361,8 +360,7 @@ function codexInstructionAction(context: ProviderContext): PlannedAction {
   };
 }
 
-function codexInstructionRemovalAction(context: ProviderContext): PlannedAction {
-  const path = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+function codexInstructionRemovalAction(path: string): PlannedAction {
   const reverses = deterministicId(['rtk', 'codex', 'instructions', path]);
   return {
     kind: 'remove-owned-change',
@@ -451,6 +449,17 @@ type ProviderManifestChannels = readonly {
   digestAvailable: boolean;
 }[];
 
+export interface RtkCodexInstructionState {
+  path: string;
+  source: 'token-harness' | 'upstream' | null;
+}
+
+function defaultCodexAgentsPath(context: ProviderContext): string {
+  const codexHome =
+    context.env?.['CODEX_HOME']?.trim() || context.fs.join(context.paths.home, '.codex');
+  return context.fs.join(codexHome, 'AGENTS.md');
+}
+
 export interface RtkPlanInput {
   context: ProviderContext;
   request: ProviderPlanRequest;
@@ -458,6 +467,11 @@ export interface RtkPlanInput {
   installed: boolean;
   identifiesCommand(command: string): boolean;
   installationChannels: ProviderManifestChannels;
+  /**
+   * Observed Codex rules-file state. Upstream-owned setup is adopted but never rewritten or removed.
+   * Optional for lower-level tests; a missing value means no Codex instruction was observed.
+   */
+  codexInstruction?: RtkCodexInstructionState;
 }
 
 /**
@@ -472,6 +486,12 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
   const targets = planTargets(context, request);
   const actions: PlannedAction[] = [];
   const targetHarnesses = [...new Set(targets.map((target) => target.harness.id))];
+  const codex = codexHarness(request);
+  const codexRequested =
+    codex !== null && request.ownership.some((owned) => owned.scope.harness === codex);
+  const codexInstruction =
+    input.codexInstruction ?? { path: defaultCodexAgentsPath(context), source: null };
+  let codexPlanTouched = false;
 
   if (request.desiredState === 'absent') {
     // Only exact entries are removal candidates. A user-owned combined matcher such as
@@ -481,9 +501,10 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       if (!alreadyRegistered(context, target, input.identifiesCommand, false)) continue;
       actions.push(removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
     }
-    const codex = codexHarness(request);
-    if (codex !== null && request.ownership.some((owned) => owned.scope.harness === codex))
-      actions.push(codexInstructionRemovalAction(context));
+    if (codexRequested && codexInstruction.source === 'token-harness') {
+      actions.push(codexInstructionRemovalAction(codexInstruction.path));
+      codexPlanTouched = true;
+    }
     // RTK itself is deliberately left installed. RFC 0004: Token Harness removes what it owns,
     // and on a machine where RTK was already present it never owned the installation. Removing
     // a tool the user installed themselves would be the destructive reading of "uninstall".
@@ -494,22 +515,26 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       targetHarnesses:
         actions.length === 0
           ? []
-          : [...new Set([...targetHarnesses, ...(codex === null ? [] : [codex])])],
+          : [...new Set([...targetHarnesses, ...(codexPlanTouched && codex !== null ? [codex] : [])])],
     };
   }
 
   if (!input.installed) {
     const install = installAction(context, { installationChannels: input.installationChannels });
-    if (install !== null) actions.push(install);
+    if (install !== null) {
+      actions.push(install);
+      if (codexRequested) codexPlanTouched = true;
+    }
   }
 
   for (const target of targets) {
     if (alreadyRegistered(context, target, input.identifiesCommand, true)) continue;
     actions.push(hookAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
   }
-  const codex = codexHarness(request);
-  if (codex !== null && request.ownership.some((owned) => owned.scope.harness === codex))
-    actions.push(codexInstructionAction(context));
+  if (codexRequested && codexInstruction.source === null) {
+    actions.push(codexInstructionAction(codexInstruction.path));
+    codexPlanTouched = true;
+  }
 
   return {
     providerId: 'rtk' as ProviderPlan['providerId'],
@@ -518,6 +543,6 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     targetHarnesses:
       actions.length === 0
         ? []
-        : [...new Set([...targetHarnesses, ...(codex === null ? [] : [codex])])],
+        : [...new Set([...targetHarnesses, ...(codexPlanTouched && codex !== null ? [codex] : [])])],
   };
 }
