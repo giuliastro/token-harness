@@ -27,10 +27,18 @@ import {
   type ResolvedCapability,
 } from '@token-harness/core';
 
-import { buildRtkPlan, hookEntryFor, hookListPointer } from '../src/index.js';
+import {
+  buildRtkPlan,
+  hookEntryFor,
+  hookListPointer,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
+} from '../src/index.js';
 import type { ProviderContext, ProviderPlanRequest } from '../src/index.js';
 
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const RTK = providerId('rtk');
 
 const CLAUDE_MANIFEST: HarnessManifest = {
@@ -56,6 +64,29 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   requiresEnablement: false,
   enablementNote: null,
   receiptFamily: 'provider-telemetry',
+};
+const CODEX_MANIFEST: HarnessManifest = {
+  schemaVersion: MANIFEST_SCHEMA_VERSION,
+  id: CODEX,
+  displayName: 'Codex CLI',
+  homepage: 'https://developers.openai.com/codex',
+  testedVersions: { minimum: '0.142.0', maximum: '0.153.0' },
+  verificationTier: 'config-only',
+  versionCommand: { executable: 'codex', args: ['--version'] },
+  interceptionPoints: [
+    { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
+    { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+  ],
+  configFiles: [
+    { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
+    { path: '.codex/hooks.json', scope: 'user', parser: 'json', primary: false },
+  ],
+  toolFamilies: [
+    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+  ],
+  requiresEnablement: true,
+  enablementNote: 'native hook trust is separate; RTK released integration is instruction-based',
+  receiptFamily: 'harness-event-stream',
 };
 
 /**
@@ -135,6 +166,22 @@ function ownership(capabilities: readonly string[], toolFamily = 'Bash'): Resolv
   }));
 }
 
+function codexOwnership(): ResolvedCapability[] {
+  return [
+    {
+      scope: {
+        harness: CODEX,
+        toolFamily: 'Bash',
+        interceptionPoint: 'pre-tool-use',
+        capability: 'instructions.progressive',
+      },
+      owner: RTK,
+      mode: 'chainable',
+      order: 0,
+    },
+  ];
+}
+
 /** The live configuration as the harness adapter would report it. */
 function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
   return {
@@ -203,6 +250,8 @@ function plan(options: {
   configs?: HarnessConfigSummary[];
   os?: PlatformFacts['os'];
   request?: ProviderPlanRequest;
+  codexConfigured?: boolean;
+  codexManaged?: boolean;
 }) {
   return buildRtkPlan({
     context: context({
@@ -211,6 +260,8 @@ function plan(options: {
     }),
     request: options.request ?? request(),
     installed: options.installed ?? true,
+    codexConfigured: options.codexConfigured ?? false,
+    codexManaged: options.codexManaged ?? false,
     identifiesCommand,
     installationChannels: CHANNELS,
   });
@@ -605,6 +656,65 @@ describe('scopes with nowhere to go', () => {
   });
 });
 
+describe('Codex instruction integration', () => {
+  const codexRequest = (desiredState: ProviderPlanRequest['desiredState'] = 'configured'): ProviderPlanRequest => ({
+    ownership: codexOwnership(),
+    harnesses: [CODEX_MANIFEST],
+    desiredState,
+  });
+
+  it('connects RTK to Codex with one owned user-global instruction block', () => {
+    const result = plan({ request: codexRequest() });
+    assert.deepEqual(result.targetHarnesses, [CODEX]);
+    assert.deepEqual(result.actions.map((action) => action.kind), [
+      'create-directory',
+      'patch-marker-block',
+    ]);
+    const action = result.actions[1];
+    assert.equal(action?.kind, 'patch-marker-block');
+    if (action?.kind !== 'patch-marker-block') return;
+    assert.equal(action.path, 'C:\\Users\\dev\\.codex\\AGENTS.md');
+    assert.equal(action.markerBegin, RTK_CODEX_MARKER_BEGIN);
+    assert.equal(action.markerEnd, RTK_CODEX_MARKER_END);
+    assert.equal(action.body, RTK_CODEX_INSTRUCTIONS.trimEnd());
+    assert.equal(action.createIfMissing, true);
+  });
+
+  it('installs RTK before writing Codex guidance when RTK is absent', () => {
+    const result = plan({ installed: false, request: codexRequest() });
+    assert.deepEqual(result.actions.map((action) => action.kind), [
+      'package-manager-install',
+      'create-directory',
+      'patch-marker-block',
+    ]);
+  });
+
+  it('does not duplicate an existing upstream or managed Codex integration', () => {
+    const result = plan({ request: codexRequest(), codexConfigured: true });
+    assert.deepEqual(result.actions, []);
+  });
+
+  it('removes only the Token Harness-owned Codex block', () => {
+    const managed = plan({
+      request: codexRequest('absent'),
+      codexConfigured: true,
+      codexManaged: true,
+    });
+    assert.deepEqual(managed.actions.map((action) => action.kind), ['remove-owned-change']);
+    const action = managed.actions[0];
+    assert.equal(action?.kind, 'remove-owned-change');
+    if (action?.kind !== 'remove-owned-change') return;
+    assert.equal(action.target.kind, 'owned-marker-block');
+    assert.equal(action.target.markerBegin, RTK_CODEX_MARKER_BEGIN);
+
+    const brownfield = plan({
+      request: codexRequest('absent'),
+      codexConfigured: true,
+      codexManaged: false,
+    });
+    assert.deepEqual(brownfield.actions, []);
+  });
+});
 describe('the pointer and the entry', () => {
   it('escapes a dot in an event name', () => {
     // The dotted pointer syntax uses `\.` for a literal dot, and an unescaped one would address
