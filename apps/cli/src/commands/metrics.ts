@@ -112,7 +112,7 @@ export async function runMetrics(
       facts: context.platform,
       paths: context.adapters.paths,
       projectRoot: context.projectRoot,
-    env: context.env,
+      env: context.env,
       // Deliberately empty. The harness↔provider seam matters to `detect` and `verify`, which
       // ask which harnesses a provider is wired to; an importer reads the provider's own
       // records and does not need to know.

@@ -128,7 +128,8 @@ const MANIFEST: ProviderManifest = {
       // config-only because the model, not a pre-tool hook, decides whether to follow them.
       surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
-        sourceReference: 'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
+        sourceReference:
+          'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
         upstreamVersion: '0.49.0',
       },
     },
@@ -138,7 +139,8 @@ const MANIFEST: ProviderManifest = {
       harnesses: [CODEX],
       surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
-        sourceReference: 'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
+        sourceReference:
+          'https://github.com/rtk-ai/rtk/blob/v0.49.0/docs/guide/getting-started/supported-agents.md',
         upstreamVersion: '0.49.0',
       },
     },
@@ -442,7 +444,6 @@ async function readAnalytics(
   };
 }
 
-
 const DECODER = new TextDecoder();
 
 async function codexInstructionConfigured(context: ProviderContext): Promise<{
@@ -454,7 +455,8 @@ async function codexInstructionConfigured(context: ProviderContext): Promise<{
     context.env?.['CODEX_HOME']?.trim() || context.fs.join(context.paths.home, '.codex');
   const agentsPath = context.fs.join(codexHome, 'AGENTS.md');
   const stat = await context.fs.stat(agentsPath);
-  if (stat === null || stat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
+  if (stat === null || stat.kind !== 'file')
+    return { configured: false, path: agentsPath, source: null };
 
   const text = DECODER.decode(await context.fs.readFile(agentsPath));
   const managedBlock = [
@@ -468,7 +470,8 @@ async function codexInstructionConfigured(context: ProviderContext): Promise<{
   // Adopt RTK's own documented global Codex setup without taking ownership of it.
   const rtkPath = context.fs.join(codexHome, 'RTK.md');
   const rtkStat = await context.fs.stat(rtkPath);
-  if (rtkStat === null || rtkStat.kind !== 'file') return { configured: false, path: agentsPath, source: null };
+  if (rtkStat === null || rtkStat.kind !== 'file')
+    return { configured: false, path: agentsPath, source: null };
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   const absoluteRef = '@' + rtkPath;
   if (lines.includes('@RTK.md') || lines.includes(absoluteRef))
@@ -491,7 +494,10 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
       evidenceItems.push(
         evidence({
           kind: 'config-entry',
-          source: codex.source === 'upstream' ? 'rtk Codex global instructions' : 'Token Harness RTK Codex instructions',
+          source:
+            codex.source === 'upstream'
+              ? 'rtk Codex global instructions'
+              : 'Token Harness RTK Codex instructions',
           path: codex.path,
           detail:
             codex.source === 'upstream'

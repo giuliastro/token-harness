@@ -371,7 +371,9 @@ function codexInstructionRemovalAction(path: string): PlannedAction {
     affectedPaths: [path],
     affectedProcesses: [],
     preconditions: ['The Token Harness RTK Codex marker block still matches the reviewed body'],
-    postconditions: ['The Token Harness RTK Codex instruction block is removed and all user content is unchanged'],
+    postconditions: [
+      'The Token Harness RTK Codex instruction block is removed and all user content is unchanged',
+    ],
     rollbackData: 'file-snapshot',
     explanation: 'Remove Token Harness-owned RTK guidance from Codex global instructions',
     path,
@@ -489,8 +491,10 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
   const codex = codexHarness(request);
   const codexRequested =
     codex !== null && request.ownership.some((owned) => owned.scope.harness === codex);
-  const codexInstruction =
-    input.codexInstruction ?? { path: defaultCodexAgentsPath(context), source: null };
+  const codexInstruction = input.codexInstruction ?? {
+    path: defaultCodexAgentsPath(context),
+    source: null,
+  };
   let codexPlanTouched = false;
 
   if (request.desiredState === 'absent') {
@@ -515,7 +519,12 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       targetHarnesses:
         actions.length === 0
           ? []
-          : [...new Set([...targetHarnesses, ...(codexPlanTouched && codex !== null ? [codex] : [])])],
+          : [
+              ...new Set([
+                ...targetHarnesses,
+                ...(codexPlanTouched && codex !== null ? [codex] : []),
+              ]),
+            ],
     };
   }
 
@@ -543,6 +552,11 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     targetHarnesses:
       actions.length === 0
         ? []
-        : [...new Set([...targetHarnesses, ...(codexPlanTouched && codex !== null ? [codex] : [])])],
+        : [
+            ...new Set([
+              ...targetHarnesses,
+              ...(codexPlanTouched && codex !== null ? [codex] : []),
+            ]),
+          ],
   };
 }

@@ -71,7 +71,6 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Quality is never inferred from token savings alone/);
   });
 
-
   it('renders Results as a dynamic optimizer-by-harness dashboard', () => {
     assert.match(GUIDE_HTML, /Connection coverage/);
     assert.match(GUIDE_HTML, /id="result-coverage"/);
