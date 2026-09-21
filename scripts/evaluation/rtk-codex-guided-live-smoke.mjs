@@ -69,7 +69,7 @@ try {
   );
   assert(codexInstall.status === 0, 'current Codex installs into isolated npm prefix');
 
-  const response = await fetch(rtkUrl);
+  const response = await globalThis.fetch(rtkUrl);
   assert(response.ok, 'reviewed RTK 0.49.0 release downloads', String(response.status));
   writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
   run('tar', ['-xzf', archive, '-C', bin], installEnv);
