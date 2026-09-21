@@ -50,7 +50,7 @@ export interface HarnessContext {
   readonly paths: PlatformPaths;
   readonly projectRoot: string;
   /** Injected environment; harnesses may read documented path overrides such as CODEX_HOME. */
-  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
 }
 
 /** A configuration file the adapter located, with the parser its content requires. */

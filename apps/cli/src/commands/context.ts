@@ -31,7 +31,7 @@ export interface CommandContext {
   /** Absolute home directory, used only to abbreviate displayed paths. */
   home: string | null;
   /** Injected process environment. Adapters read only named configuration roots such as CODEX_HOME. */
-  env?: Readonly<Record<string, string | undefined>>;
+  env?: Readonly<Record<string, string | undefined>> | undefined;
   /** Absolute Token Harness state root, or null while it is not resolved. */
   stateRoot: string | null;
   harness: HarnessId | null;

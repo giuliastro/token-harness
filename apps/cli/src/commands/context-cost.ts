@@ -235,7 +235,6 @@ export async function runContext(context: CommandContext): Promise<CommandResult
   const report: ContextReport = {
     platform: context.platform,
     projectRoot: context.projectRoot,
-    env: context.env,
     observedAt: context.now(),
     instructions: [],
     knownLoadedInstructionBytes: 0,
@@ -271,6 +270,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
   };
 
   const adapters = listHarnessAdapters()

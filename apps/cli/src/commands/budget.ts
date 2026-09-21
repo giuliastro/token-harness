@@ -31,6 +31,7 @@ export interface BudgetCommandContext {
   platform: CommandContext['platform'];
   projectRoot: string;
   harness: CommandContext['harness'];
+  env?: Readonly<Record<string, string | undefined>> | undefined;
   adapters: Pick<AdapterAccess, 'fs' | 'runner' | 'paths'> | null;
   now(): string;
 }
