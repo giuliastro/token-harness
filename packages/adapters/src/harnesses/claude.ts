@@ -75,7 +75,14 @@ const MANIFEST: HarnessManifest = {
     { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
   ],
   configFiles: [
-    { path: '.claude/settings.json', scope: 'user', parser: 'json', primary: true },
+    {
+      path: '.claude/settings.json',
+      scope: 'user',
+      parser: 'json',
+      primary: true,
+      interceptionFormat: 'hooks-event-command-list',
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+    },
     { path: '.claude/settings.json', scope: 'project', parser: 'json', primary: false },
     { path: '.claude/settings.local.json', scope: 'project', parser: 'json', primary: false },
   ],
