@@ -311,9 +311,14 @@ describe('detection', () => {
     assert.equal(detection.installationChannel, null);
   });
 
+  it('offers managed hook setup for Claude Code and Codex', async () => {
+    const detection = await rtkAdapter.detect(context({}));
+    assert.deepEqual(detection.assignableHarnesses, ['claude', 'codex']);
+  });
+
   it('does not claim a managed surface it does not have', async () => {
-    // RFC 0002 §Providers may exceed the managed surface. RTK's manifest covers Claude
-    // Code only, so the "any *managed* harness" qualifier does not apply to it.
+    // RFC 0002 §Providers may exceed the managed surface. Every harness named by RTK's
+    // manifest here is managed by Token Harness, so none is reported as unmanaged context.
     const detection = await rtkAdapter.detect(context({}));
     assert.equal(detection.supportsUnmanagedHarnesses, false);
     assert.deepEqual(detection.unmanagedHarnessesConfigured, []);
