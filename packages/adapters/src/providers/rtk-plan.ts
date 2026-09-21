@@ -44,6 +44,7 @@
 import {
   channelCanReportInventory,
   digestText,
+  harnessId,
   jsonValueDigest,
   preferredInstallationChannel,
   type CapabilityScope,
@@ -70,7 +71,7 @@ export const RTK_HOOK_COMMAND_PREFIX = 'rtk hook';
  */
 const HOOK_LIST_HARNESSES = new Set<string>(['claude']);
 const CLAUDE = 'claude';
-const CODEX = 'codex';
+const CODEX = harnessId('codex');
 const BASH = 'Bash';
 const POWERSHELL = 'PowerShell';
 
