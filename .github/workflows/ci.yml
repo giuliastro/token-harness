@@ -49,29 +49,7 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        if: runner.os != 'Linux'
         run: pnpm format:check
-
-      - name: Format diagnostic
-        if: runner.os == 'Linux'
-        run: |
-          pnpm exec prettier --write \
-            apps/cli/src/commands/metrics.ts \
-            apps/cli/test/guided-dashboard-product.test.ts \
-            packages/adapters/src/providers/rtk-plan.ts \
-            packages/adapters/src/providers/rtk.ts \
-            packages/adapters/test/rtk-plan.test.ts \
-            packages/adapters/test/rtk.test.ts \
-            scripts/evaluation/rtk-codex-guided-live-smoke.mjs
-          git diff --no-ext-diff --unified=1 -- \
-            apps/cli/src/commands/metrics.ts \
-            apps/cli/test/guided-dashboard-product.test.ts \
-            packages/adapters/src/providers/rtk-plan.ts \
-            packages/adapters/src/providers/rtk.ts \
-            packages/adapters/test/rtk-plan.test.ts \
-            packages/adapters/test/rtk.test.ts \
-            scripts/evaluation/rtk-codex-guided-live-smoke.mjs
-          exit 1
 
       - name: Test
         run: pnpm test
