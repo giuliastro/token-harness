@@ -20,6 +20,7 @@ import { createGuideCall, GuideService } from '../../apps/cli/dist/src/guided.js
 import {
   buildCommandInterpreterCommandLine,
   NodeFileSystem,
+  NodeRtkWindowsReleaseRuntime,
   resolveCommandInterpreter,
   resolveHostEnvironment,
 } from '../../packages/platform/dist/src/index.js';
@@ -182,6 +183,43 @@ try {
   const claude = runBatchShim(join(prefix, 'claude.cmd'), ['--version']);
   assert(claude.stdout.trim().length > 0, 'current Claude Code executable starts');
 
+  const installCodex = runBatchShim(join(nodeDir, 'npm.cmd'), [
+    'install',
+    '--global',
+    '--no-audit',
+    '--no-fund',
+    '@openai/codex@latest',
+  ]);
+  assert(installCodex.status === 0, 'current Codex installs into isolated npm prefix');
+  const codex = runBatchShim(join(prefix, 'codex.cmd'), ['--version']);
+  assert(codex.stdout.trim().length > 0, 'current Codex executable starts');
+
+  const rtkRuntime = new NodeRtkWindowsReleaseRuntime({
+    fs: localFs,
+    runner: resolution.environment.runner,
+  });
+  const rtkQuery = await rtkRuntime.query('0.49.0');
+  assert(
+    rtkQuery.status === 'found',
+    'reviewed RTK 0.49.0 Windows release resolves with provenance',
+    JSON.stringify(rtkQuery),
+  );
+  if (rtkQuery.status !== 'found') fail('RTK 0.49.0 release query');
+  const rtkInstall = await rtkRuntime.install({
+    asset: rtkQuery.asset,
+    targetPath: join(prefix, 'rtk.exe'),
+    previousVersion: null,
+    stateRoot: join(root, 'rtk-state'),
+    cwd: home,
+  });
+  assert(
+    rtkInstall.status === 'installed',
+    'reviewed RTK 0.49.0 installs into the isolated PATH',
+    JSON.stringify(rtkInstall),
+  );
+  const rtk = run(join(prefix, 'rtk.exe'), ['--version']);
+  assert(/0\.49\.0/.test(rtk.stdout + rtk.stderr), 'real RTK 0.49.0 executable starts');
+
   const before = thJson(['doctor']);
   const beforeGitNexus = provider(before, 'gitnexus');
   assert(beforeGitNexus?.state === 'absent', 'doctor observes GitNexus absent');
@@ -236,7 +274,57 @@ try {
     `${gitnexus.stdout}\n${gitnexus.stderr}`,
   );
 
+  const rtkBefore = provider(before, 'rtk');
+  assert(
+    rtkBefore?.assignableHarnesses?.includes('codex'),
+    'doctor exposes Codex as an RTK connection target',
+    JSON.stringify(rtkBefore),
+  );
+  const codexAgent = overview.agents.find((agent) => agent.id === 'codex');
+  const rtkTarget = codexAgent?.setup.find((item) => item.providerId === 'rtk');
+  assert(
+    rtkTarget?.state === 'actionable',
+    'guided overview marks real RTK → Codex connection actionable',
+    JSON.stringify(rtkTarget),
+  );
+  const rtkPreview = await guide.preview({
+    action: 'setup',
+    harness: 'codex',
+    provider: 'rtk',
+  });
+  assert(
+    typeof rtkPreview.ticket === 'string' && rtkPreview.ticket.length > 0,
+    'RTK → Codex preview produces an approval ticket',
+    JSON.stringify(rtkPreview),
+  );
+  assert(
+    rtkPreview.changes.some((change) => /AGENTS\.md|Codex/i.test(change.description + change.title)),
+    'RTK → Codex preview shows the reviewed instruction change',
+    JSON.stringify(rtkPreview.changes),
+  );
+  const rtkApplied = await guide.apply({ ticket: rtkPreview.ticket });
+  assert(
+    rtkApplied.ok === true && rtkApplied.appliedPlans === 1,
+    'approved RTK → Codex connection commits through the guided transaction',
+    JSON.stringify(rtkApplied),
+  );
+  const codexAgentsPath = join(home, '.codex', 'AGENTS.md');
+  const codexAgents = readFileSync(codexAgentsPath, 'utf8');
+  assert(
+    codexAgents.includes('TOKEN-HARNESS:RTK-CODEX:BEGIN') &&
+      codexAgents.includes('Always prefix shell commands with `rtk`') &&
+      codexAgents.includes('TOKEN-HARNESS:RTK-CODEX:END'),
+    'Codex global AGENTS.md contains the reviewed Token Harness-owned RTK block',
+    codexAgents,
+  );
+
   const after = thJson(['doctor']);
+  const afterRtk = provider(after, 'rtk');
+  assert(
+    afterRtk?.configuredHarnesses?.includes('codex'),
+    'doctor observes RTK connected to Codex after apply',
+    JSON.stringify(afterRtk),
+  );
   const afterGitNexus = provider(after, 'gitnexus');
   assert(
     afterGitNexus?.configuredHarnesses?.includes('claude'),
@@ -252,7 +340,7 @@ try {
     JSON.stringify(claudeConfig?.mcpServers?.gitnexus),
   );
 
-  console.log('\nWindows optional-provider first-run smoke passed.');
+  console.log('\nWindows optional-provider and RTK/Codex first-run smoke passed.');
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
