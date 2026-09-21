@@ -206,7 +206,7 @@ describe('guided workflow', () => {
     assert.deepEqual(calls.at(-1), ['apply', '--plan', 'abc00001', '--yes']);
     await assert.rejects(service.apply({ ticket: preview.ticket }), /already used/);
   });
-  it('plans all actionable recommended optimizer setup for Codex', async () => {
+  it('plans only the selected optimizer connection for Codex', async () => {
     const doctor = inventory(['codex']);
     assert.equal(guideSetupTarget(doctor, 'codex', 'rtk').state, 'actionable');
     assert.equal(guideSetupTarget(doctor, 'codex', 'harnesstrim').state, 'actionable');
@@ -217,6 +217,17 @@ describe('guided workflow', () => {
       harness: 'codex',
       provider: 'harnesstrim',
     });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
+  });
+
+  it('plans the whole recommended stack when no optimizer is selected', async () => {
+    const doctor = inventory(['codex']);
+    const { service, calls } = fixture({ ids: ['codex'], doctor });
+    const preview = await service.preview({ action: 'setup', harness: 'codex' });
     assert.notEqual(preview.ticket, null);
     assert.deepEqual(
       calls.filter((args) => args[0] === 'plan'),
@@ -348,7 +359,11 @@ describe('guided workflow', () => {
       'actionable',
     );
 
-    const preview = await service.preview({ action: 'setup', harness: 'codex' });
+    const preview = await service.preview({
+      action: 'setup',
+      harness: 'codex',
+      provider: 'harnesstrim',
+    });
     assert.ok(preview.ticket);
     assert.equal(
       calls.some((args) => args.includes('rtk')),
@@ -675,7 +690,8 @@ describe('reasoning explanations and contextual actions', () => {
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
     assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
-    assert.ok(GUIDE_HTML.includes('<h2>Optimizers</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Optimization stack</h2>'));
+    assert.ok(GUIDE_HTML.includes('id="connection-overview"'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));

@@ -29,7 +29,12 @@
       "path": ".claude/settings.json",
       "scope": "user",
       "parser": "json",
-      "primary": true
+      "primary": true,
+      "interceptionFormat": "hooks-event-command-list",
+      "interceptionPoints": [
+        "pre-tool-use",
+        "post-tool-use"
+      ]
     },
     {
       "path": ".claude/settings.json",

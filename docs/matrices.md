@@ -15,6 +15,7 @@ version outside it is reported as such and treated conservatively rather than re
 | Provider | Harness | Tested harness versions | Capabilities claimed |
 | --- | --- | --- | --- |
 | rtk | claude | 2.0.0–2.1.251 | `shell.command.rewrite`, `shell.output.reduce` |
+| rtk | codex | 0.146.0–0.146.0 | `shell.command.rewrite`, `shell.output.reduce` |
 | rtk | opencode | 1.18.11–1.18.14 | `shell.command.rewrite`, `shell.output.reduce` |
 | harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
 | harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
@@ -44,6 +45,7 @@ correct and that nothing available can show it ran.
 | Provider | Harness | Declared tier | Harness ceiling | Gap |
 | --- | --- | --- | --- | --- |
 | rtk | claude | canary | canary | at the harness ceiling |
+| rtk | codex | config-only | config-only | at the harness ceiling |
 | rtk | opencode | config-only | config-only | at the harness ceiling |
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
@@ -103,8 +105,9 @@ is exactly the drift generating the tables above exists to prevent.
   was measured on a real machine, not inferred: the identical command bypassed the pipeline
   entirely. `doctor` reports an uncovered family. The reviewed RTK Windows rows for Claude
   2.1.251 already include PowerShell support; old Bash-only configurations remain partial.
-- **RTK claims Claude Code and OpenCode.** On Codex there is nothing for it to own. That is a
-  declaration, not a gap in the resolver.
+- **RTK's Codex row is config-only.** Token Harness can write and verify the reviewed `hooks.json`
+  entry, but Codex enablement/trust is separate and runtime execution is not proven until a
+  harness-attributable receipt exists. See the RTK/Codex upstream contract spike for the boundary.
 - **RTK's OpenCode plugin is inert under OpenCode Desktop.** Spike 9.1 ran the same plugin, from the
   same global directory, under both hosts: the CLI rewrote the command and RTK's counter moved, and
   Desktop ran it unrewritten with the counter flat. Desktop supplies plugins an `input.$` that is
