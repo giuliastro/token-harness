@@ -86,7 +86,7 @@ interface PlanTarget {
   harness: HarnessManifest;
   /** The harness's own event name for the scope's interception point. */
   eventName: string;
-  /** Absolute path to the primary configuration file. */
+  /** Absolute path to the harness-declared command-hook configuration file. */
   configPath: string;
 }
 
