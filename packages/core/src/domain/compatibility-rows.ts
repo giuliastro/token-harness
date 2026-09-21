@@ -68,7 +68,9 @@ export interface CompatibilityRow {
  *
  * Windows supplied the first reviewed rows. Linux now has an exact Codex 0.152.1 row for HarnessTrim
  * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, an exact Claude Code 2.1.269 row
- * for mcptoon 0.7.10, and an exact Claude Code 2.1.269 row for GitNexus 1.6.12. The mcptoon
+ * for mcptoon 0.7.10, and an exact Claude Code 2.1.269 row for GitNexus 1.6.12. GitNexus also
+ * exposes a reviewed Codex configuration path, but no exact Codex compatibility recording has
+ * been added yet. The mcptoon
  * recordings exercised each owned instruction surface through managed apply, user drift, verified
  * rollback, and surgical uninstall while preserving unrelated user content. The GitNexus recording
  * exercised only the Claude user `mcpServers.gitnexus` JSON entry through the same ownership and
@@ -87,7 +89,9 @@ export interface CompatibilityRow {
  * per-harness receipt `verify` can read on the user's machine. HarnessTrim, mcptoon and GitNexus claim
  * `config-only`: HarnessTrim's skills-only install deliberately writes no hook, mcptoon's reviewed
  * integration owns only agent instructions, and GitNexus verification confirms the exact owned JSON
- * entry without starting the MCP server. A row must not promise a tier `verify` cannot reach.
+ * entry without starting the MCP server. Its Codex managed path is admitted from live assignability
+ * and remains config-only until a separate exact fixture is recorded. A row must not promise a tier
+ * `verify` cannot reach.
  */
 export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = [
   {

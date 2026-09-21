@@ -1,8 +1,15 @@
 # GitNexus candidate evaluation
 
-GitNexus is a **candidate-only** repository exploration/code-intelligence component. It is not a
-managed provider, is not part of the default optimization stack, and does not count toward the
-three-mechanism promotion target.
+This document records GitNexus as a **candidate-only** repository exploration/code-intelligence
+component for benchmark and promotion purposes. It is not part of the default optimization stack
+and does not count toward the three-mechanism promotion target.
+
+Historical note: this document records the candidate-evaluation boundary from before GitNexus was
+exposed as an optional managed optimizer. The current managed surface is intentionally narrower
+than the candidate workflow: it registers only the reviewed MCP entry on Claude Code or Codex,
+keeps installation/indexing separate, and still does not promote GitNexus into the recommended
+RTK + HarnessTrim baseline. See `README.md` and `docs/development-status.md` for the current
+product surface; the candidate evidence below remains valid for benchmark and promotion gates.
 
 ## Read-only discovery boundary
 

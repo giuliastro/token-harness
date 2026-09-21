@@ -36,6 +36,7 @@ import {
 } from '../src/index.js';
 
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const RTK = providerId('rtk');
 const HARNESSTRIM = providerId('harnesstrim');
 
@@ -60,6 +61,26 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   requiresEnablement: false,
   enablementNote: null,
   receiptFamily: 'provider-telemetry',
+};
+const CODEX_MANIFEST: HarnessManifest = {
+  ...CLAUDE_MANIFEST,
+  id: CODEX,
+  displayName: 'Codex CLI',
+  configFiles: [
+    { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
+    {
+      path: '.codex/hooks.json',
+      scope: 'user',
+      parser: 'json',
+      primary: false,
+      interceptionFormat: 'hooks-event-command-list',
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+    },
+  ],
+  toolFamilies: [
+    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+  ],
+  requiresEnablement: true,
 };
 
 function declaration(overrides: {
@@ -148,6 +169,28 @@ describe('a single claimant', () => {
     assert.deepEqual(result.ownership.map((entry) => entry.scope.toolFamily).sort(), [
       'Bash',
       'PowerShell',
+    ]);
+  });
+
+  it('selects the declaration for the requested harness when a provider repeats a capability', () => {
+    const claude = declaration({ capability: 'shell.output.reduce' });
+    const codex = { ...claude, harnesses: [CODEX] };
+    const result = resolveOwnership({
+      ...BASE,
+      profile: 'safe',
+      harnesses: [CLAUDE_MANIFEST, CODEX_MANIFEST],
+      providers: [
+        {
+          id: RTK,
+          capabilities: [claude, codex],
+          assignableHarnesses: new Set([CLAUDE, CODEX]),
+        },
+      ],
+    });
+
+    assert.deepEqual(result.ownership.map((entry) => formatCapabilityScope(entry.scope)).sort(), [
+      'claude/Bash/pre-tool-use/shell.output.reduce',
+      'codex/Bash/pre-tool-use/shell.output.reduce',
     ]);
   });
 });

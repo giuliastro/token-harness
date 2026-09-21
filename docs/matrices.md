@@ -23,6 +23,7 @@ version outside it is reported as such and treated conservatively rather than re
 | mcptoon | claude | 2.1.269–2.1.269 | none claimed |
 | mcptoon | codex | 0.152.1–0.153.0 | none claimed |
 | gitnexus | claude | 2.1.269–2.1.269 | none claimed |
+| gitnexus | codex | 0.153.0–0.153.0 | none claimed |
 | headroom | claude | 2.1.269–2.1.269 | none claimed |
 | headroom | codex | 0.153.0–0.153.0 | none claimed |
 
@@ -53,6 +54,7 @@ correct and that nothing available can show it ran.
 | mcptoon | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | mcptoon | codex | config-only | config-only | at the harness ceiling |
 | gitnexus | claude | config-only | canary | below the harness ceiling — see Known limitations |
+| gitnexus | codex | config-only | config-only | at the harness ceiling |
 | headroom | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | headroom | codex | config-only | config-only | at the harness ceiling |
 

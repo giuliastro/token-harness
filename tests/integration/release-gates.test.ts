@@ -48,6 +48,7 @@ import {
   type ApplyReport,
   type CliEnvelope,
   type JsonValue,
+  type MergeJsonAction,
   type MetricsReport,
   type OptimizationEvent,
   type PackageManagerInstallAction,
@@ -262,10 +263,24 @@ describe('brownfield adoption', () => {
     );
 
     const plan = await invoke<PlanReport>(['plan'], place);
-    // Behaviour 2: "the plan adopts the existing installation rather than reinstalling it". On
-    // Windows the fixture includes both Bash and PowerShell, because Bash-only is intentionally a
-    // partial integration that Token Harness now repairs.
-    assert.deepEqual(plan.data?.actions, []);
+    // Behaviour 2: the Claude installation is adopted, while the newly supported Codex surface is
+    // proposed when it is still missing. This is intentionally not an empty-plan assertion: an
+    // empty plan here would regress the RTK/Codex resolver fix by silently dropping Codex's
+    // repeated capability declarations.
+    const codexActions = (plan.data?.actions ?? []).filter((action) =>
+      action.affectedPaths.includes(place.codexHooks),
+    );
+    assert.ok(codexActions.length > 0, 'the missing RTK Codex connection should be planned');
+    assert.ok(
+      plan.data?.ownership.some(
+        (entry) => entry.owner === 'rtk' && entry.scope.harness === 'codex',
+      ),
+      'RTK must retain ownership for Codex capabilities',
+    );
+    for (const action of codexActions) {
+      assert.equal(action.kind, 'merge-json');
+      assert.deepEqual((action as MergeJsonAction).ownedPointers, ['hooks.PreToolUse']);
+    }
 
     // Behaviour 5, the strongest form: not one byte changed by any read-only command.
     assert.equal(readFileSync(place.claudeSettings, 'utf8'), before);
@@ -288,16 +303,28 @@ describe('brownfield adoption', () => {
      * Behaviour 2, stated about the adopted surface rather than about the whole plan.
      *
      * This machine has Codex wired and Claude Code bare, so a plan for it *should* contain
-     * actions — for Claude. Asserting an empty plan would have made the gate demand that one
+     * actions for the still-missing connections. Asserting an empty plan would have made the gate demand that one
      * adopted installation suppress work everywhere else, which is not adoption but paralysis.
-     * What adoption forbids is an action against the installation already there.
+     * What adoption forbids is an action against the installation already there. RTK may still
+     * add its separate PreToolUse connection to the same Codex document; the adopted HarnessTrim
+     * PostToolUse entry must remain outside that write set.
      */
     const plan = await invoke<PlanReport>(['plan'], place);
-    assert.equal(
-      plan.data?.actions.some((action) => action.affectedPaths.includes(place.codexHooks)),
-      false,
-      `no action may touch the adopted file: ${JSON.stringify(plan.data?.actions.map((action) => action.affectedPaths))}`,
+    const codexActions = (plan.data?.actions ?? []).filter((action) =>
+      action.affectedPaths.includes(place.codexHooks),
     );
+    assert.ok(codexActions.length > 0, 'RTK should remain independently actionable for Codex');
+    for (const action of codexActions) {
+      assert.equal(action.kind, 'merge-json');
+      assert.deepEqual((action as MergeJsonAction).ownedPointers, ['hooks.PreToolUse']);
+      assert.equal(
+        (action as MergeJsonAction).operations.some(
+          (operation) => operation.pointer === 'hooks.PostToolUse',
+        ),
+        false,
+        `the adopted HarnessTrim PostToolUse entry must not be planned for overwrite: ${JSON.stringify(action)}`,
+      );
+    }
     assert.equal(readFileSync(place.codexHooks, 'utf8'), before);
   });
 

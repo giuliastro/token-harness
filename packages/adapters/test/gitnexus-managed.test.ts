@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  digestText,
   harnessId,
   jsonValueDigest,
   type FileStat,
@@ -14,6 +15,9 @@ import {
 
 import {
   GITNEXUS_CLAUDE_MCP_POINTER,
+  GITNEXUS_CODEX_MARKER_BEGIN,
+  GITNEXUS_CODEX_MARKER_END,
+  GITNEXUS_CODEX_MCP_BODY,
   GITNEXUS_MCP_SERVER,
   GITNEXUS_REVIEWED_MCP_VERSION,
   gitnexusManagedProviderAdapter,
@@ -166,6 +170,19 @@ function setJson(fs: MemoryFs, value: unknown): void {
   fs.files.set('/home/dev/.claude.json', ENCODER.encode(`${JSON.stringify(value, null, 2)}\n`));
 }
 
+function setCodexConfig(fs: MemoryFs, content = ''): void {
+  fs.directories.add('/home/dev/.codex');
+  fs.files.set('/home/dev/.codex/config.toml', ENCODER.encode(content));
+}
+
+function reviewedCodexBlock(): string {
+  return [
+    `# ${GITNEXUS_CODEX_MARKER_BEGIN}`,
+    GITNEXUS_CODEX_MCP_BODY,
+    `# ${GITNEXUS_CODEX_MARKER_END}`,
+  ].join('\n');
+}
+
 test('plans one owned Claude JSON entry and never invokes gitnexus setup or mcp', async () => {
   const fs = new MemoryFs();
   setJson(fs, { theme: 'dark', mcpServers: { existing: { command: 'other' } } });
@@ -203,7 +220,7 @@ test('Windows first-run can install reviewed GitNexus through npm and then regis
 
   const detection = await gitnexusManagedProviderAdapter.detect(windows);
   assert.equal(detection.state, 'absent');
-  assert.deepEqual(detection.assignableHarnesses, [harnessId('claude')]);
+  assert.deepEqual(detection.assignableHarnesses, [harnessId('claude'), harnessId('codex')]);
 
   const plan = await planGitNexusManagedMcpActivation(windows, harnessId('claude'));
   assert.equal(plan.actions.length, 2);
@@ -271,12 +288,33 @@ test('does not retroactively own an identical brownfield entry', async () => {
   assert.match(plan.diagnostics[0]?.message ?? '', /user-owned/);
 });
 
-test('keeps Codex out until a surgical TOML ownership path exists', async () => {
+test('plans a surgical Codex marker block without touching other config', async () => {
   const fs = new MemoryFs();
+  setCodexConfig(fs, 'model = "gpt-5.6-codex"\n');
+  const commands: string[] = [];
+
+  const plan = await planGitNexusManagedMcpActivation(context(fs, commands), harnessId('codex'));
+
+  assert.equal(plan.target, '/home/dev/.codex/config.toml');
+  assert.equal(plan.actions.length, 1);
+  const action = plan.actions[0];
+  assert.ok(action?.kind === 'patch-marker-block');
+  assert.equal(action.markerBegin, GITNEXUS_CODEX_MARKER_BEGIN);
+  assert.equal(action.markerEnd, GITNEXUS_CODEX_MARKER_END);
+  assert.equal(action.body, GITNEXUS_CODEX_MCP_BODY);
+  assert.equal(action.commentPrefix, '#');
+  assert.equal(action.createIfMissing, true);
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
+});
+
+test('refuses to overwrite a brownfield Codex GitNexus table', async () => {
+  const fs = new MemoryFs();
+  setCodexConfig(fs, '[mcp_servers.gitnexus]\ncommand = "npx"\n');
+
   const plan = await planGitNexusManagedMcpActivation(context(fs), harnessId('codex'));
   assert.deepEqual(plan.actions, []);
-  assert.equal(plan.target, null);
-  assert.equal(plan.diagnostics[0]?.code, 'gitnexus-managed-mcp-harness-unsupported');
+  assert.equal(plan.target, '/home/dev/.codex/config.toml');
+  assert.equal(plan.diagnostics[0]?.code, 'gitnexus-codex-mcp-user-owned');
 });
 
 test('verifies passively without starting MCP or indexing the repository', async () => {
@@ -289,6 +327,24 @@ test('verifies passively without starting MCP or indexing the repository', async
     harnessId('claude'),
   );
   assert.equal(verification.state, 'verified');
+  assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
+  assert.equal(
+    commands.some((command) => /\b(setup|mcp|analyze)\b/.test(command)),
+    false,
+  );
+});
+
+test('verifies the reviewed Codex marker without starting MCP or indexing the repository', async () => {
+  const fs = new MemoryFs();
+  setCodexConfig(fs, `model = "gpt-5.6-codex"\n${reviewedCodexBlock()}\n`);
+  const commands: string[] = [];
+
+  const verification = await verifyGitNexusManagedMcpActivation(
+    context(fs, commands),
+    harnessId('codex'),
+  );
+  assert.equal(verification.state, 'verified');
+  assert.equal(verification.target, '/home/dev/.codex/config.toml');
   assert.deepEqual(commands, ['gitnexus --version', 'gitnexus --help']);
   assert.equal(
     commands.some((command) => /\b(setup|mcp|analyze)\b/.test(command)),
@@ -313,6 +369,20 @@ test('builds surgical removal only from the exact owned JSON receipt', () => {
   assert.ok(action?.kind === 'remove-owned-change');
   assert.deepEqual(action.target, owned);
   assert.equal(action.rollbackData, 'file-snapshot');
+
+  const codexOwnership = {
+    kind: 'owned-marker-block' as const,
+    path: '/home/dev/.codex/config.toml',
+    markerBegin: GITNEXUS_CODEX_MARKER_BEGIN,
+    markerEnd: GITNEXUS_CODEX_MARKER_END,
+    bodyDigest: digestText(GITNEXUS_CODEX_MCP_BODY),
+  };
+  const codexRemoval = planGitNexusManagedMcpRemoval(base, codexOwnership);
+  assert.equal(codexRemoval.actions.length, 1);
+  const codexAction = codexRemoval.actions[0];
+  assert.ok(codexAction?.kind === 'remove-owned-change');
+  assert.deepEqual(codexAction.target, codexOwnership);
+  assert.equal(codexAction.id, 'gitnexus:codex:mcp-server:remove');
 
   const wrong = planGitNexusManagedMcpRemoval(base, {
     ...owned,

@@ -92,7 +92,7 @@ const GITNEXUS_MANIFEST: ProviderManifest = {
   id: GITNEXUS,
   displayName: 'GitNexus',
   description:
-    'Repository graph/code-intelligence provider with a reviewed Claude Code MCP registration.',
+    'Repository graph/code-intelligence provider with reviewed Claude Code and Codex MCP registration.',
   homepage: 'https://github.com/abhigyanpatwari/GitNexus',
   sourceRepository: 'https://github.com/abhigyanpatwari/GitNexus',
   // PolyForm Noncommercial is intentionally not represented as an SPDX approval. Token Harness
@@ -104,6 +104,11 @@ const GITNEXUS_MANIFEST: ProviderManifest = {
     {
       harness: CLAUDE,
       testedVersions: { minimum: '2.1.269', maximum: '2.1.269' },
+      verificationTier: 'config-only',
+    },
+    {
+      harness: CODEX,
+      testedVersions: { minimum: '0.153.0', maximum: '0.153.0' },
       verificationTier: 'config-only',
     },
   ],
@@ -236,10 +241,13 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
 
 async function gitnexusDetection(context: ProviderContext): Promise<ProviderDetection> {
   const observation = await observeGitNexusManagedRuntime(context);
-  const verification = observation.ready
-    ? await verifyGitNexusManagedMcpActivation(context, CLAUDE)
-    : null;
-  const configuredHarnesses = verification?.state === 'verified' ? [CLAUDE] : [];
+  const configuredHarnesses: HarnessId[] = [];
+  if (observation.ready) {
+    for (const harness of [CLAUDE, CODEX]) {
+      const verification = await verifyGitNexusManagedMcpActivation(context, harness);
+      if (verification.state === 'verified') configuredHarnesses.push(harness);
+    }
+  }
   const npm = observation.absent
     ? await context.runner.run({
         executable: 'npm',
@@ -280,7 +288,7 @@ async function gitnexusDetection(context: ProviderContext): Promise<ProviderDete
     unmanagedHarnessesConfigured: [],
     supportsUnmanagedHarnesses: false,
     managedByTokenHarness: false,
-    assignableHarnesses: observation.ready || canInstall ? [CLAUDE] : [],
+    assignableHarnesses: observation.ready || canInstall ? [CLAUDE, CODEX] : [],
     evidence: [],
     warnings,
   };
@@ -352,37 +360,37 @@ async function mcptoonVerify(context: ProviderContext): Promise<ProviderVerifica
 }
 
 async function gitnexusVerify(context: ProviderContext): Promise<ProviderVerification> {
-  const result = await verifyGitNexusManagedMcpActivation(context, CLAUDE);
+  const checks = [];
+  let achieved: 'config-only' | 'presence' | null = null;
+  for (const harness of [CLAUDE, CODEX]) {
+    const result = await verifyGitNexusManagedMcpActivation(context, harness);
+    if (result.state === 'verified') achieved = 'config-only';
+    else if (achieved === null && result.state !== 'candidate-unavailable') achieved = 'presence';
+    checks.push({
+      id: `gitnexus-${harness}-managed-mcp`,
+      status:
+        result.state === 'verified'
+          ? ('pass' as const)
+          : result.state === 'not-configured'
+            ? ('not-exercised' as const)
+            : ('warn' as const),
+      summary: result.detail,
+      achievedTier:
+        result.state === 'verified'
+          ? ('config-only' as const)
+          : result.state === 'candidate-unavailable'
+            ? null
+            : ('presence' as const),
+      evidence: [],
+      remediation: null,
+    });
+  }
   return {
     providerId: GITNEXUS,
     declaredTier: 'config-only',
-    achievedTier:
-      result.state === 'verified'
-        ? 'config-only'
-        : result.state === 'candidate-unavailable'
-          ? null
-          : 'presence',
+    achievedTier: achieved,
     receipt: null,
-    checks: [
-      {
-        id: 'gitnexus-claude-managed-mcp',
-        status:
-          result.state === 'verified'
-            ? 'pass'
-            : result.state === 'not-configured'
-              ? 'not-exercised'
-              : 'warn',
-        summary: result.detail,
-        achievedTier:
-          result.state === 'verified'
-            ? 'config-only'
-            : result.state === 'candidate-unavailable'
-              ? null
-              : 'presence',
-        evidence: [],
-        remediation: null,
-      },
-    ],
+    checks,
     diagnostics: [],
   };
 }
@@ -451,21 +459,20 @@ async function gitnexusPlan(context: ProviderContext, request: ProviderPlanReque
       targetHarnesses: [],
     };
   }
-  const claude = request.harnesses.find((item) => item.id === CLAUDE);
-  if (claude === undefined) {
-    return {
-      providerId: GITNEXUS,
-      desiredState: 'configured' as const,
-      actions: [],
-      targetHarnesses: [],
-    };
+  const actions = [];
+  const targets: HarnessId[] = [];
+  for (const harness of request.harnesses.map((item) => item.id)) {
+    if (harness !== CLAUDE && harness !== CODEX) continue;
+    const plan = await planGitNexusManagedMcpActivation(context, harness);
+    if (plan.actions.length === 0) continue;
+    actions.push(...plan.actions);
+    targets.push(harness);
   }
-  const plan = await planGitNexusManagedMcpActivation(context, CLAUDE);
   return {
     providerId: GITNEXUS,
     desiredState: 'configured' as const,
-    actions: plan.actions,
-    targetHarnesses: plan.actions.length === 0 ? [] : [CLAUDE],
+    actions: dedupeActions(actions),
+    targetHarnesses: [...new Set(targets)],
   };
 }
 
