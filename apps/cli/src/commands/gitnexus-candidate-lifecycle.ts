@@ -88,6 +88,7 @@ function providerContext(context: CommandContext) {
     facts: context.platform,
     paths: context.adapters.paths,
     projectRoot: context.projectRoot,
+    env: context.env,
     harnessConfigs: [],
     now: context.now,
     localDatabase: context.adapters.localDatabase,

@@ -235,6 +235,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
   const report: ContextReport = {
     platform: context.platform,
     projectRoot: context.projectRoot,
+    env: context.env,
     observedAt: context.now(),
     instructions: [],
     knownLoadedInstructionBytes: 0,
