@@ -67,10 +67,16 @@ import type {
   ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
-import { buildRtkPlan } from './rtk-plan.js';
+import {
+  buildRtkPlan,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
+} from './rtk-plan.js';
 
 const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
 const OPENCODE = harnessId('opencode');
 
 /**
@@ -111,6 +117,19 @@ const MANIFEST: ProviderManifest = {
       evidence: {
         sourceReference: 'tests/fixtures/rows/rtk-claude-windows-2.1.251-0.48.0/README.md',
         upstreamVersion: '0.48.0',
+      },
+    },
+    {
+      capability: 'instructions.progressive',
+      mode: 'chainable',
+      harnesses: [CODEX],
+      // Released RTK 0.44.0-0.49.0 integrates Codex through AGENTS.md guidance. The scope is
+      // anchored to Codex's shell family because those instructions govern shell command choice;
+      // unlike Claude, this does not claim a transparent native RTK hook.
+      surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
+      evidence: {
+        sourceReference: 'hooks/codex/rtk-awareness.md',
+        upstreamVersion: '0.44.0',
       },
     },
     /**
@@ -169,6 +188,13 @@ const MANIFEST: ProviderManifest = {
       harness: CLAUDE,
       testedVersions: { minimum: '2.0.0', maximum: '2.1.251' },
       verificationTier: 'canary',
+    },
+    {
+      harness: CODEX,
+      testedVersions: { minimum: '0.142.0', maximum: '0.153.0' },
+      // The released RTK path here is instruction-driven, so configuration presence is the
+      // strongest claim Token Harness makes. Provider telemetry is not attributed to one harness.
+      verificationTier: 'config-only',
     },
     {
       harness: OPENCODE,
@@ -258,6 +284,7 @@ const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])rtk(\.exe)?([\s"']|$)/i;
  * `.config/opencode/plugins/rtk.ts`; the installer refuses to write it anywhere project-local.
  */
 const PLUGIN_MODULE_PATTERN = /(^|[\\/])rtk\.(ts|js|mjs|cjs|mts|cts)$/i;
+const DECODER = new TextDecoder();
 
 function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -325,6 +352,74 @@ export function harnessesWiredToRtk(
   return [...wired];
 }
 
+interface CodexInstructionIntegration {
+  configured: boolean;
+  managed: boolean;
+  drifted: boolean;
+  path: string;
+  evidence: Evidence[];
+}
+
+async function readCodexInstructionIntegration(
+  context: ProviderContext,
+): Promise<CodexInstructionIntegration> {
+  const path = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+  const rtkPath = context.fs.join(context.paths.home, '.codex', 'RTK.md');
+  const result: CodexInstructionIntegration = {
+    configured: false,
+    managed: false,
+    drifted: false,
+    path,
+    evidence: [],
+  };
+  const stat = await context.fs.stat(path);
+  if (stat === null || stat.kind !== 'file') return result;
+
+  const text = DECODER.decode(await context.fs.readFile(path));
+  const expected = [
+    `<!-- ${RTK_CODEX_MARKER_BEGIN} -->`,
+    RTK_CODEX_INSTRUCTIONS.trimEnd(),
+    `<!-- ${RTK_CODEX_MARKER_END} -->`,
+  ].join('\n');
+  const hasBegin = text.includes(RTK_CODEX_MARKER_BEGIN);
+  const hasEnd = text.includes(RTK_CODEX_MARKER_END);
+  if (hasBegin || hasEnd) {
+    if (hasBegin && hasEnd && text.includes(expected)) {
+      result.configured = true;
+      result.managed = true;
+      result.evidence.push(
+        evidence({
+          kind: 'config-entry',
+          source: 'Codex AGENTS.md',
+          path,
+          detail: 'contains the reviewed Token Harness RTK instruction block',
+        }),
+      );
+      return result;
+    }
+    result.drifted = true;
+    return result;
+  }
+
+  // Brownfield adoption: RTK 0.44.0+ writes an @...RTK.md reference into the global Codex
+  // AGENTS.md and stores the actual awareness text beside it. Recognise that upstream layout
+  // without taking ownership of either file.
+  if (!/^\s*@.*RTK\.md\s*$/im.test(text)) return result;
+  const rtkStat = await context.fs.stat(rtkPath);
+  if (rtkStat === null || rtkStat.kind !== 'file') return result;
+  const rtkText = DECODER.decode(await context.fs.readFile(rtkPath));
+  if (!/(Rust Token Killer|^# RTK\b)/m.test(rtkText) || !/\brtk\b/.test(rtkText)) return result;
+  result.configured = true;
+  result.evidence.push(
+    evidence({
+      kind: 'config-entry',
+      source: 'Codex AGENTS.md + RTK.md',
+      path,
+      detail: 'matches RTK upstream user-global Codex instruction layout',
+    }),
+  );
+  return result;
+}
 async function readVersion(context: ProviderContext): Promise<{
   version: string | null;
   verdict: VersionVerdict | null;
@@ -413,8 +508,24 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
   const version = await readVersion(context);
   evidenceItems.push(...version.evidence);
 
-  const configured = harnessesWiredToRtk(context.harnessConfigs);
-  for (const harness of configured) {
+  const configuredSet = new Set(harnessesWiredToRtk(context.harnessConfigs));
+  const codexIntegration = await readCodexInstructionIntegration(context);
+  if (codexIntegration.configured) configuredSet.add(CODEX);
+  evidenceItems.push(...codexIntegration.evidence);
+  if (codexIntegration.drifted) {
+    warnings.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'rtk-codex-instructions-drift',
+        subject: CODEX,
+        message: 'The Token Harness RTK marker in Codex AGENTS.md differs from the reviewed content',
+        path: codexIntegration.path,
+        remediation: 'Review or remove the edited RTK marker block before reconnecting it automatically',
+      }),
+    );
+  }
+  const configured = [...configuredSet];
+  for (const harness of configured.filter((item) => item !== CODEX)) {
     evidenceItems.push(
       evidence({
         kind: 'config-entry',
@@ -503,7 +614,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
      * module `rtk init -g --opencode` installs globally, which this build has no action for. Saying
      * so here is what stops the resolver assigning a scope nothing can produce.
      */
-    assignableHarnesses: [CLAUDE],
+    assignableHarnesses: [CLAUDE, CODEX],
     evidence: evidenceItems,
     warnings,
   };
@@ -1035,11 +1146,16 @@ function identifiesCommand(command: string): boolean {
  * the authority on that, so the plan asks it rather than re-deriving it.
  */
 async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
-  const version = await readVersion(context);
+  const [version, codexIntegration] = await Promise.all([
+    readVersion(context),
+    readCodexInstructionIntegration(context),
+  ]);
   return buildRtkPlan({
     context,
     request,
     installed: version.version !== null,
+    codexConfigured: codexIntegration.configured,
+    codexManaged: codexIntegration.managed,
     identifiesCommand,
     installationChannels: MANIFEST.installationChannels,
   });
