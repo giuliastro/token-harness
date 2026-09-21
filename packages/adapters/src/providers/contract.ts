@@ -56,6 +56,8 @@ export interface ProviderContext {
   readonly facts: PlatformFacts;
   readonly paths: PlatformPaths;
   readonly projectRoot: string;
+  /** Injected environment; providers may read documented integration roots such as CODEX_HOME. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
   /** What the harness adapters found. Empty when no harness was inspected. */
   readonly harnessConfigs: readonly HarnessConfigSummary[];
   /**

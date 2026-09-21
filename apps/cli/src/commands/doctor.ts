@@ -36,6 +36,7 @@ export async function runDoctor(context: CommandContext): Promise<CommandResult<
           facts: context.platform,
           paths: context.adapters.paths,
           projectRoot: context.projectRoot,
+          env: context.env,
         };
 
   // No adapter access means no detection. Reporting an empty list is honest — nothing

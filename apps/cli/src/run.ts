@@ -407,6 +407,7 @@ export async function run(options: RunOptions): Promise<number> {
     platform: options.platform,
     projectRoot: invocation.options.project ?? options.cwd,
     home: options.home,
+    env,
     stateRoot: options.stateRoot ?? null,
     harness: invocation.options.harness,
     provider: invocation.options.provider,

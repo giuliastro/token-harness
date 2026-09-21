@@ -49,6 +49,8 @@ export interface HarnessContext {
   readonly facts: PlatformFacts;
   readonly paths: PlatformPaths;
   readonly projectRoot: string;
+  /** Injected environment; harnesses may read documented path overrides such as CODEX_HOME. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** A configuration file the adapter located, with the parser its content requires. */
@@ -129,6 +131,10 @@ export interface HarnessAdapter {
 
 /** The absolute path a declaration resolves to. Shared by every adapter. */
 export function resolveConfigPath(declaration: HarnessConfigFile, context: HarnessContext): string {
+  if (declaration.scope === 'user' && declaration.path.startsWith('.codex/')) {
+    const codexHome = context.env?.['CODEX_HOME']?.trim();
+    if (codexHome) return context.fs.join(codexHome, ...declaration.path.split('/').slice(1));
+  }
   const base = declaration.scope === 'user' ? context.paths.home : context.projectRoot;
   return context.fs.join(base, ...declaration.path.split('/'));
 }
