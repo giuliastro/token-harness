@@ -27,6 +27,9 @@ import type {
 import {
   harnessesWiredToRtk,
   parseRtkAnalytics,
+  RTK_CODEX_INSTRUCTIONS,
+  RTK_CODEX_MARKER_BEGIN,
+  RTK_CODEX_MARKER_END,
   rtkAdapter,
   type ProviderContext,
 } from '../src/index.js';
@@ -64,21 +67,34 @@ function analyticsDocument(days: ReadonlyArray<{ date: string; commands: number 
   });
 }
 
-const NO_FILESYSTEM: FileSystemPort = {
-  join: (...segments) => segments.join('/'),
-  dirname: (path) => path,
-  basename: (path) => path,
-  isInside: () => false,
-  // RTK detection reads no files: everything comes from the runner and from what the
-  // harness adapters already reported. A port that throws proves it.
-  stat: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
-  readFile: () => Promise.reject(new Error('the rtk adapter must not read the filesystem')),
-  writeFile: () => Promise.reject(new Error('the rtk adapter must not write')),
-  appendFile: () => Promise.reject(new Error('the rtk adapter must not write')),
-  createDirectory: () => Promise.reject(new Error('the rtk adapter must not write')),
-  remove: () => Promise.reject(new Error('the rtk adapter must not write')),
-  readDirectory: () => Promise.resolve([]),
-};
+function fileSystem(files: Readonly<Record<string, string>> = {}): FileSystemPort {
+  const encoder = new TextEncoder();
+  return {
+    join: (...segments) => segments.join('\\'),
+    dirname: (path) => path.slice(0, path.lastIndexOf('\\')),
+    basename: (path) => path.slice(path.lastIndexOf('\\') + 1),
+    isInside: () => false,
+    stat: (path) => {
+      const value = files[path];
+      return Promise.resolve(
+        value === undefined
+          ? null
+          : { kind: 'file' as const, byteLength: encoder.encode(value).byteLength, mode: null },
+      );
+    },
+    readFile: (path) => {
+      const value = files[path];
+      return value === undefined
+        ? Promise.reject(new Error('missing test file: ' + path))
+        : Promise.resolve(encoder.encode(value));
+    },
+    writeFile: () => Promise.reject(new Error('the rtk adapter must not write')),
+    appendFile: () => Promise.reject(new Error('the rtk adapter must not write')),
+    createDirectory: () => Promise.reject(new Error('the rtk adapter must not write')),
+    remove: () => Promise.reject(new Error('the rtk adapter must not write')),
+    readDirectory: () => Promise.resolve([]),
+  };
+}
 
 interface RunnerOptions {
   version?: string | null;
@@ -135,10 +151,11 @@ function context(
     configs?: HarnessConfigSummary[];
     now?: string;
     localDatabase?: LocalDatabasePort | null;
+    files?: Readonly<Record<string, string>>;
   },
 ): ProviderContext {
   return {
-    fs: NO_FILESYSTEM,
+    fs: fileSystem(options.files),
     runner: runner(options),
     facts: FACTS,
     paths: {
@@ -265,6 +282,48 @@ describe('detection', () => {
     assert.ok(detection.evidence.some((item) => item.kind === 'version-output'));
   });
 
+  it('recognises the Token Harness-owned Codex instruction integration', async () => {
+    const agents = 'C:\\Users\\dev\\.codex\\AGENTS.md';
+    const body = [
+      `<!-- ${RTK_CODEX_MARKER_BEGIN} -->`,
+      RTK_CODEX_INSTRUCTIONS.trimEnd(),
+      `<!-- ${RTK_CODEX_MARKER_END} -->`,
+      '',
+    ].join('\n');
+    const detection = await rtkAdapter.detect(context({ files: { [agents]: body } }));
+    assert.equal(detection.state, 'configured');
+    assert.deepEqual(detection.configuredHarnesses, ['codex']);
+    assert.deepEqual(detection.assignableHarnesses, ['claude', 'codex']);
+    assert.ok(detection.evidence.some((item) => item.path === agents));
+  });
+
+  it('adopts upstream RTK Codex AGENTS.md + RTK.md without claiming ownership', async () => {
+    const agents = 'C:\\Users\\dev\\.codex\\AGENTS.md';
+    const rtk = 'C:\\Users\\dev\\.codex\\RTK.md';
+    const detection = await rtkAdapter.detect(
+      context({
+        files: {
+          [agents]: '@C:\\Users\\dev\\.codex\\RTK.md\n',
+          [rtk]: '# RTK - Rust Token Killer (Codex CLI)\nAlways prefix shell commands with `rtk`.\n',
+        },
+      }),
+    );
+    assert.equal(detection.state, 'configured');
+    assert.deepEqual(detection.configuredHarnesses, ['codex']);
+  });
+
+  it('reports an edited Token Harness Codex marker instead of silently replacing it', async () => {
+    const agents = 'C:\\Users\\dev\\.codex\\AGENTS.md';
+    const detection = await rtkAdapter.detect(
+      context({
+        files: {
+          [agents]: `<!-- ${RTK_CODEX_MARKER_BEGIN} -->\nuser edited this\n<!-- ${RTK_CODEX_MARKER_END} -->\n`,
+        },
+      }),
+    );
+    assert.equal(detection.state, 'installed');
+    assert.ok(detection.warnings.some((entry) => entry.code === 'rtk-codex-instructions-drift'));
+  });
   it('does not claim a harness wired to a different provider', async () => {
     const detection = await rtkAdapter.detect(context({ configs: [SOMEONE_ELSE] }));
     assert.equal(detection.state, 'installed');
@@ -312,8 +371,8 @@ describe('detection', () => {
   });
 
   it('does not claim a managed surface it does not have', async () => {
-    // RFC 0002 §Providers may exceed the managed surface. RTK's manifest covers Claude
-    // Code only, so the "any *managed* harness" qualifier does not apply to it.
+    // RFC 0002 §Providers may exceed the managed surface. The manifest now names the managed
+    // Claude, Codex and OpenCode surfaces explicitly, so no unmanaged qualifier is needed.
     const detection = await rtkAdapter.detect(context({}));
     assert.equal(detection.supportsUnmanagedHarnesses, false);
     assert.deepEqual(detection.unmanagedHarnessesConfigured, []);
