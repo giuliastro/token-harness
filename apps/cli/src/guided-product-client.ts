@@ -34,7 +34,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     },
     gitnexus: {
       name: 'GitNexus',
-      role: 'Registers an already-installed GitNexus CLI as a narrow Claude MCP integration and verifies the result.',
+      role: 'Registers GitNexus as a narrow MCP integration for Claude Code and Codex and verifies the result.',
       managed: true,
       optional: true,
     },
@@ -458,93 +458,29 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return { label: 'Not installed', cls: '' };
   }
 
-  function renderManagedTool(id) {
-    const info = optimizerInfo(id);
-    const component = managedComponent(id);
-    const state = componentState(id, component);
-    const card = node('article', undefined, 'tool-card');
-    const head = node('div', undefined, 'tool-head');
-    const title = node('div');
-    title.append(
-      node('h3', info.name),
-      node('span', info.optional ? 'Optional optimizer' : 'Recommended baseline', 'caption'),
-    );
-    head.append(title, pill(state.label, state.cls));
-    card.append(head, node('p', info.role));
+  function setupChoiceData(providerId) {
+    const providers = providerId ? [providerId] : ['rtk', 'harnesstrim'];
+    return activeAgents()
+      .map(agent => ({
+        agent,
+        targets: providers
+          .map(id => ({ id, target: setupTarget(agent.id, id) }))
+          .filter(item => item.target),
+      }))
+      .filter(choice => choice.targets.some(item => item.target.state === 'actionable'));
+  }
 
-    const facts = node('div', undefined, 'tool-facts');
-    if (component?.version) facts.append(node('span', 'Installed version'), node('strong', 'v' + component.version));
-    const providerTargets = activeAgents()
-      .map(agent => ({ agent, target: setupTarget(agent.id, id) }))
-      .filter(item => item.target);
-    const actionableFor = providerTargets
-      .filter(item => item.target.state === 'actionable')
-      .map(item => item.agent.name);
-    const unavailableFor = providerTargets
-      .filter(item => item.target.state === 'unavailable')
-      .map(item => item.agent.name);
-    const notApplicableFor = providerTargets
-      .filter(item => item.target.state === 'not-applicable')
-      .map(item => item.agent.name);
-    const connectedFor = component?.configuredHarnesses?.length
-      ? component.configuredHarnesses.map(agentName)
-      : [];
-    if (connectedFor.length)
-      facts.append(node('span', 'Connected to'), node('strong', connectedFor.join(', ')));
-    if (actionableFor.length)
-      facts.append(node('span', 'Setup available'), node('strong', actionableFor.join(', ')));
-    if (unavailableFor.length)
-      facts.append(node('span', 'Automatic setup unavailable'), node('strong', unavailableFor.join(', ')));
-    if (notApplicableFor.length)
-      facts.append(node('span', 'Not applicable'), node('strong', notApplicableFor.join(', ')));
-    if (!connectedFor.length && !actionableFor.length && !unavailableFor.length && !notApplicableFor.length)
-      facts.append(node('span', 'Connection'), node('strong', 'No detected coding agent target'));
-    if (component?.update === 'available')
-      facts.append(
-        node('span', 'Update'),
-        node('strong', 'v' + (component.updateAvailableVersion || 'new version') + ' available'),
-      );
-    else if (component?.update === 'blocked')
-      facts.append(node('span', 'Update'), node('strong', 'Newer package requires a provider-specific update path'));
-    card.append(facts);
+  function setupChoiceSummary(choice) {
+    return choice.targets
+      .map(item => optimizerInfo(item.id).name + ': ' + connectionPresentation(item.target).label)
+      .join(' · ');
+  }
 
-    if (
-      component?.installed &&
-      !(component?.configuredHarnesses?.length) &&
-      actionableFor.length === 0 &&
-      unavailableFor.length > 0
-    )
-      card.append(
-        messageBox(
-          'Why automatic connection is unavailable',
-          providerTargets.find(item => item.target.state === 'unavailable')?.target.reason ||
-            'The installed provider does not expose an automatic setup surface for this coding agent.',
-        ),
-      );
-
-    if (component?.warnings?.length) {
-      const attention = component.health === 'attention';
-      const prerequisite = !component.installed && component.nextAction?.kind === 'install-configure';
-      if (attention || prerequisite)
-        card.append(
-          messageBox(
-            attention ? 'Needs attention' : 'Setup requirement',
-            component.warnings[0].message,
-            attention ? 'warn' : '',
-          ),
-        );
-    }
-
-    const actions = node('div', undefined, 'inline-actions');
-    if (component?.update === 'available')
-      actions.append(actionButton('Install update', () => readOnlyOperation('updates'), 'secondary'));
-    if (
-      component?.configured &&
-      (component.health === 'attention' || component.verification === 'degraded')
-    )
-      actions.append(actionButton('Re-check health', () => readOnlyOperation('verify'), 'secondary'));
-    if (actions.children.length) card.append(actions);
-    return card;
+  function setupChoiceLimitations(choice) {
+    return choice.targets
+      .filter(item => item.target.state === 'unavailable' || item.target.state === 'not-applicable')
+      .map(item => optimizerInfo(item.id).name + ': ' + item.target.reason)
+      .join(' ');
   }
 
   function renderAgentSetup() {
@@ -598,96 +534,144 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
-  function reviewSetup(agentId = null, providerId = null) {
-    if (busy) return;
-    const agents = agentId
-      ? activeAgents().filter(item => item.id === agentId)
-      : activeAgents();
-    if (!agents.length) return;
-    const agent = agentId ? agents[0] : null;
+  function previewSetup(providerId, harnesses, run) {
     const provider = providerId ? optimizerInfo(providerId) : null;
-    const targetLabel = agent ? agent.name : agents.map(item => item.name).join(', ');
-    const run = modal(
-      provider
-        ? 'Manage ' + provider.name + ' connections'
-        : 'Set up recommended optimization stack',
-    );
-    $('modal-content').append(
-      messageBox(
-        'Safe preview first',
-        provider
-          ? 'Token Harness will inspect ' + provider.name + ' across ' + targetLabel + '. Every compatible missing connection is prepared together; connected or unsupported targets are left unchanged.'
-          : 'Token Harness will prepare the currently actionable RTK/HarnessTrim connections across ' + targetLabel + '. The exact files and changes appear before you confirm them.',
+    const targetLabel = harnesses.map(agentName).join(', ');
+    $('modal-content').replaceChildren(
+      progress(
+        'Checking selected connections',
+        'Preparing a read-only plan for ' + targetLabel + '. Nothing changes until you approve the preview.',
       ),
-      messageBox('Nothing changes yet', 'This first step only prepares the safe plan. You decide whether to apply it after seeing the concrete changes.'),
-      progress('Checking optimizer connections', 'Reading installed optimizer versions and current integration state.'),
     );
-    if (providerId === 'gitnexus')
-      $('modal-content').append(
-        messageBox(
-          'License boundary',
-          'GitNexus 1.6.12 is reviewed technically but carries PolyForm Noncommercial terms. Token Harness does not install or index it. Continue only when those terms fit your use.',
-          'warn',
-        ),
-      );
-    $('modal-actions').append(modalClose('Cancel'));
+    $('modal-actions').replaceChildren(modalClose('Cancel'));
     setBusy(true, false);
     ensureSession()
       .then(() =>
         request('/api/preview', {
           action: 'setup',
-          ...(agentId ? { harness: agentId } : {}),
+          harnesses,
           ...(providerId ? { provider: providerId } : {}),
         }),
       )
       .then(data => {
         if (run !== modalRun || !$('modal').open) return;
         pendingTicket = data.ticket;
-        if (!data.ticket) {
+        if (!data.ticket)
           refreshOverviewAfterMutation('Refreshing setup availability after the review…').catch(
             () => undefined,
           );
-        }
-        $('modal-content').replaceChildren();
-        $('modal-content').append(
+        const changes = data.changes || [];
+        $('modal-content').replaceChildren(
           messageBox(
-            provider ? 'One optimizer, all compatible agents' : 'Recommended stack',
+            provider ? provider.name + ' · selected connections' : 'Recommended stack · selected connections',
             provider
-              ? 'This approval changes only ' + provider.name + '. It may connect that optimizer to multiple compatible coding agents in the same review; other optimizers are left unchanged.'
-              : 'This review includes only currently actionable RTK/HarnessTrim connections across detected coding agents. Already-connected or unavailable targets are left out.',
+              ? 'Only ' + provider.name + ' will be changed for ' + targetLabel + '. Other optimizers and unselected coding agents stay untouched.'
+              : 'Only the selected RTK/HarnessTrim connections for ' + targetLabel + ' are included. Connected or unsupported targets stay untouched.',
           ),
         );
-        if (!data.changes.length) {
+        if (!changes.length) {
           $('modal-content').append(
             messageBox(
               'No setup change available',
               (data.notices || []).join(' ') ||
-                'No automatic change is available from the provider’s current capability surface. The dashboard is refreshing so an obsolete setup action is not left visible.',
+                'No automatic change is available from the current provider and harness capabilities. Refreshing the dashboard keeps the visible state honest.',
             ),
           );
         } else {
-          for (const change of data.changes) {
+          for (const change of changes) {
             const item = node('article', undefined, 'preview-change');
             item.append(node('h3', change.title), node('p', change.description));
             $('modal-content').append(item);
           }
-          for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
+          for (const notice of data.notices || [])
+            $('modal-content').append(node('p', notice, 'notice-row'));
         }
-        $('modal-content').append(messageBox('Safety', 'Apply uses the transactional engine with backups, ownership checks and rollback. A newer version tuple is allowed when the installed provider exposes the required capability, then the resulting state is checked again after apply.', 'safe'));
+        $('modal-content').append(
+          messageBox(
+            'Safety',
+            'Apply uses the transactional engine with backups, ownership checks and rollback. The resulting agent and optimizer state is read again after Apply.',
+            'safe',
+          ),
+        );
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket)
           $('modal-actions').append(
-            actionButton(provider ? 'Apply ' + provider.name + ' connections' : 'Apply recommended setup', () => applyTicket(data.ticket), ''),
+            actionButton(
+              provider ? 'Apply ' + provider.name + ' connections' : 'Apply recommended setup',
+              () => applyTicket(data.ticket),
+              '',
+            ),
           );
       })
       .catch(error => {
         if (run !== modalRun) return;
         $('modal-error').textContent = error.message;
         $('modal-error').hidden = false;
+        $('modal-actions').replaceChildren(modalClose('Close'));
       })
       .finally(() => {
         if (run === modalRun) setBusy(false, false);
       });
+  }
+
+  function reviewSetup(providerId = null) {
+    if (busy) return;
+    const choices = setupChoiceData(providerId);
+    if (!choices.length) return;
+    const provider = providerId ? optimizerInfo(providerId) : null;
+    const run = modal(provider ? 'Manage ' + provider.name + ' connections' : 'Set up recommended optimization stack');
+    $('modal-content').append(
+      messageBox(
+        'Choose coding agents',
+        provider
+          ? 'Select the harnesses where ' + provider.name + ' should be installed and connected. You can choose one or both; connected harnesses and unsupported targets are not changed.'
+          : 'Select the harnesses for the recommended RTK + HarnessTrim baseline. You can choose one or both; each selected harness is reviewed in the same transaction.',
+      ),
+      messageBox('Nothing changes yet', 'The next step is still read-only. Token Harness will show the exact files and provider actions before Apply becomes available.'),
+    );
+    if (providerId === 'gitnexus')
+      $('modal-content').append(
+        messageBox(
+          'License boundary',
+          'GitNexus 1.6.12 is reviewed technically but carries PolyForm Noncommercial terms. An approved setup may install the reviewed CLI, but Token Harness never creates or refreshes its repository index. Continue only when those terms fit your use.',
+          'warn',
+        ),
+      );
+    const choicesBox = node('div', undefined, 'setup-choice-list');
+    choicesBox.append(node('h3', 'Harness targets'));
+    const selectedCount = node('p', '', 'caption');
+    const inputs = [];
+    for (const choice of choices) {
+      const input = node('input');
+      input.type = 'checkbox';
+      input.checked = true;
+      input.value = choice.agent.id;
+      input.id = 'setup-target-' + run + '-' + choice.agent.id;
+      input.setAttribute('aria-label', 'Configure ' + (provider?.name || 'recommended optimizers') + ' for ' + choice.agent.name);
+      inputs.push(input);
+      const copy = node('span', undefined, 'setup-choice-copy');
+      copy.append(node('strong', choice.agent.name), node('span', setupChoiceSummary(choice), 'caption'));
+      const limitations = setupChoiceLimitations(choice);
+      if (limitations) copy.append(node('span', limitations, 'caption setup-choice-limitation'));
+      const label = node('label', undefined, 'setup-choice');
+      label.htmlFor = input.id;
+      label.append(input, copy);
+      choicesBox.append(label);
+    }
+    choicesBox.append(selectedCount);
+    $('modal-content').append(choicesBox);
+    const updateCount = () => {
+      const selected = inputs.filter(input => input.checked).length;
+      selectedCount.textContent = selected + ' of ' + inputs.length + ' harnesses selected';
+      previewButton.disabled = selected === 0;
+    };
+    for (const input of inputs) input.addEventListener('change', updateCount);
+    const previewButton = actionButton('Review selected setup', () => {
+      const harnesses = inputs.filter(input => input.checked).map(input => input.value);
+      if (harnesses.length) previewSetup(providerId, harnesses, run);
+    });
+    $('modal-actions').append(modalClose('Cancel'), previewButton);
+    updateCount();
   }
 
   async function refreshOverviewAfterMutation(message = 'Refreshing setup after the approved change…') {
@@ -779,7 +763,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const summaryText = node('div');
     summaryText.append(
       node('strong', ids.length + ' optimizer' + (ids.length === 1 ? '' : 's') + ' · ' + agents.length + ' coding agent' + (agents.length === 1 ? '' : 's')),
-      node('p', 'Statuses are shown per connection. Actions are grouped per optimizer, so adding more coding agents never adds another row of buttons.', 'caption'),
+      node('p', 'Every optimizer is monitored per harness. Choose one or more harnesses from an optimizer action; adding more harnesses never adds another action for every optimizer.', 'caption'),
     );
     summary.append(summaryText);
     const baselineActionable = ['rtk', 'harnesstrim'].some(id =>
@@ -803,7 +787,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const component = managedComponent(id);
       const row = node('div', undefined, 'connection-row');
       const nameCell = node('div', undefined, 'connection-name');
-      nameCell.append(node('strong', info.name), node('span', component?.version ? 'v' + component.version : 'Not installed', 'caption'));
+      nameCell.append(
+        node('strong', info.name),
+        node('span', info.optional ? 'Optional optimizer' : 'Recommended baseline', 'caption'),
+        node('span', info.role, 'caption connection-role'),
+        node('span', component?.version ? 'v' + component.version : 'Not installed', 'caption'),
+      );
       row.append(nameCell);
       let actionable = false;
       for (const agent of agents) {
@@ -819,7 +808,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         action.append(
           actionButton(
             component?.installed ? 'Manage connections' : 'Install & connect',
-            () => reviewSetup(null, id),
+            () => reviewSetup(id),
             'secondary',
           ),
         );
@@ -833,16 +822,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function renderManagedSetup() {
     renderConnectionOverview();
-    const ids = optimizerIds();
-    const recommended = ['rtk', 'harnesstrim'].filter(id => ids.includes(id));
-    const optional = ids.filter(id => !recommended.includes(id));
-    $('managed-tools').replaceChildren(...recommended.map(renderManagedTool));
-    const optionalRoot = $('optional-tools');
-    if (optionalRoot) {
-      optionalRoot.replaceChildren(...optional.map(renderManagedTool));
-      const details = optionalRoot.closest('details');
-      if (details) details.hidden = optional.length === 0;
-    }
   }
 
   function candidateState(observation) {

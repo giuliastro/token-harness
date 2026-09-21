@@ -80,7 +80,7 @@ function inventory(
     providers: [
       provider('rtk', ['claude', 'codex']),
       provider('harnesstrim', ['claude', 'codex']),
-      provider('gitnexus', ['claude']),
+      provider('gitnexus', ['claude', 'codex']),
     ],
     harnesses: ids.map((id) => ({
       harnessId: harnessId(id),
@@ -224,6 +224,53 @@ describe('guided workflow', () => {
     );
   });
 
+  it('plans an optimizer for exactly the selected harnesses', async () => {
+    const doctor = inventory(['claude', 'codex']);
+    const { service, calls } = fixture({ ids: ['claude', 'codex'], doctor });
+    const preview = await service.preview({
+      action: 'setup',
+      provider: 'rtk',
+      harnesses: ['codex'],
+    });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [['plan', '--harness', 'codex', '--provider', 'rtk']],
+    );
+  });
+
+  it('plans both selected harnesses without widening the optimizer scope', async () => {
+    const doctor = inventory(['claude', 'codex']);
+    const { service, calls } = fixture({ ids: ['claude', 'codex'], doctor });
+    const preview = await service.preview({
+      action: 'setup',
+      provider: 'harnesstrim',
+      harnesses: ['claude', 'codex'],
+    });
+    assert.notEqual(preview.ticket, null);
+    assert.deepEqual(
+      calls.filter((args) => args[0] === 'plan'),
+      [
+        ['plan', '--harness', 'claude', '--provider', 'harnesstrim'],
+        ['plan', '--harness', 'codex', '--provider', 'harnesstrim'],
+      ],
+    );
+  });
+
+  it('rejects ambiguous or empty harness selections', async () => {
+    const { service } = fixture();
+    for (const harnesses of [[], ['codex', 'codex']]) {
+      await assert.rejects(
+        service.preview({ action: 'setup', provider: 'rtk', harnesses }),
+        (error: unknown) => error instanceof GuideError && error.status === 400,
+      );
+    }
+    await assert.rejects(
+      service.preview({ action: 'setup', harness: 'codex', harnesses: ['codex'] }),
+      (error: unknown) => error instanceof GuideError && error.status === 400,
+    );
+  });
+
   it('plans the whole recommended stack when no optimizer is selected', async () => {
     const doctor = inventory(['codex']);
     const { service, calls } = fixture({ ids: ['codex'], doctor });
@@ -257,6 +304,11 @@ describe('guided workflow', () => {
       calls.find((args) => args[0] === 'plan'),
       ['plan', '--harness', 'claude', '--provider', 'gitnexus'],
     );
+  });
+
+  it('keeps GitNexus setup actionable for Codex as well as Claude Code', () => {
+    const doctor = inventory(['codex']);
+    assert.equal(guideSetupTarget(doctor, 'codex', 'gitnexus').state, 'actionable');
   });
 
   it('offers an absent optional provider when its reviewed installer can reach the agent', () => {
@@ -690,7 +742,7 @@ describe('reasoning explanations and contextual actions', () => {
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
     assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
-    assert.ok(GUIDE_HTML.includes('<h2>Optimization stack</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Optimizer connections</h2>'));
     assert.ok(GUIDE_HTML.includes('id="connection-overview"'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));

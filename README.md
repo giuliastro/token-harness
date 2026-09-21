@@ -33,11 +33,12 @@ The first screen is **Overview**. There is no separate Setup page to learn.
 
 1. Token Harness detects Claude Code and Codex.
 2. Each detected coding agent says either **Ready** or **Setup incomplete**.
-3. If setup is incomplete, choose **Finish setup** on that agent. Token Harness prepares the
-   recommended **RTK + HarnessTrim** baseline and shows the exact safe plan before anything changes.
-4. The **Optimizers** section keeps the recommended baseline separate from optional tools
-   (mcptoon, GitNexus and Headroom). When a tool needs an action, that action appears on the same
-   card as the status it refers to.
+3. If setup is incomplete, use the **Optimizer connections** matrix. It shows every optimizer against
+   every detected agent and lets you select one harness or both in the same review. The recommended
+   **RTK + HarnessTrim** baseline has its own action in that matrix and shows the exact safe plan
+   before anything changes.
+4. Optional optimizers (mcptoon, GitNexus and Headroom) use the same matrix and per-optimizer action;
+   there is no repeated setup button under each coding-agent card.
 5. **Health and updates** is maintenance, not another onboarding checklist. Normal setup performs its
    own safety checks. Use **Re-check health** for troubleshooting and **Check for updates** when you
    want to inspect provider versions. If a reviewed update is available, the same dialog offers
@@ -160,7 +161,7 @@ algorithms into this repository.
 | [RTK](https://github.com/rtk-ai/rtk) | Shell/tool output reduction | Managed on reviewed combinations |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Managed first-party integration |
 | mcptoon | MCP discovery / compact manifest guidance | Optional managed integration on exact reviewed 0.7.10 rows; no savings assumed |
-| GitNexus | Repository graph / MCP context | Optional managed Claude integration for already-installed 1.6.12; license review required |
+| GitNexus | Repository graph / MCP context | Optional managed Claude/Codex integration for reviewed 1.6.12; license review required |
 | Headroom | Local MCP context compression/retrieval | Optional config-only managed Claude/Codex integration for already-installed 0.37.0; package prerequisite stays user-owned |
 | [cclimits](https://github.com/cruzanstx/cclimits) | Optional Claude allowance evidence | Read-only evidence; not an optimizer |
 | [ccusage](https://github.com/ccusage/ccusage) | Local usage history | Read-only evidence; never subscription quota |

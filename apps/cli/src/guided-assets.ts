@@ -53,17 +53,8 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section class="setup-step" id="optimizers">
-<div class="section-title"><div><h2>Optimization stack</h2><p>Connections are modeled once as optimizer × coding-agent state. Each optimizer has at most one management action, regardless of how many harnesses are detected.</p></div></div>
+<div class="section-title"><div><h2>Optimizer connections</h2><p>One matrix is the source of truth for every optimizer, harness and monitored connection. Select one or more harnesses from the optimizer row you want to install or connect. A configured connection is not counted as savings until measured evidence exists.</p></div></div>
 <div id="connection-overview" class="connection-overview"><p class="empty">Checking optimizer connections…</p></div>
-<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK + HarnessTrim are the recommended starting stack. Use the connection matrix above to configure them across compatible coding agents.</p></div>
-<div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
-
-<details class="disclosure optional-disclosure">
-<summary>Optional optimizers</summary>
-<p class="caption">Add these only when you want their specific capability. They are not required to complete first-run setup and are never counted as savings merely because they are configured.</p>
-<div id="optional-tools" class="tool-grid"><article class="tool-card"><h3>Checking optional optimizers…</h3></article></div>
-</details>
-
 <details class="disclosure"><summary>Remove Token Harness-managed configuration</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration it owns; installed provider software and user-owned configuration may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details>
 </section>
 

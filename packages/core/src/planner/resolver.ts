@@ -224,10 +224,9 @@ export function resolveOwnership(input: ResolveInput): ResolutionResult {
 
         for (const provider of input.providers) {
           const declaration = provider.capabilities.find(
-            (entry) => entry.capability === capability,
+            (entry) => entry.capability === capability && declarationCoversScope(entry, scope),
           );
           if (declaration === undefined) continue;
-          if (!declarationCoversScope(declaration, scope)) continue;
 
           // RFC 0003 §Observational capabilities are outside this model. An observer transforms
           // no payload, so there is nothing for ownership to arbitrate, and the address above

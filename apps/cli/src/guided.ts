@@ -1184,9 +1184,18 @@ export class GuideService {
     const data = input as Record<string, unknown>;
     const action = String(data['action']);
     const candidateAction = action === 'candidate-setup' || action === 'candidate-remove';
+    const requestedHarnesses = data['harnesses'];
+    const validHarnesses =
+      Array.isArray(requestedHarnesses) &&
+      requestedHarnesses.length > 0 &&
+      requestedHarnesses.length <= 20 &&
+      requestedHarnesses.every(
+        (value) => typeof value === 'string' && ['claude', 'codex'].includes(value),
+      ) &&
+      new Set(requestedHarnesses).size === requestedHarnesses.length;
     if (
       Object.keys(data).some(
-        (key) => !['action', 'harness', 'task', 'provider', 'candidate'].includes(key),
+        (key) => !['action', 'harness', 'harnesses', 'task', 'provider', 'candidate'].includes(key),
       ) ||
       ![
         'setup',
@@ -1198,6 +1207,9 @@ export class GuideService {
         'candidate-remove',
       ].includes(action) ||
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
+      (data['harnesses'] !== undefined && !validHarnesses) ||
+      (data['harnesses'] !== undefined && action !== 'setup') ||
+      (data['harnesses'] !== undefined && data['harness'] !== undefined) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
         !['rtk', 'harnesstrim', 'mcptoon', 'gitnexus', 'headroom'].includes(
@@ -1210,6 +1222,7 @@ export class GuideService {
       (action === 'remove' &&
         (data['provider'] === undefined ||
           data['harness'] !== undefined ||
+          data['harnesses'] !== undefined ||
           data['task'] !== undefined ||
           data['candidate'] !== undefined)) ||
       (data['provider'] !== undefined && action !== 'remove' && action !== 'setup') ||
@@ -1410,16 +1423,30 @@ export class GuideService {
       }
       this.record('Checking supported changes. Your agent settings are unchanged.', 'working');
       const inventory = await this.call<DoctorReport>(['doctor']);
+      const selectedHarnesses =
+        data['harnesses'] !== undefined
+          ? (data['harnesses'] as string[])
+          : data['harness'] !== undefined
+            ? [String(data['harness'])]
+            : null;
       const selected = (inventory.data?.harnesses ?? []).filter(
         (item) =>
           item.state !== 'absent' &&
           (item.harnessId === 'claude' || item.harnessId === 'codex') &&
-          (data['harness'] === undefined || item.harnessId === data['harness']),
+          (selectedHarnesses === null || selectedHarnesses.includes(item.harnessId)),
       );
       const changes: GuidePreview['changes'] = [],
         notices: string[] = [],
         plans: string[] = [];
       let network = false;
+      if (selectedHarnesses !== null) {
+        for (const harness of selectedHarnesses) {
+          if (!selected.some((item) => item.harnessId === harness))
+            notices.push(
+              `${name(harness)} is not currently detected. No setup change was prepared for it.`,
+            );
+        }
+      }
       for (const agent of selected) {
         this.record(
           `Preparing supported changes for ${name(agent.harnessId)}. No settings changed.`,

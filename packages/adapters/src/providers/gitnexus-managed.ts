@@ -1,6 +1,8 @@
 import {
   compareVersions,
   diagnostic,
+  digestText,
+  harnessId,
   jsonValueDigest,
   parseSemanticVersion,
   parseJsonDocumentText,
@@ -20,13 +22,16 @@ import { parseGitNexusCliCapabilities, parseGitNexusVersion } from './gitnexus-c
  * First reviewed managed MCP slice for GitNexus.
  *
  * Upstream `gitnexus setup` also manages skills and other editor surfaces, so Token Harness does
- * not invoke it. This slice owns one exact Claude Code user-scoped JSON entry and relies on the
- * generic `merge-json` transaction action for snapshots, drift refusal and ownership receipts.
- * Codex is deliberately excluded until its native TOML transaction can emit removable ownership
- * for one `mcp_servers` entry; whole-file rollback alone is not enough for surgical uninstall.
+ * not invoke it. This slice owns one exact MCP registration per harness: a Claude Code user-scoped
+ * JSON entry or a marker-fenced Codex TOML block. The generic transaction actions preserve
+ * unrelated user configuration and emit ownership receipts for surgical uninstall.
  */
 export const GITNEXUS_REVIEWED_MCP_VERSION = '1.6.12';
 export const GITNEXUS_CLAUDE_MCP_POINTER = 'mcpServers.gitnexus';
+export const GITNEXUS_CODEX_MARKER_BEGIN = 'TOKEN-HARNESS:GITNEXUS-MCP:BEGIN';
+export const GITNEXUS_CODEX_MARKER_END = 'TOKEN-HARNESS:GITNEXUS-MCP:END';
+export const GITNEXUS_CODEX_MCP_BODY =
+  '[mcp_servers.gitnexus]\ncommand = "gitnexus"\nargs = ["mcp"]';
 export const GITNEXUS_MCP_SERVER: JsonValue = {
   command: 'gitnexus',
   args: ['mcp'],
@@ -55,6 +60,18 @@ const DECODER = new TextDecoder();
 
 function claudeTarget(context: ProviderContext): string {
   return context.fs.join(context.paths.home, '.claude.json');
+}
+
+function codexTarget(context: ProviderContext): string {
+  return context.fs.join(context.paths.home, '.codex', 'config.toml');
+}
+
+function codexExpectedBlock(): string {
+  return [
+    `# ${GITNEXUS_CODEX_MARKER_BEGIN}`,
+    GITNEXUS_CODEX_MCP_BODY,
+    `# ${GITNEXUS_CODEX_MARKER_END}`,
+  ].join('\n');
 }
 
 export interface GitNexusManagedRuntime {
@@ -120,8 +137,8 @@ export async function observeGitNexusManagedRuntime(
     executable: versionOutcome.executablePath,
     supportsMcp: capabilities.mcp,
     detail: capabilities.mcp
-      ? `GitNexus ${version} exposes the MCP command required by the managed Claude integration`
-      : `GitNexus ${version} does not advertise the MCP command required by the managed Claude integration`,
+      ? `GitNexus ${version} exposes the MCP command required by the managed integration`
+      : `GitNexus ${version} does not advertise the MCP command required by the managed integration`,
   };
 }
 
@@ -159,11 +176,176 @@ function gitnexusInstallAction(): PlannedAction {
   };
 }
 
+function codexDirectoryAction(harness: HarnessId, path: string): PlannedAction {
+  return {
+    kind: 'create-directory',
+    id: `gitnexus:${harness}:directory`,
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: ['The GitNexus Codex configuration directory is still absent'],
+    postconditions: ['The GitNexus Codex configuration directory exists'],
+    rollbackData: 'file-snapshot',
+    explanation:
+      'Create the directory that contains the Token Harness-owned GitNexus Codex integration',
+    path,
+  };
+}
+
+async function planCodexRegistration(
+  context: ProviderContext,
+  harness: HarnessId,
+): Promise<GitNexusManagedMcpPlan> {
+  const directory = context.fs.join(context.paths.home, '.codex');
+  const target = codexTarget(context);
+  if (!context.fs.isInside(target, context.paths.home)) {
+    return {
+      harness,
+      target,
+      actions: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'gitnexus-codex-mcp-target-outside-home',
+          subject: harness,
+          message: 'The resolved Codex MCP configuration is outside the user home directory',
+          path: target,
+          remediation: 'Inspect the resolved home directory before managing GitNexus MCP',
+        }),
+      ],
+    };
+  }
+
+  const actions: PlannedAction[] = [];
+  const directoryStat = await context.fs.stat(directory);
+  if (directoryStat !== null && directoryStat.kind !== 'directory') {
+    return {
+      harness,
+      target,
+      actions: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'gitnexus-codex-directory-conflict',
+          subject: harness,
+          message: 'Codex configuration directory is occupied by a non-directory path',
+          path: directory,
+          remediation: 'Resolve the path conflict manually before enabling managed GitNexus MCP',
+        }),
+      ],
+    };
+  }
+  if (directoryStat === null) actions.push(codexDirectoryAction(harness, directory));
+
+  const stat = await context.fs.stat(target);
+  if (stat !== null && stat.kind !== 'file') {
+    return {
+      harness,
+      target,
+      actions: [],
+      diagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'gitnexus-codex-config-path-conflict',
+          subject: harness,
+          message: 'Codex configuration is not a regular file',
+          path: target,
+          remediation: 'Resolve the path conflict manually before enabling managed GitNexus MCP',
+        }),
+      ],
+    };
+  }
+
+  if (stat !== null) {
+    const text = DECODER.decode(await context.fs.readFile(target));
+    const hasBegin = text.includes(GITNEXUS_CODEX_MARKER_BEGIN);
+    const hasEnd = text.includes(GITNEXUS_CODEX_MARKER_END);
+    if (hasBegin || hasEnd) {
+      if (hasBegin && hasEnd && text.includes(codexExpectedBlock())) {
+        return {
+          harness,
+          target,
+          actions: [],
+          diagnostics: [
+            diagnostic({
+              severity: 'info',
+              code: 'gitnexus-codex-mcp-already-present',
+              subject: harness,
+              message: 'The reviewed GitNexus Codex MCP block is already present',
+              path: target,
+              remediation: null,
+            }),
+          ],
+        };
+      }
+      return {
+        harness,
+        target,
+        actions: [],
+        diagnostics: [
+          diagnostic({
+            severity: 'warning',
+            code: 'gitnexus-codex-mcp-marker-drift',
+            subject: harness,
+            message:
+              'An existing Token Harness GitNexus marker block differs from the reviewed content',
+            path: target,
+            remediation: 'Review the existing block before changing it',
+          }),
+        ],
+      };
+    }
+    if (/^\s*\[mcp_servers\.gitnexus\]\s*$/m.test(text)) {
+      return {
+        harness,
+        target,
+        actions: [],
+        diagnostics: [
+          diagnostic({
+            severity: 'warning',
+            code: 'gitnexus-codex-mcp-user-owned',
+            subject: harness,
+            message:
+              'A user-owned mcp_servers.gitnexus table already exists and will not be overwritten',
+            path: target,
+            remediation: 'Review the existing GitNexus MCP configuration manually',
+          }),
+        ],
+      };
+    }
+  }
+
+  actions.push({
+    kind: 'patch-marker-block',
+    id: 'gitnexus:codex:mcp-server',
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [target],
+    affectedProcesses: [],
+    preconditions: ['No GitNexus MCP table or Token Harness GitNexus marker block exists'],
+    postconditions: ['Codex config contains exactly one Token Harness GitNexus MCP server block'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Register the installed reviewed GitNexus CLI as a Codex MCP server',
+    path: target,
+    markerBegin: GITNEXUS_CODEX_MARKER_BEGIN,
+    markerEnd: GITNEXUS_CODEX_MARKER_END,
+    commentPrefix: '#',
+    commentSuffix: '',
+    body: GITNEXUS_CODEX_MCP_BODY,
+    expectedBodyDigest: null,
+    createIfMissing: true,
+  });
+  return { harness, target, actions, diagnostics: [] };
+}
+
 export async function planGitNexusManagedMcpActivation(
   context: ProviderContext,
   harness: HarnessId,
 ): Promise<GitNexusManagedMcpPlan> {
-  if (harness !== 'claude') {
+  if (harness !== 'claude' && harness !== 'codex') {
     return {
       harness,
       target: null,
@@ -174,7 +356,7 @@ export async function planGitNexusManagedMcpActivation(
           code: 'gitnexus-managed-mcp-harness-unsupported',
           subject: harness,
           message:
-            'Managed GitNexus MCP registration is currently reviewed only for Claude Code user configuration',
+            'Managed GitNexus MCP registration is currently reviewed only for Claude Code and Codex',
           remediation:
             'Keep this harness configuration user-owned until Token Harness has a surgical ownership path for it',
         }),
@@ -218,6 +400,11 @@ export async function planGitNexusManagedMcpActivation(
       };
     }
     installActions.push(gitnexusInstallAction());
+  }
+
+  if (harness === 'codex') {
+    const activation = await planCodexRegistration(context, harness);
+    return { ...activation, actions: [...installActions, ...activation.actions] };
   }
 
   const target = claudeTarget(context);
@@ -364,18 +551,32 @@ export function planGitNexusManagedMcpRemoval(
   context: ProviderContext,
   ownership: OwnedArtifact,
 ): GitNexusManagedMcpPlan {
-  const harness = 'claude' as HarnessId;
-  const target = claudeTarget(context);
-  if (
-    ownership.kind !== 'owned-json-entry' ||
-    ownership.path !== target ||
-    ownership.pointer !== GITNEXUS_CLAUDE_MCP_POINTER ||
-    ownership.placement !== 'value' ||
-    ownership.valueDigest !== jsonValueDigest(GITNEXUS_MCP_SERVER)
-  ) {
+  const claude = gitnexusOwnedArtifact(context, harnessId('claude')) as Extract<
+    OwnedArtifact,
+    { kind: 'owned-json-entry' }
+  >;
+  const codex = gitnexusOwnedArtifact(context, harnessId('codex')) as Extract<
+    OwnedArtifact,
+    { kind: 'owned-marker-block' }
+  >;
+  const matchesClaude =
+    ownership.kind === 'owned-json-entry' &&
+    ownership.path === claude.path &&
+    ownership.pointer === GITNEXUS_CLAUDE_MCP_POINTER &&
+    ownership.placement === 'value' &&
+    ownership.valueDigest === jsonValueDigest(GITNEXUS_MCP_SERVER);
+  const matchesCodex =
+    ownership.kind === 'owned-marker-block' &&
+    ownership.path === codex.path &&
+    ownership.markerBegin === codex.markerBegin &&
+    ownership.markerEnd === codex.markerEnd &&
+    ownership.bodyDigest === codex.bodyDigest;
+  const harness = matchesCodex ? ('codex' as HarnessId) : ('claude' as HarnessId);
+  const target = matchesCodex ? codex : claude;
+  if (!matchesClaude && !matchesCodex) {
     return {
       harness,
-      target,
+      target: target.path,
       actions: [],
       diagnostics: [
         diagnostic({
@@ -384,7 +585,7 @@ export function planGitNexusManagedMcpRemoval(
           subject: harness,
           message:
             'The supplied ownership receipt does not identify the reviewed GitNexus MCP entry',
-          path: target,
+          path: target.path,
           remediation:
             'Use the ownership receipt from the committed GitNexus MCP activation transaction',
         }),
@@ -394,32 +595,58 @@ export function planGitNexusManagedMcpRemoval(
 
   const action: PlannedAction = {
     kind: 'remove-owned-change',
-    id: 'gitnexus:claude:mcp-server:remove',
+    id: `gitnexus:${harness}:mcp-server:remove`,
     riskClass: 'reversible',
     requiresNetwork: false,
     requiresElevation: false,
-    affectedPaths: [target],
+    affectedPaths: [target.path],
     affectedProcesses: [],
     preconditions: ['The owned GitNexus MCP entry still matches its transaction receipt'],
-    postconditions: ['Only the Token Harness-owned mcpServers.gitnexus entry is removed'],
+    postconditions: ['Only the Token Harness-owned GitNexus MCP integration is removed'],
     rollbackData: 'file-snapshot',
-    explanation: 'Remove the exact GitNexus MCP entry owned by Token Harness',
-    path: target,
-    reverses: 'gitnexus:claude:mcp-server',
+    explanation: `Remove the exact GitNexus ${harness} MCP integration owned by Token Harness`,
+    path: target.path,
+    reverses: `gitnexus:${harness}:mcp-server`,
     target: ownership,
   };
-  return { harness, target, actions: [action], diagnostics: [] };
+  return { harness, target: target.path, actions: [action], diagnostics: [] };
+}
+
+export function gitnexusOwnedArtifact(
+  context: ProviderContext,
+  harness: HarnessId,
+): OwnedArtifact | null {
+  if (harness === 'claude') {
+    return {
+      kind: 'owned-json-entry',
+      path: claudeTarget(context),
+      pointer: GITNEXUS_CLAUDE_MCP_POINTER,
+      placement: 'value',
+      valueDigest: jsonValueDigest(GITNEXUS_MCP_SERVER),
+    };
+  }
+  if (harness === 'codex') {
+    return {
+      kind: 'owned-marker-block',
+      path: codexTarget(context),
+      markerBegin: GITNEXUS_CODEX_MARKER_BEGIN,
+      markerEnd: GITNEXUS_CODEX_MARKER_END,
+      bodyDigest: digestText(GITNEXUS_CODEX_MCP_BODY),
+    };
+  }
+  return null;
 }
 
 export async function verifyGitNexusManagedMcpActivation(
   context: ProviderContext,
   harness: HarnessId,
 ): Promise<GitNexusManagedMcpVerification> {
-  if (harness !== 'claude') {
+  if (harness !== 'claude' && harness !== 'codex') {
     return {
       state: 'degraded',
       target: null,
-      detail: 'Managed GitNexus MCP verification is currently reviewed only for Claude Code',
+      detail:
+        'Managed GitNexus MCP verification is currently reviewed only for Claude Code and Codex',
     };
   }
 
@@ -430,6 +657,39 @@ export async function verifyGitNexusManagedMcpActivation(
       target: null,
       detail: observation.detail,
     };
+  }
+
+  if (harness === 'codex') {
+    const target = codexTarget(context);
+    const stat = await context.fs.stat(target);
+    if (stat === null) return { state: 'not-configured', target, detail: 'Codex config is absent' };
+    if (stat.kind !== 'file')
+      return { state: 'degraded', target, detail: 'Codex config is not a regular file' };
+    const text = DECODER.decode(await context.fs.readFile(target));
+    const hasBegin = text.includes(GITNEXUS_CODEX_MARKER_BEGIN);
+    const hasEnd = text.includes(GITNEXUS_CODEX_MARKER_END);
+    if (hasBegin || hasEnd) {
+      if (hasBegin && hasEnd && text.includes(codexExpectedBlock())) {
+        return {
+          state: 'verified',
+          target,
+          detail: `GitNexus ${observation.version ?? ''} is registered through the Token Harness-owned Codex MCP block; verification did not start the MCP server`,
+        };
+      }
+      return {
+        state: 'degraded',
+        target,
+        detail: 'The Token Harness GitNexus Codex marker block differs from the reviewed content',
+      };
+    }
+    if (/^\s*\[mcp_servers\.gitnexus\]\s*$/m.test(text)) {
+      return {
+        state: 'degraded',
+        target,
+        detail: 'A user-owned mcp_servers.gitnexus table is present in Codex config',
+      };
+    }
+    return { state: 'not-configured', target, detail: 'GitNexus Codex MCP block is absent' };
   }
 
   const target = claudeTarget(context);

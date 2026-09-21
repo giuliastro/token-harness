@@ -26,8 +26,12 @@ export {
 } from './gitnexus-candidate.js';
 export {
   GITNEXUS_CLAUDE_MCP_POINTER,
+  GITNEXUS_CODEX_MARKER_BEGIN,
+  GITNEXUS_CODEX_MARKER_END,
+  GITNEXUS_CODEX_MCP_BODY,
   GITNEXUS_MCP_SERVER,
   GITNEXUS_REVIEWED_MCP_VERSION,
+  gitnexusOwnedArtifact,
   planGitNexusManagedMcpActivation,
   planGitNexusManagedMcpRemoval,
   verifyGitNexusManagedMcpActivation,

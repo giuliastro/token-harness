@@ -5,6 +5,7 @@ import { harnessId, providerId } from '@token-harness/core';
 
 import {
   GITNEXUS_CLAUDE_MCP_POINTER,
+  GITNEXUS_CODEX_MARKER_BEGIN,
   HEADROOM_CLAUDE_MCP_POINTER,
   HEADROOM_CODEX_MARKER_BEGIN,
   MCPTOON_MARKER_BEGIN,
@@ -52,15 +53,20 @@ test('mcptoon plans ownership-safe removal for Claude and Codex integrations', a
   }
 });
 
-test('GitNexus plans ownership-safe removal of its Claude MCP configuration', async () => {
+test('GitNexus plans ownership-safe removal of its Claude and Codex MCP configurations', async () => {
   const plan = await gitnexusManagedProviderAdapter.plan(context, absentRequest);
   const removals = plan.actions.filter((action) => action.kind === 'remove-owned-change');
 
-  assert.equal(removals.length, 1);
-  const target = removals[0]?.target;
-  assert.equal(target?.kind, 'owned-json-entry');
-  if (target?.kind === 'owned-json-entry') {
-    assert.equal(target.pointer, GITNEXUS_CLAUDE_MCP_POINTER);
+  assert.equal(removals.length, 2);
+  const claude = removals.find((action) => action.target.kind === 'owned-json-entry');
+  const codex = removals.find((action) => action.target.kind === 'owned-marker-block');
+  assert.equal(claude?.target.kind, 'owned-json-entry');
+  if (claude?.target.kind === 'owned-json-entry') {
+    assert.equal(claude.target.pointer, GITNEXUS_CLAUDE_MCP_POINTER);
+  }
+  assert.equal(codex?.target.kind, 'owned-marker-block');
+  if (codex?.target.kind === 'owned-marker-block') {
+    assert.equal(codex.target.markerBegin, GITNEXUS_CODEX_MARKER_BEGIN);
   }
 });
 

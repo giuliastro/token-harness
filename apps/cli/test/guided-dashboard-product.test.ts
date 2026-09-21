@@ -17,11 +17,12 @@ describe('first-run guided overview', () => {
 
   it('keeps coding agents and the optimization stack as the two visible setup entities', () => {
     assert.match(GUIDE_HTML, /<h2>Coding agents<\/h2>/);
-    assert.match(GUIDE_HTML, /<h2>Optimization stack<\/h2>/);
+    assert.match(GUIDE_HTML, /<h2>Optimizer connections<\/h2>/);
     assert.match(GUIDE_HTML, /id="connection-overview"/);
-    assert.match(GUIDE_HTML, /Recommended baseline/);
-    assert.match(GUIDE_HTML, /Optional optimizers/);
-    assert.match(GUIDE_HTML, /RTK \+ HarnessTrim/);
+    assert.match(GUIDE_HTML, /Select one or more harnesses/);
+    assert.match(GUIDE_JS, /Recommended baseline/);
+    assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
+    assert.doesNotMatch(GUIDE_HTML, /managed-tools|optional-tools|Optional optimizers/);
     assert.match(GUIDE_HTML, /Health and updates/);
     assert.doesNotMatch(GUIDE_HTML, /Checks and maintenance/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Managed optimizers<\/h2>/);
@@ -42,12 +43,14 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /renderConnectionOverview/);
     assert.match(GUIDE_JS, /Manage connections/);
     assert.match(GUIDE_JS, /Install & connect/);
-    assert.match(GUIDE_JS, /reviewSetup\(null, id\)/);
+    assert.match(GUIDE_JS, /reviewSetup\(id\)/);
+    assert.match(GUIDE_JS, /setupChoiceData/);
+    assert.match(GUIDE_JS, /setup-choice/);
     assert.match(GUIDE_JS, /Set up recommended stack/);
     assert.match(GUIDE_JS, /Connected to/);
-    assert.match(GUIDE_JS, /Setup available/);
+    assert.match(GUIDE_JS, /Available/);
     assert.match(GUIDE_JS, /Not applicable/);
-    assert.match(GUIDE_JS, /Why automatic connection is unavailable/);
+    assert.match(GUIDE_JS, /setup-choice-limitation/);
     assert.doesNotMatch(GUIDE_JS, /Connect to ['"] \+ agent\.name/);
     assert.doesNotMatch(GUIDE_JS, /Set up for ['"] \+ agent\.name/);
     assert.match(GUIDE_JS, /Install update/);
@@ -55,7 +58,6 @@ describe('first-run guided overview', () => {
   });
 
   it('keeps preview and explicit approval for setup changes', () => {
-    assert.match(GUIDE_JS, /Safe preview first/);
     assert.match(GUIDE_JS, /Nothing changes yet/);
     assert.match(GUIDE_JS, /Apply recommended setup/);
     assert.match(GUIDE_JS, /Apply ['"] \+ provider\.name \+ ['"] connections/);
