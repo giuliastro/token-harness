@@ -13,7 +13,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
   const VIEWS = {
     dashboard: ['Overview', 'Your coding agents, optimizer setup, health and measured results in one place.'],
-    results: ['Results', 'Detailed measured savings, quality evidence, and recent activity.'],
+    results: ['Results', 'Cross-optimizer and cross-harness coverage, health, measured evidence, quality and recent activity.'],
   };
   const TOOL_INFO = {
     rtk: {
@@ -215,6 +215,26 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return (current?.stack?.components || []).find(component => component.providerId === id) || null;
   }
 
+  function toolInfo(id) {
+    const known = TOOL_INFO[id];
+    if (known) return known;
+    const component = managedComponent(id);
+    return {
+      name: component?.displayName || id,
+      role: CATEGORY[component?.category] || 'Managed optimizer.',
+      managed: true,
+      optional: true,
+    };
+  }
+
+  function managedProviderIds() {
+    const ids = [];
+    const add = id => { if (id && !ids.includes(id)) ids.push(id); };
+    for (const component of current?.stack?.components || []) add(component.providerId);
+    for (const agent of activeAgents()) for (const target of agent.setup || []) add(target.providerId);
+    return ids;
+  }
+
   function configuredProviders() {
     return (current?.stack?.components || []).filter(component => component.configured);
   }
@@ -350,12 +370,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
       };
     if (incomplete.length)
       return {
-        label: 'Setup incomplete',
+        label: 'Connections available',
         cls: 'warn',
-        title: incomplete.length === 1
-          ? 'Finish setup for ' + incomplete[0].name
-          : 'Finish the available recommended setup for your coding agents',
-        detail: 'Every Finish setup action below has a concrete change available from the installed provider. Newer version combinations are attempted transactionally and checked again after apply.',
+        title: 'Optimizer connections are available',
+        detail: 'Use Manage connections on the optimizer cards below. Coding-agent cards are status only, so adding more harnesses does not create a second setup workflow.',
         action: 'configure',
       };
     const unavailable = baselineUnavailableAgents();
@@ -442,8 +460,72 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return { label: 'Not installed', cls: '' };
   }
 
+  function manageOptimizerConnections(id) {
+    if (busy) return;
+    const info = toolInfo(id);
+    const targets = activeAgents()
+      .map(agent => ({ agent, target: setupTarget(agent.id, id) }))
+      .filter(item => item.target);
+    const actionable = targets.filter(item => item.target.state === 'actionable');
+    modal('Manage ' + info.name + ' connections');
+    $('modal-content').append(
+      messageBox(
+        'One optimizer, many harnesses',
+        'This is the single connection control for ' + info.name + '. Choose a compatible detected harness below; Token Harness previews one exact transaction before anything changes.',
+      ),
+    );
+
+    const facts = node('div', undefined, 'tool-facts');
+    for (const item of targets) {
+      const label =
+        item.target.state === 'connected'
+          ? 'Connected'
+          : item.target.state === 'actionable'
+            ? 'Available'
+            : item.target.state === 'unavailable'
+              ? 'Unavailable'
+              : 'Not applicable';
+      facts.append(node('span', item.agent.name), node('strong', label));
+    }
+    if (!targets.length)
+      $('modal-content').append(messageBox('No detected harness target', 'Install or expose a supported coding harness, then Refresh.'));
+    else
+      $('modal-content').append(facts);
+
+    if (actionable.length) {
+      const chooser = node('div', undefined, 'field-row');
+      const label = node('label', 'Connect to');
+      const select = node('select');
+      select.setAttribute('aria-label', 'Harness to connect');
+      for (const item of actionable) {
+        const option = node('option', item.agent.name);
+        option.value = item.agent.id;
+        select.append(option);
+      }
+      chooser.append(label, select);
+      $('modal-content').append(
+        chooser,
+        node('p', 'Connected, unavailable and not-applicable harnesses stay visible above but are not offered as no-op actions.', 'caption'),
+      );
+      $('modal-actions').append(
+        modalClose('Cancel'),
+        actionButton('Review connection', () => reviewSetup(select.value, id)),
+      );
+    } else {
+      $('modal-content').append(
+        messageBox(
+          'No connection change available',
+          targets.some(item => item.target.state === 'connected')
+            ? 'Every currently compatible connection is already configured, or the remaining harnesses are unavailable.'
+            : 'No detected harness currently exposes a reviewed automatic connection for this optimizer.',
+        ),
+      );
+      $('modal-actions').append(modalClose('Done'));
+    }
+  }
+
   function renderManagedTool(id) {
-    const info = TOOL_INFO[id];
+    const info = toolInfo(id);
     const component = managedComponent(id);
     const state = componentState(id, component);
     const card = node('article', undefined, 'tool-card');
@@ -500,7 +582,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     )
       card.append(
         messageBox(
-          'Why there is no Connect button',
+          'Why this connection is unavailable',
           providerTargets.find(item => item.target.state === 'unavailable')?.target.reason ||
             'The installed provider does not expose an automatic setup surface for this coding agent.',
         ),
@@ -520,17 +602,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
 
     const actions = node('div', undefined, 'inline-actions');
-    for (const agent of activeAgents()) {
-      const target = setupTarget(agent.id, id);
-      if (target?.state !== 'actionable') continue;
+    if (providerTargets.length)
       actions.append(
         actionButton(
-          component?.installed ? 'Connect to ' + agent.name : 'Set up for ' + agent.name,
-          () => reviewSetup(agent.id, id),
+          actionableFor.length ? 'Manage connections' : 'View connections',
+          () => manageOptimizerConnections(id),
           'secondary',
         ),
       );
-    }
     if (component?.update === 'available')
       actions.append(actionButton('Install update', () => readOnlyOperation('updates'), 'secondary'));
     if (
@@ -564,33 +643,35 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('h3', agent.name),
         node('span', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
       );
-      head.append(title, pill(baseline.label, baseline.cls));
-      const detail =
-        baseline.state === 'incomplete'
-          ? 'An automatic setup is available for ' +
-            baseline.actionable.map(target => target.provider).join(' + ') +
-            '. Finish setup to review and apply it.'
-          : baseline.state === 'unavailable'
-            ? 'The installed baseline providers do not currently expose an automatic setup surface for this agent. Token Harness will not offer a no-op button.'
-            : baseline.state === 'limited'
-              ? 'All automatic baseline actions exposed by the installed providers are complete.'
-              : 'All automatic baseline connections exposed for this coding agent are configured.';
-      card.append(head, node('p', detail));
-      if (agent.providers?.length)
-        card.append(
-          node(
-            'p',
-            'Connected optimizers: ' + agent.providers.join(', '),
-            'caption',
-          ),
-        );
-      if (baseline.state === 'incomplete') {
-        const actions = node('div', undefined, 'inline-actions');
-        actions.append(actionButton('Finish setup', () => reviewSetup(agent.id)));
-        card.append(actions);
-      } else if (baseline.unavailable.length) {
+      const connectedCount = agent.providers?.length || 0;
+      const actionableCount = (agent.setup || []).filter(target => target.state === 'actionable').length;
+      const badge = connectedCount
+        ? connectedCount + ' optimizer' + (connectedCount === 1 ? '' : 's') + ' connected'
+        : actionableCount
+          ? 'Connections available'
+          : 'No optimizer connected';
+      head.append(title, pill(badge, connectedCount ? 'good' : actionableCount ? 'warn' : ''));
+      card.append(
+        head,
+        node(
+          'p',
+          connectedCount
+            ? 'This harness is ready as a target. Manage additional optimizer connections from the Optimizers section.'
+            : actionableCount
+              ? 'Compatible optimizer connections are available in the Optimizers section below.'
+              : 'No reviewed automatic optimizer connection is currently available for this harness.',
+        ),
+      );
+      card.append(
+        node(
+          'p',
+          connectedCount ? 'Connected optimizers: ' + agent.providers.join(', ') : 'Connected optimizers: none',
+          'caption',
+        ),
+      );
+      if (baseline.unavailable.length) {
         const details = node('details', undefined, 'agent-details');
-        details.append(node('summary', 'Why some automatic connections are unavailable'));
+        details.append(node('summary', 'Unavailable optimizer connections'));
         for (const target of baseline.unavailable)
           details.append(node('p', target.provider + ': ' + target.reason, 'caption'));
         card.append(details);
@@ -603,8 +684,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (busy) return;
     const agent = activeAgents().find(item => item.id === agentId);
     if (!agent) return;
-    const provider = providerId ? TOOL_INFO[providerId] : null;
-    if (providerId && !provider) return;
+    const provider = providerId ? toolInfo(providerId) : null;
     const run = modal(
       provider
         ? 'Set up ' + provider.name + ' for ' + agent.name
@@ -755,18 +835,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
   function renderManagedSetup() {
-    $('managed-tools').replaceChildren(
-      renderManagedTool('rtk'),
-      renderManagedTool('harnesstrim'),
-    );
+    const ids = managedProviderIds();
+    const recommended = ids.filter(id => !toolInfo(id).optional);
+    const optional = ids.filter(id => toolInfo(id).optional);
+    const managedRoot = $('managed-tools');
+    managedRoot.replaceChildren(...recommended.map(renderManagedTool));
+    if (!recommended.length) managedRoot.append(sectionEmpty('No recommended optimizer is registered in this build.'));
     const optionalRoot = $('optional-tools');
-    if (optionalRoot)
-      optionalRoot.replaceChildren(
-        renderManagedTool('mcptoon'),
-        renderManagedTool('gitnexus'),
-        renderManagedTool('headroom'),
-      );
-
+    if (optionalRoot) {
+      optionalRoot.replaceChildren(...optional.map(renderManagedTool));
+      if (!optional.length) optionalRoot.append(sectionEmpty('No optional optimizer is registered in this build.'));
+    }
   }
 
   function candidateState(observation) {
