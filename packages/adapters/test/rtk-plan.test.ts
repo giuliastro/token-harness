@@ -66,7 +66,6 @@ const CLAUDE_MANIFEST: HarnessManifest = {
   receiptFamily: 'provider-telemetry',
 };
 
-
 const CODEX_MANIFEST: HarnessManifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
   id: CODEX,
@@ -459,7 +458,6 @@ describe('installed but not wired', () => {
   });
 });
 
-
 describe('Codex hook-list integration', () => {
   it('targets Codex hooks.json instead of its primary config.toml', () => {
     const result = plan({ installed: true, request: codexRequest() });
@@ -493,7 +491,8 @@ describe('Codex hook-list integration', () => {
     assert.equal(result.actions.length, 1);
     const action = result.actions[0] as RemoveOwnedChangeAction;
     assert.equal(action.target.kind, 'owned-json-entry');
-    if (action.target.kind !== 'owned-json-entry') assert.fail('expected an owned JSON entry');
+    if (action.target.kind !== 'owned-json-entry')
+      assert.fail('expected an owned JSON entry');
     assert.equal(action.target.path, CODEX_HOOKS);
     assert.equal(action.target.pointer, 'hooks.PreToolUse');
     assert.equal(action.target.placement, 'array-element');
