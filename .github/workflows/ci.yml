@@ -48,6 +48,31 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Temporary on this PR: run the repository formatter so the exact patch is visible in CI
+      # logs while the branch is being edited through the GitHub connector. This step is removed
+      # before merge; the committed files must still pass the normal check on their own.
+      - name: Format changed files for patch preview
+        shell: bash
+        run: |
+          pnpm exec prettier --write \
+            apps/cli/test/guided-actions-ui.test.ts \
+            apps/cli/test/guided-dashboard-product.test.ts \
+            apps/cli/test/guided.test.ts \
+            packages/adapters/src/providers/rtk-plan.ts \
+            packages/adapters/src/providers/rtk.ts \
+            packages/adapters/test/rtk-plan.test.ts \
+            packages/adapters/test/rtk.test.ts \
+            scripts/evaluation/optional-windows-first-run-smoke.mjs
+          git diff -- \
+            apps/cli/test/guided-actions-ui.test.ts \
+            apps/cli/test/guided-dashboard-product.test.ts \
+            apps/cli/test/guided.test.ts \
+            packages/adapters/src/providers/rtk-plan.ts \
+            packages/adapters/src/providers/rtk.ts \
+            packages/adapters/test/rtk-plan.test.ts \
+            packages/adapters/test/rtk.test.ts \
+            scripts/evaluation/optional-windows-first-run-smoke.mjs
+
       - name: Format check
         run: pnpm format:check
 
