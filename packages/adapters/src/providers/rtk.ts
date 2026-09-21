@@ -565,9 +565,12 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
         severity: 'error',
         code: 'provider-configured-but-missing',
         message:
-          'A harness hook on this machine invokes rtk, but rtk could not be run, so every intercepted command will fail',
-        path: context.harnessConfigs[0]?.configPath ?? null,
-        remediation: 'Install RTK, or remove the hook entry that invokes it',
+          'A harness integration on this machine references rtk, but rtk could not be run, so the integration cannot work',
+        path:
+          codexIntegration.configured
+            ? codexIntegration.path
+            : (context.harnessConfigs[0]?.configPath ?? null),
+        remediation: 'Install RTK, or remove the integration that references it',
       }),
     );
   }
@@ -586,8 +589,8 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     /**
      * RFC 0002 §Providers may exceed the managed surface.
      *
-     * The field asks whether this manifest names a harness with no adapter behind it. It names two,
-     * Claude Code and OpenCode, and both are managed — so the qualifier RFC 0006's doctor transcript
+     * The field asks whether this manifest names a harness with no adapter behind it. It names
+     * Claude Code, Codex and OpenCode, and all three are managed — so the qualifier RFC 0006's doctor transcript
      * uses for HarnessTrim does not apply, and the report says "not configured for any harness"
      * without hedging.
      *
@@ -601,18 +604,13 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     // every installation it finds is the user's.
     managedByTokenHarness: false,
     /**
-     * Claude Code alone, and independent of the observed version.
+     * Claude and Codex are assignable through separate reviewed action shapes.
      *
-     * RTK's assignment is produced by this build writing the hook itself — `rtk-plan.ts` appends the
-     * entry — so nothing about the installed `rtk` decides whether the state is reachable. What does
-     * decide it is which harness schema that builder knows, and it knows one: `HOOK_LIST_HARNESSES`
-     * holds `claude` and the builder refuses anything else, because a `{matcher, hooks:[…]}` object
-     * at `hooks.<event>` is Claude Code's schema and nothing else's.
-     *
-     * RTK claims OpenCode too, from spike 9.1, and that claim is real — detected, adopted, verified
-     * and measured there. It is simply not *written* there: its OpenCode integration is a plugin
-     * module `rtk init -g --opencode` installs globally, which this build has no action for. Saying
-     * so here is what stops the resolver assigning a scope nothing can produce.
+     * Claude uses the native RTK hook entry that Token Harness writes directly. Released RTK
+     * integrates Codex through user-global instructions, so the Codex plan writes one
+     * Token Harness-owned AGENTS.md marker block instead of pretending Codex has the Claude hook
+     * schema. OpenCode remains detectable/verifiable but not assignable because its plugin install
+     * is still delegated upstream and has no reviewed write set here.
      */
     assignableHarnesses: [CLAUDE, CODEX],
     evidence: evidenceItems,
@@ -643,14 +641,17 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     remediation: version.version === null ? 'Install RTK, or add it to PATH' : null,
   });
 
-  const configured = harnessesWiredToRtk(context.harnessConfigs);
+  const configuredSet = new Set(harnessesWiredToRtk(context.harnessConfigs));
+  const codexIntegration = await readCodexInstructionIntegration(context);
+  if (codexIntegration.configured) configuredSet.add(CODEX);
+  const configured = [...configuredSet];
   checks.push({
-    id: 'hook-registered',
+    id: 'integration-configured',
     status: configured.length > 0 ? 'pass' : 'not-exercised',
     summary:
       configured.length > 0
-        ? `wired to ${configured.join(', ')}`
-        : 'no harness configuration names rtk',
+        ? `configured for ${configured.join(', ')}`
+        : 'no harness integration references rtk',
     achievedTier: configured.length > 0 ? 'config-only' : null,
     evidence: [],
     remediation: null,
