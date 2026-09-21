@@ -6,7 +6,8 @@
  * A small set of actions, and often zero:
  *
  * 1. installation, when RTK is not runnable — chosen from the manifest's channels;
- * 2. one `merge-json` entry per uncovered Claude shell tool family.
+ * 2. one `merge-json` entry per uncovered Claude shell tool family;
+ * 3. one owned Codex AGENTS.md instruction block when Codex is selected.
  *
  * On Windows Claude Code can expose both `Bash` and `PowerShell`. RTK's native Claude hook reads
  * `tool_input.command` and does not branch on the tool name, so an existing RTK Claude integration
@@ -69,8 +70,53 @@ export const RTK_HOOK_COMMAND_PREFIX = 'rtk hook';
  */
 const HOOK_LIST_HARNESSES = new Set<string>(['claude']);
 const CLAUDE = 'claude';
+const CODEX = 'codex';
 const BASH = 'Bash';
 const POWERSHELL = 'PowerShell';
+
+export const RTK_CODEX_MARKER_BEGIN = 'TOKEN-HARNESS:RTK-CODEX:BEGIN';
+export const RTK_CODEX_MARKER_END = 'TOKEN-HARNESS:RTK-CODEX:END';
+
+/**
+ * Reviewed against RTK 0.44.0's upstream Codex awareness file.
+ *
+ * RTK 0.44.0-0.49.0 integrate Codex through instructions rather than a native RTK hook.
+ * Keeping this as a Token Harness-owned marker block makes the connection reversible without
+ * invoking `rtk init`, which would mutate user instructions outside this reviewed action.
+ */
+export const RTK_CODEX_INSTRUCTIONS = `# RTK - Rust Token Killer (Codex CLI)
+
+**Usage**: Token-optimized CLI proxy for shell commands.
+
+## Rule
+
+Always prefix shell commands with \`rtk\`.
+
+Examples:
+
+\`\`\`bash
+rtk git status
+rtk cargo test
+rtk npm run build
+rtk pytest -q
+\`\`\`
+
+## Meta Commands
+
+\`\`\`bash
+rtk gain            # Token savings analytics
+rtk gain --history  # Recent command savings history
+rtk proxy <cmd>     # Run raw command without filtering
+\`\`\`
+
+## Verification
+
+\`\`\`bash
+rtk --version
+rtk gain
+which rtk
+\`\`\`
+`;
 
 /**
  * The pointer into a Claude-shaped settings document.
@@ -381,8 +427,92 @@ export interface RtkPlanInput {
   request: ProviderPlanRequest;
   /** Whether `rtk` could be run, from `detect`. */
   installed: boolean;
+  /** Whether a valid RTK Codex instructions integration is already present, including brownfield. */
+  codexConfigured: boolean;
+  /** Whether the Codex marker block is Token Harness-owned and may be removed automatically. */
+  codexManaged: boolean;
   identifiesCommand(command: string): boolean;
   installationChannels: ProviderManifestChannels;
+}
+
+function wantsCodexInstructions(request: ProviderPlanRequest): boolean {
+  return (
+    request.harnesses.some((harness) => harness.id === CODEX) &&
+    request.ownership.some(
+      (owned) =>
+        owned.scope.harness === CODEX &&
+        owned.scope.capability === 'instructions.progressive',
+    )
+  );
+}
+
+function codexDirectoryAction(context: ProviderContext): PlannedAction {
+  const path = context.fs.join(context.paths.home, '.codex');
+  return {
+    kind: 'create-directory',
+    id: 'rtk:codex:directory',
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: ['The Codex user configuration directory is absent or already a directory'],
+    postconditions: ['The Codex user configuration directory exists'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Ensure the Codex user configuration directory exists for RTK guidance',
+    path,
+  };
+}
+
+function codexInstructionAction(context: ProviderContext): PlannedAction {
+  const path = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+  return {
+    kind: 'patch-marker-block',
+    id: 'rtk:codex:instructions',
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: ['The Token Harness RTK Codex marker block is still absent'],
+    postconditions: ['Codex AGENTS.md contains exactly one reviewed RTK instruction block'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Connect RTK to Codex through reviewed user-global AGENTS.md instructions',
+    path,
+    markerBegin: RTK_CODEX_MARKER_BEGIN,
+    markerEnd: RTK_CODEX_MARKER_END,
+    commentPrefix: '<!--',
+    commentSuffix: '-->',
+    body: RTK_CODEX_INSTRUCTIONS.trimEnd(),
+    expectedBodyDigest: null,
+    createIfMissing: true,
+  };
+}
+
+function codexRemovalAction(context: ProviderContext): PlannedAction {
+  const path = context.fs.join(context.paths.home, '.codex', 'AGENTS.md');
+  return {
+    kind: 'remove-owned-change',
+    id: 'rtk:codex:instructions:remove',
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [path],
+    affectedProcesses: [],
+    preconditions: ['The Token Harness RTK Codex marker block still matches the reviewed body'],
+    postconditions: ['The Token Harness RTK Codex instruction block is absent'],
+    rollbackData: 'file-snapshot',
+    explanation: 'Remove only the Token Harness-owned RTK Codex instruction block',
+    path,
+    reverses: 'rtk:codex:instructions',
+    target: {
+      kind: 'owned-marker-block',
+      path,
+      markerBegin: RTK_CODEX_MARKER_BEGIN,
+      markerEnd: RTK_CODEX_MARKER_END,
+      bodyDigest: digestText(RTK_CODEX_INSTRUCTIONS.trimEnd()),
+    },
+  };
 }
 
 /**
@@ -395,8 +525,14 @@ export interface RtkPlanInput {
 export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
   const { context, request } = input;
   const targets = planTargets(context, request);
+  const codexRequested = wantsCodexInstructions(request);
   const actions: PlannedAction[] = [];
-  const targetHarnesses = [...new Set(targets.map((target) => target.harness.id))];
+  const targetHarnesses = [
+    ...new Set([
+      ...targets.map((target) => target.harness.id),
+      ...(codexRequested ? [CODEX] : []),
+    ]),
+  ];
 
   if (request.desiredState === 'absent') {
     // Only exact entries are removal candidates. A user-owned combined matcher such as
@@ -406,6 +542,7 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       if (!alreadyRegistered(context, target, input.identifiesCommand, false)) continue;
       actions.push(removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
     }
+    if (codexRequested && input.codexManaged) actions.push(codexRemovalAction(context));
     // RTK itself is deliberately left installed. RFC 0004: Token Harness removes what it owns,
     // and on a machine where RTK was already present it never owned the installation. Removing
     // a tool the user installed themselves would be the destructive reading of "uninstall".
@@ -425,6 +562,10 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
   for (const target of targets) {
     if (alreadyRegistered(context, target, input.identifiesCommand, true)) continue;
     actions.push(hookAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
+  }
+
+  if (codexRequested && !input.codexConfigured) {
+    actions.push(codexDirectoryAction(context), codexInstructionAction(context));
   }
 
   return {
