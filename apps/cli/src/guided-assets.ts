@@ -41,11 +41,11 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>Token Harness shows setup actions only when it has a reviewed automatic change for that exact agent, provider version and platform. Unsupported combinations are shown as unavailable instead of as unfinished work.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Your detected harnesses are shown here as targets and status, not as a second setup workflow. Optimizer connections are managed from the Optimizers section below.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
 <summary>Agent details and optional reasoning settings</summary>
-<p class="caption">Allowance, connected-tool observations and reasoning preferences are advanced information. They are not required to finish optimizer setup.</p>
+<p class="caption">Allowance, connected-tool observations and reasoning preferences are advanced information. Optimizer connections are managed separately below.</p>
 <div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div>
 <div class="subsection-heading"><h3>Optional reasoning settings</h3><p class="caption">Persistent agent preferences are separate from optimizer setup.</p></div>
 <div id="agent-tuning" class="tool-grid"><article class="tool-card"><h3>Checking reasoning controls…</h3></article></div>
@@ -53,8 +53,8 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section class="setup-step" id="optimizers">
-<div class="section-title"><div><h2>Optimizers</h2><p>Recommended and optional tools are kept separate. Every button sits next to the tool or agent it affects, and every configuration change is previewed before approval.</p></div></div>
-<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK + HarnessTrim are configured together from the coding-agent card above, so first-run setup stays one action per agent.</p></div>
+<div class="section-title"><div><h2>Optimizers</h2><p>Install and connect optimizers here. Each optimizer has one scalable connection control, regardless of how many coding harnesses you add later; every concrete change is still previewed before approval.</p></div></div>
+<div class="subsection-heading"><h3>Recommended baseline</h3><p class="caption">RTK and HarnessTrim remain the recommended baseline, but each optimizer owns its own connection workflow and can target any compatible detected harness.</p></div>
 <div id="managed-tools" class="tool-grid"><article class="tool-card"><h3>Checking recommended optimizers…</h3></article></div>
 
 <details class="disclosure optional-disclosure">
@@ -73,9 +73,12 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
-<div class="results-header"><div><h2>Measured results</h2><p>What Token Harness can actually prove, kept separate from estimates and experimental claims.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How measurement works</button></div></div>
+<div class="results-header"><div><h2>Results overview</h2><p>A cross-optimizer, cross-harness dashboard of connection coverage, health and evidence. Missing telemetry stays missing rather than being reported as zero.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How measurement works</button></div></div>
 <div id="result-summary" class="impact-grid" aria-label="Measured value"><article class="metric-card"><span class="metric-label">Measured output</span><strong class="metric-value">Checking…</strong></article></div>
-<div class="section-title"><div><h2>Optimizer evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div><section class="panel"><div id="result-savings" class="evidence-list"><p class="empty">Checking recorded results…</p></div></section>
+<div class="section-title"><div><h2>Optimizer × harness coverage</h2><p>Every managed optimizer is listed against every detected harness, including unavailable and not-applicable combinations.</p></div></div><section class="panel"><div id="result-coverage" class="tool-grid"><p class="empty">Checking connection coverage…</p></div></section>
+<div class="section-title"><div><h2>Optimizer status</h2><p>Installed version, health, verification and measured evidence for every managed optimizer.</p></div></div><section class="panel"><div id="result-optimizers" class="tool-grid"><p class="empty">Checking optimizer status…</p></div></section>
+<div class="section-title"><div><h2>Harness overview</h2><p>Which optimizers are connected to each coding harness and which evidence can be attributed there.</p></div></div><section class="panel"><div id="result-harnesses" class="tool-grid"><p class="empty">Checking harness coverage…</p></div></section>
+<div class="section-title"><div><h2>Measured optimizer evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div><section class="panel"><div id="result-savings" class="evidence-list"><p class="empty">Checking recorded results…</p></div></section>
 <div class="section-title"><div><h2>Experimental benchmark results</h2><p>Candidate evidence is evaluation only; it never promotes a tool automatically.</p></div></div><section class="panel"><div id="candidate-results" class="evidence-list"><p class="empty">Checking candidate evidence…</p></div></section>
 <div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this local app session.</p></div></div><section class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></section>
 </section>
