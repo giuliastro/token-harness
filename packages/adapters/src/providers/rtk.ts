@@ -646,7 +646,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   if (codexIntegration.configured) configuredSet.add(CODEX);
   const configured = [...configuredSet];
   checks.push({
-    id: 'integration-configured',
+    id: 'hook-registered',
     status: configured.length > 0 ? 'pass' : 'not-exercised',
     summary:
       configured.length > 0
