@@ -153,11 +153,24 @@ describe('unified efficiency decision', () => {
     });
   });
 
-  it('does not invent a context action from an unsupported pressure label', () => {
+  it('does not infer maskable material from context pressure alone', () => {
     const decision = decideEfficiency({
       currentHarness: 'codex',
       taskClass: 'standard',
-      optimization: [advice(CODEX, { contextPressure: 'high' })],
+      optimization: [
+        advice(CODEX, {
+          contextPressure: 'high',
+          recommendations: [
+            {
+              area: 'context',
+              priority: 'first',
+              action: 'review context',
+              target: null,
+              evidence: [{ code: 'instruction-budget', summary: 'instruction bytes are high' }],
+            },
+          ],
+        }),
+      ],
     });
 
     assert.equal(decision.contextAction, 'unknown');
@@ -249,6 +262,19 @@ describe('unified efficiency decision', () => {
     assert.ok(critical.reasons.some((item) => item.code === 'efficiency-quality-floor-protected'));
   });
 
+  it('does not endorse an observed effort below the task quality floor', () => {
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'critical',
+      optimization: [advice(CODEX, { currentEffort: 'low', recommendedEffort: null })],
+    });
+
+    assert.equal(decision.reasoningEffort, null);
+    assert.ok(
+      decision.reasons.some((item) => item.code === 'efficiency-observed-effort-below-floor'),
+    );
+  });
+
   it('requires context cleanup before a quota-derived effort increase', () => {
     const constrained = advice(CODEX, {
       contextPressure: 'high',
@@ -285,7 +311,7 @@ describe('unified efficiency decision', () => {
       optimization: [constrained],
     });
 
-    assert.equal(decision.contextAction, 'mask');
+    assert.equal(decision.contextAction, 'unknown');
     assert.equal(decision.reasoningEffort, 'medium');
     assert.ok(
       decision.reasons.some((item) => item.code === 'efficiency-context-before-quota-escalation'),
@@ -301,6 +327,22 @@ describe('unified efficiency decision', () => {
       taskClass: 'standard',
       optimization: [advice(CODEX)],
       capacities: [mismatched],
+    });
+
+    assert.deepEqual(decision.allowanceBudget, {
+      fiveHourPercent: null,
+      weeklyPercent: null,
+    });
+  });
+
+  it("does not assign a task cost above either window's spendable allowance", () => {
+    const constrained = capacity(CODEX);
+    constrained.weekly.spendableRemainingPercent = 5;
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'standard',
+      optimization: [advice(CODEX)],
+      capacities: [constrained],
     });
 
     assert.deepEqual(decision.allowanceBudget, {

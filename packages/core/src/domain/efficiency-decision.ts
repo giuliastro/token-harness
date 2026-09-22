@@ -182,10 +182,7 @@ function chooseHarness(
   return candidate;
 }
 
-function chooseContextAction(
-  advice: HarnessOptimizationAdvice,
-  hasContextEvidence: boolean,
-): EfficiencyContextAction {
+function chooseContextAction(advice: HarnessOptimizationAdvice): EfficiencyContextAction {
   if (advice.state === 'absent' || advice.state === 'unavailable') return 'unknown';
   if (
     (advice.budgetDecision?.state === 'wait-for-reset' &&
@@ -196,12 +193,7 @@ function chooseContextAction(
   ) {
     return 'checkpoint';
   }
-  if (
-    hasContextEvidence &&
-    (advice.contextPressure === 'high' || advice.contextPressure === 'moderate')
-  ) {
-    return 'mask';
-  }
+  // Pressure does not identify expendable bytes. Masking needs item-level evidence from 19.2.
   if (advice.contextPressure === 'low') return 'keep';
   return 'unknown';
 }
@@ -335,7 +327,19 @@ function exactCapacityBudget(
   const weekly = capacity.weekly.p75UsedPercentPerAcceptedTask;
   const valid = (value: number | null): value is number =>
     value !== null && Number.isFinite(value) && value > 0 && value <= 100;
-  if (capacity.status !== 'estimated' || !valid(fiveHour) || !valid(weekly)) {
+  const fiveHourSpendable = capacity.fiveHour.spendableRemainingPercent;
+  const weeklySpendable = capacity.weekly.spendableRemainingPercent;
+  if (
+    capacity.status !== 'estimated' ||
+    !valid(fiveHour) ||
+    !valid(weekly) ||
+    fiveHourSpendable === null ||
+    !Number.isFinite(fiveHourSpendable) ||
+    fiveHourSpendable < fiveHour ||
+    weeklySpendable === null ||
+    !Number.isFinite(weeklySpendable) ||
+    weeklySpendable < weekly
+  ) {
     addEvidence(
       evidence,
       'capacity',
@@ -347,7 +351,7 @@ function exactCapacityBudget(
     reasons.push(
       reason(
         'efficiency-task-budget-unknown',
-        'Complete positive five-hour and weekly exact-policy task-cost evidence is required for allowance budgets',
+        'Complete exact-policy task cost must fit within both observed spendable allowances after reserve',
       ),
     );
     return empty;
@@ -444,18 +448,16 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
   const contextEvidence = advice.recommendations
     .filter((item) => item.area === 'context' || item.area === 'session')
     .flatMap((item) => item.evidence);
-  const contextAction = chooseContextAction(advice, contextEvidence.length > 0);
+  const contextAction = chooseContextAction(advice);
   addEvidence(evidence, 'context', contextEvidence);
   reasons.push(
     reason(
       `efficiency-context-${contextAction}`,
       contextAction === 'checkpoint'
         ? 'Checkpoint before more work because included allowance or stated-workload capacity is constrained'
-        : contextAction === 'mask'
-          ? 'Reduce avoidable observed context before considering quota-driven escalation'
-          : contextAction === 'keep'
-            ? 'Observed context pressure does not require cleanup before this attempt'
-            : 'Context evidence is incomplete; do not invent a cleanup action',
+        : contextAction === 'keep'
+          ? 'Observed context pressure does not require cleanup before this attempt'
+          : 'Context evidence is incomplete; do not invent a cleanup action',
     ),
   );
 
@@ -475,6 +477,17 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
     evidence,
     reasons,
   );
+  const selectedRank = effortRank(policy.reasoning);
+  const floorRank = effortRank(taskEffortFloor(input.taskClass));
+  if (selectedRank !== null && floorRank !== null && selectedRank < floorRank) {
+    policy.reasoning = null;
+    reasons.push(
+      reason(
+        'efficiency-observed-effort-below-floor',
+        'Neither the observed effort nor a supported recommendation establishes the task quality floor',
+      ),
+    );
+  }
   const selectedPolicy = {
     model: policy.model,
     reasoningEffort: policy.reasoning,
