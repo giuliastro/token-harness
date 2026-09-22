@@ -197,8 +197,22 @@ function createGuide(projectId) {
   });
 
   let ticketCounter = 0;
+  const tracedCall = async (args) => {
+    const result = await guideCall(args);
+    if (args[0] === 'apply' && result.exitCode !== 0) {
+      console.error(
+        'Guided apply failed:',
+        JSON.stringify({
+          exitCode: result.exitCode,
+          outcome: result.data?.outcome ?? null,
+          diagnostics: result.diagnostics?.map(({ code, message }) => ({ code, message })) ?? [],
+        }),
+      );
+    }
+    return result;
+  };
   return new GuideService(
-    guideCall,
+    tracedCall,
     () => Date.now(),
     () => `windows-live-ticket-${projectId}-${++ticketCounter}`,
   );
