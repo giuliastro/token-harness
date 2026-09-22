@@ -262,6 +262,75 @@ describe('unified efficiency decision', () => {
     assert.ok(critical.reasons.some((item) => item.code === 'efficiency-quality-floor-protected'));
   });
 
+  it('does not adopt a model change from generic recommendation evidence', () => {
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'standard',
+      optimization: [
+        advice(CODEX, {
+          recommendedModel: 'codex-model-b',
+          recommendations: [
+            {
+              area: 'model',
+              priority: 'next',
+              action: 'choose another model',
+              target: 'codex-model-b',
+              evidence: [{ code: 'model-catalog', summary: 'candidate is in catalog' }],
+            },
+          ],
+        }),
+      ],
+    });
+
+    assert.equal(decision.model, 'codex-model-a');
+    assert.ok(decision.reasons.some((item) => item.code === 'efficiency-model-learning-unproven'));
+  });
+
+  it('adopts only the exact learned model after the allowance gate', () => {
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'standard',
+      optimization: [
+        advice(CODEX, {
+          recommendedModel: 'codex-model-b',
+          modelLearning: {
+            harnessId: CODEX,
+            state: 'learned',
+            verification: 'config-only',
+            policy: { reasoningEffort: 'medium', verbosity: 'medium' },
+            baseModel: 'codex-model-a',
+            recommendedModel: 'codex-model-b',
+            candidateModel: 'codex-model-b',
+            intent: 'allowance-efficiency',
+            minimumPairs: 3,
+            matchedReceipts: 6,
+            ignoredReceipts: 0,
+            candidates: [],
+            reasons: [],
+          },
+          recommendations: [
+            {
+              area: 'model',
+              priority: 'next',
+              action: 'choose another model',
+              target: 'codex-model-b',
+              evidence: [
+                {
+                  code: 'model-allowance-throughput-improved',
+                  summary: 'both windows support the candidate',
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+    });
+
+    assert.equal(decision.model, 'codex-model-b');
+    assert.equal(decision.reasoningEffort, 'medium');
+    assert.equal(decision.verbosity, 'medium');
+  });
+
   it('does not endorse an observed effort below the task quality floor', () => {
     const decision = decideEfficiency({
       currentHarness: 'codex',

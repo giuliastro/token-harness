@@ -208,6 +208,41 @@ function recommendationEvidence(
     .flatMap((item) => item.evidence);
 }
 
+function hasLearnedControlEvidence(
+  advice: HarnessOptimizationAdvice,
+  area: 'model' | 'verbosity',
+  current: string | null,
+  recommended: string,
+  support: readonly RecommendationEvidence[],
+): boolean {
+  const codes = new Set(support.map((item) => item.code));
+  if (area === 'model') {
+    const learning = advice.modelLearning;
+    return (
+      learning?.state === 'learned' &&
+      learning.baseModel === current &&
+      learning.candidateModel === recommended &&
+      learning.recommendedModel === recommended &&
+      learning.policy.reasoningEffort === advice.currentEffort &&
+      learning.policy.verbosity === advice.currentVerbosity &&
+      (codes.has('model-allowance-throughput-improved') ||
+        codes.has('model-quality-recovery-with-capacity'))
+    );
+  }
+  const learning = advice.verbosityLearning;
+  return (
+    learning?.state === 'learned' &&
+    learning.baseVerbosity === current &&
+    learning.candidateVerbosity === recommended &&
+    learning.recommendedVerbosity === recommended &&
+    learning.policy.model === advice.currentModel &&
+    learning.policy.reasoningEffort === advice.currentEffort &&
+    (codes.has('verbosity-allowance-throughput-improved') ||
+      codes.has('verbosity-quality-recovery-with-capacity') ||
+      codes.has('verbosity-quality-recovery-capacity-unproven'))
+  );
+}
+
 interface PolicyChoice {
   area: Extract<RecommendationArea, 'model' | 'reasoning' | 'verbosity'>;
   current: string | null;
@@ -225,6 +260,18 @@ function choosePolicy(
   const selected = Object.fromEntries(
     choices.map((choice) => [choice.area, choice.current]),
   ) as Record<PolicyChoice['area'], string | null>;
+  if (
+    choices.filter((choice) => choice.recommended !== null && choice.recommended !== choice.current)
+      .length > 1
+  ) {
+    reasons.push(
+      reason(
+        'efficiency-single-control-guard',
+        'Keep the observed policy because more than one native control would change at once',
+      ),
+    );
+    return selected;
+  }
   const supportedChanges = choices.filter((choice) => {
     if (choice.recommended === null || choice.recommended === choice.current) return false;
     const support = recommendationEvidence(advice, choice.area, choice.recommended);
@@ -237,19 +284,21 @@ function choosePolicy(
       );
       return false;
     }
+    if (
+      (choice.area === 'model' || choice.area === 'verbosity') &&
+      !hasLearnedControlEvidence(advice, choice.area, choice.current, choice.recommended, support)
+    ) {
+      reasons.push(
+        reason(
+          `efficiency-${choice.area}-learning-unproven`,
+          `Keep the current ${choice.area} because the exact single-control learning gate is not evidenced`,
+        ),
+      );
+      return false;
+    }
     addEvidence(evidence, 'optimizer', support);
     return true;
   });
-
-  if (supportedChanges.length > 1) {
-    reasons.push(
-      reason(
-        'efficiency-single-control-guard',
-        'Keep the observed policy because more than one learned native control would change at once',
-      ),
-    );
-    return selected;
-  }
 
   const change = supportedChanges[0];
   if (change === undefined) return selected;
