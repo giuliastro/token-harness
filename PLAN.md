@@ -2174,3 +2174,647 @@ Token-Harness-owned skill can display **Enabled** without requiring the user to 
 - Treat modified/custom skill paths as conflicts and never overwrite them automatically.
 - Resolve ownership from the newest relevant effective transaction plus the live file digest, so rollback/uninstall cannot leave a ghost Enabled state.
 - Keep this state read-only; installation still requires the existing preview -> approval -> apply transaction.
+
+
+## 19. Phase 11 — Closed-loop coding efficiency controller
+
+The next product milestone moves Token Harness from an optimization stack manager with strong
+measurement/advisory policy into an **evidence-backed efficiency controller** for Claude Code and
+Codex.
+
+The optimization target stays the one established by RFC 0011 and refined by RFCs 0014–0021:
+
+> maximize accepted, verified coding work per included allowance while preserving the task quality
+> floor.
+
+This phase does **not** replace the optimization stack manager. RTK, HarnessTrim and other admitted
+components remain independently maintained mechanisms. The new controller sits above them and
+coordinates the controls that materially change useful work per allowance: harness choice, native
+model, reasoning effort, verbosity, context state, task budget, retry strategy and bounded
+escalation.
+
+The five-hour and weekly windows remain independent constraints. Local token reduction, context
+reduction, API-equivalent cost and provider-reported subscription usage remain separate evidence
+classes. No token-to-subscription conversion is introduced.
+
+### 19.0 Product direction and controller boundary
+
+Token Harness should evolve toward this control loop:
+
+```text
+task
+  |
+  v
+classify task + acceptance criteria
+  |
+  v
+observe 5h / weekly allowance + current policy + context pressure
+  |
+  v
+efficiency decision
+  |-- harness
+  |-- model
+  |-- reasoning effort
+  |-- verbosity
+  |-- context policy
+  |-- task allowance budget
+  |-- retry / escalation budget
+  |
+  v
+Claude Code / Codex
+  |
+  v
+deterministic verification
+  |
+  +-- accepted -> stop + record outcome
+  |
+  +-- failure -> fingerprint -> retry / change strategy / escalate / checkpoint
+  |
+  v
+measure observed allowance + quality + attempts
+  |
+  v
+learn only from comparable evidence
+```
+
+Token Harness remains conservative by default:
+
+- no background daemon is required for ordinary use;
+- no silent purchase or redemption of credits;
+- no implicit switch from subscription-authenticated usage to paid API usage;
+- no mutation outside a reviewed ownership/rollback contract;
+- no automatic model/harness escalation from a model-name heuristic;
+- no quality regression may be hidden by a lower quota delta;
+- no continuous autonomous loop without explicit opt-in and hard stop conditions.
+
+The first implementation remains recommendation-first where a harness does not expose a safe,
+reviewed runtime control surface.
+
+### 19.1 P0 — Unified Efficiency Decision Engine
+
+The existing `budget`, `context`, `optimize`, `schedule`, workload-capacity and native-policy
+logic should converge on one internal decision contract instead of behaving as adjacent advisory
+features.
+
+Add a provider-neutral decision object conceptually equivalent to:
+
+```ts
+interface EfficiencyDecision {
+  harness: "claude" | "codex";
+  taskClass: "mechanical" | "standard" | "hard" | "critical";
+
+  model: string | null;
+  reasoningEffort: string | null;
+  verbosity: string | null;
+
+  contextAction:
+    | "keep"
+    | "mask"
+    | "compact"
+    | "checkpoint"
+    | "fresh-session"
+    | "unknown";
+
+  allowanceBudget: {
+    fiveHourPercent: number | null;
+    weeklyPercent: number | null;
+  };
+
+  maxAttempts: number;
+  premiumEscalations: number;
+  evidence: string[];
+}
+```
+
+The exact schema may differ, but the semantic requirement is one explainable decision that can
+answer: **what is the cheapest quality-safe way to attempt this task now?**
+
+The engine reuses existing RFC 0014–0021 evidence rather than duplicating quota math.
+
+Initial behavior:
+
+- mechanical work prefers the cheapest proven policy that still clears quality gates;
+- standard work starts at the lowest proven policy for that class and repository;
+- hard/critical work may start above the cheapest tier when historical failed-attempt evidence says
+  cheap-first would waste more allowance through retries;
+- context cleanup is evaluated before quota-driven reasoning/model escalation;
+- weekly pressure can constrain a five-hour window that still has headroom;
+- near-reset five-hour headroom can be used only when weekly reserve and task quality policy remain
+  safe;
+- unknown evidence produces a conservative recommendation, never fabricated optimization.
+
+Acceptance:
+
+- one deterministic decision is produced from one evidence snapshot;
+- the decision cites the existing observations/receipts that caused every non-default choice;
+- model/effort/verbosity changes still obey single-control learning gates unless a later reviewed RFC
+  explicitly proves safe joint optimization;
+- no raw Claude percentage is numerically ranked against a raw Codex percentage;
+- all existing plan/apply/rollback ownership invariants remain intact.
+
+### 19.2 P0 — Automatic Context Governor
+
+Context growth is the largest remaining uncontrolled source of allowance waste. The current
+`context` audit, HarnessTrim reducers, compact-handoff guidance, MCP inventory and context-owner
+experiments provide the measurement foundation; this milestone turns them into a coherent policy.
+
+The Context Governor classifies context material into:
+
+- **keep** — still required for the current decision or unresolved failure;
+- **mask** — obsolete tool output or observations already acted upon;
+- **summarize** — expensive information that must survive but no longer needs full fidelity;
+- **checkpoint** — durable task state required before a boundary/reset;
+- **compact** — same task continues but history has become inefficient;
+- **fresh-session** — previous task is complete or current context has low reuse value.
+
+Observe, where available:
+
+- instruction bytes and hierarchy;
+- recent session/turn age signals;
+- reducer-attributed tool-output volume;
+- repeated/superseded command output;
+- MCP static schema exposure;
+- repository material repeatedly re-read;
+- current changed files and unresolved validation;
+- task-boundary state.
+
+The controller must prefer deterministic masking/filtering over spending another LLM call merely to
+summarize disposable output. Compaction is for durable state, not for compressing noise that can be
+dropped safely.
+
+A generated checkpoint/handoff must preserve only:
+
+- objective and acceptance criteria;
+- decisions and rejected alternatives that would otherwise be re-litigated;
+- exact paths/symbols/config facts that were expensive to discover;
+- changed files/current diff state;
+- passing/failing validation;
+- unresolved questions;
+- next concrete action.
+
+Acceptance:
+
+- context recommendations are measurable and explainable;
+- old test/build/shell output already reduced by RTK/HarnessTrim is not redundantly re-summarized;
+- a completed task can trigger fresh-session guidance instead of carrying its transcript forever;
+- compaction/checkpoint artifacts have a configured size budget;
+- context reduction is never converted directly into claimed subscription-quota savings;
+- quality/retry regression can veto an aggressive context policy.
+
+### 19.3 P0 — Adaptive cheap-first policy and bounded escalation
+
+Model and reasoning selection should become an **escalation ladder**, not a permanent preference.
+
+The ladder is derived from installed native capabilities and project-local evidence. No permanent
+ordering is inferred from names such as `mini`, `fast`, `pro`, `opus`, `sonnet`, or model
+version numbers.
+
+Policy shape:
+
+```text
+lowest proven quality-safe policy
+        |
+        v
+attempt + verify
+        |
+        +-- success -> stop
+        |
+        +-- new evidence of higher difficulty -> raise effort or model within reviewed policy
+        |
+        +-- same failure / no progress -> do not repeat identical strategy
+```
+
+Use existing RFC 0015–0019 evidence for effort, verbosity and model learning. Add explicit
+escalation receipts so Token Harness can learn whether a cheap-first attempt saved allowance or
+merely created a costly retry.
+
+Examples of policy intent:
+
+- mechanical scaffolding: low reasoning, terse output, cheapest proven model;
+- focused standard bug: lowest proven standard policy;
+- difficult multi-file debugging: start at the proven class floor rather than forcing a low-cost
+  model that historically causes retries;
+- architecture/security-sensitive work: preserve the critical quality floor even under weekly
+  pressure.
+
+Acceptance:
+
+- no escalation occurs only because allowance is available;
+- no downgrade crosses the existing task-class quality floor;
+- a stronger model/effort can be justified by repeated retry/quality recovery evidence;
+- successful low-cost completion terminates the ladder immediately;
+- policy records whether escalation improved acceptance versus simply consuming more allowance.
+
+### 19.4 P0 — Per-task allowance budget
+
+RFC 0020 answers whether a known backlog fits remaining allowance. This milestone adds the inverse
+control: **how much of each live allowance window may one task consume before Token Harness stops
+blind retries and reassesses?**
+
+A task budget keeps five-hour and weekly limits separate:
+
+```text
+task class: hard
+five-hour spend budget: X%
+weekly spend budget: Y%
+attempt budget: 3
+premium escalations: 1
+```
+
+The first version is conservative and evidence-backed:
+
+- derive suggested budgets from recent accepted-task p75 cost for the exact task/policy boundary
+  when available;
+- otherwise expose the budget as unknown rather than inventing a percentage;
+- respect the configured global reserve before assigning task headroom;
+- never project capacity across a reset that has not occurred;
+- never interpret local token count as a subscription allowance budget.
+
+When the task reaches its attempt/budget guard:
+
+1. stop repeating the same strategy;
+2. checkpoint current state;
+3. inspect whether the failure class changed;
+4. escalate only if quality evidence supports it;
+5. otherwise defer/re-route/re-observe rather than consume allowance indefinitely.
+
+Acceptance:
+
+- one runaway task cannot silently consume the entire weekly reserve;
+- budget exhaustion does not force a lower-quality completion;
+- explicit user override remains possible;
+- a task that completes early returns unused headroom to the normal policy with no artificial
+  carry-over accounting.
+
+### 19.5 P1 — Bounded coding loop and deterministic stop conditions
+
+Add an opt-in loop controller around coding attempts, not a generic infinite autonomous agent loop.
+
+The controller uses deterministic verification whenever possible:
+
+- compiler/typechecker;
+- formatter/linter;
+- targeted test selection;
+- project-defined acceptance commands;
+- diff/working-tree checks.
+
+Loop shape:
+
+```text
+implement
+  |
+verify
+  |
+  +-- accepted --------------------------> stop
+  |
+  +-- failed
+       |
+       v
+   fingerprint failure
+       |
+       +-- materially new -> one bounded retry
+       |
+       +-- same failure -> change strategy / escalate / checkpoint
+```
+
+Hard stop conditions include:
+
+- acceptance criteria satisfied;
+- maximum attempts reached;
+- same failure fingerprint repeated without new evidence;
+- measured task allowance guard reached;
+- context pressure requires checkpoint/reset;
+- premium escalation allowance exhausted;
+- verification cannot produce a trustworthy signal.
+
+The loop must never end with an open-ended instruction such as "review once more and improve
+anything you see" after acceptance criteria already pass.
+
+Acceptance:
+
+- every loop has an explicit maximum;
+- tests passing plus acceptance criteria terminate execution;
+- identical strategy/failure pairs cannot repeat indefinitely;
+- stop reason is persisted as outcome evidence;
+- failed loops are measurable separately from accepted work.
+
+### 19.6 P1 — Failure fingerprinting and retry-waste detection
+
+Create a privacy-bounded failure identity from structured signals such as:
+
+- failing test/command identity;
+- normalized error code/class;
+- relevant stack-frame or symbol identity where safely observable;
+- changed-file set;
+- attempted strategy identifier;
+- validation result.
+
+Do not persist raw source code, full logs, credentials or prompts merely to fingerprint failure.
+
+Use fingerprints to distinguish:
+
+- productive retry: new evidence/new failure;
+- strategy retry: same failure with a materially different approach;
+- wasteful retry: same failure plus effectively identical strategy.
+
+A second equivalent failure should trigger reassessment; repeated equivalent failures should trigger
+a hard stop or reviewed escalation rather than another blind attempt.
+
+Acceptance:
+
+- fingerprints remain stable enough to catch obvious repeated failure loops;
+- privacy boundaries remain compatible with existing Token Harness receipts;
+- retry-waste metrics can be correlated with observed allowance without inventing causal savings.
+
+### 19.7 P1 — Repository Intelligence abstraction and persistent cache
+
+Repository localization should become a first-class optimization channel independent of any one
+vendor/provider.
+
+Define a repository-intelligence contract that may be backed by:
+
+- native grep/read;
+- language server;
+- tree-sitter/AST index;
+- GitNexus where licensing/use is appropriate;
+- future reviewed graph/index providers.
+
+Cache only durable, reproducible metadata keyed to repository state, for example:
+
+- file digest;
+- symbols/signatures;
+- imports/dependencies;
+- callers/callees where supported;
+- public API surface;
+- related tests;
+- bounded file/symbol summaries;
+- last indexed commit/digest.
+
+Git-aware invalidation updates only changed material.
+
+The objective is not "store the whole repository in AI memory." The objective is to avoid paying a
+model repeatedly to rediscover deterministic repository structure.
+
+Acceptance:
+
+- unchanged files do not require an LLM re-summary merely because a new task begins;
+- a cache entry is invalidated by content identity, not wall-clock guesses;
+- provider-specific indexes remain optional behind the abstraction;
+- proprietary/noncommercial license boundaries remain visible and cannot silently become the
+  default production path.
+
+### 19.8 P1 — Selective Context Builder
+
+Use repository intelligence plus current failure/task signals to construct a small, high-signal
+context envelope before model execution.
+
+Preferred localization order:
+
+```text
+task / issue / failure
+      |
+      v
+keywords + stack trace + git diff
+      |
+      v
+candidate files
+      |
+      v
+candidate symbols
+      |
+      v
+imports / callers / tests
+      |
+      v
+exact line ranges / compact signatures
+      |
+      v
+coding model
+```
+
+The builder should favor:
+
+- exact symbols over whole files;
+- changed ranges over unchanged bodies;
+- dependency edges over broad repository scans;
+- targeted tests over whole-suite output;
+- cached structural facts over repeated AI exploration.
+
+It may widen context when verification proves that the first envelope was insufficient. Widening is
+itself measurable evidence.
+
+Acceptance:
+
+- the first context envelope has an explicit byte/token budget where measurable;
+- widening is incremental rather than jumping directly to whole-repository context;
+- missing context is allowed to cost one controlled retry, but repeated localization misses become a
+  measurable signal that the retrieval strategy needs adjustment.
+
+### 19.9 P1 — Measure the existing token-economy skills
+
+The existing HarnessTrim/agent guidance already captures several high-value strategies:
+
+- `compact-handoff`;
+- `debug-log-slim`;
+- `delegate-bulk`;
+- `delta-response`;
+- `review-delta`;
+- `scaffold-fast`.
+
+Move these from "good guidance" toward attributable policy evidence.
+
+Examples of useful measurements:
+
+- raw tool output versus model-visible reduced output;
+- handoff bytes plus downstream rediscovery cost;
+- delegated-context bytes versus compact return bytes;
+- output verbosity before/after;
+- first-pass acceptance rate for mechanical low-reasoning work;
+- review findings delivered per output volume.
+
+Do not aggregate unlike measurements into a single fake savings percentage.
+
+Acceptance:
+
+- each skill/mechanism has an evidence class appropriate to what it actually measures;
+- a strategy can be disabled/demoted when it increases retries or harms acceptance;
+- upstream/provider marketing numbers never become Token Harness measured results.
+
+### 19.10 P1 — Development Efficiency analytics
+
+Results should evolve from optimizer health/savings into a development-efficiency view while keeping
+the existing optimizer × harness diagnostics.
+
+Primary KPI:
+
+> **accepted verified tasks per observed included allowance**
+
+Supporting metrics may include, only when evidence exists:
+
+- accepted tasks by task class;
+- five-hour and weekly allowance used, separately;
+- accepted tasks per 10% allowance within one harness;
+- first-pass acceptance rate;
+- retry rate and failed-loop allowance;
+- escalation frequency;
+- premium-model share;
+- tasks completed without premium escalation;
+- context/tool-output reduction by attributable mechanism;
+- checkpoint/fresh-session frequency;
+- repository-intelligence cache hit rate;
+- localization widening rate;
+- task budget stops and their outcomes.
+
+Cross-provider raw percentages must not be displayed as if directly comparable. Cross-harness
+comparison uses the existing normalized accepted-task/capacity contracts.
+
+Acceptance:
+
+- "Not measured" remains distinct from zero;
+- no combined savings total mixes context bytes, local tokens and subscription percentage;
+- a quality regression blocks positive efficiency claims;
+- every headline metric can expose its evidence provenance.
+
+### 19.11 P2 — Automatic cross-harness routing for new work
+
+RFCs 0020–0021 already provide conservative workload allocation. After enough empirical receipts
+exist, Token Harness may make the next-task route executable rather than merely advisory.
+
+Automatic routing is limited initially to **new, independent tasks**. In-progress work still requires
+a bounded handoff and transfer-benefit evidence.
+
+Decision inputs:
+
+- independently normalized accepted-task capacity;
+- current five-hour and weekly reserve;
+- task class;
+- project-local acceptance history;
+- expected context startup/handoff cost;
+- proven model/effort policy on each harness.
+
+Routing must fail closed to recommendation-only when the evidence is incomplete.
+
+Acceptance:
+
+- no raw provider percentage subtraction;
+- no hidden paid fallback;
+- no in-progress session migration without an explicit compact handoff;
+- route rationale is visible and reproducible.
+
+### 19.12 P2 — Learned repository/task policies
+
+Once enough receipts exist, Token Harness may learn per-project policy preferences instead of relying
+only on global defaults.
+
+Examples:
+
+- a repository's mechanical tasks reliably succeed on the lowest-cost policy;
+- a specific test subsystem repeatedly requires a higher effort;
+- one harness has lower retry cost for frontend tasks while another has stronger acceptance for
+  multi-file backend changes;
+- certain context sources consistently produce no measurable value;
+- an aggressive compaction policy causes rediscovery and should be relaxed.
+
+Learning remains bounded by:
+
+- project-local evidence;
+- minimum sample counts;
+- recency;
+- stable policy identity;
+- quality gates;
+- reversible recommendations;
+- explicit unknown when evidence conflicts.
+
+Do not build an opaque universal ranking of Claude versus Codex.
+
+### 19.13 P3 — Opt-in autonomous efficiency execution
+
+Only after 19.1–19.12 are evidence-backed should Token Harness offer an opt-in mode that can execute
+the whole bounded loop automatically.
+
+The autonomous controller may:
+
+- choose the initial reviewed harness/policy;
+- apply an approved session-scoped or owned policy where supported;
+- prepare selective context;
+- execute the coding attempt;
+- run deterministic verification;
+- retry within the configured attempt/task allowance budget;
+- checkpoint;
+- escalate within the reviewed ladder;
+- stop on acceptance or safety/budget conditions.
+
+It may **not**:
+
+- buy/redeem credits automatically;
+- enable API billing implicitly;
+- bypass user-owned config;
+- run unbounded loops;
+- lower the task quality floor to hit an efficiency target;
+- conceal provider/harness switching;
+- treat estimated local tokens as subscription spend.
+
+This mode is an explicit product capability, not the default behavior of ordinary Token Harness
+startup.
+
+### 19.14 Delivery order
+
+Implement in this order so the controller gains leverage without outrunning its evidence:
+
+1. unified Efficiency Decision Engine;
+2. Context Governor recommendations + checkpoint contract;
+3. adaptive escalation policy;
+4. per-task allowance/attempt budget;
+5. bounded coding loop with deterministic stop conditions;
+6. failure fingerprinting;
+7. repository-intelligence abstraction/cache;
+8. selective context builder;
+9. measurable skill/policy attribution;
+10. development-efficiency dashboard;
+11. automatic next-task cross-harness routing;
+12. project-local learned policies;
+13. opt-in autonomous execution.
+
+Do **not** make adding more optimizer integrations the primary roadmap while these controller layers
+remain incomplete. New providers should enter only when they close a measured gap in this phase or
+materially outperform an existing mechanism under the existing quality/allowance gates.
+
+### 19.15 Release gates
+
+The closed-loop efficiency milestone is considered product-complete only when a user can:
+
+1. see verified/explicitly-unknown five-hour and weekly allowance state;
+2. obtain one explainable per-task Efficiency Decision;
+3. identify and reduce avoidable context before model escalation;
+4. assign an evidence-backed attempt/allowance budget to a task;
+5. execute a bounded implement/verify/retry loop with deterministic stop conditions;
+6. detect repeated failure without repeating the same strategy indefinitely;
+7. build a small repository context envelope without re-reading the whole repository by default;
+8. record accepted-task outcome, retries and comparable allowance movement;
+9. see accepted verified work per allowance without mixed-evidence arithmetic;
+10. preserve all existing transaction, ownership, compatibility, rollback and privacy invariants.
+
+Before broad autonomous execution, real empirical fixtures must cover at least mechanical, standard
+and hard task classes on both Claude Code and Codex where the respective live allowance surfaces are
+available. Critical tasks may remain recommendation-only until evidence is sufficient.
+
+### 19.16 Immediate sequencing from current main
+
+The near-term development sequence from the current repository state is:
+
+1. complete the real current-stack validation tracked by issue #255 so RTK + HarnessTrim have a
+   trustworthy present-day baseline;
+2. keep the merged optimizer × harness setup/results model as the management foundation;
+3. stop treating provider-count expansion as the main definition of progress;
+4. implement 19.1–19.4 as the next runtime-policy milestone;
+5. use those contracts to drive 19.5–19.10 and measure whether the controller actually increases
+   accepted work per allowance;
+6. admit automatic routing/autonomy only after the measured controller loop is demonstrably better
+   than the current advisory workflow.
+
+The product positioning that this phase should make true is:
+
+> **Token Harness maximizes verified coding work from your Claude Code and Codex allowance.**
+
+The optimization stack remains how Token Harness obtains specialized mechanisms. The efficiency
+controller becomes how it decides when and how to use them.
