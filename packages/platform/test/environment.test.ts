@@ -76,6 +76,36 @@ describe('minimal child environment', () => {
     assert.equal(windows['npm_config_prefix'], 'C:\\Tools');
   });
 
+  it('preserves isolated pipx and uv roots so installed tools remain visible on PATH', () => {
+    for (const [os, prefix, separator] of [
+      ['windows', 'C:\\Tools', ';'],
+      ['linux', '/opt/tools', ':'],
+    ] as const) {
+      const env = minimalChildEnvironment({
+        facts: facts(os),
+        ambient: {
+          PATH: `${prefix}${separator}/usr/bin`,
+          PIPX_HOME: `${prefix}/pipx-home`,
+          PIPX_BIN_DIR: `${prefix}/bin`,
+          PIPX_DEFAULT_PYTHON: `${prefix}/python`,
+          UV_TOOL_DIR: `${prefix}/uv-tools`,
+          UV_TOOL_BIN_DIR: `${prefix}/bin`,
+          UV_PYTHON: `${prefix}/python`,
+          PIPX_UNREVIEWED_SETTING: 'not inherited',
+          UV_UNREVIEWED_SETTING: 'not inherited',
+        },
+      });
+      assert.equal(env['PIPX_HOME'], `${prefix}/pipx-home`);
+      assert.equal(env['PIPX_BIN_DIR'], `${prefix}/bin`);
+      assert.equal(env['PIPX_DEFAULT_PYTHON'], `${prefix}/python`);
+      assert.equal(env['UV_TOOL_DIR'], `${prefix}/uv-tools`);
+      assert.equal(env['UV_TOOL_BIN_DIR'], `${prefix}/bin`);
+      assert.equal(env['UV_PYTHON'], `${prefix}/python`);
+      assert.equal(env['PIPX_UNREVIEWED_SETTING'], undefined);
+      assert.equal(env['UV_UNREVIEWED_SETTING'], undefined);
+    }
+  });
+
   it('sets NO_COLOR, because a child that colours its output breaks every importer', () => {
     const env = minimalChildEnvironment({ facts: facts('linux'), ambient: {} });
     assert.equal(env['NO_COLOR'], '1');

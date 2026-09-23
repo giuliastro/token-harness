@@ -33,6 +33,13 @@ const WINDOWS_ALLOWLIST: readonly string[] = [
   // a filesystem location, not a credential; dropping it can update a different global npm tree
   // while PATH continues to resolve the old executable.
   'NPM_CONFIG_PREFIX',
+  // Keep isolated Python tool installs inside the same roots the parent observes on PATH.
+  'PIPX_HOME',
+  'PIPX_BIN_DIR',
+  'PIPX_DEFAULT_PYTHON',
+  'UV_TOOL_DIR',
+  'UV_TOOL_BIN_DIR',
+  'UV_PYTHON',
   'PATH',
   'PATHEXT',
   'PROCESSOR_ARCHITECTURE',
@@ -69,6 +76,12 @@ const POSIX_ALLOWLIST: readonly string[] = [
   // Keep both common spellings because POSIX environment names are case-sensitive.
   'NPM_CONFIG_PREFIX',
   'npm_config_prefix',
+  'PIPX_HOME',
+  'PIPX_BIN_DIR',
+  'PIPX_DEFAULT_PYTHON',
+  'UV_TOOL_DIR',
+  'UV_TOOL_BIN_DIR',
+  'UV_PYTHON',
   'PATH',
   'SHELL',
   'TMPDIR',
