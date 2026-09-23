@@ -129,6 +129,10 @@ async function verifyManagedIntegrationPostconditions(
         const runtimeProblem = detection.warnings.find(
           (entry) => entry.severity === 'error' || entry.severity === 'warning',
         );
+        const verification = await adapter.verify(providerContext);
+        const failedChecks = verification.checks
+          .filter((check) => check.status !== 'pass' && check.id.includes(integration.harnessId))
+          .map((check) => check.summary);
         diagnostics.push(
           diagnostic({
             severity: 'error',
@@ -136,7 +140,8 @@ async function verifyManagedIntegrationPostconditions(
             subject: integration.providerId,
             message:
               `${adapter.manifest.displayName} setup did not become active for ${integration.harnessId} after the approved actions` +
-              (runtimeProblem === undefined ? '' : `: ${runtimeProblem.message}`),
+              (runtimeProblem === undefined ? '' : `: ${runtimeProblem.message}`) +
+              (failedChecks.length === 0 ? '' : `; ${failedChecks.join('; ')}`),
             path: detection.executable,
             remediation:
               runtimeProblem?.remediation ??
