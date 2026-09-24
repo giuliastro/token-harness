@@ -236,7 +236,13 @@ function fixture() {
         remove: async (path) => {
           files.delete(path);
         },
-        readDirectory: async () => [],
+        readDirectory: async (path) => {
+          const prefix = path.endsWith('/') ? path : `${path}/`;
+          return [...files.keys()]
+            .filter((candidate) => candidate.startsWith(prefix))
+            .map((candidate) => candidate.slice(prefix.length))
+            .filter((name) => name !== '' && !name.includes('/'));
+        },
       },
       runner,
       paths: {
@@ -254,6 +260,9 @@ function fixture() {
   return {
     context,
     files,
+    setFile(path: string, value: unknown) {
+      files.set(path, new TextEncoder().encode(JSON.stringify(value)));
+    },
     setUsedPercent(value: number) {
       usedPercent = value;
     },
@@ -320,6 +329,112 @@ describe('benchmark capture commands', () => {
     });
     assert.deepEqual(finished.data.receipt.outcome.errorCodes, []);
     assert.match(world.text(finished.data.receiptPath), /"variant": "baseline"/);
+  });
+
+  it('captures only CCR session usage metadata in a quality-gated task receipt', async () => {
+    const world = fixture();
+    assert.equal((await runBenchmarkStart(world.context())).exitCode, 0);
+
+    const sessionId = 'codex-session-private-1';
+    world.setFile(
+      '/home/dev/.local/state/token-harness/smart-routing/smart-routing-1799056920000-a1.json',
+      {
+        schemaVersion: 2,
+        eventId: '1799056920000-a1',
+        timestamp: '2026-09-02T10:02:00.000Z',
+        source: 'ccr',
+        harnessId: 'codex',
+        mode: 'shadow',
+        classifierVersion: 'heuristic-v1',
+        tier: 'simple',
+        score: 0.1,
+        confidence: 'high',
+        reasonCodes: ['short-prompt'],
+        requestModel: 'OpenAI/gpt-5.6-codex',
+        candidateModel: null,
+        routeMutationRequested: false,
+        routeSkipReason: 'shadow-mode',
+        promptChars: 12,
+        requestInputTokenEstimate: 3,
+        toolCount: 0,
+        hasImage: false,
+        decisionLatencyMs: 0.2,
+        sessionId,
+        measurement: {
+          status: 'not-measured',
+          resolvedModel: null,
+          providerInputTokens: null,
+          providerOutputTokens: null,
+          qualityGate: 'unknown',
+        },
+      },
+    );
+
+    world.setNow('2026-09-02T10:20:00.000Z');
+    const finishContext = world.context();
+    finishContext.benchmarkQuality = 'passed';
+    finishContext.benchmarkAttempts = 1;
+    finishContext.benchmarkFailedAttempts = 0;
+    finishContext.env = { CCR_WEB_AUTH_TOKEN: 'never-persist-this-token' };
+    finishContext.ccrFetch = async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { method: string };
+      const value =
+        request.method === 'getAppInfo'
+          ? { version: '3.1.1' }
+          : {
+              selectedSession: {
+                session: { agent: 'codex', id: `codex:${sessionId}` },
+                conversation: [{ user: { content: 'private prompt content' } }],
+                requests: [
+                  {
+                    sessionId,
+                    createdAt: '2026-09-02T10:04:00.000Z',
+                    model: 'OpenAI/gpt-fast',
+                    inputTokens: 120,
+                    outputTokens: 40,
+                    cacheReadTokens: 30,
+                    cacheWriteTokens: 5,
+                    totalTokens: 160,
+                    costUsd: 0.012,
+                    path: '/home/dev/project/private.ts',
+                  },
+                ],
+              },
+            };
+      return new Response(JSON.stringify({ ok: true, value }), { status: 200 });
+    };
+
+    const finished = await runBenchmarkFinish(finishContext);
+    assert.equal(finished.exitCode, 0);
+    assert.ok(finished.data);
+    assert.deepEqual(finished.data.receipt.ccrUsage, {
+      schemaVersion: 1,
+      status: 'observed',
+      sessionCount: 1,
+      observedSessionCount: 1,
+      requestCount: 1,
+      inputTokens: 120,
+      outputTokens: 40,
+      cacheReadTokens: 30,
+      cacheWriteTokens: 5,
+      totalTokens: 160,
+      recordedCostUsd: 0.012,
+      byModel: [
+        {
+          model: 'OpenAI/gpt-fast',
+          requestCount: 1,
+          inputTokens: 120,
+          outputTokens: 40,
+          cacheReadTokens: 30,
+          cacheWriteTokens: 5,
+          totalTokens: 160,
+          recordedCostUsd: 0.012,
+        },
+      ],
+    });
+    const receiptText = world.text(finished.data.receiptPath);
+    assert.doesNotMatch(receiptText, new RegExp(sessionId));
+    assert.doesNotMatch(receiptText, /private prompt content|private\.ts|never-persist-this-token/);
   });
 
   it('refuses a capture when the project cannot be stably attributed', async () => {

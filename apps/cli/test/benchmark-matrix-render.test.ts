@@ -18,6 +18,19 @@ const report: TaskBenchmarkMatrixReport = {
       optimizedLocalTokens: 1400,
       localTokenSavingPercent: 30,
       quota: null,
+      ccrUsage: {
+        status: 'comparable',
+        baselineRequests: 5,
+        optimizedRequests: 5,
+        baselineTokens: 500,
+        optimizedTokens: 400,
+        totalTokenDelta: -100,
+        baselineModels: ['provider/strong'],
+        optimizedModels: ['provider/fast'],
+        baselineRecordedCostUsd: 0.05,
+        optimizedRecordedCostUsd: 0.02,
+        recordedCostDeltaUsd: -0.03,
+      },
     },
   ],
   byTaskClass: [
@@ -36,6 +49,21 @@ const report: TaskBenchmarkMatrixReport = {
       baselineLocalTokens: 2000,
       optimizedLocalTokens: 1400,
       localTokenSavingPercent: 30,
+      ccrUsage: {
+        comparablePairs: 1,
+        partialPairs: 0,
+        qualityGatedPairs: 0,
+        notMeasuredPairs: 0,
+        baselineRequests: 5,
+        optimizedRequests: 5,
+        baselineTokens: 500,
+        optimizedTokens: 400,
+        totalTokenDelta: -100,
+        recordedCostPairs: 1,
+        baselineRecordedCostUsd: 0.05,
+        optimizedRecordedCostUsd: 0.02,
+        recordedCostDeltaUsd: -0.03,
+      },
     },
   ],
   overall: {
@@ -53,6 +81,21 @@ const report: TaskBenchmarkMatrixReport = {
     baselineLocalTokens: 2000,
     optimizedLocalTokens: 1400,
     localTokenSavingPercent: 30,
+    ccrUsage: {
+      comparablePairs: 1,
+      partialPairs: 0,
+      qualityGatedPairs: 0,
+      notMeasuredPairs: 0,
+      baselineRequests: 5,
+      optimizedRequests: 5,
+      baselineTokens: 500,
+      optimizedTokens: 400,
+      totalTokenDelta: -100,
+      recordedCostPairs: 1,
+      baselineRecordedCostUsd: 0.05,
+      optimizedRecordedCostUsd: 0.02,
+      recordedCostDeltaUsd: -0.03,
+    },
   },
   selection: {
     scanned: 2,
@@ -76,6 +119,11 @@ describe('benchmark matrix rendering', () => {
     assert.match(rendered, /mechanical-real-1 — optimized-better/);
     assert.match(rendered, /local-evidence/);
     assert.match(rendered, /delta \+30%/);
+    assert.match(rendered, /CCR observed tokens across 1 quality-passed pairs/);
+    assert.match(rendered, /delta -100/);
+    assert.match(rendered, /CCR recorded provider-cost estimate/);
+    assert.match(rendered, /delta -0\.030000 USD/);
+    assert.match(rendered, /separate from subscription quota and\s+billed savings/);
     assert.match(rendered, /Local token deltas are local evidence only/);
     assert.doesNotMatch(rendered, /score/i);
     for (const line of rendered.trimEnd().split('\n')) {

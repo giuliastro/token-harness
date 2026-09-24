@@ -1,6 +1,6 @@
 import type { SmartRoutingTier } from './smart-routing.js';
 
-export const SMART_ROUTING_EVENT_SCHEMA_VERSION = 1;
+export const SMART_ROUTING_EVENT_SCHEMA_VERSION = 2;
 export const SMART_ROUTING_EVENT_PREFIX = 'smart-routing-';
 export const SMART_ROUTING_EVENT_RETENTION_LIMIT = 200;
 
@@ -12,7 +12,7 @@ export type SmartRoutingMode = 'shadow' | 'conservative';
  * token reduction and cannot enter RFC 0005's exact/estimated savings totals.
  */
 export interface SmartRoutingDecisionEvent {
-  schemaVersion: typeof SMART_ROUTING_EVENT_SCHEMA_VERSION;
+  schemaVersion: 1 | typeof SMART_ROUTING_EVENT_SCHEMA_VERSION;
   eventId: string;
   timestamp: string;
   source: 'ccr';
@@ -32,6 +32,8 @@ export interface SmartRoutingDecisionEvent {
   toolCount: number;
   hasImage: boolean;
   decisionLatencyMs: number;
+  /** CCR's opaque local session id, retained only to match local request-usage counters. */
+  sessionId?: string | null;
   measurement: {
     status: 'not-measured';
     resolvedModel: null;
@@ -106,30 +108,34 @@ export function isSmartRoutingDecisionEvent(value: unknown): value is SmartRouti
   if (!isRecord(value) || !isRecord(value['measurement'])) return false;
   const event = value as unknown as SmartRoutingDecisionEvent;
   const measurement = event.measurement;
+  const schemaVersion = value['schemaVersion'];
+  const keys = [
+    'schemaVersion',
+    'eventId',
+    'timestamp',
+    'source',
+    'harnessId',
+    'mode',
+    'classifierVersion',
+    'tier',
+    'score',
+    'confidence',
+    'reasonCodes',
+    'requestModel',
+    'candidateModel',
+    'routeMutationRequested',
+    'routeSkipReason',
+    'promptChars',
+    'requestInputTokenEstimate',
+    'toolCount',
+    'hasImage',
+    'decisionLatencyMs',
+    'measurement',
+  ];
+  const isV2 = schemaVersion === SMART_ROUTING_EVENT_SCHEMA_VERSION;
+  if (isV2) keys.push('sessionId');
   return (
-    hasExactKeys(value, [
-      'schemaVersion',
-      'eventId',
-      'timestamp',
-      'source',
-      'harnessId',
-      'mode',
-      'classifierVersion',
-      'tier',
-      'score',
-      'confidence',
-      'reasonCodes',
-      'requestModel',
-      'candidateModel',
-      'routeMutationRequested',
-      'routeSkipReason',
-      'promptChars',
-      'requestInputTokenEstimate',
-      'toolCount',
-      'hasImage',
-      'decisionLatencyMs',
-      'measurement',
-    ]) &&
+    hasExactKeys(value, keys) &&
     hasExactKeys(value['measurement'] as Record<string, unknown>, [
       'status',
       'resolvedModel',
@@ -137,7 +143,7 @@ export function isSmartRoutingDecisionEvent(value: unknown): value is SmartRouti
       'providerOutputTokens',
       'qualityGate',
     ]) &&
-    event.schemaVersion === SMART_ROUTING_EVENT_SCHEMA_VERSION &&
+    (event.schemaVersion === 1 || event.schemaVersion === SMART_ROUTING_EVENT_SCHEMA_VERSION) &&
     typeof event.eventId === 'string' &&
     /^[0-9]{13}-[a-z0-9]+$/.test(event.eventId) &&
     typeof event.timestamp === 'string' &&
@@ -164,6 +170,9 @@ export function isSmartRoutingDecisionEvent(value: unknown): value is SmartRouti
     typeof event.hasImage === 'boolean' &&
     Number.isFinite(event.decisionLatencyMs) &&
     event.decisionLatencyMs >= 0 &&
+    (!isV2 ||
+      event.sessionId === null ||
+      (typeof event.sessionId === 'string' && /^[A-Za-z0-9_.:-]{1,256}$/.test(event.sessionId))) &&
     measurement.status === 'not-measured' &&
     measurement.resolvedModel === null &&
     measurement.providerInputTokens === null &&

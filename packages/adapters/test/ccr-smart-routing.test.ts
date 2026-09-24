@@ -7,6 +7,8 @@ import { createCcrSmartRoutingScript } from '../src/routing/ccr-smart-routing.js
 type CcrInput = {
   model?: string;
   tokenCount?: number;
+  sessionId?: string;
+  headers?: Record<string, string | string[]>;
   summary?: { lastUserText?: string; toolNames?: string[]; hasImage?: boolean } | null;
 };
 
@@ -50,6 +52,8 @@ test('generated CCR shadow rule classifies without changing the request or persi
     {
       model: 'Provider/main',
       tokenCount: 12,
+      sessionId: 'session-abc',
+      headers: { 'user-agent': 'claude-code/2.1.0' },
       summary: { lastUserText: prompt, toolNames: [], hasImage: false },
     },
     { TOKEN_HARNESS_ROUTING_SIMPLE_MODEL: 'Provider/fast' },
@@ -65,6 +69,7 @@ test('generated CCR shadow rule classifies without changing the request or persi
   assert.equal(writes[0]?.event['mode'], 'shadow');
   assert.equal(writes[0]?.event['candidateModel'], 'Provider/fast');
   assert.equal(writes[0]?.event['routeMutationRequested'], false);
+  assert.equal(writes[0]?.event['sessionId'], 'session-abc');
   assert.equal(JSON.stringify(writes[0]?.event).includes(prompt), false);
   assert.equal(source.includes('api.fetch'), false);
 });
@@ -81,6 +86,8 @@ test('conservative mode returns a configured simple model only for a high-confid
     {
       model: 'Provider/main',
       tokenCount: 12,
+      sessionId: 'codex-session',
+      headers: { 'user-agent': 'openai-codex/0.1.0' },
       summary: { lastUserText: 'What is 2 + 2?', toolNames: [], hasImage: false },
     },
     { TOKEN_HARNESS_ROUTING_SIMPLE_MODEL: 'Provider/fast' },
@@ -89,6 +96,7 @@ test('conservative mode returns a configured simple model only for a high-confid
   assert.equal(((await result) as { model?: string } | null)?.model, 'Provider/fast');
   assert.equal(writes[0]?.event['harnessId'], 'codex');
   assert.equal(writes[0]?.event['routeMutationRequested'], true);
+  assert.equal(writes[0]?.event['sessionId'], 'codex-session');
 });
 
 test('conservative mode preserves requests with unconfirmed tool compatibility', async () => {
@@ -101,6 +109,7 @@ test('conservative mode preserves requests with unconfirmed tool compatibility',
   const input = {
     model: 'Provider/main',
     tokenCount: 12,
+    headers: { 'user-agent': 'openai-codex/0.1.0' },
     summary: { lastUserText: 'What is 2 + 2?', toolNames: ['read_file'], hasImage: false },
   };
   const defaultTools = executeCcrScript(source, input, {
@@ -119,6 +128,25 @@ test('conservative mode preserves requests with unconfirmed tool compatibility',
   );
 });
 
+test('generated rule fails open without a trusted harness identity signal', async () => {
+  const source = createCcrSmartRoutingScript({
+    harnessId: 'claude',
+    mode: 'conservative',
+    telemetryDirectory: '/state/smart-routing',
+    pathSeparator: '/',
+  });
+  const { result, writes } = executeCcrScript(
+    source,
+    {
+      model: 'Provider/main',
+      summary: { lastUserText: 'What is 2 + 2?', toolNames: [], hasImage: false },
+    },
+    { TOKEN_HARNESS_ROUTING_SIMPLE_MODEL: 'Provider/fast' },
+  );
+  assert.equal(await result, null);
+  assert.equal(writes.length, 0);
+});
+
 test('conservative mode preserves the current route when the request model is unavailable', async () => {
   const source = createCcrSmartRoutingScript({
     harnessId: 'codex',
@@ -128,7 +156,10 @@ test('conservative mode preserves the current route when the request model is un
   });
   const { result, writes } = executeCcrScript(
     source,
-    { summary: { lastUserText: 'What is 2 + 2?', toolNames: [], hasImage: false } },
+    {
+      headers: { 'user-agent': 'openai-codex/0.1.0' },
+      summary: { lastUserText: 'What is 2 + 2?', toolNames: [], hasImage: false },
+    },
     { TOKEN_HARNESS_ROUTING_SIMPLE_MODEL: 'Provider/fast' },
   );
 

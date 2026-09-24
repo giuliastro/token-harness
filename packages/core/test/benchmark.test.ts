@@ -134,6 +134,119 @@ describe('task benchmark capture contract', () => {
     assert.equal(completed.receipt.localUsage, null);
   });
 
+  it('round-trips CCR usage without persisting session identifiers or request payloads', () => {
+    const source = receipt('baseline', {
+      ccrUsage: {
+        schemaVersion: 1,
+        status: 'observed',
+        sessionCount: 1,
+        observedSessionCount: 1,
+        requestCount: 2,
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 140,
+        recordedCostUsd: 0.02,
+        byModel: [
+          {
+            model: 'Provider/strong',
+            requestCount: 2,
+            inputTokens: 100,
+            outputTokens: 40,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            totalTokens: 140,
+            recordedCostUsd: 0.02,
+          },
+        ],
+      },
+    });
+    const parsed = parseTaskBenchmarkReceipt(JSON.parse(JSON.stringify(source)));
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.receipt.ccrUsage, source.ccrUsage);
+    assert.equal(JSON.stringify(parsed.receipt).includes('sessionId'), false);
+    assert.equal(JSON.stringify(parsed.receipt).includes('requestBody'), false);
+  });
+
+  it('reports CCR request-usage deltas only when both paired quality gates pass', () => {
+    const baseline = receipt('baseline', {
+      ccrUsage: {
+        schemaVersion: 1,
+        status: 'observed',
+        sessionCount: 1,
+        observedSessionCount: 1,
+        requestCount: 5,
+        inputTokens: 400,
+        outputTokens: 100,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 500,
+        recordedCostUsd: 0.05,
+        byModel: [
+          {
+            model: 'Provider/strong',
+            requestCount: 5,
+            inputTokens: 400,
+            outputTokens: 100,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            totalTokens: 500,
+            recordedCostUsd: 0.05,
+          },
+        ],
+      },
+    });
+    const optimized = receipt('optimized', {
+      ccrUsage: {
+        schemaVersion: 1,
+        status: 'observed',
+        sessionCount: 1,
+        observedSessionCount: 1,
+        requestCount: 5,
+        inputTokens: 320,
+        outputTokens: 80,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 400,
+        recordedCostUsd: 0.02,
+        byModel: [
+          {
+            model: 'Provider/fast',
+            requestCount: 5,
+            inputTokens: 320,
+            outputTokens: 80,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            totalTokens: 400,
+            recordedCostUsd: 0.02,
+          },
+        ],
+      },
+    });
+    const compared = compareTaskBenchmarkReceipts(baseline, optimized);
+    assert.equal(compared.ccrUsage?.status, 'comparable');
+    assert.equal(compared.ccrUsage?.totalTokenDelta, -100);
+    assert.ok(Math.abs((compared.ccrUsage?.recordedCostDeltaUsd ?? 0) + 0.03) < 1e-12);
+    assert.equal(compared.quota?.optimizedDeltaUsedPercent, 6);
+
+    const unmatched = compareTaskBenchmarkReceipts(
+      { ...baseline, harnessId: harnessId('claude') },
+      optimized,
+    );
+    assert.equal(unmatched.verdict, 'incomparable');
+    assert.equal(unmatched.ccrUsage?.status, 'not-measured');
+    assert.equal(unmatched.ccrUsage?.totalTokenDelta, null);
+
+    const gated = compareTaskBenchmarkReceipts(baseline, {
+      ...optimized,
+      outcome: { ...optimized.outcome, qualityGate: 'failed' },
+    });
+    assert.equal(gated.ccrUsage?.status, 'quality-gated');
+    assert.equal(gated.ccrUsage?.totalTokenDelta, null);
+  });
+
   it('rejects an invalid completion instead of persisting a malformed receipt', () => {
     const invalidAttempts = completeTaskBenchmarkCapture(capture(), {
       completedAt: '2026-09-02T12:20:00.000Z',
@@ -632,5 +745,86 @@ describe('empirical benchmark matrix', () => {
       report.entries.every((entry) => entry.quota !== null),
       true,
     );
+  });
+
+  it('aggregates only complete quality-passed CCR observations separately from verdicts', () => {
+    const ccrUsage = (
+      totalTokens: number,
+      recordedCostUsd: number,
+      status: 'observed' | 'partial' = 'observed',
+    ) => ({
+      schemaVersion: 1 as const,
+      status,
+      sessionCount: 1,
+      observedSessionCount: 1,
+      requestCount: 5,
+      inputTokens: totalTokens - 100,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalTokens,
+      recordedCostUsd,
+      byModel: [],
+    });
+    const baseline = receipt('baseline', {
+      benchmarkId: 'mechanical-ccr-1',
+      ccrUsage: ccrUsage(500, 0.05),
+    });
+    const optimized = receipt('optimized', {
+      benchmarkId: 'mechanical-ccr-1',
+      ccrUsage: ccrUsage(400, 0.02),
+    });
+    const gatedBaseline = receipt('baseline', {
+      benchmarkId: 'hard-ccr-1',
+      taskClass: 'hard',
+      ccrUsage: ccrUsage(1000, 0.1),
+    });
+    const gatedOptimized = receipt('optimized', {
+      benchmarkId: 'hard-ccr-1',
+      taskClass: 'hard',
+      outcome: { qualityGate: 'failed', attempts: 1, failedAttempts: 0, errorCodes: [] },
+      ccrUsage: ccrUsage(800, 0.08),
+    });
+    const withoutCcrUsage = (value: TaskBenchmarkReceipt): TaskBenchmarkReceipt => {
+      const copy = { ...value };
+      delete copy.ccrUsage;
+      return copy;
+    };
+
+    const report = buildTaskBenchmarkMatrix([
+      { baseline, optimized },
+      { baseline: gatedBaseline, optimized: gatedOptimized },
+    ]);
+
+    assert.equal(
+      report.entries[0]?.verdict,
+      compareTaskBenchmarkReceipts(withoutCcrUsage(baseline), withoutCcrUsage(optimized)).verdict,
+    );
+    const usageSummary = report.overall.ccrUsage;
+    assert.ok(usageSummary);
+    assert.deepEqual(
+      {
+        ...usageSummary,
+        recordedCostDeltaUsd: null,
+      },
+      {
+        comparablePairs: 1,
+        partialPairs: 0,
+        qualityGatedPairs: 1,
+        notMeasuredPairs: 0,
+        baselineRequests: 5,
+        optimizedRequests: 5,
+        baselineTokens: 500,
+        optimizedTokens: 400,
+        totalTokenDelta: -100,
+        recordedCostPairs: 1,
+        baselineRecordedCostUsd: 0.05,
+        optimizedRecordedCostUsd: 0.02,
+        recordedCostDeltaUsd: null,
+      },
+    );
+    assert.ok(Math.abs((usageSummary.recordedCostDeltaUsd ?? 0) + 0.03) < 1e-12);
+    assert.equal(report.byTaskClass[1]?.ccrUsage?.qualityGatedPairs, 1);
+    assert.equal(report.entries[1]?.ccrUsage?.totalTokenDelta, null);
   });
 });

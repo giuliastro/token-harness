@@ -98,6 +98,10 @@ Even in these cases Token Harness starts as a recommendation engine. Automatic s
 opt-in, version-gated, benchmarked and reversible. A feature is not made dynamic merely because it
 can be.
 
+Per-request model routing is the secondary policy specified by [RFC 0028](0028-smart-model-routing.md).
+It begins with CCR shadow observation and keeps conservative route changes explicit, benchmarked,
+and reversible; it does not replace the native model/reasoning policy in the optimization stack.
+
 ## Component model
 
 Third-party projects remain independent dependencies behind thin adapters. Token Harness should

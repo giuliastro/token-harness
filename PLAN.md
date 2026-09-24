@@ -2827,12 +2827,23 @@ controller becomes how it decides when and how to use them.
 RFC 0028 adds per-request model routing as a secondary runtime policy under RFC 0027. It runs after
 the existing native model/effort policy and begins with observation only.
 
+**Implementation status (2026-09-24):** the local classifier, shadow telemetry, managed CCR 3.1.1
+rule lifecycle, and CCR usage fields in paired receipts are implemented. Real provider-paired task
+runs and any resulting subscription-allowance savings claim remain open evidence work.
+
 #### 20.1 P0 — Local classifier and CCR shadow integration
 
 The first slice supplies a deterministic TypeScript heuristic with no API or local-model call, a CCR
-Node.js script export for Claude Code and Codex, and local feature-only decision telemetry. Shadow
-mode is the default and returns no model rewrite. Users add the generated script through CCR's
-Routing UI; Token Harness does not install CCR or edit its rules in this phase.
+Node.js script export for Claude Code and Codex, local feature-only decision telemetry, and an
+optional managed CCR rule setup through CCR 3.1.1's authenticated loopback Web RPC. Setup uses the
+existing preview/`--yes` approval and ownership receipt, adds only the Token Harness rule, verifies
+it after save, and offers an exact-rule rollback. Token Harness does not install CCR, configure
+providers, create provider credentials, or create/enable an Agent Profile or alter harness endpoint
+settings. Users must connect and launch the harness through an enabled CCR profile for requests to
+reach the rule. The gateway may restart when CCR applies the saved configuration.
+
+Shadow mode remains the default and returns no model rewrite. Conservative mode is explicit and
+must be configured separately; changing an existing rule's mode requires rollback before setup.
 
 Decision events record tier, confidence, reason codes, sanitized request/candidate model IDs, request
 metadata and classifier latency. Prompts, request bodies, credentials, and tool contents are not
@@ -2849,19 +2860,31 @@ IDs, provider credentials, paid overflow routes, or hidden fallback chains are i
 #### 20.3 P1 — Quality and allowance measurement
 
 Any claimed benefit requires paired task evidence with the actual resolved model, comparable
-provider-reported usage or included-allowance evidence, and an explicit quality outcome. API cost,
-subscription allowance, latency, and local token estimates remain separate. Automatic routing beyond
-the conservative opt-in remains disabled until those gates pass on both supported harnesses.
+provider-reported usage or included-allowance evidence, and an explicit quality outcome. Benchmark
+receipts can capture CCR 3.1.1's per-session model/token counters and CCR-recorded provider-cost
+estimate after dropping request bodies and session IDs. The paired comparator shows this evidence
+separately and exposes token/cost deltas only when both quality gates pass and both observations are
+complete. CCR usage never changes the quota-based verdict. API cost, subscription allowance,
+latency, and local token estimates remain separate. Automatic routing beyond the conservative
+opt-in remains disabled until those gates pass on both supported harnesses.
+
+Live provider/allowance measurement is still an operator-run paired experiment; offline tests and a
+verified CCR configuration do not prove a real request was routed or that a subscription quota was
+saved.
 
 Acceptance:
 
 - the same pure classifier is exercised directly and through the generated CCR script;
 - the generated shadow rule works for separate Claude Code and Codex profiles and never rewrites a
   request;
+- CCR setup is local-only, previewed, approval-gated, version-gated to 3.1.1, ownership-tracked,
+  post-verified, and reversible without changing unrelated rules;
 - telemetry contains no prompt text or credentials, is stored locally, and fails open on write
   errors;
+- benchmark receipts retain only CCR model/usage aggregates, and omit request/session bodies and
+  session identifiers;
 - routing decision counts remain separate from exact, estimated, counterfactual, and billed token
   savings;
-- conservative routing requires explicit script generation and only proposes a configured
+- conservative routing requires explicit mode selection and only proposes a configured
   compatible simple model for a high-confidence low-risk request;
 - no savings claim appears until paired quality and usage evidence is attributable per route.

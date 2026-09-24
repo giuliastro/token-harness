@@ -128,6 +128,8 @@ export interface RunOptions {
   /** The metrics store. Omitted by tests that assert the CLI contract without one. */
   metrics?: MetricsStore | null;
   env?: Readonly<Record<string, string | undefined>>;
+  /** Optional test seam for local CCR Web RPC; production uses Node's built-in fetch. */
+  ccrFetch?: typeof fetch;
   stdoutIsTty?: boolean;
   toolVersion?: string;
   /**
@@ -429,6 +431,11 @@ export async function run(options: RunOptions): Promise<number> {
     routingMetrics: invocation.options.routingMetrics,
     routingMode: invocation.options.routingMode,
     routingPrune: invocation.options.routingPrune,
+    routingCcrConfigure: invocation.options.routingCcrConfigure,
+    routingCcrRollback: invocation.options.routingCcrRollback,
+    routingCcrUsage: invocation.options.routingCcrUsage,
+    env: options.env ?? {},
+    ...(options.ccrFetch === undefined ? {} : { ccrFetch: options.ccrFetch }),
     agentSkill: invocation.options.agentSkill,
     since: invocation.options.since,
     until: invocation.options.until,

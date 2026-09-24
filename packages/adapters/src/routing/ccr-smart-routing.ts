@@ -21,7 +21,7 @@ export function createCcrSmartRoutingScript(options: CcrSmartRoutingScriptOption
   const mode = options.mode ?? 'shadow';
   const eventPathPrefix = `${options.telemetryDirectory}${options.pathSeparator}`;
   const classifierSource = classifySmartRoutingPrompt.toString();
-  const eventSchemaVersion = 1;
+  const eventSchemaVersion = 2;
   const classifierVersion = SMART_ROUTING_CLASSIFIER_VERSION;
 
   return `const classifySmartRoutingPrompt = (${classifierSource});
@@ -31,6 +31,21 @@ const mode = ${JSON.stringify(mode)};
 const startedAt = Date.now();
 const safeInput = input && typeof input === "object" ? input : {};
 const summary = safeInput.summary && typeof safeInput.summary === "object" ? safeInput.summary : {};
+const headers = safeInput.headers && typeof safeInput.headers === "object" ? safeInput.headers : {};
+const headerSignals = [];
+for (const [name, rawValue] of Object.entries(headers)) {
+  const key = name.toLowerCase();
+  if (key !== "user-agent" && key !== "x-user-agent" && key !== "x-client-user-agent" && key !== "x-ccr-client" && key !== "x-client-name") continue;
+  if (Array.isArray(rawValue)) headerSignals.push(rawValue.join(" "));
+  else if (typeof rawValue === "string") headerSignals.push(rawValue);
+}
+const agentSignal = headerSignals.join(" ").toLowerCase();
+const detectedHarness = /openai-codex|codex[_ -]?cli/.test(agentSignal)
+  ? "codex"
+  : /@anthropic-ai\\/claude-code|claude[-_ ]code|claude[_ -]?cli/.test(agentSignal)
+    ? "claude"
+    : null;
+if (detectedHarness !== harnessId) return null;
 const prompt = typeof summary.lastUserText === "string" ? summary.lastUserText : "";
 const toolCount = Array.isArray(summary.toolNames) ? summary.toolNames.length : 0;
 const tokenCount = Number.isSafeInteger(safeInput.tokenCount) && safeInput.tokenCount > 0 ? safeInput.tokenCount : null;
@@ -47,6 +62,8 @@ const simpleModel = typeof rawSimpleModel === "string" && /^[A-Za-z0-9_.:/@+-]{1
 const requestModel = typeof safeInput.model === "string" && /^[A-Za-z0-9_.:/@+-]{1,160}$/.test(safeInput.model)
   ? safeInput.model
   : null;
+const rawSessionId = typeof safeInput.sessionId === "string" ? safeInput.sessionId : null;
+const sessionId = rawSessionId !== null && /^[A-Za-z0-9_.:-]{1,256}$/.test(rawSessionId) ? rawSessionId : null;
 const candidateModel = decision.tier === "simple" ? simpleModel : null;
 let routeMutationRequested = false;
 let routeSkipReason = null;
@@ -94,6 +111,7 @@ const event = {
   toolCount,
   hasImage: decision.hasImage,
   decisionLatencyMs: Math.max(0, Date.now() - startedAt),
+  sessionId,
   measurement: {
     status: "not-measured",
     resolvedModel: null,

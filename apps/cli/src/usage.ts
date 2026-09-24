@@ -46,7 +46,7 @@ Advanced commands
   apply       Apply a reviewed plan
   verify      Check that configured integrations work
   metrics     Show measured savings
-  routing     Export a CCR rule or inspect routing decisions
+  routing     Export/configure a CCR rule or inspect routing decisions
   update      Check or update installed providers
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
@@ -63,6 +63,9 @@ Useful flags
   --route-metrics      Show local routing decision telemetry
   --route-mode <mode>  shadow by default; conservative requires opt-in
   --prune              Keep only the 200 newest routing decision records
+  --configure-ccr      Preview CCR setup; --yes applies the owned rule
+  --rollback-ccr       Preview rollback; --yes removes the owned rule
+  --ccr-usage          Read CCR model/token aggregates for local sessions
   --project <dir>      Use that project instead of the current directory
   --help               Show help for a command
   --version            Print the version
@@ -333,9 +336,11 @@ Exits 0 whatever the figures say — an empty report is a fact, not a failure.`,
 Usage
   token-harness routing --script --harness <claude|codex>
                         [--route-mode <shadow|conservative>] [--json]
+  token-harness routing --configure-ccr --harness <claude|codex> [--yes]
+  token-harness routing --rollback-ccr --harness <claude|codex> [--yes]
   token-harness routing --route-metrics [--since <duration|date>]
                         [--until <date>] [--harness <claude|codex>]
-                        [--prune] [--json]
+                        [--ccr-usage] [--prune] [--json]
 
 Script export defaults to shadow mode. Add the generated script as a Node.js script rule in CCR;
 it records local, prompt-free decisions and returns no route rewrite in shadow mode. Conservative
@@ -346,7 +351,13 @@ TOKEN_HARNESS_ROUTING_ALLOW_TOOLS=true. No API call or local model is used to cl
 CCR must run on this machine as the same user for the local telemetry path to be writable. A failed
 telemetry write never blocks the agent request. Decision records contain no prompt or credentials.
 Routing choices are not measured token savings; this command keeps them separate from \`metrics\`.
-Use --prune to remove all but the 200 newest decision records.`,
+Use --prune to remove all but the 200 newest decision records.
+
+Managed CCR calls use the authenticated loopback Web RPC. Set CCR_WEB_AUTH_TOKEN for both
+processes and optionally CCR_WEB_URL (default http://127.0.0.1:3458). CCR 3.1.1 is the
+reviewed version. Configure previews by default; --yes applies the rule and may restart the
+gateway. Rollback removes only the exact rule and script Token Harness owns. CCR usage is
+observed request telemetry, not subscription quota or measured savings.`,
   uninstall: `token-harness uninstall — remove what Token Harness owns
 
 Usage

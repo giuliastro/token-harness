@@ -247,7 +247,7 @@ browser controller itself.
 | `apply` | Apply a reviewed stored plan | Yes, only with `--yes` |
 | `verify` | Check the declared integration tier | No |
 | `metrics` | Report attributable reducer savings | No |
-| `routing` | Export a shadow-first CCR rule or inspect routing decisions | No |
+| `routing` | Export/configure an owned CCR rule or inspect routing decisions | Yes, only after preview and `--yes` |
 | `status` | Report pipelines, drift and importer modes | No |
 | `update` | Check/update reviewed provider packages | Yes, only with `--yes` |
 | `rollback` | Restore the latest transaction snapshot | Yes, only with `--yes` |
@@ -262,6 +262,60 @@ Need stable machine-readable output? Add `--json`. Need the evidence behind a hu
 The older automation contracts remain available. `ui --json` preserves its existing schema-1
 report; `ui --read-only` opens the legacy read-only UI; `ui --no-open` starts the guided app without
 launching a browser.
+
+### Smart Model Routing (advanced)
+
+The local TypeScript classifier needs no API key or local model. CCR 3.1.1 can be configured as the
+interception layer for Claude Code or Codex using its authenticated loopback Web RPC. Set
+`CCR_WEB_AUTH_TOKEN` in the Token Harness environment to the token already used by the local CCR
+service. For a useful shadow report, also set `TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the CCR
+service environment to a model configured there; shadow mode records it as a candidate without
+changing the request. These commands manage the Token Harness routing rule only; they do not create
+an Agent Profile or change Claude Code/Codex endpoint settings. To send requests through CCR, first
+configure and enable an Agent Profile for the harness, launch it through CCR (`ccr <profile>` or
+`ccr-app <profile>`), and verify that its request appears in CCR logs. See CCR's
+[Agent Profiles guide](https://github.com/musistudio/claude-code-router/blob/main/docs/src/content/docs/en/configuration/profiles.md).
+Preview and apply the default shadow rule:
+
+```sh
+token-harness routing --configure-ccr --harness codex
+token-harness routing --configure-ccr --harness codex --yes
+```
+
+For a paired routing experiment, capture the baseline while the rule is in shadow mode, then record
+the task's actual quality outcome. To test conservative routing, configure
+`TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the CCR service environment with a model already available
+there, restart CCR as needed, roll back the owned shadow rule, and preview/apply the conservative
+rule. Run the same task as the optimized variant, record its quality, then compare the receipt paths
+printed by Token Harness:
+
+```sh
+token-harness benchmark-start --benchmark-id routing-codex-1 --variant baseline --task mechanical --harness codex
+# Run the task with CCR in shadow mode, then finish with the actual quality and attempt counts.
+token-harness benchmark-finish --benchmark-id routing-codex-1 --variant baseline --quality passed --attempts 1 --failed-attempts 0
+
+token-harness routing --rollback-ccr --harness codex
+token-harness routing --rollback-ccr --harness codex --yes
+token-harness routing --configure-ccr --harness codex --route-mode conservative
+token-harness routing --configure-ccr --harness codex --route-mode conservative --yes
+token-harness benchmark-start --benchmark-id routing-codex-1 --variant optimized --task mechanical --harness codex
+# Repeat the same task under comparable conditions, then finish with its real quality outcome.
+token-harness benchmark-finish --benchmark-id routing-codex-1 --variant optimized --quality passed --attempts 1 --failed-attempts 0
+
+token-harness benchmark --baseline /path/to/baseline.json --optimized /path/to/optimized.json
+```
+
+To inspect decisions and local CCR request usage outside the task comparison, use
+`token-harness routing --route-metrics` or add `--ccr-usage`.
+
+The benchmark reads CCR session counters only when the task produced local routing events with a
+recognized harness identity. Receipts retain model and token aggregates, not prompts or session
+IDs. The comparator shows CCR token and provider-cost-estimate deltas separately and only when both
+observations are complete and both quality gates pass. This is not evidence of saved Codex/Claude
+subscription quota; quota deltas remain separately attributable, and no live savings are claimed
+until real paired tasks have been measured. `token-harness benchmark-matrix` also aggregates CCR
+usage across complete quality-passed pairs and reports withheld pairs separately. Shadow mode
+remains the default, and switching an owned rule's mode requires rollback before reconfiguration.
 
 ### Evaluation evidence (advanced / maintainers)
 

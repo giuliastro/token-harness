@@ -110,6 +110,9 @@ export interface CommandOptions {
   routingMetrics: boolean;
   routingMode: 'shadow' | 'conservative';
   routingPrune: boolean;
+  routingCcrConfigure: boolean;
+  routingCcrRollback: boolean;
+  routingCcrUsage: boolean;
   /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
   agentSkill: boolean;
   /** Show the full technical human report. JSON is already complete. */
@@ -164,6 +167,9 @@ const BOOLEAN_FLAGS = new Set([
   '--script',
   '--route-metrics',
   '--prune',
+  '--configure-ccr',
+  '--rollback-ccr',
+  '--ccr-usage',
 ]);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
@@ -240,6 +246,9 @@ export function parseArgv(
     routingMetrics: false,
     routingMode: 'shadow',
     routingPrune: false,
+    routingCcrConfigure: false,
+    routingCcrRollback: false,
+    routingCcrUsage: false,
     agentSkill: false,
     verbose: false,
     yes: false,
@@ -288,6 +297,9 @@ export function parseArgv(
       if (name === '--script') options.routingScript = true;
       if (name === '--route-metrics') options.routingMetrics = true;
       if (name === '--prune') options.routingPrune = true;
+      if (name === '--configure-ccr') options.routingCcrConfigure = true;
+      if (name === '--rollback-ccr') options.routingCcrRollback = true;
+      if (name === '--ccr-usage') options.routingCcrUsage = true;
       if (name === '--verbose') options.verbose = true;
       continue;
     }

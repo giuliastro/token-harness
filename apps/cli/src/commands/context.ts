@@ -57,6 +57,12 @@ export interface CommandContext {
   routingMetrics?: boolean;
   routingMode?: 'shadow' | 'conservative';
   routingPrune?: boolean;
+  routingCcrConfigure?: boolean;
+  routingCcrRollback?: boolean;
+  routingCcrUsage?: boolean;
+  /** Environment is injected by the process boundary; CCR secrets must never enter reports. */
+  env?: Readonly<Record<string, string | undefined>>;
+  ccrFetch?: typeof fetch;
   /** Guided/internal Agent Skill installation, still executed through plan/apply. */
   agentSkill?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
