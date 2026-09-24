@@ -282,8 +282,10 @@ needed. See CCR's
 On a first install, preview and approve CCR install/start, then preview and approve routing setup:
 
 ```sh
+# First preview and approve CCR install/start.
 token-harness routing --configure-ccr --harness codex
 token-harness routing --configure-ccr --harness codex --yes
+# Then preview and approve the routing rule and optional profile.
 token-harness routing --configure-ccr --harness codex
 token-harness routing --configure-ccr --harness codex --yes
 ```
