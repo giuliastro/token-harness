@@ -209,7 +209,7 @@ means unknown, not zero.`,
 Usage
   token-harness optimize [--json] [--harness <id>] [--project <dir>]
                          [--task <class>] [--profile <name>] [--reserve <0-95>]
-                         [--tasks-left <n>]
+                         [--tasks-left <n>] [--context-snapshot <path>]
 
 Defaults to --task standard --profile balanced --reserve 20. The command is
 read-only. It combines live budget windows with context/MCP inventory and emits
@@ -229,7 +229,14 @@ an explicit --reserve and otherwise keeps the task quality-floor rules.
 included allowance without assuming capacity after a future reset. It is never
 inferred from ccusage or local tokens. When exact model/effort/verbosity benchmark
 evidence proves a shortfall, quota-derived effort escalation is suppressed and
-the report identifies whether five-hour or weekly allowance is the bottleneck.`,
+the report identifies whether five-hour or weekly allowance is the bottleneck.
+
+--context-snapshot accepts a UTF-8 JSON file of bounded, content-free active-session
+metadata (64 KiB maximum). It can report observed task boundaries, validation and
+material states; it cannot contain transcript text or override measured context
+pressure. Reported bytes are local measurements, never token or quota savings. This
+is an integration input, not a user-authored settings file: the optional Agent Skill
+may create and remove it when direct evidence is available. Otherwise omit the flag.`,
 
   context: `token-harness context — audit context overhead before spending quota
 

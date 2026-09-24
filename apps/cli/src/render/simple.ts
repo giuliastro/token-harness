@@ -359,6 +359,14 @@ export function renderSimpleOptimize(report: OptimizeReport): string {
     );
     const evidence = recommendation === undefined ? null : usefulEvidence(recommendation.evidence);
     if (evidence) lines.push(truncate(`    Why: ${evidence}`, MAX_WIDTH));
+    const governor = harness.contextGovernor;
+    if (governor !== undefined)
+      lines.push(
+        truncate(
+          `    Context governor: ${governor.action}; ${governor.actionableBytes}B actionable local bytes`,
+          MAX_WIDTH,
+        ),
+      );
   }
   lines.push(...changeLine(false));
   const candidate = advice.find(

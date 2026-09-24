@@ -102,6 +102,8 @@ export interface CommandOptions {
   reservePercent: number | null;
   /** Explicit accepted tasks remaining before the next allowance re-observation. */
   tasksLeft: number | null;
+  /** Optional bounded active-session metadata file for optimize. */
+  contextSnapshot: string | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
   /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
@@ -139,6 +141,7 @@ const VALUE_FLAGS = new Set([
   '--profile',
   '--reserve',
   '--tasks-left',
+  '--context-snapshot',
 ]);
 
 /**
@@ -219,6 +222,7 @@ export function parseArgv(
     profile: null,
     reservePercent: null,
     tasksLeft: null,
+    contextSnapshot: null,
     nativePolicy: false,
     agentSkill: false,
     verbose: false,
@@ -503,6 +507,9 @@ export function parseArgv(
         }
         break;
       }
+      case '--context-snapshot':
+        options.contextSnapshot = value;
+        break;
       case '--transaction':
         // Kept deliberately opaque here. The rollback command compares it only with a journal id
         // that was already loaded from the local store; the raw value is never used as a path.

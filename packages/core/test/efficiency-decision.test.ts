@@ -176,6 +176,55 @@ describe('unified efficiency decision', () => {
     assert.equal(decision.contextAction, 'unknown');
   });
 
+  it('uses direct context-governor evidence even when optimizer advice is unavailable', () => {
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'standard',
+      optimization: [],
+      contextGovernor: {
+        harnessId: CODEX,
+        pressure: 'unknown',
+        taskBoundary: 'continuing',
+        validation: 'passing',
+        quality: 'passed',
+        reuse: 'efficient',
+        materials: [
+          { kind: 'tool-output', state: 'superseded', byteLength: 768, reduction: 'none' },
+        ],
+      },
+    });
+
+    assert.equal(decision.contextAction, 'mask');
+    assert.equal(decision.contextGovernor?.action, 'mask');
+    assert.ok(decision.evidence.some((item) => item.code === 'context-superseded-material'));
+    assert.equal(decision.model, null);
+  });
+
+  it('ignores a context snapshot for a different selected harness', () => {
+    const decision = decideEfficiency({
+      currentHarness: 'codex',
+      taskClass: 'standard',
+      optimization: [advice(CODEX)],
+      contextGovernor: {
+        harnessId: CLAUDE,
+        pressure: 'high',
+        taskBoundary: 'continuing',
+        validation: 'passing',
+        quality: 'passed',
+        reuse: 'efficient',
+        materials: [
+          { kind: 'tool-output', state: 'superseded', byteLength: 768, reduction: 'none' },
+        ],
+      },
+    });
+
+    assert.equal(decision.contextGovernor, null);
+    assert.equal(decision.contextAction, 'keep');
+    assert.ok(
+      decision.reasons.some((item) => item.code === 'efficiency-context-governor-harness-mismatch'),
+    );
+  });
+
   it('uses the existing scheduler recommendation without performing a harness switch', () => {
     const decision = decideEfficiency({
       currentHarness: 'codex',

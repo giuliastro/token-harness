@@ -14,6 +14,7 @@ import type { ModelLearningDecision } from './model-learning.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
+import type { ContextGovernorDecision } from './context-governor.js';
 import type { PlatformFacts } from './platform.js';
 import type { WorkloadCoverageDecision } from './workload-coverage.js';
 
@@ -104,6 +105,8 @@ export interface HarnessOptimizationAdvice {
   verbosityLearning?: VerbosityLearningDecision;
   /** Additive single-control model feedback; legacy reports may omit it. */
   modelLearning?: ModelLearningDecision;
+  /** Optional active-session context decision; local byte evidence only. */
+  contextGovernor?: ContextGovernorDecision;
   recommendations: OptimizationRecommendation[];
   diagnostics: Diagnostic[];
 }

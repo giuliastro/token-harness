@@ -422,6 +422,7 @@ export async function run(options: RunOptions): Promise<number> {
     budgetProfile: invocation.options.profile,
     reservePercent: invocation.options.reservePercent,
     tasksRemaining: invocation.options.tasksLeft,
+    contextSnapshotPath: invocation.options.contextSnapshot,
     nativePolicy: invocation.options.nativePolicy,
     agentSkill: invocation.options.agentSkill,
     since: invocation.options.since,

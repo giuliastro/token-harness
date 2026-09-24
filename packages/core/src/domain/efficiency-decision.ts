@@ -7,6 +7,12 @@
  */
 
 import type { CrossHarnessSchedulerDecision } from './cross-harness-scheduler.js';
+import {
+  decideContextGovernor,
+  type ContextGovernorAction,
+  type ContextGovernorDecision,
+  type ContextGovernorInput,
+} from './context-governor.js';
 import type { HarnessId } from './ids.js';
 import {
   effortRank,
@@ -19,13 +25,7 @@ import {
 import type { AcceptedTaskCapacityEstimate } from './task-capacity.js';
 
 export type EfficiencyHarness = 'claude' | 'codex';
-export type EfficiencyContextAction =
-  | 'keep'
-  | 'mask'
-  | 'compact'
-  | 'checkpoint'
-  | 'fresh-session'
-  | 'unknown';
+export type EfficiencyContextAction = ContextGovernorAction;
 
 export type EfficiencyEvidenceSource =
   | 'budget'
@@ -63,6 +63,8 @@ export interface EfficiencyDecision {
   reasoningEffort: string | null;
   verbosity: string | null;
   contextAction: EfficiencyContextAction;
+  /** Optional item-level assessment; contextAction may be further constrained by budget/workload evidence. */
+  contextGovernor: ContextGovernorDecision | null;
   allowanceBudget: EfficiencyAllowanceBudget;
   maxAttempts: number | null;
   premiumEscalationBudget: number | null;
@@ -80,6 +82,8 @@ export interface EfficiencyDecisionInput {
   scheduler?: CrossHarnessSchedulerDecision | null;
   /** Optional already-assessed budget; omitted until a reviewed policy can prove it. */
   attemptBudget?: EfficiencyAttemptBudget | null;
+  /** Optional bounded context evidence for the selected harness. No transcript content is accepted. */
+  contextGovernor?: ContextGovernorInput | null;
 }
 
 function reason(code: string, summary: string): RecommendationEvidence {
@@ -182,7 +186,10 @@ function chooseHarness(
   return candidate;
 }
 
-function chooseContextAction(advice: HarnessOptimizationAdvice): EfficiencyContextAction {
+function chooseContextAction(
+  advice: HarnessOptimizationAdvice,
+  contextGovernorAction: EfficiencyContextAction | null,
+): EfficiencyContextAction {
   if (advice.state === 'absent' || advice.state === 'unavailable') return 'unknown';
   if (
     (advice.budgetDecision?.state === 'wait-for-reset' &&
@@ -193,9 +200,48 @@ function chooseContextAction(advice: HarnessOptimizationAdvice): EfficiencyConte
   ) {
     return 'checkpoint';
   }
-  // Pressure does not identify expendable bytes. Masking needs item-level evidence from 19.2.
+  if (contextGovernorAction !== null) return contextGovernorAction;
+  // Pressure does not identify expendable bytes. Cleanup needs item-level evidence from 19.2.
   if (advice.contextPressure === 'low') return 'keep';
   return 'unknown';
+}
+
+function contextGovernorForHarness(
+  input: EfficiencyDecisionInput,
+  harness: EfficiencyHarness,
+  reasons: RecommendationEvidence[],
+): ContextGovernorDecision | null {
+  const snapshot = input.contextGovernor;
+  if (snapshot === null || snapshot === undefined) return null;
+  if (snapshot.harnessId !== harness) {
+    reasons.push(
+      reason(
+        'efficiency-context-governor-harness-mismatch',
+        'Ignore context material evidence because it belongs to a different harness snapshot',
+      ),
+    );
+    return null;
+  }
+  return decideContextGovernor(snapshot);
+}
+
+function contextActionSummary(action: EfficiencyContextAction): string {
+  switch (action) {
+    case 'keep':
+      return 'Keep the observed context because no safer item-level reduction is supported';
+    case 'mask':
+      return 'Deterministically mask explicitly superseded tool or repository output';
+    case 'summarize':
+      return 'Condense durable material only where no reducer has already summarized it';
+    case 'compact':
+      return 'Compact durable state for the continuing task within its configured byte budget';
+    case 'checkpoint':
+      return 'Preserve durable task state before an observed allowance, reset or task boundary';
+    case 'fresh-session':
+      return 'Start a fresh session at the evidenced task boundary';
+    case 'unknown':
+      return 'Context evidence is incomplete; do not invent a cleanup action';
+  }
 }
 
 function recommendationEvidence(
@@ -465,6 +511,8 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
   const harness = chooseHarness(input, evidence, reasons);
   const matchingAdvice = input.optimization.filter((item) => item.harnessId === harness);
   const advice = matchingAdvice.length === 1 ? matchingAdvice[0]! : null;
+  const contextGovernor = contextGovernorForHarness(input, harness, reasons);
+  if (contextGovernor !== null) addEvidence(evidence, 'context', contextGovernor.evidence);
 
   if (advice === null || advice.state === 'absent' || advice.state === 'unavailable') {
     reasons.push(
@@ -474,8 +522,12 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
           : matchingAdvice.length === 0
             ? 'efficiency-optimizer-evidence-missing'
             : 'efficiency-optimizer-evidence-ambiguous',
-        'One optimizer snapshot is required for the selected harness; policy and context remain unknown',
+        'One optimizer snapshot is required for the selected harness; policy remains unknown and context uses only its separate evidence',
       ),
+    );
+    const contextAction = contextGovernor?.action ?? 'unknown';
+    reasons.push(
+      reason(`efficiency-context-${contextAction}`, contextActionSummary(contextAction)),
     );
     const attempts = attemptBudget(input, evidence, reasons);
     return {
@@ -484,7 +536,8 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
       model: null,
       reasoningEffort: null,
       verbosity: null,
-      contextAction: 'unknown',
+      contextAction,
+      contextGovernor,
       allowanceBudget: { fiveHourPercent: null, weeklyPercent: null },
       ...attempts,
       evidence: uniqueSortedEvidence(evidence),
@@ -497,18 +550,9 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
   const contextEvidence = advice.recommendations
     .filter((item) => item.area === 'context' || item.area === 'session')
     .flatMap((item) => item.evidence);
-  const contextAction = chooseContextAction(advice);
+  const contextAction = chooseContextAction(advice, contextGovernor?.action ?? null);
   addEvidence(evidence, 'context', contextEvidence);
-  reasons.push(
-    reason(
-      `efficiency-context-${contextAction}`,
-      contextAction === 'checkpoint'
-        ? 'Checkpoint before more work because included allowance or stated-workload capacity is constrained'
-        : contextAction === 'keep'
-          ? 'Observed context pressure does not require cleanup before this attempt'
-          : 'Context evidence is incomplete; do not invent a cleanup action',
-    ),
-  );
+  reasons.push(reason(`efficiency-context-${contextAction}`, contextActionSummary(contextAction)));
 
   const policy = choosePolicy(
     advice,
@@ -550,6 +594,7 @@ export function decideEfficiency(input: EfficiencyDecisionInput): EfficiencyDeci
     taskClass: input.taskClass,
     ...selectedPolicy,
     contextAction,
+    contextGovernor,
     allowanceBudget,
     ...attempts,
     evidence: uniqueSortedEvidence(evidence),

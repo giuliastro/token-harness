@@ -11,6 +11,8 @@ import {
 
 import type { CommandContext } from '../src/commands/context.js';
 import { runOptimize } from '../src/commands/optimize.js';
+import { renderOptimizeReport } from '../src/render/optimize.js';
+import { renderSimpleOptimize } from '../src/render/simple.js';
 
 const PLATFORM: PlatformFacts = {
   os: 'linux',
@@ -38,10 +40,30 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
 }
 
 describe('optimize command', () => {
-  it('puts context first and preserves the hard-task quality floor while over pace', async () => {
+  it('uses bounded context evidence and preserves the hard-task quality floor while over pace', async () => {
+    const snapshotPath = '/home/dev/context-snapshot.json';
+    let snapshotBytes = new TextEncoder().encode(
+      JSON.stringify({
+        schemaVersion: 1,
+        harnessId: 'codex',
+        taskBoundary: 'continuing',
+        validation: 'passing',
+        quality: 'passed',
+        reuse: 'efficient',
+        materials: [
+          {
+            kind: 'tool-output',
+            state: 'superseded',
+            byteLength: 512,
+            reduction: 'none',
+          },
+        ],
+      }),
+    );
     const files = new Map<string, FileStat>([
       ['/home/dev/project/.git', { kind: 'directory', byteLength: 0, mode: null }],
       ['/home/dev/project/AGENTS.md', { kind: 'file', byteLength: 25_000, mode: null }],
+      [snapshotPath, { kind: 'file', byteLength: snapshotBytes.byteLength, mode: null }],
     ]);
 
     const context: CommandContext = {
@@ -50,6 +72,7 @@ describe('optimize command', () => {
       home: '/home/dev',
       stateRoot: '/home/dev/.local/state/token-harness',
       harness: harnessId('codex'),
+      contextSnapshotPath: snapshotPath,
       provider: null,
       taskClass: 'hard',
       budgetProfile: 'economy',
@@ -72,7 +95,7 @@ describe('optimize command', () => {
           basename: (path) => path.split('/').filter(Boolean).at(-1) ?? path,
           isInside: (candidate, parent) => candidate.startsWith(parent),
           stat: async (path) => files.get(path) ?? null,
-          readFile: async () => new Uint8Array(),
+          readFile: async (path) => (path === snapshotPath ? snapshotBytes : new Uint8Array()),
           writeFile: async () => {
             throw new Error('read-only');
           },
@@ -258,6 +281,18 @@ describe('optimize command', () => {
     const advice = result.data.harnesses[0];
     assert.ok(advice);
     assert.equal(advice.contextPressure, 'high');
+    assert.equal(advice.contextGovernor?.action, 'mask');
+    assert.equal(advice.contextGovernor?.actionableBytes, 512);
+    const fullHuman = renderOptimizeReport(result.data, {
+      toolVersion: 'test',
+      home: null,
+      decorate: false,
+    });
+    const simpleHuman = renderSimpleOptimize(result.data);
+    assert.match(fullHuman, /CONTEXT GOVERNOR/);
+    assert.match(fullHuman, /local byte counts only/);
+    assert.match(simpleHuman, /Context governor: mask/);
+    assert.ok(fullHuman.split('\n').every((line) => line.length <= 78));
     assert.equal(advice.pace[0]?.state, 'over-pace');
     assert.equal(advice.currentEffort, 'high');
     assert.equal(advice.recommendedEffort, 'medium');
@@ -275,7 +310,8 @@ describe('optimize command', () => {
       true,
     );
     assert.equal(advice.recommendations[0]?.area, 'context');
-    assert.match(advice.recommendations[0]?.action ?? '', /static context/i);
+    assert.equal(advice.recommendations[0]?.target, 'mask');
+    assert.match(advice.recommendations[0]?.action ?? '', /superseded/i);
     const mcpAdvice = advice.recommendations.find(
       (item) => item.area === 'mcp' && item.target === 'github',
     );
@@ -287,6 +323,24 @@ describe('optimize command', () => {
         .length,
       1,
     );
+
+    const legacyResult = await runOptimize({ ...context, contextSnapshotPath: null });
+    assert.equal(legacyResult.exitCode, 0);
+    assert.equal(legacyResult.data?.harnesses[0]?.contextGovernor, undefined);
+    assert.match(
+      legacyResult.data?.harnesses[0]?.recommendations[0]?.action ?? '',
+      /static context/i,
+    );
+
+    const mismatch = await runOptimize({ ...context, harness: harnessId('claude') });
+    assert.equal(mismatch.exitCode, 2);
+    assert.equal(mismatch.diagnostics[0]?.code, 'context-snapshot-harness-mismatch');
+
+    snapshotBytes = new TextEncoder().encode('{');
+    files.set(snapshotPath, { kind: 'file', byteLength: snapshotBytes.byteLength, mode: null });
+    const malformed = await runOptimize(context);
+    assert.equal(malformed.exitCode, 2);
+    assert.equal(malformed.diagnostics[0]?.code, 'context-snapshot-invalid');
   });
 
   it('requires an explicit reserve for the custom profile', async () => {
