@@ -33,6 +33,8 @@ export * from './domain/optimizer.js';
 export * from './domain/outcome-learning.js';
 export * from './domain/verbosity-learning.js';
 export * from './domain/model-learning.js';
+export * from './domain/smart-routing.js';
+export * from './domain/smart-routing-telemetry.js';
 export * from './domain/action-conflicts.js';
 export * from './domain/capabilities.js';
 export * from './domain/compatibility-rows.js';

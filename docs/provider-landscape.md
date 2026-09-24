@@ -90,17 +90,17 @@ measurements for both paths.
 | System | License | Role | Why it adds value | Admission gates |
 | --- | --- | --- | --- | --- |
 | [LiteLLM](https://github.com/BerriAI/litellm) | MIT outside `enterprise/` | Gateway and telemetry substrate | Provides one self-hosted OpenAI-compatible surface for 100+ providers, with load balancing, retries/fallbacks, spend tracking, budgets, and usage logs. It is the most practical common seam beneath a routing policy. | Do not label load balancing as intelligent routing. Add credential redaction, endpoint ownership, per-request model receipts, uninstall/restore, and a hosted-egress warning. |
-| [Claude Code Router](https://github.com/musistudio/claude-code-router) | MIT | Agent-native model gateway for coding agents | One local endpoint for Claude Code, Codex, OpenCode, and other agents, with effort- and request-conditioned routing rules, ordered fallback chains, and request logs carrying the resolved route, latency, tokens, and estimated cost. It speaks to exactly the harnesses Token Harness manages and is distributed as an npm CLI, so it shares the platform and packaging expectations of this project. **Overflow-only candidate.** | It rewrites the same agent configuration surfaces Token Harness owns and holds credentials, so endpoint and profile ownership must be resolved before mutation. Confirm detection of a user-run instance on `127.0.0.1:3456`, a read-only adoption path for its routing rules and logs, credential redaction, and that routing outcomes stay out of the token-saving totals. Requires the model-routing RFC below before a manifest. |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) | MIT | Agent-native model gateway for coding agents | One local endpoint for Claude Code, Codex, OpenCode, and other agents, with request-conditioned routing rules and request logs. RFC 0028 selects a local heuristic shadow-first integration across Claude Code and Codex. | Token Harness owns an exact reviewed npm CLI copy and local service lifecycle only when no authenticated external CCR service is already present. Install/start and routing changes have separate preview/apply gates. It may create a CCR-CLI-only profile from one already configured harness provider; login/import remains explicit. Rollback is ownership-scoped and routing evidence stays outside token-saving totals. |
 | [RouteLLM](https://github.com/lm-sys/RouteLLM) | Apache-2.0 | Learned strong/weak model router | Ships trained routers and an OpenAI-compatible server; upstream reports up to 85% cost reduction while retaining 95% GPT-4 performance on general benchmarks and already uses LiteLLM for model access. | Recalibrate on coding-agent turns, tool calls, and long sessions; record the chosen model per operation; A/B task success; treat the generic benchmark as insufficient for a default coding profile. |
 | [LLMRouter](https://github.com/ulab-uiuc/LLMRouter) | MIT | Effort-aware routing library and server | Selects the model per query by task complexity, cost, and quality across 16+ strategies (KNN, MLP, graph, Elo, multi-round, personalized), with training and data-generation pipelines plus an OpenAI-compatible serving surface. It is the most direct implementation of the "escalate only when the task needs it" tier model. **Overflow-only candidate.** | Evaluate as the effort-aware routing-policy owner against RouteLLM, not as a second router in the same request path. Verify the inference-server footprint and that routing decisions are observable per request without prompt egress; Python research stack needs a versioned, documented serving mode before plan/apply/verify can be built on it. |
 | [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) | Apache-2.0 | Self-hosted mixture-of-models router | Actively targets model, reasoning, and tool selection plus semantic caching across heterogeneous local/private/cloud inference. It is the better fit for teams already running vLLM infrastructure. | Heavy deployment footprint; separate desktop and fleet support; prove cache identity and privacy; make it an alternative owner to RouteLLM, not a second router in the same request path. |
 
-### Required architecture work before any router adapter
+### Required architecture work before a managed router adapter
 
 The current taxonomy has `reasoning.effort.route`, which changes effort on a selected
 model. Choosing a different model or provider is a new interception and attribution
-surface. Per RFC 0003, router admission therefore requires an RFC that adds a capability
-such as `model.request.route` and defines:
+surface. RFC 0028 adds the exclusive `model.request.route` capability and defines the
+shadow-first decision and telemetry contract. A managed router adapter still needs:
 
 - exactly one routing-policy owner per model request;
 - gateway-only behavior versus quality/complexity routing;
@@ -111,9 +111,10 @@ such as `model.request.route` and defines:
 - credential, prompt-egress, and data-residency diagnostics;
 - plan, apply, verification, rollback, and brownfield adoption for endpoint changes.
 
-Claude Code Router and LLMRouter remain local candidates under this RFC, but the quota-aware
-roadmap does not schedule them before native model/effort/context policy. Neither is admitted before
-the `model.request.route` capability and its cost/quality attribution class exist.
+The CCR shadow script and saved profile are not proof of a live request being intercepted. Managed
+CCR installation/configuration verifies only the local CLI, gateway, and exact saved records.
+Alternative routers remain gated on the list above and the measured policy gates in RFC 0028.
+Native model/effort/context policy stays first.
 
 Hosted routers such as [Not Diamond](https://docs.notdiamond.ai/docs/what-is-model-routing)
 and [OpenRouter Auto](https://openrouter.ai/openrouter/auto) remain later opt-in candidates.

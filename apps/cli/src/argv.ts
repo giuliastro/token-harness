@@ -49,6 +49,7 @@ export const AVAILABLE_COMMANDS = [
   'optimize',
   'plan',
   'rollback',
+  'routing',
   'setup',
   'status',
   'stack-review',
@@ -106,6 +107,15 @@ export interface CommandOptions {
   contextSnapshot: string | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
+  /** RFC 0028 CCR script export and local routing telemetry actions. */
+  routingScript: boolean;
+  routingMetrics: boolean;
+  routingMode: 'shadow' | 'conservative';
+  routingPrune: boolean;
+  routingCcrConfigure: boolean;
+  routingCcrRollback: boolean;
+  routingCcrUpdate: boolean;
+  routingCcrUsage: boolean;
   /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
   agentSkill: boolean;
   /** Show the full technical human report. JSON is already complete. */
@@ -141,6 +151,7 @@ const VALUE_FLAGS = new Set([
   '--profile',
   '--reserve',
   '--tasks-left',
+  '--route-mode',
   '--context-snapshot',
 ]);
 
@@ -151,7 +162,20 @@ const VALUE_FLAGS = new Set([
  * an envelope when `--json` parsed; it is listed here so the main loop does not reject it as
  * unknown.
  */
-const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--agent-skill', '--verbose', '--yes']);
+const BOOLEAN_FLAGS = new Set([
+  '--json',
+  '--native-policy',
+  '--agent-skill',
+  '--verbose',
+  '--yes',
+  '--script',
+  '--route-metrics',
+  '--prune',
+  '--configure-ccr',
+  '--rollback-ccr',
+  '--update-ccr',
+  '--ccr-usage',
+]);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
   return argv.some((token) => token === '--json' || token.startsWith('--json='));
@@ -224,6 +248,14 @@ export function parseArgv(
     tasksLeft: null,
     contextSnapshot: null,
     nativePolicy: false,
+    routingScript: false,
+    routingMetrics: false,
+    routingMode: 'shadow',
+    routingPrune: false,
+    routingCcrConfigure: false,
+    routingCcrRollback: false,
+    routingCcrUpdate: false,
+    routingCcrUsage: false,
     agentSkill: false,
     verbose: false,
     yes: false,
@@ -269,6 +301,13 @@ export function parseArgv(
       if (name === '--yes') options.yes = true;
       if (name === '--native-policy') options.nativePolicy = true;
       if (name === '--agent-skill') options.agentSkill = true;
+      if (name === '--script') options.routingScript = true;
+      if (name === '--route-metrics') options.routingMetrics = true;
+      if (name === '--prune') options.routingPrune = true;
+      if (name === '--configure-ccr') options.routingCcrConfigure = true;
+      if (name === '--rollback-ccr') options.routingCcrRollback = true;
+      if (name === '--update-ccr') options.routingCcrUpdate = true;
+      if (name === '--ccr-usage') options.routingCcrUsage = true;
       if (name === '--verbose') options.verbose = true;
       continue;
     }
@@ -507,6 +546,20 @@ export function parseArgv(
         }
         break;
       }
+      case '--route-mode':
+        if (value !== 'shadow' && value !== 'conservative') {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-routing-mode',
+              message: `Routing mode ${JSON.stringify(value)} is not supported`,
+              remediation: 'Use --route-mode shadow or --route-mode conservative',
+            }),
+          );
+        } else {
+          options.routingMode = value;
+        }
+        break;
       case '--context-snapshot':
         options.contextSnapshot = value;
         break;

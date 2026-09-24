@@ -46,6 +46,7 @@ Advanced commands
   apply       Apply a reviewed plan
   verify      Check that configured integrations work
   metrics     Show measured savings
+  routing     Install/configure CCR or inspect routing decisions
   update      Check or update installed providers
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
@@ -58,6 +59,14 @@ Useful flags
   --yes                Confirm a configuration-changing operation
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
+  --script             Export a CCR script rule (routing command)
+  --route-metrics      Show local routing decision telemetry
+  --route-mode <mode>  shadow by default; conservative requires opt-in
+  --prune              Keep only the 200 newest routing decision records
+  --configure-ccr      Preview managed CCR setup; --yes applies one step
+  --update-ccr         Preview update of the managed CCR CLI
+  --rollback-ccr       Preview rollback; --yes removes owned rule/profile
+  --ccr-usage          Read CCR model/token aggregates for local sessions
   --project <dir>      Use that project instead of the current directory
   --help               Show help for a command
   --version            Print the version
@@ -330,6 +339,36 @@ Figures are never merged across measurement classes or units: tokens are not
 added to characters, and an estimate is not added to an exact figure. A
 counterfactual reduction is reported on its own line and never as a saving.
 Exits 0 whatever the figures say — an empty report is a fact, not a failure.`,
+  routing: `token-harness routing — inspect or export Smart Model Routing
+
+Usage
+  token-harness routing --script --harness <claude|codex>
+                        [--route-mode <shadow|conservative>] [--json]
+  token-harness routing --configure-ccr --harness <claude|codex> [--yes]
+  token-harness routing --update-ccr [--yes]
+  token-harness routing --rollback-ccr --harness <claude|codex> [--yes]
+  token-harness routing --route-metrics [--since <duration|date>]
+                        [--until <date>] [--harness <claude|codex>]
+                        [--ccr-usage] [--prune] [--json]
+
+Script export defaults to shadow mode. Add the generated script as a Node.js script rule in CCR;
+it records local, prompt-free decisions and returns no route rewrite in shadow mode. Conservative
+mode is explicit and only proposes a configured simple model for high-confidence, low-risk requests.
+It leaves requests with tool schemas unchanged unless the CCR process explicitly sets
+TOKEN_HARNESS_ROUTING_ALLOW_TOOLS=true. No API call or local model is used to classify.
+
+CCR must run on this machine as the same user for the local telemetry path to be writable. A failed
+telemetry write never blocks the agent request. Decision records contain no prompt or credentials.
+Routing choices are not measured token savings; this command keeps them separate from \`metrics\`.
+Use --prune to remove all but the 200 newest decision records.
+
+When no authenticated local CCR service is present, configure first previews an npm install/start
+of CCR 3.1.1 in Token Harness' protected local state; after approving that step, run configure again
+to preview the routing rule and optional CCR-only CLI profile. A Token Harness-owned service keeps
+its Web RPC token in a private local file; existing services can use CCR_WEB_AUTH_TOKEN and
+optionally CCR_WEB_URL. --update-ccr only updates a Token Harness-owned CLI to the reviewed pin.
+Rollback removes only the exact rule, profile, and script Token Harness owns. CCR usage is observed
+request telemetry, not subscription quota or measured savings.`,
   uninstall: `token-harness uninstall — remove what Token Harness owns
 
 Usage

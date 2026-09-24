@@ -56,6 +56,18 @@ export interface CommandContext {
   contextSnapshotPath?: string | null;
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
+  /** RFC 0028 CCR routing script export, metrics view, and explicit telemetry pruning. */
+  routingScript?: boolean;
+  routingMetrics?: boolean;
+  routingMode?: 'shadow' | 'conservative';
+  routingPrune?: boolean;
+  routingCcrConfigure?: boolean;
+  routingCcrRollback?: boolean;
+  routingCcrUpdate?: boolean;
+  routingCcrUsage?: boolean;
+  /** Environment is injected by the process boundary; CCR secrets must never enter reports. */
+  env?: Readonly<Record<string, string | undefined>>;
+  ccrFetch?: typeof fetch;
   /** Guided/internal Agent Skill installation, still executed through plan/apply. */
   agentSkill?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */

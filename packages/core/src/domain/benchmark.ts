@@ -44,6 +44,32 @@ export interface TaskLocalUsage {
   totalTokens: number;
 }
 
+/** CCR's in-window request usage, retained without request bodies or session identifiers. */
+export interface TaskBenchmarkCcrUsage {
+  schemaVersion: 1;
+  status: 'observed' | 'partial' | 'unavailable';
+  sessionCount: number;
+  observedSessionCount: number;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalTokens: number;
+  /** CCR's locally calculated provider cost, never subscription-quota evidence. */
+  recordedCostUsd: number | null;
+  byModel: Array<{
+    model: string;
+    requestCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    totalTokens: number;
+    recordedCostUsd: number | null;
+  }>;
+}
+
 /**
  * Minimal per-session local usage snapshot persisted only in the in-progress capture.
  *
@@ -87,6 +113,8 @@ export interface TaskBenchmarkReceipt {
   contextAtFinish?: TaskBenchmarkContextSnapshot | null;
   /** Local token volume is evidence about workload, not backend subscription quota. */
   localUsage: TaskLocalUsage | null;
+  /** Optional paired CCR usage observation; it is not quota or savings evidence by itself. */
+  ccrUsage?: TaskBenchmarkCcrUsage | null;
   outcome: TaskBenchmarkOutcome;
   /** Additive schema-1 witness; absent in legacy receipts. Configuration, not live-session proof. */
   policyAtFinish?: BenchmarkPolicySnapshot | null;
@@ -258,6 +286,89 @@ function parseLocalUsage(value: unknown): TaskLocalUsage | null | undefined {
     return undefined;
   }
   return { inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens, totalTokens };
+}
+
+function parseTaskBenchmarkCcrUsage(value: unknown): TaskBenchmarkCcrUsage | null | undefined {
+  if (value === null) return null;
+  const row = record(value);
+  if (row === null || row['schemaVersion'] !== 1) return undefined;
+  const status = row['status'];
+  const sessionCount = finiteNonNegative(row['sessionCount']);
+  const observedSessionCount = finiteNonNegative(row['observedSessionCount']);
+  const requestCount = finiteNonNegative(row['requestCount']);
+  const inputTokens = finiteNonNegative(row['inputTokens']);
+  const outputTokens = finiteNonNegative(row['outputTokens']);
+  const cacheReadTokens = finiteNonNegative(row['cacheReadTokens']);
+  const cacheWriteTokens = finiteNonNegative(row['cacheWriteTokens']);
+  const totalTokens = finiteNonNegative(row['totalTokens']);
+  const recordedCostUsd = nullableFiniteNonNegative(row['recordedCostUsd']);
+  if (
+    (status !== 'observed' && status !== 'partial' && status !== 'unavailable') ||
+    sessionCount === null ||
+    observedSessionCount === null ||
+    requestCount === null ||
+    inputTokens === null ||
+    outputTokens === null ||
+    cacheReadTokens === null ||
+    cacheWriteTokens === null ||
+    totalTokens === null ||
+    recordedCostUsd === undefined ||
+    observedSessionCount > sessionCount ||
+    !Array.isArray(row['byModel'])
+  ) {
+    return undefined;
+  }
+  const byModel: TaskBenchmarkCcrUsage['byModel'] = [];
+  for (const item of row['byModel']) {
+    const modelRow = record(item);
+    if (
+      modelRow === null ||
+      typeof modelRow['model'] !== 'string' ||
+      !/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(modelRow['model'])
+    )
+      return undefined;
+    const modelRequestCount = finiteNonNegative(modelRow['requestCount']);
+    const modelInputTokens = finiteNonNegative(modelRow['inputTokens']);
+    const modelOutputTokens = finiteNonNegative(modelRow['outputTokens']);
+    const modelCacheReadTokens = finiteNonNegative(modelRow['cacheReadTokens']);
+    const modelCacheWriteTokens = finiteNonNegative(modelRow['cacheWriteTokens']);
+    const modelTotalTokens = finiteNonNegative(modelRow['totalTokens']);
+    const modelCost = nullableFiniteNonNegative(modelRow['recordedCostUsd']);
+    if (
+      modelRequestCount === null ||
+      modelInputTokens === null ||
+      modelOutputTokens === null ||
+      modelCacheReadTokens === null ||
+      modelCacheWriteTokens === null ||
+      modelTotalTokens === null ||
+      modelCost === undefined
+    )
+      return undefined;
+    byModel.push({
+      model: modelRow['model'],
+      requestCount: modelRequestCount,
+      inputTokens: modelInputTokens,
+      outputTokens: modelOutputTokens,
+      cacheReadTokens: modelCacheReadTokens,
+      cacheWriteTokens: modelCacheWriteTokens,
+      totalTokens: modelTotalTokens,
+      recordedCostUsd: modelCost,
+    });
+  }
+  return {
+    schemaVersion: 1,
+    status,
+    sessionCount,
+    observedSessionCount,
+    requestCount,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    totalTokens,
+    recordedCostUsd,
+    byModel,
+  };
 }
 
 function parseLocalSessionSnapshot(value: unknown): TaskBenchmarkLocalSessionSnapshot | null {
@@ -515,6 +626,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   const contextAtFinish = hasContextAtFinish
     ? parseTaskBenchmarkContextSnapshot(row['contextAtFinish'])
     : undefined;
+  const hasCcrUsage = Object.hasOwn(row, 'ccrUsage');
+  const ccrUsage = hasCcrUsage ? parseTaskBenchmarkCcrUsage(row['ccrUsage']) : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -537,7 +650,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
     outcome === null ||
     (hasBoundaryPolicy && policyAtFinish === undefined) ||
     (hasContextAtStart && contextAtStart === undefined) ||
-    (hasContextAtFinish && contextAtFinish === undefined)
+    (hasContextAtFinish && contextAtFinish === undefined) ||
+    (hasCcrUsage && ccrUsage === undefined)
   ) {
     return {
       ok: false,
@@ -566,6 +680,7 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
       ...(hasContextAtStart ? { contextAtStart: contextAtStart ?? null } : {}),
       ...(hasContextAtFinish ? { contextAtFinish: contextAtFinish ?? null } : {}),
       ...(hasBoundaryPolicy ? { policyAtFinish: policyAtFinish ?? null } : {}),
+      ...(hasCcrUsage ? { ccrUsage: ccrUsage ?? null } : {}),
     },
   };
 }
@@ -580,6 +695,7 @@ export interface CompleteTaskBenchmarkCaptureInput {
   localUsage?: TaskLocalUsage | null;
   contextAtFinish?: TaskBenchmarkContextSnapshot | null;
   policyAtFinish?: BenchmarkPolicySnapshot | null;
+  ccrUsage?: TaskBenchmarkCcrUsage | null;
 }
 
 export function completeTaskBenchmarkCapture(
@@ -603,6 +719,7 @@ export function completeTaskBenchmarkCapture(
     ...(capture.contextAtStart !== undefined ? { contextAtStart: capture.contextAtStart } : {}),
     ...(input.contextAtFinish !== undefined ? { contextAtFinish: input.contextAtFinish } : {}),
     ...(input.policyAtFinish !== undefined ? { policyAtFinish: input.policyAtFinish } : {}),
+    ...(input.ccrUsage !== undefined ? { ccrUsage: input.ccrUsage } : {}),
     outcome: {
       qualityGate: input.qualityGate,
       attempts: input.attempts,
@@ -662,7 +779,23 @@ export interface TaskBenchmarkComparison {
   basis: TaskBenchmarkBasis;
   evidenceLevel: TaskBenchmarkEvidenceLevel;
   quota: TaskBenchmarkQuotaComparison | null;
+  /** Separate CCR observed-usage comparison; never changes the quota-based verdict. */
+  ccrUsage?: TaskBenchmarkCcrUsageComparison;
   reasons: string[];
+}
+
+export interface TaskBenchmarkCcrUsageComparison {
+  status: 'comparable' | 'partial' | 'quality-gated' | 'not-measured';
+  baselineRequests: number | null;
+  optimizedRequests: number | null;
+  baselineTokens: number | null;
+  optimizedTokens: number | null;
+  totalTokenDelta: number | null;
+  baselineModels: string[];
+  optimizedModels: string[];
+  baselineRecordedCostUsd: number | null;
+  optimizedRecordedCostUsd: number | null;
+  recordedCostDeltaUsd: number | null;
 }
 
 export interface TaskBenchmarkCompareReport {
@@ -825,7 +958,7 @@ function result(
  * 4. comparable backend quota delta is the primary efficiency evidence;
  * 5. failed attempts, runtime errors, total attempts and local token volume are secondary evidence.
  */
-export function compareTaskBenchmarkReceipts(
+function compareTaskBenchmarkReceiptsCore(
   baseline: TaskBenchmarkReceipt,
   optimized: TaskBenchmarkReceipt,
 ): TaskBenchmarkComparison {
@@ -969,6 +1102,77 @@ export function compareTaskBenchmarkReceipts(
   ]);
 }
 
+function compareCcrUsage(
+  baseline: TaskBenchmarkReceipt,
+  optimized: TaskBenchmarkReceipt,
+  samePair: boolean,
+): TaskBenchmarkCcrUsageComparison {
+  if (!samePair) {
+    return {
+      status: 'not-measured',
+      baselineRequests: null,
+      optimizedRequests: null,
+      baselineTokens: null,
+      optimizedTokens: null,
+      totalTokenDelta: null,
+      baselineModels: [],
+      optimizedModels: [],
+      baselineRecordedCostUsd: null,
+      optimizedRecordedCostUsd: null,
+      recordedCostDeltaUsd: null,
+    };
+  }
+  const left = baseline.ccrUsage ?? null;
+  const right = optimized.ccrUsage ?? null;
+  const status =
+    left === null ||
+    right === null ||
+    left.status === 'unavailable' ||
+    right.status === 'unavailable'
+      ? 'not-measured'
+      : left.status !== 'observed' || right.status !== 'observed'
+        ? 'partial'
+        : baseline.outcome.qualityGate !== 'passed' || optimized.outcome.qualityGate !== 'passed'
+          ? 'quality-gated'
+          : 'comparable';
+  const canCompare = status === 'comparable';
+  const baselineRecordedCostUsd = left?.recordedCostUsd ?? null;
+  const optimizedRecordedCostUsd = right?.recordedCostUsd ?? null;
+  return {
+    status,
+    baselineRequests: left?.requestCount ?? null,
+    optimizedRequests: right?.requestCount ?? null,
+    baselineTokens: left?.totalTokens ?? null,
+    optimizedTokens: right?.totalTokens ?? null,
+    totalTokenDelta: canCompare && left && right ? right.totalTokens - left.totalTokens : null,
+    baselineModels: left?.byModel.map((row) => row.model) ?? [],
+    optimizedModels: right?.byModel.map((row) => row.model) ?? [],
+    baselineRecordedCostUsd,
+    optimizedRecordedCostUsd,
+    recordedCostDeltaUsd:
+      canCompare && baselineRecordedCostUsd !== null && optimizedRecordedCostUsd !== null
+        ? optimizedRecordedCostUsd - baselineRecordedCostUsd
+        : null,
+  };
+}
+
+/** Compare ordinary evidence and attach CCR token/cost observations as a separate, quality-gated row. */
+export function compareTaskBenchmarkReceipts(
+  baseline: TaskBenchmarkReceipt,
+  optimized: TaskBenchmarkReceipt,
+): TaskBenchmarkComparison {
+  const samePair =
+    baseline.benchmarkId === optimized.benchmarkId &&
+    baseline.taskClass === optimized.taskClass &&
+    baseline.harnessId === optimized.harnessId &&
+    baseline.variant === 'baseline' &&
+    optimized.variant === 'optimized';
+  return {
+    ...compareTaskBenchmarkReceiptsCore(baseline, optimized),
+    ccrUsage: compareCcrUsage(baseline, optimized, samePair),
+  };
+}
+
 export interface TaskBenchmarkMatrixPair {
   baseline: TaskBenchmarkReceipt;
   optimized: TaskBenchmarkReceipt;
@@ -985,6 +1189,24 @@ export interface TaskBenchmarkMatrixEntry {
   optimizedLocalTokens: number | null;
   localTokenSavingPercent: number | null;
   quota: TaskBenchmarkQuotaComparison | null;
+  /** Separate, quality-gated CCR request usage; does not affect the verdict or quota evidence. */
+  ccrUsage?: TaskBenchmarkCcrUsageComparison;
+}
+
+export interface TaskBenchmarkMatrixCcrUsageSummary {
+  comparablePairs: number;
+  partialPairs: number;
+  qualityGatedPairs: number;
+  notMeasuredPairs: number;
+  baselineRequests: number | null;
+  optimizedRequests: number | null;
+  baselineTokens: number | null;
+  optimizedTokens: number | null;
+  totalTokenDelta: number | null;
+  recordedCostPairs: number;
+  baselineRecordedCostUsd: number | null;
+  optimizedRecordedCostUsd: number | null;
+  recordedCostDeltaUsd: number | null;
 }
 
 export interface TaskBenchmarkMatrixSummary {
@@ -1002,6 +1224,8 @@ export interface TaskBenchmarkMatrixSummary {
   baselineLocalTokens: number | null;
   optimizedLocalTokens: number | null;
   localTokenSavingPercent: number | null;
+  /** Present when at least one pair has CCR usage evidence. */
+  ccrUsage?: TaskBenchmarkMatrixCcrUsageSummary;
 }
 
 export interface TaskBenchmarkMatrixSelection {
@@ -1045,6 +1269,28 @@ function summarizeMatrixEntries(
     local.length === 0
       ? null
       : local.reduce((total, entry) => total + (entry.optimizedLocalTokens ?? 0), 0);
+  const ccrRows = entries.flatMap((entry) =>
+    entry.ccrUsage === undefined ? [] : [entry.ccrUsage],
+  );
+  const comparableCcrRows = ccrRows.filter((row) => row.status === 'comparable');
+  const ccrCostRows = comparableCcrRows.filter((row) => row.recordedCostDeltaUsd !== null);
+  const hasCcrEvidence = ccrRows.some((row) => row.status !== 'not-measured');
+  const baselineCcrTokens =
+    comparableCcrRows.length === 0
+      ? null
+      : comparableCcrRows.reduce((total, row) => total + (row.baselineTokens ?? 0), 0);
+  const optimizedCcrTokens =
+    comparableCcrRows.length === 0
+      ? null
+      : comparableCcrRows.reduce((total, row) => total + (row.optimizedTokens ?? 0), 0);
+  const baselineRecordedCostUsd =
+    ccrCostRows.length === 0
+      ? null
+      : ccrCostRows.reduce((total, row) => total + (row.baselineRecordedCostUsd ?? 0), 0);
+  const optimizedRecordedCostUsd =
+    ccrCostRows.length === 0
+      ? null
+      : ccrCostRows.reduce((total, row) => total + (row.optimizedRecordedCostUsd ?? 0), 0);
 
   return {
     taskClass,
@@ -1064,6 +1310,37 @@ function summarizeMatrixEntries(
       baselineLocalTokens === null || optimizedLocalTokens === null
         ? null
         : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
+    ...(hasCcrEvidence
+      ? {
+          ccrUsage: {
+            comparablePairs: comparableCcrRows.length,
+            partialPairs: ccrRows.filter((row) => row.status === 'partial').length,
+            qualityGatedPairs: ccrRows.filter((row) => row.status === 'quality-gated').length,
+            notMeasuredPairs: ccrRows.filter((row) => row.status === 'not-measured').length,
+            baselineRequests:
+              comparableCcrRows.length === 0
+                ? null
+                : comparableCcrRows.reduce((total, row) => total + (row.baselineRequests ?? 0), 0),
+            optimizedRequests:
+              comparableCcrRows.length === 0
+                ? null
+                : comparableCcrRows.reduce((total, row) => total + (row.optimizedRequests ?? 0), 0),
+            baselineTokens: baselineCcrTokens,
+            optimizedTokens: optimizedCcrTokens,
+            totalTokenDelta:
+              baselineCcrTokens === null || optimizedCcrTokens === null
+                ? null
+                : optimizedCcrTokens - baselineCcrTokens,
+            recordedCostPairs: ccrCostRows.length,
+            baselineRecordedCostUsd,
+            optimizedRecordedCostUsd,
+            recordedCostDeltaUsd:
+              baselineRecordedCostUsd === null || optimizedRecordedCostUsd === null
+                ? null
+                : optimizedRecordedCostUsd - baselineRecordedCostUsd,
+          },
+        }
+      : {}),
   };
 }
 
@@ -1107,6 +1384,7 @@ export function buildTaskBenchmarkMatrix(
             ? null
             : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
         quota: comparison.quota,
+        ...(comparison.ccrUsage === undefined ? {} : { ccrUsage: comparison.ccrUsage }),
       };
     })
     .sort(

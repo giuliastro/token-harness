@@ -196,7 +196,8 @@ verification, managed lifecycle, compatibility/reversibility, project maturity a
 validation. Broader context owners also require an explicit admission decision.
 
 See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) and
-[RFC 0027](docs/rfcs/0027-optimization-stack-manager.md).
+[RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) and
+[RFC 0028](docs/rfcs/0028-smart-model-routing.md).
 
 ## Stable-stack operating model
 
@@ -247,6 +248,7 @@ browser controller itself.
 | `apply` | Apply a reviewed stored plan | Yes, only with `--yes` |
 | `verify` | Check the declared integration tier | No |
 | `metrics` | Report attributable reducer savings | No |
+| `routing` | Export/configure an owned CCR rule or inspect routing decisions | Yes, only after preview and `--yes` |
 | `status` | Report pipelines, drift and importer modes | No |
 | `update` | Check/update reviewed provider packages | Yes, only with `--yes` |
 | `rollback` | Restore the latest transaction snapshot | Yes, only with `--yes` |
@@ -261,6 +263,79 @@ Need stable machine-readable output? Add `--json`. Need the evidence behind a hu
 The older automation contracts remain available. `ui --json` preserves its existing schema-1
 report; `ui --read-only` opens the legacy read-only UI; `ui --no-open` starts the guided app without
 launching a browser.
+
+### Smart Model Routing (advanced)
+
+The local TypeScript classifier needs no API key or local model. On Node.js 22+, Token Harness can
+install and start the reviewed CCR 3.1.1 CLI in its own protected state directory. Installation and
+routing configuration are separate preview/apply steps. Existing authenticated CCR services can be
+used as-is; Token Harness does not adopt or update an external/global CCR installation. For a useful
+shadow report, the selected CCR profile needs an existing provider/model; when exactly one matching
+Claude Code or Codex provider is already configured, Token Harness adds a profile scoped to CCR CLI
+launches if the provider exposes one unambiguous default model. If it exposes several models, set
+`TOKEN_HARNESS_ROUTING_PROFILE_MODEL` to the exact `Provider/model` for the profile. To enable a
+conservative candidate, set `TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` to an exact configured
+`Provider/model`; Token Harness validates it against CCR's provider catalog. It never imports OAuth
+credentials or edits native harness endpoints. Select provider login/import explicitly in CCR when
+needed. See CCR's
+[Agent Profiles guide](https://github.com/musistudio/claude-code-router/blob/main/docs/src/content/docs/en/configuration/profiles.md).
+On a first install, preview and approve CCR install/start, then preview and approve routing setup:
+
+```sh
+# First preview and approve CCR install/start.
+token-harness routing --configure-ccr --harness codex
+token-harness routing --configure-ccr --harness codex --yes
+# Then preview and approve the routing rule and optional profile.
+token-harness routing --configure-ccr --harness codex
+token-harness routing --configure-ccr --harness codex --yes
+```
+
+To update the Token Harness-owned CCR CLI to the current reviewed version pin, preview and apply:
+
+```sh
+token-harness routing --update-ccr
+token-harness routing --update-ccr --yes
+```
+
+After setup, launch the scoped profile shown by Token Harness (for Codex, typically
+`ccr "Token Harness Codex"`) and confirm a real request appears in CCR logs. The saved profile or
+gateway status alone does not prove interception. In shadow mode the rule records the proposed tier
+and leaves the current model unchanged.
+
+For a paired routing experiment, capture the baseline while the rule is in shadow mode, then record
+the task's actual quality outcome. To test conservative routing, set
+`TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the Token Harness environment to an exact model already
+configured in CCR, roll back the owned shadow rule, and preview/apply the conservative rule. Token
+Harness validates the alias and embeds it in the script. Run the same task as the optimized variant,
+record its quality, then compare the receipt paths printed by Token Harness:
+
+```sh
+token-harness benchmark-start --benchmark-id routing-codex-1 --variant baseline --task mechanical --harness codex
+# Run the task with CCR in shadow mode, then finish with the actual quality and attempt counts.
+token-harness benchmark-finish --benchmark-id routing-codex-1 --variant baseline --quality passed --attempts 1 --failed-attempts 0
+
+token-harness routing --rollback-ccr --harness codex
+token-harness routing --rollback-ccr --harness codex --yes
+token-harness routing --configure-ccr --harness codex --route-mode conservative
+token-harness routing --configure-ccr --harness codex --route-mode conservative --yes
+token-harness benchmark-start --benchmark-id routing-codex-1 --variant optimized --task mechanical --harness codex
+# Repeat the same task under comparable conditions, then finish with its real quality outcome.
+token-harness benchmark-finish --benchmark-id routing-codex-1 --variant optimized --quality passed --attempts 1 --failed-attempts 0
+
+token-harness benchmark --baseline /path/to/baseline.json --optimized /path/to/optimized.json
+```
+
+To inspect decisions and local CCR request usage outside the task comparison, use
+`token-harness routing --route-metrics` or add `--ccr-usage`.
+
+The benchmark reads CCR session counters only when the task produced local routing events with a
+recognized harness identity. Receipts retain model and token aggregates, not prompts or session
+IDs. The comparator shows CCR token and provider-cost-estimate deltas separately and only when both
+observations are complete and both quality gates pass. This is not evidence of saved Codex/Claude
+subscription quota; quota deltas remain separately attributable, and no live savings are claimed
+until real paired tasks have been measured. `token-harness benchmark-matrix` also aggregates CCR
+usage across complete quality-passed pairs and reports withheld pairs separately. Shadow mode
+remains the default, and switching an owned rule's mode requires rollback before reconfiguration.
 
 ### Evaluation evidence (advanced / maintainers)
 
@@ -478,6 +553,7 @@ does not require that Corepack shim write.
 
 Before changing public behavior or architecture, read
 [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),
+[RFC 0028](docs/rfcs/0028-smart-model-routing.md),
 [docs/optimizer-priorities.md](docs/optimizer-priorities.md),
 [docs/release-readiness.md](docs/release-readiness.md), [PLAN.md](PLAN.md), and the accepted
 [RFCs](docs/rfcs).

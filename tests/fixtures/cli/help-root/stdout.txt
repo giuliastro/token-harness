@@ -30,6 +30,7 @@ Advanced commands
   apply       Apply a reviewed plan
   verify      Check that configured integrations work
   metrics     Show measured savings
+  routing     Install/configure CCR or inspect routing decisions
   update      Check or update installed providers
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
@@ -42,6 +43,14 @@ Useful flags
   --yes                Confirm a configuration-changing operation
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
+  --script             Export a CCR script rule (routing command)
+  --route-metrics      Show local routing decision telemetry
+  --route-mode <mode>  shadow by default; conservative requires opt-in
+  --prune              Keep only the 200 newest routing decision records
+  --configure-ccr      Preview managed CCR setup; --yes applies one step
+  --update-ccr         Preview update of the managed CCR CLI
+  --rollback-ccr       Preview rollback; --yes removes owned rule/profile
+  --ccr-usage          Read CCR model/token aggregates for local sessions
   --project <dir>      Use that project instead of the current directory
   --help               Show help for a command
   --version            Print the version

@@ -41,6 +41,7 @@ import { runMcp } from './commands/mcp.js';
 import { runOptimize } from './commands/optimize.js';
 import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
+import { runSmartRouting } from './commands/smart-routing.js';
 import { runSetup } from './commands/setup.js';
 import { runStatus } from './commands/status.js';
 import { runStackReview } from './commands/stack-review.js';
@@ -82,6 +83,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   optimize: runOptimize,
   plan: runPlan,
   rollback: runRollback,
+  routing: runSmartRouting,
   setup: runSetup,
   status: runStatus,
   'stack-review': runStackReview,
@@ -128,6 +130,8 @@ export interface RunOptions {
   /** The metrics store. Omitted by tests that assert the CLI contract without one. */
   metrics?: MetricsStore | null;
   env?: Readonly<Record<string, string | undefined>>;
+  /** Optional test seam for local CCR Web RPC; production uses Node's built-in fetch. */
+  ccrFetch?: typeof fetch;
   stdoutIsTty?: boolean;
   toolVersion?: string;
   /**
@@ -429,6 +433,16 @@ export async function run(options: RunOptions): Promise<number> {
     tasksRemaining: invocation.options.tasksLeft,
     contextSnapshotPath: invocation.options.contextSnapshot,
     nativePolicy: invocation.options.nativePolicy,
+    routingScript: invocation.options.routingScript,
+    routingMetrics: invocation.options.routingMetrics,
+    routingMode: invocation.options.routingMode,
+    routingPrune: invocation.options.routingPrune,
+    routingCcrConfigure: invocation.options.routingCcrConfigure,
+    routingCcrRollback: invocation.options.routingCcrRollback,
+    routingCcrUpdate: invocation.options.routingCcrUpdate,
+    routingCcrUsage: invocation.options.routingCcrUsage,
+    env: options.env ?? {},
+    ...(options.ccrFetch === undefined ? {} : { ccrFetch: options.ccrFetch }),
     agentSkill: invocation.options.agentSkill,
     since: invocation.options.since,
     until: invocation.options.until,

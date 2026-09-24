@@ -123,6 +123,66 @@ function localLine(summary: TaskBenchmarkMatrixSummary): string | null {
   );
 }
 
+function signedCount(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatCount(value)}`;
+}
+
+function signedUsd(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(6)}`;
+}
+
+function ccrUsageLines(summary: TaskBenchmarkMatrixSummary, indent: number): string[] {
+  const usage = summary.ccrUsage;
+  if (usage === undefined) return [];
+  const lines: string[] = [];
+  if (
+    usage.comparablePairs > 0 &&
+    usage.baselineTokens !== null &&
+    usage.optimizedTokens !== null &&
+    usage.totalTokenDelta !== null
+  ) {
+    lines.push(
+      ...wrap(
+        `CCR observed tokens across ${String(usage.comparablePairs)} quality-passed pairs — ` +
+          `baseline ${formatCount(usage.baselineTokens)}, optimized ${formatCount(usage.optimizedTokens)}, ` +
+          `delta ${signedCount(usage.totalTokenDelta)}`,
+        indent,
+      ),
+    );
+  } else if (usage.partialPairs > 0 || usage.qualityGatedPairs > 0) {
+    lines.push(
+      ...wrap(
+        `CCR usage deltas withheld — partial ${String(usage.partialPairs)}, quality-gated ${String(usage.qualityGatedPairs)}`,
+        indent,
+      ),
+    );
+  }
+  if (
+    usage.recordedCostPairs > 0 &&
+    usage.baselineRecordedCostUsd !== null &&
+    usage.optimizedRecordedCostUsd !== null &&
+    usage.recordedCostDeltaUsd !== null
+  ) {
+    lines.push(
+      ...wrap(
+        `CCR recorded provider-cost estimate across ${String(usage.recordedCostPairs)} pairs — ` +
+          `baseline ${usage.baselineRecordedCostUsd.toFixed(6)} USD, optimized ` +
+          `${usage.optimizedRecordedCostUsd.toFixed(6)} USD, delta ${signedUsd(usage.recordedCostDeltaUsd)} USD`,
+        indent,
+      ),
+    );
+  }
+  if (usage.comparablePairs > 0 || usage.partialPairs > 0 || usage.qualityGatedPairs > 0) {
+    lines.push(
+      ...wrap(
+        'CCR usage and cost estimates are separate from subscription quota and billed savings.',
+        indent,
+      ),
+    );
+  }
+  return lines;
+}
+
 function candidateSummaryLine(summary: CandidateEvidenceSummary): string {
   return (
     `${String(summary.pairs)} pairs; evidence ${String(summary.evidencePairs)}/${String(
@@ -171,8 +231,12 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
     entry.localTokenSavingPercent === null
       ? ''
       : `; local delta ${percent(entry.localTokenSavingPercent)}`;
+  const ccr =
+    entry.ccrUsage?.status === 'comparable' && entry.ccrUsage.totalTokenDelta !== null
+      ? `; CCR ${signedCount(entry.ccrUsage.totalTokenDelta)} tokens`
+      : '';
   if (!('context' in entry)) {
-    return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}`;
+    return `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}${ccr}`;
   }
   const contextCounts =
     entry.context.baseline === null || entry.context.optimized === null
@@ -181,7 +245,7 @@ function entryLine(entry: TaskBenchmarkMatrixEntry | TaskBenchmarkContextMatrixE
           entry.context.optimized.effectiveStaticMcpToolCount,
         )} static tools`;
   return (
-    `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}; ` +
+    `${entry.benchmarkId} — ${entry.verdict}; ${entry.basis}; ${entry.evidenceLevel}${local}${ccr}; ` +
     `context ${entry.context.verdict}${contextCounts}`
   );
 }
@@ -297,6 +361,7 @@ export function renderBenchmarkMatrixReport(
     if (contextSummary !== undefined) lines.push(...wrap(contextLine(contextSummary), 4));
     const local = localLine(summary);
     if (local !== null) lines.push(...wrap(local, 4));
+    lines.push(...ccrUsageLines(summary, 4));
   }
 
   lines.push('', 'Overall');
@@ -305,6 +370,7 @@ export function renderBenchmarkMatrixReport(
   if (contextReport !== null) lines.push(...wrap(contextLine(contextReport.context.overall), 2));
   const overallLocal = localLine(report.overall);
   if (overallLocal !== null) lines.push(...wrap(overallLocal, 2));
+  lines.push(...ccrUsageLines(report.overall, 2));
 
   if (report.candidateEvidence !== undefined && report.campaign === undefined) {
     lines.push('', 'Candidate evidence — experimental');

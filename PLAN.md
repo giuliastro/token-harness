@@ -101,6 +101,8 @@ Exit criteria:
 | 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
 | 0010 | Read-only status seam for external consumers | Reserved — Phase 9, §9.4, §15 item 41 |
 | 0011 | Quota-aware Claude Code and Codex orchestration | Proposed — post-0.2 product direction |
+| 0027 | Optimization stack manager | Accepted |
+| 0028 | Smart model routing, shadow-first | Accepted |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -934,12 +936,12 @@ forbids; LLMLingua is an engine with no lifecycle; and the routers need the capa
 attribution-class RFC named below before a manifest can honestly describe them.
 
 LiteLLM is a gateway substrate, not by itself evidence of intelligent routing or token
-savings. Claude Code Router is called "router" but is first an agent-native gateway; its
-routing rules and logs make it independently adoptable once the capability exists. RouteLLM,
-vLLM Semantic Router, and LLMRouter remain alternative owners of a model request.
-Before any of them can be admitted, a new RFC must define the model-routing capability and a
-cost/quality attribution class: routing a request to a cheaper model is never folded into
-RFC 0005's exact or estimated token-saving totals.
+savings. RFC 0028 now defines `model.request.route` and a separate cost/quality attribution class.
+The first experiment uses Claude Code Router as an agent-native gateway for Claude Code and Codex,
+starting with a local heuristic classifier and shadow-only request observation. This does not
+admit CCR as a managed provider, enable paid routing, or change the existing native model policy.
+RouteLLM, vLLM Semantic Router, and LLMRouter remain alternative policy owners and still require
+their own compatibility, lifecycle, and quality evidence before admission.
 
 ### 9.4 The read-only status seam, and its first consumer
 
@@ -2807,8 +2809,9 @@ The near-term development sequence from the current repository state is:
 4. implement 19.1–19.4 as the next runtime-policy milestone;
 5. use those contracts to drive 19.5–19.10 and measure whether the controller actually increases
    accepted work per allowance;
-6. admit automatic routing/autonomy only after the measured controller loop is demonstrably better
-   than the current advisory workflow.
+6. collect shadow-only model-routing decisions under Phase 20.1 without changing selected models;
+7. admit conservative automatic routing/autonomy only after the measured controller loop and
+   per-model quality/allowance evidence are demonstrably better than the current advisory workflow.
 
 The product positioning that this phase should make true is:
 
@@ -2825,3 +2828,76 @@ for approval, records the previous npm inventory, installs the exact target and 
 installed manifest and global inventory. Source, `npx`, and other package-manager launches are
 reported as unsupported for automatic self-update rather than guessed. Updating from the browser
 requires restarting the app to load the new package.
+
+## 20. Phase 12 — Smart Model Routing, shadow-first
+
+RFC 0028 adds per-request model routing as a secondary runtime policy under RFC 0027. It runs after
+the existing native model/effort policy and begins with observation only.
+
+**Implementation status (2026-09-24):** the local classifier, shadow telemetry, managed CCR 3.1.1
+install/start/update lifecycle, scoped-profile integration where an existing harness provider is
+already configured, and CCR usage fields in paired receipts are implemented. Real provider-paired
+task runs and any resulting subscription-allowance savings claim remain open evidence work.
+
+#### 20.1 P0 — Local classifier and CCR shadow integration
+
+The first slice supplies a deterministic TypeScript heuristic with no API or local-model call, a CCR
+Node.js script export for Claude Code and Codex, local feature-only decision telemetry, and an
+managed CCR CLI setup through npm into Token Harness' protected state directory, followed by rule
+configuration over CCR 3.1.1's authenticated loopback Web RPC. First install/start and routing
+configuration are separate preview/apply steps so each exact mutation is visible before `--yes`.
+`--update-ccr` updates only the versioned Token Harness-owned package to the reviewed pin; it never
+updates or replaces a global/user-owned installation. Configuration records ownership, verifies the
+saved rule/profile, and offers rollback. Where CCR already has exactly one provider imported for the
+selected harness, Token Harness can add a profile scoped to CCR CLI launches; it never imports OAuth
+credentials or changes native harness endpoints. Without that provider, the user performs provider
+login/import explicitly in CCR. Users launch through the CCR-scoped profile to route requests; the
+gateway may restart when CCR applies the saved configuration.
+
+Shadow mode remains the default and returns no model rewrite. Conservative mode is explicit and
+must be configured separately; changing an existing rule's mode requires rollback before setup.
+
+Decision events record tier, confidence, reason codes, sanitized request/candidate model IDs, request
+metadata and classifier latency. Prompts, request bodies, credentials, and tool contents are not
+persisted. Routing events stay outside RFC 0005 optimization-saving aggregates and report
+`not-measured` for model savings.
+
+#### 20.2 P1 — Conservative opt-in route
+
+The optional conservative mode may route only high-confidence simple requests to one model the user
+has already configured in CCR. Complex or ambiguous requests, multimodal requests, and tool-enabled
+requests without explicit tool-compatibility confirmation pass through unchanged. No default model
+IDs, provider credentials, paid overflow routes, or hidden fallback chains are introduced.
+
+#### 20.3 P1 — Quality and allowance measurement
+
+Any claimed benefit requires paired task evidence with the actual resolved model, comparable
+provider-reported usage or included-allowance evidence, and an explicit quality outcome. Benchmark
+receipts can capture CCR 3.1.1's per-session model/token counters and CCR-recorded provider-cost
+estimate after dropping request bodies and session IDs. The paired comparator shows this evidence
+separately and exposes token/cost deltas only when both quality gates pass and both observations are
+complete. CCR usage never changes the quota-based verdict. API cost, subscription allowance,
+latency, and local token estimates remain separate. Automatic routing beyond the conservative
+opt-in remains disabled until those gates pass on both supported harnesses.
+
+Live provider/allowance measurement is still an operator-run paired experiment; offline tests and a
+verified CCR configuration do not prove a real request was routed or that a subscription quota was
+saved.
+
+Acceptance:
+
+- the same pure classifier is exercised directly and through the generated CCR script;
+- the generated shadow rule works for separate Claude Code and Codex profiles and never rewrites a
+  request;
+- CCR install/start/update and configuration are local-only, previewed, approval-gated,
+  version-gated to 3.1.1, ownership-tracked, post-verified, and reversible without changing
+  unrelated rules, profiles, providers, or credentials;
+- telemetry contains no prompt text or credentials, is stored locally, and fails open on write
+  errors;
+- benchmark receipts retain only CCR model/usage aggregates, and omit request/session bodies and
+  session identifiers;
+- routing decision counts remain separate from exact, estimated, counterfactual, and billed token
+  savings;
+- conservative routing requires explicit mode selection and only proposes a configured
+  compatible simple model for a high-confidence low-risk request;
+- no savings claim appears until paired quality and usage evidence is attributable per route.

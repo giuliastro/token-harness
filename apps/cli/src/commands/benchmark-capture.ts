@@ -24,12 +24,14 @@ import {
   type TaskBenchmarkCapture,
   type TaskBenchmarkCaptureFinishReport,
   type TaskBenchmarkCaptureStartReport,
+  type TaskBenchmarkCcrUsage,
 } from '@token-harness/core';
 
 import { runBudget } from './budget.js';
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
 import { runHistory } from './history.js';
+import { loadSmartRoutingEventsForWindow, observeCcrUsage } from './routing-usage.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
@@ -456,6 +458,62 @@ export async function runBenchmarkFinish(
   const finishContextObservation = contextResult.data?.harnesses.find(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
+  const routingHarness = parsed.capture.harnessId === CLAUDE ? 'claude' : 'codex';
+  const routingEvents = await loadSmartRoutingEventsForWindow({
+    context,
+    harness: routingHarness,
+    since: parsed.capture.startedAt,
+    until: completedAt,
+  });
+  let ccrUsage: TaskBenchmarkCcrUsage | undefined;
+  let ccrUsageDiagnostics: ReturnType<typeof diagnostic>[] = [];
+  if (routingEvents.length > 0) {
+    try {
+      const observed = await observeCcrUsage({
+        context,
+        events: routingEvents,
+        since: parsed.capture.startedAt,
+        until: completedAt,
+      });
+      ccrUsage = { schemaVersion: 1, ...observed.usage };
+      if (observed.usage.status !== 'observed') {
+        ccrUsageDiagnostics = [
+          diagnostic({
+            severity: 'warning',
+            code: 'benchmark-ccr-usage-partial',
+            message: `CCR request usage was ${observed.usage.status} for this capture`,
+            remediation:
+              'Check CCR Web RPC logging and keep one harness session active during the benchmark task',
+          }),
+        ];
+      }
+    } catch {
+      ccrUsage = {
+        schemaVersion: 1,
+        status: 'unavailable',
+        sessionCount: 0,
+        observedSessionCount: 0,
+        requestCount: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 0,
+        recordedCostUsd: null,
+        byModel: [],
+      };
+      ccrUsageDiagnostics = [
+        diagnostic({
+          severity: 'warning',
+          code: 'benchmark-ccr-usage-unavailable',
+          message:
+            'CCR request usage could not be read; the task receipt is still valid without it',
+          remediation:
+            'Set the local CCR Web RPC token and verify CCR 3.1.1 request logging before the next paired capture',
+        }),
+      ];
+    }
+  }
   const completed = completeTaskBenchmarkCapture(parsed.capture, {
     completedAt,
     usageAfter: budget?.windows ?? [],
@@ -465,6 +523,7 @@ export async function runBenchmarkFinish(
     localUsage,
     contextAtFinish: taskBenchmarkContextSnapshot(finishContextObservation),
     policyAtFinish: benchmarkPolicySnapshot(finishContextObservation),
+    ...(ccrUsage === undefined ? {} : { ccrUsage }),
   });
   if (!completed.ok) {
     return commandResult({
@@ -512,6 +571,7 @@ export async function runBenchmarkFinish(
       ...budgetResult.diagnostics,
       ...historyResult.diagnostics,
       ...contextResult.diagnostics,
+      ...ccrUsageDiagnostics,
     ],
   });
 }

@@ -15,9 +15,13 @@ function receiptLine(label: string, receipt: TaskBenchmarkReceipt): string {
     receipt.localUsage === null
       ? 'local tokens unknown'
       : `local ${formatCount(receipt.localUsage.totalTokens)} tokens`;
+  const ccr =
+    receipt.ccrUsage === undefined || receipt.ccrUsage === null
+      ? 'CCR usage not captured'
+      : `CCR ${receipt.ccrUsage.status}, ${formatCount(receipt.ccrUsage.totalTokens)} tokens across ${String(receipt.ccrUsage.requestCount)} requests`;
   return (
     `${label}: quality ${receipt.outcome.qualityGate}; attempts ${String(receipt.outcome.attempts)}; ` +
-    `failed ${String(receipt.outcome.failedAttempts)}; errors ${String(receipt.outcome.errorCodes.length)}; ${local}`
+    `failed ${String(receipt.outcome.failedAttempts)}; errors ${String(receipt.outcome.errorCodes.length)}; ${local}; ${ccr}`
   );
 }
 
@@ -58,6 +62,31 @@ export function renderBenchmarkReport(
         0,
       ),
     );
+  }
+
+  const ccrUsage = comparison.ccrUsage;
+  if (ccrUsage === undefined || ccrUsage.status === 'not-measured') {
+    lines.push('CCR observed usage: not measured for both variants');
+  } else if (ccrUsage.status === 'comparable') {
+    const modelPair = `${ccrUsage.baselineModels.join(', ') || 'unknown'} → ${ccrUsage.optimizedModels.join(', ') || 'unknown'}`;
+    lines.push(
+      ...wrap(
+        `CCR request usage: ${formatCount(ccrUsage.baselineTokens ?? 0)} → ${formatCount(ccrUsage.optimizedTokens ?? 0)} tokens; delta ${String(ccrUsage.totalTokenDelta ?? 0)}; models ${modelPair}`,
+        0,
+      ),
+    );
+    if (ccrUsage.recordedCostDeltaUsd !== null) {
+      lines.push(
+        `CCR recorded provider-cost estimate delta: ${ccrUsage.recordedCostDeltaUsd.toFixed(6)} USD`,
+      );
+    }
+    lines.push('CCR request tokens and price estimates remain separate from subscription quota');
+  } else if (ccrUsage.status === 'quality-gated') {
+    lines.push(
+      'CCR request usage: observed, but delta withheld until both task quality gates pass',
+    );
+  } else {
+    lines.push('CCR request usage: partial or ambiguous, not compared');
   }
 
   const contextCounts =
