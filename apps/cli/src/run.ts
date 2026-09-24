@@ -439,6 +439,7 @@ export async function run(options: RunOptions): Promise<number> {
     routingPrune: invocation.options.routingPrune,
     routingCcrConfigure: invocation.options.routingCcrConfigure,
     routingCcrRollback: invocation.options.routingCcrRollback,
+    routingCcrUpdate: invocation.options.routingCcrUpdate,
     routingCcrUsage: invocation.options.routingCcrUsage,
     env: options.env ?? {},
     ...(options.ccrFetch === undefined ? {} : { ccrFetch: options.ccrFetch }),

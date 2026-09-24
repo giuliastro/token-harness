@@ -17,13 +17,18 @@ model, GPU, Jev account, or additional classifier service. A model provider conf
 still have its own credentials, pricing, and data-egress behavior; the classifier does not make
 those choices or enable that provider.
 
-This is a secondary runtime policy under RFC 0027. It does not turn Token Harness into a model
-gateway, replace native harness policy, install CCR, configure providers, or silently change
-user-owned harness configuration. On a local CCR 3.1.1 installation, Token Harness can optionally
-manage only its own routing rule through CCR's authenticated loopback Web RPC after preview and
-explicit approval; rollback removes only the exact rule it owns. Users still configure/enable the
-CCR Agent Profile or endpoint that sends Claude Code/Codex requests through that gateway, and should
-verify real requests in CCR logs.
+This is a secondary runtime policy under RFC 0027. It does not replace native harness policy or
+silently change user-owned harness configuration. Token Harness may install a reviewed CCR CLI
+version into its own protected local state directory through npm, start its local gateway, and
+explicitly update that owned copy. Installation/start and routing configuration use separate
+preview/approval steps; no global CCR package is replaced. On a local CCR 3.1.1 service,
+configuration uses CCR's authenticated loopback Web RPC and rollback removes only the exact rule
+and optional profile it owns. If exactly one matching provider is already configured in CCR,
+Token Harness may create a profile scoped to CCR CLI launches; provider login/import remains an
+explicit user action because it selects authentication and billing. Native Claude Code/Codex
+endpoints are not changed. A new profile uses the provider's explicit default or a unique configured
+model; otherwise `TOKEN_HARNESS_ROUTING_PROFILE_MODEL` must name the exact `Provider/model` alias.
+Users launch through the scoped profile and verify real requests in CCR logs.
 
 ## Capability amendment
 
@@ -70,7 +75,9 @@ simple model only when all of these hold:
    `TOKEN_HARNESS_ROUTING_ALLOW_TOOLS=true` after confirming that the selected model supports the
    active tool protocol;
 4. `TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` names a configured CCR model and differs from the incoming
-   model.
+   model. Managed configuration validates this exact `Provider/model` alias against CCR's provider
+   catalog; it does not infer a cheap model from its name. A manually exported script relies on the
+   user's CCR process environment for the same setting.
 
 All other requests pass through unchanged. The initial version does not downgrade standard,
 complex, or critical requests and does not select model IDs by name, infer prices, change provider,
@@ -127,9 +134,12 @@ rollback lifecycle before it can be a managed provider.
 
 The first implementation provides a pure classifier, a CCR script exporter for Claude Code and
 Codex, feature-only local decision telemetry, a separate decision-count report, and deterministic
-offline tests. Optional managed setup validates the script, previews the new rule, applies only
-after explicit approval, verifies it through the CCR API, and stores a local ownership receipt for
-rollback. It requires CCR 3.1.1's local authenticated Web RPC; the user must already have CCR and
-their provider configured. It does not create or enable a CCR Agent Profile or change harness
-endpoint settings. A successful configuration verifies only that CCR saved the rule and reports
-gateway state; it does not claim live-request or quota verification.
+offline tests. Managed setup previews and installs the exact reviewed CCR CLI version locally when
+no authenticated CCR service is available, then asks for a second preview before changing routing
+configuration. Existing authenticated CCR services are connected to without adopting or updating
+their external CLI installation. Configuration validates the script, saves only the owned rule and
+optional CCR-scoped CLI profile, verifies both through the CCR API, and stores a local ownership
+receipt for rollback. It never imports provider credentials. A successful setup verifies only the
+local package, gateway, and saved configuration; it does not claim live-request or quota
+verification. An explicit update command targets the reviewed version pin; discovery of a newer
+upstream release alone does not silently update the package.

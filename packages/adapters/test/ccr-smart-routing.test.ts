@@ -99,6 +99,28 @@ test('conservative mode returns a configured simple model only for a high-confid
   assert.equal(writes[0]?.event['sessionId'], 'codex-session');
 });
 
+test('keeps CCR model aliases with spaces in provider display names', async () => {
+  const source = createCcrSmartRoutingScript({
+    harnessId: 'claude',
+    mode: 'conservative',
+    telemetryDirectory: '/state/smart-routing',
+    pathSeparator: '/',
+    simpleModel: 'Claude Code API/claude-haiku-4-5',
+  });
+  const { result, writes } = executeCcrScript(source, {
+    model: 'Claude Code API/claude-sonnet-4-5',
+    headers: { 'user-agent': 'claude-code/2.1.0' },
+    summary: { lastUserText: 'What is 2 + 2?', toolNames: [], hasImage: false },
+  });
+
+  assert.equal(
+    ((await result) as { model?: string } | null)?.model,
+    'Claude Code API/claude-haiku-4-5',
+  );
+  assert.equal(writes[0]?.event['requestModel'], 'Claude Code API/claude-sonnet-4-5');
+  assert.equal(writes[0]?.event['candidateModel'], 'Claude Code API/claude-haiku-4-5');
+});
+
 test('conservative mode preserves requests with unconfirmed tool compatibility', async () => {
   const source = createCcrSmartRoutingScript({
     harnessId: 'codex',

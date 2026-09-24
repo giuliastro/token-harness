@@ -92,7 +92,7 @@ describe('CCR management adapter', () => {
             {
               sessionId: 'session-1',
               createdAt: '2026-09-24T10:00:00.000Z',
-              model: 'OpenAI/gpt-fast',
+              model: 'Codex API/gpt-fast',
               inputTokens: 50,
               outputTokens: 20,
               cacheReadTokens: 10,
@@ -122,6 +122,7 @@ describe('CCR management adapter', () => {
     );
     assert.ok(reduced);
     assert.equal(reduced.requestCount, 1);
+    assert.equal(reduced.byModel[0]?.model, 'Codex API/gpt-fast');
     assert.equal(reduced.totalTokens, 70);
     assert.equal(reduced.recordedCostUsd, 0.01);
     assert.deepEqual(Object.keys(reduced).sort(), [

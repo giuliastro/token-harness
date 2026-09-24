@@ -9,6 +9,7 @@ import {
   type CcrObservedRequestUsage,
   type CcrSessionUsage,
 } from '@token-harness/adapters';
+import { resolveManagedCcr } from './ccr-runtime.js';
 import {
   SMART_ROUTING_EVENT_PREFIX,
   isSmartRoutingDecisionEvent,
@@ -114,13 +115,11 @@ export async function observeCcrUsage(input: {
       failedSessions: 0,
     };
   }
+  const managed = await resolveManagedCcr(input.context);
+  if (managed.kind === 'unavailable') throw new Error('CCR management credentials are unavailable');
   const client = new CcrManagementClient({
-    ...(input.context.env?.['CCR_WEB_URL'] === undefined
-      ? {}
-      : { baseUrl: input.context.env['CCR_WEB_URL'] }),
-    ...(input.context.env?.['CCR_WEB_AUTH_TOKEN'] === undefined
-      ? {}
-      : { authToken: input.context.env['CCR_WEB_AUTH_TOKEN'] }),
+    baseUrl: managed.endpoint,
+    authToken: managed.token,
     ...(input.context.ccrFetch === undefined ? {} : { fetcher: input.context.ccrFetch }),
   });
   const appInfo = await client.call('getAppInfo');

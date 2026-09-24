@@ -63,6 +63,7 @@ export interface CommandContext {
   routingPrune?: boolean;
   routingCcrConfigure?: boolean;
   routingCcrRollback?: boolean;
+  routingCcrUpdate?: boolean;
   routingCcrUsage?: boolean;
   /** Environment is injected by the process boundary; CCR secrets must never enter reports. */
   env?: Readonly<Record<string, string | undefined>>;

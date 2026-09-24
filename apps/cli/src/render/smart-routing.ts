@@ -12,6 +12,22 @@ export function renderSmartRoutingReport(report: SmartRoutingCommandReport): str
       `Rule: ${report.ruleId}`,
       `Script: ${report.scriptPath}`,
       `Management endpoint: ${report.managementEndpoint}`,
+      ...(report.profileId === undefined || report.profileId === null
+        ? []
+        : [`CCR profile: ${report.profileId}`]),
+      ...(report.launchCommand === undefined || report.launchCommand === null
+        ? []
+        : [`Launch: ${report.launchCommand}`]),
+    ].join('\n');
+  }
+
+  if (report.kind === 'ccr-lifecycle') {
+    return [
+      `CCR ${report.action}: ${report.state}`,
+      `Version: ${report.version}`,
+      `Package: ${report.packagePath}`,
+      `CLI: ${report.executablePath}`,
+      `Management endpoint: ${report.managementEndpoint}`,
     ].join('\n');
   }
 

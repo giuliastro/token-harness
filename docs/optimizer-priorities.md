@@ -136,22 +136,24 @@ that complexity worthwhile.
 [RFC 0028](rfcs/0028-smart-model-routing.md) adds a local TypeScript heuristic and a CCR gateway
 integration for Claude Code and Codex. Classification makes no API calls and needs no local model.
 The default CCR rule is shadow-only: it records a tier and leaves the current model selection alone.
-An optional managed setup supports local CCR 3.1.1 through authenticated loopback Web RPC, with
-preview, explicit apply, ownership tracking, post-save verification and exact-rule rollback. It
-manages the Token Harness routing rule only; CCR installation, provider setup and credentials stay
-user-owned. The first conservative opt-in may select only a user-configured simple model for
-high-confidence, low-risk turns; requests with unknown tool compatibility or multimodal input pass
-through.
-The user must separately enable an Agent Profile or endpoint that sends harness requests through
-CCR; adding the rule alone does not prove interception.
+Managed setup installs/starts the reviewed CCR CLI version in Token Harness' protected local state
+when no authenticated local CCR service is available. Installation and routing changes have
+separate previews, and `--update-ccr` updates only the Token Harness-owned package to the reviewed
+version pin. Routing configuration uses authenticated loopback Web RPC, ownership tracking,
+post-save verification and exact rule/profile rollback. When exactly one matching harness provider
+is already configured in CCR, Token Harness can create a profile scoped to CCR CLI launches.
+Provider login/import remains explicit, credentials are never copied by Token Harness, and native
+harness endpoint settings stay user-owned. The first conservative opt-in may select only a
+user-configured simple model for high-confidence, low-risk turns; requests with unknown tool
+compatibility or multimodal input pass through.
 
 Routing decisions have their own local telemetry and report. They are not savings events. A cheaper
 model label alone does not prove lower included-allowance use, API spend, or preserved quality, so
 Token Harness reports model savings as **not measured** until paired usage and quality evidence can
 be attributed to the actual resolved model. Paired task receipts can include CCR's metadata-only
 per-model usage and provider-cost estimate; that comparison is quality-gated and does not establish
-subscription-quota savings. CCR is managed only as the local rule/interception layer, not as a
-provider or installation.
+subscription-quota savings. CCR is a managed local interception dependency, not an admitted model
+provider; Token Harness never imports its account credentials.
 
 ## Capability ownership and composition
 

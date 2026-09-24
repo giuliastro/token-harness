@@ -100,7 +100,9 @@ const ALLOWED_SKIP_REASONS = new Set([
 ]);
 
 function isSafeModelId(value: unknown): value is string | null {
-  return value === null || (typeof value === 'string' && /^[A-Za-z0-9_.:/@+-]{1,160}$/.test(value));
+  return (
+    value === null || (typeof value === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(value))
+  );
 }
 
 /** Validate the local CCR decision record without accepting prompt or credential fields. */

@@ -266,29 +266,46 @@ launching a browser.
 
 ### Smart Model Routing (advanced)
 
-The local TypeScript classifier needs no API key or local model. CCR 3.1.1 can be configured as the
-interception layer for Claude Code or Codex using its authenticated loopback Web RPC. Set
-`CCR_WEB_AUTH_TOKEN` in the Token Harness environment to the token already used by the local CCR
-service. For a useful shadow report, also set `TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the CCR
-service environment to a model configured there; shadow mode records it as a candidate without
-changing the request. These commands manage the Token Harness routing rule only; they do not create
-an Agent Profile or change Claude Code/Codex endpoint settings. To send requests through CCR, first
-configure and enable an Agent Profile for the harness, launch it through CCR (`ccr <profile>` or
-`ccr-app <profile>`), and verify that its request appears in CCR logs. See CCR's
+The local TypeScript classifier needs no API key or local model. On Node.js 22+, Token Harness can
+install and start the reviewed CCR 3.1.1 CLI in its own protected state directory. Installation and
+routing configuration are separate preview/apply steps. Existing authenticated CCR services can be
+used as-is; Token Harness does not adopt or update an external/global CCR installation. For a useful
+shadow report, the selected CCR profile needs an existing provider/model; when exactly one matching
+Claude Code or Codex provider is already configured, Token Harness adds a profile scoped to CCR CLI
+launches if the provider exposes one unambiguous default model. If it exposes several models, set
+`TOKEN_HARNESS_ROUTING_PROFILE_MODEL` to the exact `Provider/model` for the profile. To enable a
+conservative candidate, set `TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` to an exact configured
+`Provider/model`; Token Harness validates it against CCR's provider catalog. It never imports OAuth
+credentials or edits native harness endpoints. Select provider login/import explicitly in CCR when
+needed. See CCR's
 [Agent Profiles guide](https://github.com/musistudio/claude-code-router/blob/main/docs/src/content/docs/en/configuration/profiles.md).
-Preview and apply the default shadow rule:
+On a first install, preview and approve CCR install/start, then preview and approve routing setup:
 
 ```sh
 token-harness routing --configure-ccr --harness codex
 token-harness routing --configure-ccr --harness codex --yes
+token-harness routing --configure-ccr --harness codex
+token-harness routing --configure-ccr --harness codex --yes
 ```
 
+To update the Token Harness-owned CCR CLI to the current reviewed version pin, preview and apply:
+
+```sh
+token-harness routing --update-ccr
+token-harness routing --update-ccr --yes
+```
+
+After setup, launch the scoped profile shown by Token Harness (for Codex, typically
+`ccr "Token Harness Codex"`) and confirm a real request appears in CCR logs. The saved profile or
+gateway status alone does not prove interception. In shadow mode the rule records the proposed tier
+and leaves the current model unchanged.
+
 For a paired routing experiment, capture the baseline while the rule is in shadow mode, then record
-the task's actual quality outcome. To test conservative routing, configure
-`TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the CCR service environment with a model already available
-there, restart CCR as needed, roll back the owned shadow rule, and preview/apply the conservative
-rule. Run the same task as the optimized variant, record its quality, then compare the receipt paths
-printed by Token Harness:
+the task's actual quality outcome. To test conservative routing, set
+`TOKEN_HARNESS_ROUTING_SIMPLE_MODEL` in the Token Harness environment to an exact model already
+configured in CCR, roll back the owned shadow rule, and preview/apply the conservative rule. Token
+Harness validates the alias and embeds it in the script. Run the same task as the optimized variant,
+record its quality, then compare the receipt paths printed by Token Harness:
 
 ```sh
 token-harness benchmark-start --benchmark-id routing-codex-1 --variant baseline --task mechanical --harness codex

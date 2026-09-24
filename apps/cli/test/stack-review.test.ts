@@ -49,6 +49,7 @@ describe('stack-review CLI', () => {
         routingPrune: false,
         routingCcrConfigure: false,
         routingCcrRollback: false,
+        routingCcrUpdate: false,
         routingCcrUsage: false,
         agentSkill: false,
         verbose: false,

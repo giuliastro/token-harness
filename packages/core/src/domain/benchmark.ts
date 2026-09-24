@@ -324,7 +324,7 @@ function parseTaskBenchmarkCcrUsage(value: unknown): TaskBenchmarkCcrUsage | nul
     if (
       modelRow === null ||
       typeof modelRow['model'] !== 'string' ||
-      !/^[A-Za-z0-9_.:/@+-]{1,160}$/.test(modelRow['model'])
+      !/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(modelRow['model'])
     )
       return undefined;
     const modelRequestCount = finiteNonNegative(modelRow['requestCount']);

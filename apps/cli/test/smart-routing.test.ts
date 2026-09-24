@@ -283,6 +283,92 @@ describe('Smart Model Routing CLI', () => {
     );
   });
 
+  it('creates and rolls back only a CCR-scoped profile when an exact provider/model is selected', async () => {
+    const provider = {
+      name: 'Claude Code API',
+      type: 'anthropic_messages',
+      models: ['claude-sonnet-4-5', 'claude-haiku-4-5'],
+      apiKey: 'private-provider-key',
+    };
+    let savedConfig: Record<string, unknown> = {
+      Providers: [provider],
+      profile: { enabled: true, profiles: [] },
+      Router: { rules: [{ id: 'user-rule', enabled: true }] },
+    };
+    const ccrFetch: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { method: string; args?: unknown[] };
+      let value: unknown;
+      if (body.method === 'getAppInfo') value = { version: '3.1.1' };
+      else if (body.method === 'getConfig') value = savedConfig;
+      else if (body.method === 'getGatewayStatus') value = { state: 'running' };
+      else if (body.method === 'validateRouteScript') value = { ok: true };
+      else if (body.method === 'saveConfig') {
+        savedConfig = body.args?.[0] as Record<string, unknown>;
+        value = { ok: true };
+      } else value = null;
+      return new Response(JSON.stringify({ ok: true, value }), { status: 200 });
+    };
+    const { commandContext, files } = context({
+      routingCcrConfigure: true,
+      harness: 'claude' as never,
+      env: {
+        CCR_WEB_AUTH_TOKEN: 'private-ccr-token',
+        TOKEN_HARNESS_ROUTING_PROFILE_MODEL: 'Claude Code API/claude-sonnet-4-5',
+        TOKEN_HARNESS_ROUTING_SIMPLE_MODEL: 'Claude Code API/claude-haiku-4-5',
+      },
+      ccrFetch,
+    });
+
+    const preview = await runSmartRouting(commandContext);
+    assert.equal(preview.data?.kind, 'ccr-configuration');
+    if (preview.data?.kind !== 'ccr-configuration') return;
+    assert.equal(preview.data.state, 'preview');
+    assert.equal(preview.data.launchCommand, 'ccr "Token Harness Claude Code"');
+    assert.match(preview.diagnostics[0]?.message ?? '', /Claude Code API\/claude-sonnet-4-5/);
+    assert.equal((savedConfig['profile'] as { profiles: unknown[] }).profiles.length, 0);
+
+    const applied = await runSmartRouting({ ...commandContext, confirmed: true });
+    assert.equal(applied.data?.kind, 'ccr-configuration');
+    if (applied.data?.kind !== 'ccr-configuration') return;
+    assert.equal(applied.data.state, 'configured');
+    const profiles = (savedConfig['profile'] as { profiles: Array<Record<string, unknown>> })
+      .profiles;
+    assert.equal(profiles.length, 1);
+    assert.equal(profiles[0]?.['scope'], 'ccr');
+    assert.equal(profiles[0]?.['surface'], 'cli');
+    assert.equal(profiles[0]?.['agent'], 'claude-code');
+    assert.equal(profiles[0]?.['model'], 'Claude Code API/claude-sonnet-4-5');
+    assert.equal(savedConfig['Providers'] instanceof Array, true);
+    assert.equal(
+      (savedConfig['Providers'] as Array<Record<string, unknown>>)[0]?.['apiKey'],
+      'private-provider-key',
+    );
+    const scriptPath = [...files.keys()].find((path) => path.endsWith('smart-routing-claude.js'));
+    assert.ok(scriptPath);
+    assert.match(
+      new TextDecoder().decode(files.get(scriptPath!)!),
+      /Claude Code API\/claude-haiku-4-5/,
+    );
+
+    const rollback = await runSmartRouting({
+      ...commandContext,
+      routingCcrConfigure: false,
+      routingCcrRollback: true,
+      confirmed: true,
+    });
+    assert.equal(rollback.data?.kind, 'ccr-configuration');
+    if (rollback.data?.kind !== 'ccr-configuration') return;
+    assert.equal(rollback.data.state, 'rolled-back');
+    assert.deepEqual((savedConfig['profile'] as { profiles: unknown[] }).profiles, []);
+    assert.deepEqual((savedConfig['Router'] as { rules: unknown[] }).rules, [
+      { id: 'user-rule', enabled: true },
+    ]);
+    assert.equal(
+      (savedConfig['Providers'] as Array<Record<string, unknown>>)[0]?.['apiKey'],
+      'private-provider-key',
+    );
+  });
+
   it('reports metadata-only CCR request usage without claiming savings', async () => {
     const timestamp = Date.parse('2026-09-23T12:00:00.000Z');
     const event = routingEvent({ schemaVersion: 2, sessionId: 'session-usage' });

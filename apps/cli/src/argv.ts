@@ -114,6 +114,7 @@ export interface CommandOptions {
   routingPrune: boolean;
   routingCcrConfigure: boolean;
   routingCcrRollback: boolean;
+  routingCcrUpdate: boolean;
   routingCcrUsage: boolean;
   /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
   agentSkill: boolean;
@@ -172,6 +173,7 @@ const BOOLEAN_FLAGS = new Set([
   '--prune',
   '--configure-ccr',
   '--rollback-ccr',
+  '--update-ccr',
   '--ccr-usage',
 ]);
 
@@ -252,6 +254,7 @@ export function parseArgv(
     routingPrune: false,
     routingCcrConfigure: false,
     routingCcrRollback: false,
+    routingCcrUpdate: false,
     routingCcrUsage: false,
     agentSkill: false,
     verbose: false,
@@ -303,6 +306,7 @@ export function parseArgv(
       if (name === '--prune') options.routingPrune = true;
       if (name === '--configure-ccr') options.routingCcrConfigure = true;
       if (name === '--rollback-ccr') options.routingCcrRollback = true;
+      if (name === '--update-ccr') options.routingCcrUpdate = true;
       if (name === '--ccr-usage') options.routingCcrUsage = true;
       if (name === '--verbose') options.verbose = true;
       continue;

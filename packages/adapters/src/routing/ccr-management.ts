@@ -63,7 +63,7 @@ const DEFAULT_CCR_WEB_URL = 'http://127.0.0.1:3458';
 const CCR_RPC_PATH = '/api/ccr/rpc';
 const CCR_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
-const MODEL_ID = /^[A-Za-z0-9_.:/@+-]{1,160}$/;
+const MODEL_ID = /^[A-Za-z0-9_.:/@+ -]{1,160}$/;
 const HARNESS_AGENTS = { claude: 'claude-code', codex: 'codex' } as const;
 
 type JsonRecord = Record<string, unknown>;

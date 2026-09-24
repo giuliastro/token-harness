@@ -14,7 +14,6 @@ import {
   isSameCcrConfig,
   readCcrVersion,
   removeOwnedCcrSmartRoutingRule,
-  resolveCcrManagementUrl,
 } from '@token-harness/adapters';
 import {
   EXIT_CODES,
@@ -33,6 +32,7 @@ import {
 } from '@token-harness/core';
 import type { CommandContext } from './context.js';
 import { observeCcrUsage, type CcrUsageReport } from './routing-usage.js';
+import { ensureManagedCcrRuntime, resolveManagedCcr } from './ccr-runtime.js';
 
 export type SmartRoutingCommandReport =
   | {
@@ -60,6 +60,17 @@ export type SmartRoutingCommandReport =
       ruleId: string;
       scriptPath: string;
       managementEndpoint: string;
+      profileId?: string | null;
+      launchCommand?: string | null;
+    }
+  | {
+      kind: 'ccr-lifecycle';
+      action: 'install' | 'update' | 'start';
+      state: 'preview' | 'installed' | 'updated' | 'started' | 'already-current';
+      version: string;
+      packagePath: string;
+      executablePath: string;
+      managementEndpoint: string;
     };
 
 interface CcrOwnershipReceipt {
@@ -71,6 +82,8 @@ interface CcrOwnershipReceipt {
   scriptPath: string;
   scriptSha256: string;
   installedAt: string;
+  profileId?: string;
+  profileSha256?: string;
 }
 
 interface CcrState {
@@ -126,7 +139,7 @@ function ccrFailure(errorValue: unknown): { code: string; message: string; remed
       code: 'ccr-auth-token-required',
       message: 'CCR Web RPC authentication is not configured for Token Harness',
       remediation:
-        'Set CCR_WEB_AUTH_TOKEN for both CCR and Token Harness, and optionally CCR_WEB_URL; the token is never printed or stored',
+        'Start the local CCR service or set CCR_WEB_AUTH_TOKEN and optionally CCR_WEB_URL; Token Harness never prints credentials, and managed credentials are stored only in protected local state',
     },
     unreachable: {
       code: 'ccr-management-unreachable',
@@ -205,6 +218,10 @@ async function readOwnership(
       value['ruleId'] === ccrSmartRoutingRuleId(harness) &&
       typeof value['scriptPath'] === 'string' &&
       /^[a-f0-9]{64}$/.test(String(value['scriptSha256'])) &&
+      (value['profileId'] === undefined || typeof value['profileId'] === 'string') &&
+      (value['profileSha256'] === undefined ||
+        /^[a-f0-9]{64}$/.test(String(value['profileSha256']))) &&
+      (value['profileId'] === undefined) === (value['profileSha256'] === undefined) &&
       typeof value['installedAt'] === 'string'
     ) {
       return value as unknown as CcrOwnershipReceipt;
@@ -247,13 +264,11 @@ async function cleanupUnappliedCcrFiles(
 }
 
 async function readCcrState(context: CommandContext): Promise<CcrState> {
-  const baseUrl = resolveCcrManagementUrl(context.env?.['CCR_WEB_URL']);
-  if (baseUrl === null) throw new CcrManagementError('endpoint-invalid');
+  const managed = await resolveManagedCcr(context);
+  if (managed.kind === 'unavailable') throw new CcrManagementError('token-missing');
   const client = new CcrManagementClient({
-    baseUrl,
-    ...(context.env?.['CCR_WEB_AUTH_TOKEN'] === undefined
-      ? {}
-      : { authToken: context.env['CCR_WEB_AUTH_TOKEN'] }),
+    baseUrl: managed.endpoint,
+    authToken: managed.token,
     ...(context.ccrFetch === undefined ? {} : { fetcher: context.ccrFetch }),
   });
   const [appInfo, configValue, gatewayValue] = await Promise.all([
@@ -269,11 +284,261 @@ async function readCcrState(context: CommandContext): Promise<CcrState> {
     throw new CcrManagementError('invalid-response');
   }
   const gatewayState = safeGatewayState(gatewayValue);
-  return { client, endpoint: baseUrl, version, config: configValue, gatewayState };
+  return { client, endpoint: managed.endpoint, version, config: configValue, gatewayState };
 }
 
 function validateRouteRuleResult(value: unknown): boolean {
   return isJsonRecord(value) && value['ok'] === true;
+}
+
+interface CcrProfilePlan {
+  profile: Record<string, unknown> | null;
+  profileContainer: Record<string, unknown> | null;
+  conflict: boolean;
+  reason: string | null;
+}
+
+const OWNED_PROFILE_IDS: Record<SmartRoutingHarness, string> = {
+  claude: 'token-harness-smart-routing-claude-v1',
+  codex: 'token-harness-smart-routing-codex-v1',
+};
+
+function profileSlug(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'provider'
+  );
+}
+
+/** Use only an already imported, harness-native provider; never import or select new credentials. */
+function planCcrProfile(
+  config: Record<string, unknown>,
+  harness: SmartRoutingHarness,
+  selectedModel?: string,
+): CcrProfilePlan {
+  const profileContainer = isJsonRecord(config['profile']) ? config['profile'] : null;
+  const profiles =
+    profileContainer && Array.isArray(profileContainer['profiles'])
+      ? profileContainer['profiles']
+      : null;
+  if (profileContainer === null || profiles === null || profileContainer['enabled'] === false) {
+    return {
+      profile: null,
+      profileContainer,
+      conflict: false,
+      reason: 'CCR Agent Profiles are unavailable or disabled',
+    };
+  }
+  const providerName = harness === 'claude' ? 'Claude Code API' : 'Codex API';
+  const protocol = harness === 'claude' ? 'anthropic_messages' : 'openai_responses';
+  const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
+  const matches = providers.filter(
+    (item) =>
+      isJsonRecord(item) &&
+      item['name'] === providerName &&
+      item['type'] === protocol &&
+      Array.isArray(item['models']) &&
+      item['models'].some(
+        (model) => typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model),
+      ),
+  );
+  if (matches.length !== 1 || !isJsonRecord(matches[0])) {
+    return {
+      profile: null,
+      profileContainer,
+      conflict: false,
+      reason:
+        matches.length === 0
+          ? `Import the existing ${providerName} login/provider in CCR before Token Harness can create a safe launcher profile`
+          : `CCR has multiple ${providerName} providers; select the intended subscription account explicitly in CCR`,
+    };
+  }
+  const provider = matches[0];
+  const models = (provider['models'] as unknown[]).filter(
+    (model): model is string =>
+      typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model),
+  );
+  let model: string | undefined;
+  const selectedModelValue = selectedModel?.trim();
+  if (selectedModelValue) {
+    if (!selectedModelValue.startsWith(`${providerName}/`)) {
+      return {
+        profile: null,
+        profileContainer,
+        conflict: false,
+        reason:
+          'TOKEN_HARNESS_ROUTING_PROFILE_MODEL must name a model from the matching CCR provider',
+      };
+    }
+    const selectedId = selectedModelValue.slice(providerName.length + 1);
+    if (models.includes(selectedId)) model = selectedId;
+    else
+      return {
+        profile: null,
+        profileContainer,
+        conflict: false,
+        reason:
+          'TOKEN_HARNESS_ROUTING_PROFILE_MODEL is not present in the matching CCR provider model list',
+      };
+  }
+  const providerDefault =
+    typeof provider['defaultModel'] === 'string'
+      ? provider['defaultModel']
+      : typeof provider['model'] === 'string'
+        ? provider['model']
+        : null;
+  if (model === undefined && providerDefault !== null) {
+    const providerDefaultId = providerDefault.startsWith(`${providerName}/`)
+      ? providerDefault.slice(providerName.length + 1)
+      : providerDefault;
+    if (models.includes(providerDefaultId)) model = providerDefaultId;
+  }
+  if (model === undefined && models.length === 1) model = models[0];
+  if (model === undefined) {
+    return {
+      profile: null,
+      profileContainer,
+      conflict: false,
+      reason: `${providerName} has multiple models; set TOKEN_HARNESS_ROUTING_PROFILE_MODEL to the exact Provider/model you want as the CCR CLI default`,
+    };
+  }
+  const id = OWNED_PROFILE_IDS[harness];
+  const profile: Record<string, unknown> = {
+    agent: harness === 'claude' ? 'claude-code' : 'codex',
+    enabled: true,
+    id,
+    model: `${providerName}/${model}`,
+    name: `Token Harness ${harness === 'claude' ? 'Claude Code' : 'Codex'}`,
+    providerId: typeof provider['id'] === 'string' ? provider['id'] : profileSlug(providerName),
+    providerName,
+    scope: 'ccr',
+    surface: 'cli',
+  };
+  const existing = profiles.filter((item) => isJsonRecord(item) && item['id'] === id);
+  if (existing.length > 0) {
+    return {
+      profile,
+      profileContainer,
+      conflict: true,
+      reason: 'A CCR Agent Profile already uses the Token Harness profile id',
+    };
+  }
+  return { profile, profileContainer, conflict: false, reason: null };
+}
+
+function configuredCcrModel(
+  config: Record<string, unknown>,
+  requested: string | undefined,
+): string | null {
+  const candidate = requested?.trim();
+  if (candidate === undefined || !/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(candidate)) return null;
+  const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
+  return providers.some(
+    (provider) =>
+      isJsonRecord(provider) &&
+      typeof provider['name'] === 'string' &&
+      Array.isArray(provider['models']) &&
+      provider['models'].some(
+        (model) => typeof model === 'string' && candidate === `${provider['name']}/${model}`,
+      ),
+  )
+    ? candidate
+    : null;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (!isJsonRecord(value)) return JSON.stringify(value);
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    .join(',')}}`;
+}
+
+function profileRows(config: Record<string, unknown>): unknown[] {
+  const container = config['profile'];
+  return isJsonRecord(container) && Array.isArray(container['profiles'])
+    ? container['profiles']
+    : [];
+}
+
+function withCcrProfile(
+  config: Record<string, unknown>,
+  profile: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const container = config['profile'];
+  if (
+    !isJsonRecord(container) ||
+    container['enabled'] === false ||
+    !Array.isArray(container['profiles'])
+  ) {
+    return null;
+  }
+  if (container['profiles'].some((item) => isJsonRecord(item) && item['id'] === profile['id'])) {
+    return null;
+  }
+  return {
+    ...config,
+    profile: { ...container, profiles: [profile, ...container['profiles']] },
+  };
+}
+
+function withoutOwnedCcrProfile(
+  config: Record<string, unknown>,
+  profileId: string,
+  expectedSha256: string,
+): Record<string, unknown> | null {
+  const container = config['profile'];
+  if (!isJsonRecord(container) || !Array.isArray(container['profiles'])) return config;
+  const matches = container['profiles'].filter(
+    (item) => isJsonRecord(item) && item['id'] === profileId,
+  );
+  if (matches.length === 0) return config;
+  if (matches.length !== 1 || scriptHash(stableJson(matches[0])) !== expectedSha256) return null;
+  return {
+    ...config,
+    profile: {
+      ...container,
+      profiles: container['profiles'].filter(
+        (item) => !(isJsonRecord(item) && item['id'] === profileId),
+      ),
+    },
+  };
+}
+
+function isExpectedCcrProfile(
+  value: unknown,
+  expected: Record<string, unknown>,
+): value is Record<string, unknown> {
+  if (!isJsonRecord(value)) return false;
+  const requiredKeys = [
+    'agent',
+    'enabled',
+    'id',
+    'model',
+    'name',
+    'providerId',
+    'providerName',
+    'scope',
+    'surface',
+  ];
+  return requiredKeys.every((key) => stableJson(value[key]) === stableJson(expected[key]));
+}
+
+function ccrLaunchCommand(harness: SmartRoutingHarness): string {
+  return `ccr "Token Harness ${harness === 'claude' ? 'Claude Code' : 'Codex'}"`;
+}
+
+function profilePlanDiagnostic(plan: CcrProfilePlan) {
+  if (plan.reason === null) return null;
+  return diagnostic({
+    severity: 'warning',
+    code: 'ccr-profile-not-created',
+    message: plan.reason,
+    remediation: `Resolve the CCR profile setup requirement and rerun routing setup; provider login/import and credential changes remain explicit CCR actions`,
+  });
 }
 
 async function ccrConfiguration(
@@ -292,12 +557,6 @@ async function ccrConfiguration(
   const ruleId = ccrSmartRoutingRuleId(harnessId);
   const path = scriptPath(context, harnessId);
   const telemetryDirectory = stateDirectory(context);
-  const script = createCcrSmartRoutingScript({
-    harnessId,
-    mode,
-    telemetryDirectory,
-    pathSeparator: context.platform.os === 'windows' ? '\\' : '/',
-  });
   let ccr: CcrState;
   try {
     ccr = await readCcrState(context);
@@ -309,6 +568,41 @@ async function ccrConfiguration(
       diagnostics: [diagnostic({ severity: 'error', ...issue })],
     });
   }
+
+  const requestedProfileModel = context.env?.['TOKEN_HARNESS_ROUTING_PROFILE_MODEL'];
+  const profilePlan = planCcrProfile(ccr.config, harnessId, requestedProfileModel);
+  const profileModelWarning =
+    requestedProfileModel?.trim() &&
+    (profilePlan.profile === null || profilePlan.profile['model'] !== requestedProfileModel.trim())
+      ? diagnostic({
+          severity: 'warning',
+          code: 'ccr-profile-model-not-configured',
+          message:
+            'TOKEN_HARNESS_ROUTING_PROFILE_MODEL did not match a model in the selected CCR provider and was not applied',
+          remediation:
+            'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
+        })
+      : null;
+  const requestedSimpleModel = context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
+  const configuredSimpleModel = configuredCcrModel(ccr.config, requestedSimpleModel);
+  const simpleModelWarning =
+    requestedSimpleModel?.trim() && configuredSimpleModel === null
+      ? diagnostic({
+          severity: 'warning',
+          code: 'ccr-simple-model-not-configured',
+          message:
+            'TOKEN_HARNESS_ROUTING_SIMPLE_MODEL did not match a model in the selected CCR configuration and was not embedded',
+          remediation:
+            'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
+        })
+      : null;
+  const script = createCcrSmartRoutingScript({
+    harnessId,
+    mode,
+    telemetryDirectory,
+    pathSeparator: context.platform.os === 'windows' ? '\\' : '/',
+    simpleModel: configuredSimpleModel,
+  });
 
   const expectedRule = createCcrSmartRoutingRule(harnessId, path);
   const router = ccr.config['Router'];
@@ -322,6 +616,31 @@ async function ccrConfiguration(
   }
   const matching = rules.filter((item) => isJsonRecord(item) && item['id'] === ruleId);
   const owned = await readOwnership(context, harnessId);
+  const profileList =
+    profilePlan.profileContainer && Array.isArray(profilePlan.profileContainer['profiles'])
+      ? profilePlan.profileContainer['profiles']
+      : [];
+  const currentOwnedProfile = owned?.profileId
+    ? profileList.find((item) => isJsonRecord(item) && item['id'] === owned.profileId)
+    : undefined;
+  const ownedProfileMatches =
+    owned?.profileId === undefined ||
+    (isJsonRecord(currentOwnedProfile) &&
+      owned.profileSha256 === scriptHash(stableJson(currentOwnedProfile)));
+  if (owned !== null && !ownedProfileMatches) {
+    return error(
+      'ccr-owned-profile-drift',
+      'The Token Harness CCR profile changed or disappeared after setup, so configuration was left untouched',
+      'Review the profile in CCR Agent Config; restore it or remove it manually before retrying',
+    );
+  }
+  if (profilePlan.conflict && !owned?.profileId) {
+    return error(
+      'ccr-profile-id-conflict',
+      'A CCR Agent Profile already uses the Token Harness profile id, so it was left unchanged',
+      'Rename or remove that profile in CCR Agent Config before retrying',
+    );
+  }
   const ownershipStat = await fs.stat(receiptPath(context, harnessId));
   if (owned === null && ownershipStat !== null) {
     return error(
@@ -345,6 +664,96 @@ async function ccrConfiguration(
             `Review the active routing rule, run \`token-harness routing --rollback-ccr --harness ${harnessId} --yes\`, then configure again in ${mode} mode`,
           );
         }
+        if (
+          owned.profileId === undefined &&
+          profilePlan.profile !== null &&
+          !profilePlan.conflict
+        ) {
+          const profileConfig = withCcrProfile(ccr.config, profilePlan.profile);
+          if (profileConfig === null) {
+            return error(
+              'ccr-profile-config-conflict',
+              'CCR Agent Profile settings changed or cannot accept the Token Harness profile',
+              'Review CCR Agent Config and retry from a new preview',
+            );
+          }
+          if (!context.confirmed) {
+            return configurationResult(
+              'configure',
+              'preview',
+              ccr,
+              harnessId,
+              mode,
+              ruleId,
+              path,
+              [
+                diagnostic({
+                  severity: 'info',
+                  code: 'ccr-profile-preview',
+                  message:
+                    'The CCR routing rule is already owned; Token Harness would add its scoped CLI profile using the existing provider',
+                  remediation: `Review the CCR-only profile and rerun with --yes. Launch it with ${ccrLaunchCommand(harnessId)}`,
+                }),
+              ],
+              String(profilePlan.profile['id']),
+              ccrLaunchCommand(harnessId),
+            );
+          }
+          try {
+            const currentConfig = await ccr.client.call('getConfig');
+            if (!isSameCcrConfig(currentConfig, ccr.config))
+              throw new CcrManagementError('config-drift');
+            await ccr.client.call('saveConfig', [profileConfig, { applyProfile: false }]);
+            const afterConfig = await ccr.client.call('getConfig');
+            const afterRouter = isJsonRecord(afterConfig) ? afterConfig['Router'] : null;
+            const afterRules =
+              isJsonRecord(afterRouter) && Array.isArray(afterRouter['rules'])
+                ? afterRouter['rules']
+                : [];
+            if (!afterRules.some((item) => isExactCcrSmartRoutingRule(item, expectedRule)))
+              throw new CcrManagementError('request-failed');
+            const savedProfile = profileRows(isJsonRecord(afterConfig) ? afterConfig : {}).find(
+              (item) => isJsonRecord(item) && item['id'] === profilePlan.profile?.['id'],
+            );
+            if (!isExpectedCcrProfile(savedProfile, profilePlan.profile))
+              throw new CcrManagementError('request-failed');
+            const updatedOwnership: CcrOwnershipReceipt = {
+              ...owned,
+              profileId: String(profilePlan.profile['id']),
+              profileSha256: scriptHash(stableJson(savedProfile)),
+            };
+            await writeJson(context, receiptPath(context, harnessId), updatedOwnership);
+            return configurationResult(
+              'configure',
+              'configured',
+              ccr,
+              harnessId,
+              mode,
+              ruleId,
+              path,
+              [
+                diagnostic({
+                  severity: 'info',
+                  code: 'ccr-profile-verified',
+                  message:
+                    'CCR saved and verified the Token Harness scoped CLI profile using an existing provider',
+                  remediation: `Launch Claude Code or Codex through ${ccrLaunchCommand(harnessId)} and verify requests in CCR logs`,
+                }),
+              ],
+              updatedOwnership.profileId,
+              ccrLaunchCommand(harnessId),
+            );
+          } catch (errorValue) {
+            const issue = ccrFailure(errorValue);
+            return commandResult({
+              command: 'routing',
+              exitCode: EXIT_CODES['problems-found'],
+              diagnostics: [diagnostic({ severity: 'error', ...issue })],
+            });
+          }
+        }
+        const profileWarning =
+          owned.profileId === undefined ? profilePlanDiagnostic(profilePlan) : null;
         return configurationResult(
           'configure',
           'already-configured',
@@ -353,6 +762,9 @@ async function ccrConfiguration(
           mode,
           ruleId,
           path,
+          profileWarning === null ? [] : [profileWarning],
+          owned.profileId ?? null,
+          owned.profileId ? ccrLaunchCommand(harnessId) : null,
         );
       }
     }
@@ -385,15 +797,33 @@ async function ccrConfiguration(
   }
 
   if (!context.confirmed) {
-    return configurationResult('configure', 'preview', ccr, harnessId, mode, ruleId, path, [
-      diagnostic({
-        severity: 'info',
-        code: 'ccr-configure-preview',
-        message: `CCR ${ccr.version} would receive one ${mode} Node.js routing rule for ${harnessId}`,
-        path,
-        remediation: `Review the rule and rerun with --yes to apply it; CCR may restart. This does not attach ${harnessId} to CCR: use an enabled CCR Agent Profile and verify requests in CCR logs. Rollback: \`token-harness routing --rollback-ccr --harness ${harnessId} --yes\``,
-      }),
-    ]);
+    const profileDiagnostic = profilePlanDiagnostic(profilePlan);
+    return configurationResult(
+      'configure',
+      'preview',
+      ccr,
+      harnessId,
+      mode,
+      ruleId,
+      path,
+      [
+        diagnostic({
+          severity: 'info',
+          code: 'ccr-configure-preview',
+          message:
+            profilePlan.profile === null
+              ? `CCR ${ccr.version} would receive one ${mode} Node.js routing rule for ${harnessId}`
+              : `CCR ${ccr.version} would receive one ${mode} Node.js routing rule and a CCR-only CLI profile for ${harnessId} using ${String(profilePlan.profile['model'])}`,
+          path,
+          remediation: `Review the exact CCR changes and rerun with --yes to apply them; CCR may restart. The profile uses an existing provider and affects only CLI launches through CCR. Rollback: \`token-harness routing --rollback-ccr --harness ${harnessId} --yes\``,
+        }),
+        ...(profileDiagnostic === null ? [] : [profileDiagnostic]),
+        ...(profileModelWarning === null ? [] : [profileModelWarning]),
+        ...(simpleModelWarning === null ? [] : [simpleModelWarning]),
+      ],
+      profilePlan.profile === null ? null : String(profilePlan.profile['id']),
+      profilePlan.profile === null ? null : ccrLaunchCommand(harnessId),
+    );
   }
 
   let validation: unknown;
@@ -424,12 +854,21 @@ async function ccrConfiguration(
     );
   }
 
-  const nextConfig = addCcrSmartRoutingRule(ccr.config, expectedRule);
-  if (nextConfig === null) {
+  const withRule = addCcrSmartRoutingRule(ccr.config, expectedRule);
+  if (withRule === null) {
     return error(
       'ccr-routing-rule-conflict',
       'CCR routing rules changed or cannot accept a script rule',
       'Refresh CCR state and review existing rules before retrying',
+    );
+  }
+  const nextConfig =
+    profilePlan.profile === null ? withRule : withCcrProfile(withRule, profilePlan.profile);
+  if (nextConfig === null) {
+    return error(
+      'ccr-profile-config-conflict',
+      'CCR Agent Profile settings changed or cannot accept the Token Harness profile',
+      'Review CCR Agent Config and retry from a new preview',
     );
   }
   const now = context.now();
@@ -462,26 +901,59 @@ async function ccrConfiguration(
     if (!afterRules.some((item) => isExactCcrSmartRoutingRule(item, expectedRule))) {
       throw new CcrManagementError('request-failed');
     }
-    const activeOwnership: CcrOwnershipReceipt = { ...ownership, status: 'active' };
+    let savedProfile: Record<string, unknown> | null = null;
+    if (profilePlan.profile !== null) {
+      const saved = profileRows(isJsonRecord(afterConfig) ? afterConfig : {}).find(
+        (item) => isJsonRecord(item) && item['id'] === profilePlan.profile?.['id'],
+      );
+      if (!isExpectedCcrProfile(saved, profilePlan.profile))
+        throw new CcrManagementError('request-failed');
+      savedProfile = saved;
+    }
+    const activeOwnership: CcrOwnershipReceipt = {
+      ...ownership,
+      status: 'active',
+      ...(savedProfile === null || profilePlan.profile === null
+        ? {}
+        : {
+            profileId: String(profilePlan.profile['id']),
+            profileSha256: scriptHash(stableJson(savedProfile)),
+          }),
+    };
     await writeJson(context, receiptPath(context, harnessId), activeOwnership);
     const gatewayValue = await ccr.client.call('getGatewayStatus');
     const gatewayState = safeGatewayState(gatewayValue);
     const finalCcr = { ...ccr, gatewayState };
-    return configurationResult('configure', 'configured', finalCcr, harnessId, mode, ruleId, path, [
-      diagnostic({
-        severity: gatewayState === 'running' ? 'info' : 'warning',
-        code: gatewayState === 'running' ? 'ccr-config-verified' : 'ccr-gateway-not-running',
-        message:
-          gatewayState === 'running'
-            ? 'CCR accepted the rule and its gateway reports running; live request routing has not been exercised'
-            : `CCR saved and verified the rule, but its gateway reports ${gatewayState}`,
-        path,
-        remediation:
-          gatewayState === 'running'
-            ? 'Use shadow mode first, then inspect local decisions with `token-harness routing --route-metrics`'
-            : 'Start or repair the CCR gateway, then verify it before sending a model request',
-      }),
-    ]);
+    const profileDiagnostic = profilePlanDiagnostic(profilePlan);
+    return configurationResult(
+      'configure',
+      'configured',
+      finalCcr,
+      harnessId,
+      mode,
+      ruleId,
+      path,
+      [
+        diagnostic({
+          severity: gatewayState === 'running' ? 'info' : 'warning',
+          code: gatewayState === 'running' ? 'ccr-config-verified' : 'ccr-gateway-not-running',
+          message:
+            gatewayState === 'running'
+              ? 'CCR accepted the rule and its gateway reports running; live request routing has not been exercised'
+              : `CCR saved and verified the rule, but its gateway reports ${gatewayState}`,
+          path,
+          remediation:
+            gatewayState === 'running'
+              ? 'Use shadow mode first, then inspect local decisions with `token-harness routing --route-metrics`'
+              : 'Start or repair the CCR gateway, then verify it before sending a model request',
+        }),
+        ...(profileDiagnostic === null ? [] : [profileDiagnostic]),
+        ...(profileModelWarning === null ? [] : [profileModelWarning]),
+        ...(simpleModelWarning === null ? [] : [simpleModelWarning]),
+      ],
+      activeOwnership.profileId ?? null,
+      activeOwnership.profileId ? ccrLaunchCommand(harnessId) : null,
+    );
   } catch (errorValue) {
     if (!saveAttempted) await cleanupUnappliedCcrFiles(context, harnessId, ownership);
     const issue = ccrFailure(errorValue);
@@ -514,6 +986,8 @@ function configurationResult(
   ruleId: string,
   path: string,
   diagnostics: ReturnType<typeof diagnostic>[] = [],
+  profileId: string | null = null,
+  launchCommand: string | null = null,
 ): CommandResult<SmartRoutingCommandReport> {
   return commandResult({
     command: 'routing',
@@ -529,6 +1003,8 @@ function configurationResult(
       ruleId,
       scriptPath: path,
       managementEndpoint: ccr.endpoint,
+      profileId,
+      launchCommand,
     },
     diagnostics,
   });
@@ -566,6 +1042,24 @@ async function rollbackCcrConfiguration(
     });
   }
   const expectedRule = createCcrSmartRoutingRule(harnessId, ownership.scriptPath);
+  const profileValue =
+    ownership.profileId === undefined
+      ? null
+      : (profileRows(ccr.config).find(
+          (item) => isJsonRecord(item) && item['id'] === ownership.profileId,
+        ) ?? null);
+  if (
+    ownership.profileId !== undefined &&
+    profileValue !== null &&
+    (ownership.profileSha256 === undefined ||
+      scriptHash(stableJson(profileValue)) !== ownership.profileSha256)
+  ) {
+    return error(
+      'ccr-owned-profile-drift',
+      'The CCR profile changed after Token Harness created it, so rollback left it untouched',
+      'Review the profile in CCR Agent Config; restore it or remove it manually before retrying rollback',
+    );
+  }
   const rules =
     isJsonRecord(ccr.config['Router']) && Array.isArray(ccr.config['Router']['rules'])
       ? ccr.config['Router']['rules']
@@ -575,13 +1069,61 @@ async function rollbackCcrConfiguration(
     if (!context.confirmed) {
       return configurationResult(
         'rollback',
-        'already-absent',
+        ownership.profileId === undefined ? 'already-absent' : 'preview',
         ccr,
         harnessId,
         ownership.mode,
         ownership.ruleId,
         ownership.scriptPath,
+        ownership.profileId === undefined
+          ? []
+          : [
+              diagnostic({
+                severity: 'info',
+                code: 'ccr-rollback-profile-preview',
+                message:
+                  'Rollback would remove the remaining exact Token Harness CLI profile and local script',
+                remediation: 'Review the change and rerun with --yes to apply it',
+              }),
+            ],
+        ownership.profileId ?? null,
+        ownership.profileId === undefined ? null : ccrLaunchCommand(harnessId),
       );
+    }
+    if (ownership.profileId !== undefined) {
+      const nextConfig = withoutOwnedCcrProfile(
+        ccr.config,
+        ownership.profileId,
+        ownership.profileSha256!,
+      );
+      if (nextConfig === null) {
+        return error(
+          'ccr-owned-profile-drift',
+          'The CCR profile is duplicated or changed, so rollback left it untouched',
+          'Review CCR Agent Config and retry after restoring the exact owned profile',
+        );
+      }
+      try {
+        const currentConfig = await ccr.client.call('getConfig');
+        if (!isSameCcrConfig(currentConfig, ccr.config))
+          throw new CcrManagementError('config-drift');
+        await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+        const afterConfig = await ccr.client.call('getConfig');
+        if (
+          profileRows(isJsonRecord(afterConfig) ? afterConfig : {}).some(
+            (item) => isJsonRecord(item) && item['id'] === ownership.profileId,
+          )
+        ) {
+          throw new CcrManagementError('request-failed');
+        }
+      } catch (errorValue) {
+        const issue = ccrFailure(errorValue);
+        return commandResult({
+          command: 'routing',
+          exitCode: EXIT_CODES['problems-found'],
+          diagnostics: [diagnostic({ severity: 'error', ...issue })],
+        });
+      }
     }
     const bytes = await fs.readFile(ownership.scriptPath).catch(() => null);
     if (bytes !== null && scriptHash(new TextDecoder().decode(bytes)) === ownership.scriptSha256) {
@@ -623,15 +1165,39 @@ async function rollbackCcrConfiguration(
           path: ownership.scriptPath,
           remediation: 'Review the change and rerun with --yes to apply it',
         }),
+        ...(ownership.profileId === undefined
+          ? []
+          : [
+              diagnostic({
+                severity: 'info',
+                code: 'ccr-rollback-profile-preview',
+                message:
+                  'Rollback also removes the exact Token Harness scoped CLI profile; providers and credentials remain unchanged',
+                remediation: 'Review the change and rerun with --yes to apply it',
+              }),
+            ]),
       ],
+      ownership.profileId ?? null,
+      ownership.profileId === undefined ? null : ccrLaunchCommand(harnessId),
     );
   }
-  const nextConfig = removeOwnedCcrSmartRoutingRule(ccr.config, ownership.ruleId, expectedRule);
-  if (nextConfig === null) {
+  const withoutRule = removeOwnedCcrSmartRoutingRule(ccr.config, ownership.ruleId, expectedRule);
+  if (withoutRule === null) {
     return error(
       'ccr-owned-rule-drift',
       'CCR rules changed while rollback was being prepared',
       'Refresh the CCR state and retry after reviewing the rule list',
+    );
+  }
+  const nextConfig =
+    ownership.profileId === undefined
+      ? withoutRule
+      : withoutOwnedCcrProfile(withoutRule, ownership.profileId, ownership.profileSha256!);
+  if (nextConfig === null) {
+    return error(
+      'ccr-owned-profile-drift',
+      'The Token Harness CCR profile changed while rollback was being prepared',
+      'Refresh CCR state and retry after reviewing the profile',
     );
   }
   try {
@@ -648,6 +1214,14 @@ async function rollbackCcrConfiguration(
         ? after['Router']['rules']
         : [];
     if (afterRules.some((item) => isJsonRecord(item) && item['id'] === ownership.ruleId)) {
+      throw new CcrManagementError('request-failed');
+    }
+    if (
+      ownership.profileId !== undefined &&
+      profileRows(isJsonRecord(after) ? after : {}).some(
+        (item) => isJsonRecord(item) && item['id'] === ownership.profileId,
+      )
+    ) {
       throw new CcrManagementError('request-failed');
     }
     const gatewayValue = await ccr.client.call('getGatewayStatus');
@@ -700,14 +1274,19 @@ export async function runSmartRouting(
   const wantsMetrics = context.routingMetrics === true;
   const wantsCcrConfigure = context.routingCcrConfigure === true;
   const wantsCcrRollback = context.routingCcrRollback === true;
-  const requestedActions = [wantsScript, wantsMetrics, wantsCcrConfigure, wantsCcrRollback].filter(
-    Boolean,
-  ).length;
+  const wantsCcrUpdate = context.routingCcrUpdate === true;
+  const requestedActions = [
+    wantsScript,
+    wantsMetrics,
+    wantsCcrConfigure,
+    wantsCcrRollback,
+    wantsCcrUpdate,
+  ].filter(Boolean).length;
   if (requestedActions !== 1) {
     return error(
       'routing-action-required',
       'Choose one Smart Model Routing action',
-      'Use `token-harness routing --script --harness claude`, `--configure-ccr`, `--rollback-ccr`, or `--route-metrics`',
+      'Use `token-harness routing --script --harness claude`, `--configure-ccr`, `--update-ccr`, `--rollback-ccr`, or `--route-metrics`',
     );
   }
   if (context.routingPrune === true && !wantsMetrics) {
@@ -731,7 +1310,114 @@ export async function runSmartRouting(
       'Use `token-harness routing --configure-ccr --harness codex --route-mode conservative`',
     );
   }
-  if (wantsCcrConfigure) return ccrConfiguration(context);
+  if (wantsCcrConfigure) {
+    let managed;
+    try {
+      managed = await resolveManagedCcr(context);
+    } catch (errorValue) {
+      const issue = ccrFailure(errorValue);
+      return commandResult({
+        command: 'routing',
+        exitCode: EXIT_CODES['problems-found'],
+        diagnostics: [diagnostic({ severity: 'error', ...issue })],
+      });
+    }
+    if (managed.kind === 'external') return ccrConfiguration(context);
+    const ensured = await ensureManagedCcrRuntime({ context, action: 'configure' });
+    if (ensured.kind === 'result') return ensured.result;
+    if (ensured.changed) {
+      const state =
+        ensured.lifecycleAction === 'install'
+          ? 'installed'
+          : ensured.lifecycleAction === 'update'
+            ? 'updated'
+            : 'started';
+      return commandResult({
+        command: 'routing',
+        exitCode: EXIT_CODES.ok,
+        data: {
+          kind: 'ccr-lifecycle',
+          action: ensured.lifecycleAction,
+          state,
+          version: CCR_REVIEWED_VERSION,
+          packagePath: ensured.packagePath,
+          executablePath: ensured.executablePath,
+          managementEndpoint: ensured.endpoint,
+        },
+        diagnostics: [
+          diagnostic({
+            severity: 'info',
+            code: `ccr-${ensured.lifecycleAction}-verified`,
+            message: `Token Harness ${state} and verified the local CCR CLI and gateway`,
+            remediation: `Next preview and configure the ${context.routingMode ?? 'shadow'} routing rule with token-harness routing --configure-ccr --harness ${String(context.harness ?? '<claude|codex>')}; provider login/import remains a separate CCR choice`,
+          }),
+        ],
+      });
+    }
+    const configured = await ccrConfiguration({
+      ...context,
+      env: {
+        ...(context.env ?? {}),
+        CCR_WEB_URL: ensured.endpoint,
+        CCR_WEB_AUTH_TOKEN: ensured.token,
+      },
+    });
+    return configured;
+  }
+  if (wantsCcrUpdate) {
+    let managed;
+    try {
+      managed = await resolveManagedCcr(context);
+    } catch (errorValue) {
+      const issue = ccrFailure(errorValue);
+      return commandResult({
+        command: 'routing',
+        exitCode: EXIT_CODES['problems-found'],
+        diagnostics: [diagnostic({ severity: 'error', ...issue })],
+      });
+    }
+    if (managed.kind !== 'managed') {
+      return error(
+        'ccr-update-not-managed',
+        'Token Harness updates only the CCR CLI installation it owns',
+        'Install CCR through `token-harness routing --configure-ccr --harness <claude|codex>` first; external CCR installations are left to their owner',
+      );
+    }
+    const updated = await ensureManagedCcrRuntime({ context, action: 'update' });
+    if (updated.kind === 'result') return updated.result;
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'ccr-lifecycle',
+        action: updated.lifecycleAction,
+        state:
+          updated.lifecycleAction === 'start'
+            ? 'started'
+            : updated.lifecycleAction === 'update'
+              ? 'updated'
+              : 'installed',
+        version: CCR_REVIEWED_VERSION,
+        packagePath: updated.packagePath,
+        executablePath: updated.executablePath,
+        managementEndpoint: updated.endpoint,
+      },
+      diagnostics: [
+        diagnostic({
+          severity: 'info',
+          code: `ccr-${updated.lifecycleAction}-verified`,
+          message:
+            updated.lifecycleAction === 'update'
+              ? `Token Harness updated its managed CCR CLI to ${CCR_REVIEWED_VERSION} and verified the gateway`
+              : updated.lifecycleAction === 'start'
+                ? `Token Harness started its managed CCR ${CCR_REVIEWED_VERSION} service`
+                : `Token Harness installed its managed CCR ${CCR_REVIEWED_VERSION} service`,
+          remediation:
+            'This verifies the local gateway only; it does not prove that a Claude Code or Codex request was routed or that subscription quota was saved',
+        }),
+      ],
+    });
+  }
   if (wantsCcrRollback) return rollbackCcrConfiguration(context);
 
   const fs = context.adapters?.fs;

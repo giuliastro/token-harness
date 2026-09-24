@@ -80,6 +80,13 @@ describe('argv', () => {
       assert.equal(metrics.options.since, '7d');
     }
 
+    const updateCcr = parseArgv(['routing', '--update-ccr', '--yes']);
+    assert.equal(updateCcr.kind, 'command');
+    if (updateCcr.kind === 'command') {
+      assert.equal(updateCcr.options.routingCcrUpdate, true);
+      assert.equal(updateCcr.options.yes, true);
+    }
+
     assert.equal(parseArgv(['routing', '--route-mode', 'aggressive']).kind, 'usage-error');
   });
 

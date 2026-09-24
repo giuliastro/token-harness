@@ -10,6 +10,8 @@ export interface CcrSmartRoutingScriptOptions {
   mode?: SmartRoutingMode;
   telemetryDirectory: string;
   pathSeparator: '/' | '\\';
+  /** Optional model selected from an already configured CCR provider; never inferred from names. */
+  simpleModel?: string | null;
 }
 
 /**
@@ -23,6 +25,11 @@ export function createCcrSmartRoutingScript(options: CcrSmartRoutingScriptOption
   const classifierSource = classifySmartRoutingPrompt.toString();
   const eventSchemaVersion = 2;
   const classifierVersion = SMART_ROUTING_CLASSIFIER_VERSION;
+  const configuredSimpleModel =
+    typeof options.simpleModel === 'string' &&
+    /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(options.simpleModel)
+      ? options.simpleModel
+      : null;
 
   return `const classifySmartRoutingPrompt = (${classifierSource});
 const telemetryPathPrefix = ${JSON.stringify(eventPathPrefix)};
@@ -56,10 +63,10 @@ const decision = classifySmartRoutingPrompt({
   inputTokens: tokenCount
 });
 const rawSimpleModel = api.env("TOKEN_HARNESS_ROUTING_SIMPLE_MODEL");
-const simpleModel = typeof rawSimpleModel === "string" && /^[A-Za-z0-9_.:/@+-]{1,160}$/.test(rawSimpleModel)
+const simpleModel = typeof rawSimpleModel === "string" && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(rawSimpleModel)
   ? rawSimpleModel
-  : null;
-const requestModel = typeof safeInput.model === "string" && /^[A-Za-z0-9_.:/@+-]{1,160}$/.test(safeInput.model)
+  : ${JSON.stringify(configuredSimpleModel)};
+const requestModel = typeof safeInput.model === "string" && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(safeInput.model)
   ? safeInput.model
   : null;
 const rawSessionId = typeof safeInput.sessionId === "string" ? safeInput.sessionId : null;
