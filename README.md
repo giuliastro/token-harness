@@ -195,7 +195,8 @@ verification, managed lifecycle, compatibility/reversibility, project maturity a
 validation. Broader context owners also require an explicit admission decision.
 
 See [docs/optimizer-priorities.md](docs/optimizer-priorities.md) and
-[RFC 0027](docs/rfcs/0027-optimization-stack-manager.md).
+[RFC 0027](docs/rfcs/0027-optimization-stack-manager.md) and
+[RFC 0028](docs/rfcs/0028-smart-model-routing.md).
 
 ## Stable-stack operating model
 
@@ -246,6 +247,7 @@ browser controller itself.
 | `apply` | Apply a reviewed stored plan | Yes, only with `--yes` |
 | `verify` | Check the declared integration tier | No |
 | `metrics` | Report attributable reducer savings | No |
+| `routing` | Export a shadow-first CCR rule or inspect routing decisions | No |
 | `status` | Report pipelines, drift and importer modes | No |
 | `update` | Check/update reviewed provider packages | Yes, only with `--yes` |
 | `rollback` | Restore the latest transaction snapshot | Yes, only with `--yes` |
@@ -472,6 +474,7 @@ does not require that Corepack shim write.
 
 Before changing public behavior or architecture, read
 [RFC 0027](docs/rfcs/0027-optimization-stack-manager.md),
+[RFC 0028](docs/rfcs/0028-smart-model-routing.md),
 [docs/optimizer-priorities.md](docs/optimizer-priorities.md),
 [docs/release-readiness.md](docs/release-readiness.md), [PLAN.md](PLAN.md), and the accepted
 [RFCs](docs/rfcs).

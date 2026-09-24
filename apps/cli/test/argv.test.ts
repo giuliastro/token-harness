@@ -42,6 +42,35 @@ describe('argv', () => {
     }
   });
 
+  it('parses Smart Model Routing script and metrics actions', () => {
+    const script = parseArgv([
+      'routing',
+      '--script',
+      '--harness',
+      'claude',
+      '--route-mode',
+      'conservative',
+      '--json',
+    ]);
+    assert.equal(script.kind, 'command');
+    if (script.kind === 'command') {
+      assert.equal(script.command, 'routing');
+      assert.equal(script.options.routingScript, true);
+      assert.equal(script.options.routingMode, 'conservative');
+      assert.equal(script.options.harness, 'claude');
+    }
+
+    const metrics = parseArgv(['routing', '--route-metrics', '--prune', '--since', '7d']);
+    assert.equal(metrics.kind, 'command');
+    if (metrics.kind === 'command') {
+      assert.equal(metrics.options.routingMetrics, true);
+      assert.equal(metrics.options.routingPrune, true);
+      assert.equal(metrics.options.since, '7d');
+    }
+
+    assert.equal(parseArgv(['routing', '--route-mode', 'aggressive']).kind, 'usage-error');
+  });
+
   it('rejects an unknown flag', () => {
     const parsed = parseArgv(['doctor', '--debug']);
     assert.equal(parsed.kind, 'usage-error');

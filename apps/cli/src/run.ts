@@ -41,6 +41,7 @@ import { runMcp } from './commands/mcp.js';
 import { runOptimize } from './commands/optimize.js';
 import { runPlan } from './commands/plan.js';
 import { runRollback, runUninstall } from './commands/rollback.js';
+import { runSmartRouting } from './commands/smart-routing.js';
 import { runSetup } from './commands/setup.js';
 import { runStatus } from './commands/status.js';
 import { runStackReview } from './commands/stack-review.js';
@@ -82,6 +83,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   optimize: runOptimize,
   plan: runPlan,
   rollback: runRollback,
+  routing: runSmartRouting,
   setup: runSetup,
   status: runStatus,
   'stack-review': runStackReview,
@@ -423,6 +425,10 @@ export async function run(options: RunOptions): Promise<number> {
     reservePercent: invocation.options.reservePercent,
     tasksRemaining: invocation.options.tasksLeft,
     nativePolicy: invocation.options.nativePolicy,
+    routingScript: invocation.options.routingScript,
+    routingMetrics: invocation.options.routingMetrics,
+    routingMode: invocation.options.routingMode,
+    routingPrune: invocation.options.routingPrune,
     agentSkill: invocation.options.agentSkill,
     since: invocation.options.since,
     until: invocation.options.until,

@@ -105,7 +105,7 @@ native/current-stack baseline.
 | P1 | context/prompt/output minimization | Caveman-class systems and other maintained specialized optimizers | Measure which surface is actually changed, overlap with RTK/HarnessTrim, task quality and marginal allowance/context value. |
 | P2 | broad context ownership | Headroom / Context Mode-class systems | Large potential surface but higher overlap, latency, attribution and quality risk; at most one broad owner by default. |
 | P2 | result-side encoding/compression | TOON/result encoders, MCP result compressors | Must add material value after RTK/HarnessTrim and avoid lossy compression cascades. |
-| P2 | native model/reasoning/verbosity | Token Harness policies over supported native controls | Useful secondary policy, not a substitute for integrating strong external optimizers. Dynamic switching only when task/allowance evidence justifies it. |
+| P2 | native model/reasoning/verbosity and per-request routing | Native Token Harness policies first; shadow-first CCR routing as a secondary policy | Useful secondary policy, not a substitute for the managed optimization stack. Dynamic model switching requires quality/allowance evidence and stays opt-in. |
 | P3 | API billed-token cost attribution | billing/price evidence | Requires attributable billed input/output tokens plus verified pricing before money claims. |
 
 This ranking is intentionally revisable. A newly maintained project can move ahead when evidence
@@ -130,6 +130,20 @@ state, for example:
 
 Even these begin as recommendations and become automatic only if opt-in and benchmark evidence make
 that complexity worthwhile.
+
+### Smart Model Routing
+
+[RFC 0028](rfcs/0028-smart-model-routing.md) adds a local TypeScript heuristic and a CCR gateway
+integration for Claude Code and Codex. Classification makes no API calls and needs no local model.
+The default CCR rule is shadow-only: it records a tier and leaves the current model selection alone.
+The first conservative opt-in may select only a user-configured simple model for high-confidence,
+low-risk turns; requests with unknown tool compatibility or multimodal input pass through.
+
+Routing decisions have their own local telemetry and report. They are not savings events. A cheaper
+model label alone does not prove lower included-allowance use, API spend, or preserved quality, so
+Token Harness reports model savings as **not measured** until paired usage and quality evidence can
+be attributed to the actual resolved model. CCR remains a gateway candidate, not a newly managed
+provider, in this first slice.
 
 ## Capability ownership and composition
 

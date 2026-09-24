@@ -52,6 +52,11 @@ export interface CommandContext {
   tasksRemaining?: number | null;
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
+  /** RFC 0028 CCR routing script export, metrics view, and explicit telemetry pruning. */
+  routingScript?: boolean;
+  routingMetrics?: boolean;
+  routingMode?: 'shadow' | 'conservative';
+  routingPrune?: boolean;
   /** Guided/internal Agent Skill installation, still executed through plan/apply. */
   agentSkill?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */

@@ -101,6 +101,8 @@ Exit criteria:
 | 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
 | 0010 | Read-only status seam for external consumers | Reserved — Phase 9, §9.4, §15 item 41 |
 | 0011 | Quota-aware Claude Code and Codex orchestration | Proposed — post-0.2 product direction |
+| 0027 | Optimization stack manager | Accepted |
+| 0028 | Smart model routing, shadow-first | Accepted |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -935,12 +937,12 @@ forbids; LLMLingua is an engine with no lifecycle; and the routers need the capa
 attribution-class RFC named below before a manifest can honestly describe them.
 
 LiteLLM is a gateway substrate, not by itself evidence of intelligent routing or token
-savings. Claude Code Router is called "router" but is first an agent-native gateway; its
-routing rules and logs make it independently adoptable once the capability exists. RouteLLM,
-vLLM Semantic Router, and LLMRouter remain alternative owners of a model request.
-Before any of them can be admitted, a new RFC must define the model-routing capability and a
-cost/quality attribution class: routing a request to a cheaper model is never folded into
-RFC 0005's exact or estimated token-saving totals.
+savings. RFC 0028 now defines `model.request.route` and a separate cost/quality attribution class.
+The first experiment uses Claude Code Router as an agent-native gateway for Claude Code and Codex,
+starting with a local heuristic classifier and shadow-only request observation. This does not
+admit CCR as a managed provider, enable paid routing, or change the existing native model policy.
+RouteLLM, vLLM Semantic Router, and LLMRouter remain alternative policy owners and still require
+their own compatibility, lifecycle, and quality evidence before admission.
 
 ### 9.4 The read-only status seam, and its first consumer
 
@@ -2809,8 +2811,9 @@ The near-term development sequence from the current repository state is:
 4. implement 19.1–19.4 as the next runtime-policy milestone;
 5. use those contracts to drive 19.5–19.10 and measure whether the controller actually increases
    accepted work per allowance;
-6. admit automatic routing/autonomy only after the measured controller loop is demonstrably better
-   than the current advisory workflow.
+6. collect shadow-only model-routing decisions under Phase 20.1 without changing selected models;
+7. admit conservative automatic routing/autonomy only after the measured controller loop and
+   per-model quality/allowance evidence are demonstrably better than the current advisory workflow.
 
 The product positioning that this phase should make true is:
 
@@ -2818,3 +2821,47 @@ The product positioning that this phase should make true is:
 
 The optimization stack remains how Token Harness obtains specialized mechanisms. The efficiency
 controller becomes how it decides when and how to use them.
+
+## 20. Phase 12 — Smart Model Routing, shadow-first
+
+RFC 0028 adds per-request model routing as a secondary runtime policy under RFC 0027. It runs after
+the existing native model/effort policy and begins with observation only.
+
+#### 20.1 P0 — Local classifier and CCR shadow integration
+
+The first slice supplies a deterministic TypeScript heuristic with no API or local-model call, a CCR
+Node.js script export for Claude Code and Codex, and local feature-only decision telemetry. Shadow
+mode is the default and returns no model rewrite. Users add the generated script through CCR's
+Routing UI; Token Harness does not install CCR or edit its rules in this phase.
+
+Decision events record tier, confidence, reason codes, sanitized request/candidate model IDs, request
+metadata and classifier latency. Prompts, request bodies, credentials, and tool contents are not
+persisted. Routing events stay outside RFC 0005 optimization-saving aggregates and report
+`not-measured` for model savings.
+
+#### 20.2 P1 — Conservative opt-in route
+
+The optional conservative mode may route only high-confidence simple requests to one model the user
+has already configured in CCR. Complex or ambiguous requests, multimodal requests, and tool-enabled
+requests without explicit tool-compatibility confirmation pass through unchanged. No default model
+IDs, provider credentials, paid overflow routes, or hidden fallback chains are introduced.
+
+#### 20.3 P1 — Quality and allowance measurement
+
+Any claimed benefit requires paired task evidence with the actual resolved model, comparable
+provider-reported usage or included-allowance evidence, and an explicit quality outcome. API cost,
+subscription allowance, latency, and local token estimates remain separate. Automatic routing beyond
+the conservative opt-in remains disabled until those gates pass on both supported harnesses.
+
+Acceptance:
+
+- the same pure classifier is exercised directly and through the generated CCR script;
+- the generated shadow rule works for separate Claude Code and Codex profiles and never rewrites a
+  request;
+- telemetry contains no prompt text or credentials, is stored locally, and fails open on write
+  errors;
+- routing decision counts remain separate from exact, estimated, counterfactual, and billed token
+  savings;
+- conservative routing requires explicit script generation and only proposes a configured
+  compatible simple model for a high-confidence low-risk request;
+- no savings claim appears until paired quality and usage evidence is attributable per route.

@@ -47,8 +47,10 @@ import { renderOptimizeReport } from './optimize.js';
 import { renderPlanReport } from './plan.js';
 import { renderStatusReport } from './status.js';
 import { renderStackReviewReport } from './stack-review.js';
+import { renderSmartRoutingReport } from './smart-routing.js';
 import { renderUpdateReport } from './update.js';
 import { renderVerifyReport } from './verify.js';
+import type { SmartRoutingCommandReport } from '../commands/smart-routing.js';
 import type { RenderContext } from './layout.js';
 import {
   renderSimpleApply,
@@ -127,6 +129,8 @@ export function renderHuman(
         return plain(renderSimpleMcp(data as McpReport));
       case 'metrics':
         return plain(renderSimpleMetrics(data as MetricsReport));
+      case 'routing':
+        return plain(renderSmartRoutingReport(data as SmartRoutingCommandReport));
       case 'optimize':
         return plain(renderSimpleOptimize(data as OptimizeReport));
       case 'plan':
@@ -183,6 +187,8 @@ export function renderHuman(
       return plain(renderVerifyReport(data as VerifyReport, context));
     case 'metrics':
       return plain(renderMetricsReport(data as MetricsReport, context));
+    case 'routing':
+      return plain(renderSmartRoutingReport(data as SmartRoutingCommandReport));
     case 'update':
       return plain(renderUpdateReport(data as UpdateReport, context));
     default:
@@ -206,6 +212,7 @@ export {
   renderPlanReport,
   renderStatusReport,
   renderStackReviewReport,
+  renderSmartRoutingReport,
   renderUpdateReport,
   renderVerifyReport,
 };
