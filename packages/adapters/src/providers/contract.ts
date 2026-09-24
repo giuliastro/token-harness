@@ -24,6 +24,7 @@ import type {
   Diagnostic,
   FileSystemPort,
   HarnessConfigSummary,
+  HarnessId,
   HarnessManifest,
   ImportCursor,
   LocalDatabasePort,
@@ -94,6 +95,8 @@ export interface PassiveReceipt {
   observedAt: string;
   /** Operations the provider recorded at that point. */
   operations: number;
+  /** The coding agent that produced this receipt, when the source is isolated by harness. */
+  harnessId?: HarnessId;
   /** Where it was read from, for the evidence trail. */
   source: string;
 }

@@ -616,6 +616,7 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         harnesses: present,
         desiredState: 'configured',
       });
+      diagnostics.push(...(providerPlan.diagnostics ?? []));
       if (providerPlan.actions.length === 0) continue;
 
       const admissionProviderVersion = providerVersionForManagedAdmission(

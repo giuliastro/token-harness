@@ -27,7 +27,7 @@ import {
   type StatusReport,
   type VerifyReport,
 } from '@token-harness/core';
-import { nodeVersionRows } from '@token-harness/tests';
+import { nodeVersionRows, withRtkHookProxyAvailable } from '@token-harness/tests';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
@@ -117,7 +117,9 @@ async function invoke<T>(
     stateRoot: place.state,
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      runner: withRtkHookProxyAvailable(
+        new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      ),
       paths: {
         home: place.home,
         config: join(place.home, 'config'),
@@ -162,7 +164,9 @@ async function invokeHuman(argv: readonly string[], place: World): Promise<strin
     stateRoot: place.state,
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      runner: withRtkHookProxyAvailable(
+        new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      ),
       paths: {
         home: place.home,
         config: join(place.home, 'config'),
@@ -238,7 +242,7 @@ describe('uninstall', () => {
   it('does not claim a removal when it recognised nothing to remove', async () => {
     /**
      * Observed on a real machine before this: with a user hook appended beside the applied one,
-     * uninstall left `rtk hook claude` on disk and still printed "Removed what Token Harness owned.
+     * uninstall left the RTK hook proxy on disk and still printed "Removed what Token Harness owned.
      * Everything else is untouched."
      *
      * `observeOwnership` reaches `already-satisfied` for an edited array element on purpose — a

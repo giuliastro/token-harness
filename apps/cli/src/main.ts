@@ -17,6 +17,7 @@ import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 
 import {
+  harnessId,
   EXIT_CODES,
   JsonlStore,
   commandResult,
@@ -64,6 +65,7 @@ import {
 import { observeAgentSkill } from './agent-skill.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
+import { runRtkHookProxy } from './commands/rtk-hook-proxy.js';
 
 /**
  * The internal reader mode.
@@ -92,8 +94,33 @@ async function runAsDatabaseReader(argv: readonly string[]): Promise<boolean> {
   return true;
 }
 
+const RTK_HOOK_PROXY_FLAG = '__internal-rtk-hook';
+const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
+
+async function readStandardInput(): Promise<string | null> {
+  const chunks: string[] = [];
+  let bytes = 0;
+  for await (const chunk of process.stdin) {
+    const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    bytes += Buffer.byteLength(text, 'utf8');
+    if (bytes > MAX_HOOK_INPUT_BYTES) return null;
+    chunks.push(text);
+  }
+  return chunks.join('');
+}
+
 export async function main(argv: readonly string[]): Promise<void> {
   if (await runAsDatabaseReader(argv)) return;
+
+  if (argv[0] === RTK_HOOK_PROXY_FLAG && argv[2] === '--check') {
+    if (argv[1] === 'claude' || argv[1] === 'codex') {
+      process.stdout.write('token-harness-rtk-hook-proxy-v1\n');
+      process.exitCode = EXIT_CODES.ok;
+    } else {
+      process.exitCode = EXIT_CODES['usage-error'];
+    }
+    return;
+  }
 
   const opensGuide = argv.length === 0 || argv[0] === 'start' || argv[0] === 'ui';
   const readOnly = argv.includes('--read-only');
@@ -144,6 +171,7 @@ export async function main(argv: readonly string[]): Promise<void> {
     // report, and `run` uses them for the runtime-floor check before refusing.
     platform: resolution.ok ? resolution.environment.facts : resolution.facts,
     cwd: process.cwd(),
+    applicationEntryScript: process.argv[1] ?? null,
     home: resolution.ok ? resolution.environment.paths.home : null,
     stateRoot: resolution.ok ? resolution.environment.paths.state : null,
     environmentDiagnostics: resolution.ok ? attribution.diagnostics : resolution.diagnostics,
@@ -200,6 +228,36 @@ export async function main(argv: readonly string[]): Promise<void> {
     env: process.env,
     stdoutIsTty: process.stdout.isTTY === true,
   };
+
+  if (argv[0] === RTK_HOOK_PROXY_FLAG) {
+    const selected = argv[1];
+    if (selected !== 'claude' && selected !== 'codex') {
+      process.stderr.write('[Token Harness] Invalid RTK hook target; continuing unchanged.\n');
+      process.exitCode = 0;
+      return;
+    }
+    const input = await readStandardInput();
+    if (!resolution.ok || fs === null || attribution.salt === null || input === null) {
+      process.stderr.write(
+        '[Token Harness] Could not prepare private RTK history; continuing unchanged.\n',
+      );
+      process.exitCode = 0;
+      return;
+    }
+
+    const result = await runRtkHookProxy({
+      runner: resolution.environment.runner,
+      cwd: process.cwd(),
+      harness: harnessId(selected),
+      databasePath: fs.join(resolution.environment.paths.state, `rtk-${selected}.db`),
+      stdin: input,
+    });
+    if (result.stdout.length > 0) process.stdout.write(result.stdout);
+    if (result.stderr.length > 0) process.stderr.write(result.stderr);
+    // RTK's hook contract is fail-open; a proxy error must not prevent the user's command.
+    process.exitCode = 0;
+    return;
+  }
 
   if (uiInvocation?.ok === true) {
     process.exitCode =

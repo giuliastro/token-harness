@@ -33,15 +33,15 @@ The first screen is **Overview**. There is no separate Setup page to learn.
 
 1. Token Harness detects Claude Code and Codex.
 2. Each detected coding agent says either **Ready** or **Setup incomplete**.
-3. If setup is incomplete, use the **Optimizer connections** matrix. It shows every optimizer against
+3. If setup is incomplete, use the **Optimizer setup** matrix. It shows every optimizer against
    every detected agent and lets you select one harness or both in the same review. The recommended
    **RTK + HarnessTrim** baseline has its own action in that matrix and shows the exact safe plan
    before anything changes.
 4. Optional optimizers (mcptoon, GitNexus and Headroom) use the same matrix and per-optimizer action;
    there is no repeated setup button under each coding-agent card.
 5. **Health and updates** is maintenance, not another onboarding checklist. Normal setup performs its
-   own safety checks. Use **Re-check health** for troubleshooting and **Check for updates** when you
-   want to inspect provider versions. If a reviewed update is available, the same dialog offers
+   own safety checks. Use **Re-check health** for troubleshooting and **Check for updates** to inspect
+   Token Harness and optimizer versions. If an update is available, the same dialog offers
    **Install updates** after showing the versions.
 6. Keep using Claude Code or Codex normally. Open **Results** when you want detailed evidence.
 
@@ -173,11 +173,12 @@ be accepted without another hard-coded version bump when their executable versio
 machine-readable `capabilities` version and the semantic surface/write-set comparison reports no
 drift.
 
-Provider **package updates are separate from harness configuration writes**. `token-harness update`
-can replace a reviewed provider target without requiring an exact historical Claude/Codex fixture
-for that package version; exact compatibility rows still gate any later managed agent-config
-mutation. HarnessTrim updates use its reviewed npm channel and capture the previous global version
-for rollback. On native Windows RTK still prefers WinGet, but when that catalog is behind the
+Token Harness and provider **package updates are separate from harness configuration writes**.
+`token-harness update` can update the app when it is running from its verified global npm
+installation, and can replace a reviewed provider target without requiring an exact historical
+Claude/Codex fixture for that package version; exact compatibility rows still gate any later
+managed agent-config mutation. HarnessTrim updates use its reviewed npm channel and capture the
+previous global version for rollback. On native Windows RTK still prefers WinGet, but when that catalog is behind the
 reviewed 0.49.0 target Token Harness can fall back to the exact official GitHub Windows x64 release:
 it verifies GitHub's published SHA-256, replaces only the uniquely resolved `rtk.exe`, verifies the
 new version, and restores and re-verifies the previous bytes on failure. This package-only fallback
@@ -362,17 +363,22 @@ Update Token Harness itself:
 npm install --global token-harness@latest
 ```
 
-Provider checks and reviewed updates are in **Overview -> Health and updates**. The browser first
-checks reviewed channels and, when an installable update exists, offers **Install updates** in the
-same dialog. From the advanced CLI, the preview prints the exact confirmation command:
+Token Harness and optimizer checks are in **Overview -> Health and updates**. The browser checks
+the app's npm installation and the reviewed optimizer channels. When an installable update exists,
+it offers **Install updates** in the same dialog. After updating Token Harness from the browser,
+restart the app to load the new version. From the advanced CLI, the preview prints the exact
+confirmation command:
 
 ```sh
 token-harness update
 token-harness update --yes
 ```
 
-`update` replaces only installed providers whose target is inside the reviewed provider-package
-policy. HarnessTrim uses npm and captures the previous global version for rollback. On native
+`update` installs Token Harness itself only when the running copy matches its global npm package;
+other install methods remain available through their original updater. Optimizer updates replace
+only installed providers whose target is inside the reviewed provider-package policy. The npm
+package inventory captures the previous Token Harness version for rollback. HarnessTrim uses npm
+and captures the previous global version for rollback. On native
 Windows RTK prefers WinGet; when WinGet cannot yet reach the reviewed target, Token Harness can use
 the verified official GitHub Windows x64 release fallback described above. That fallback verifies the
 published digest and post-update version and restores the previous executable on failure.

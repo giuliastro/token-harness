@@ -1,8 +1,9 @@
 /**
  * `token-harness update` coordinator.
  *
- * Ordinary provider updates stay in `update-base.ts` and retain the existing package-manager
- * transaction. Native Windows gets one additional RTK-only route: when WinGet is behind the newest
+ * Provider package updates and Token Harness' own npm update stay in `update-base.ts` and retain
+ * the existing package-manager transaction. Native Windows gets one additional RTK-only route:
+ * when WinGet is behind the newest
  * provider release Token Harness has already source-reviewed, the exact official GitHub release can
  * replace the one unambiguous resolved `rtk.exe` after SHA-256 verification.
  *
@@ -94,6 +95,7 @@ function withDirectRow(
           }
         : row,
     ),
+    ...(report.application === undefined ? {} : { application: report.application }),
     network: [...new Set([...report.network, ...destinations])].sort(),
     execution: report.execution,
   };
@@ -350,7 +352,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
   const markDirectAppliedInProgress = async (): Promise<void> => {
     directJournal.entries[0]!.status = 'applied';
-    // Keep `outcome: in-progress` until any ordinary provider updates have either committed or
+    // Keep `outcome: in-progress` until any package updates have either committed or
     // failed and the coordinated RTK rollback has finished.
     await journalStore.write(directJournal);
   };
@@ -509,6 +511,8 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
         : EXIT_CODES['apply-failed-rolled-back'];
     return result(finalExit, report, [...combinedDiagnostics, rollbackDiagnostic]);
   }
+
+  if (base.data?.application !== undefined) report.application = base.data.application;
 
   const committedDiagnostic = diagnostic({
     severity: 'info',

@@ -289,6 +289,20 @@ separator that parses as a version", and that is what the channel table records.
 A query is a network read. It is disclosed the way every other network access is: the plan
 names the destination in its network summary, so a dry run that reached the network says so.
 
+#### Updating Token Harness itself
+
+The on-demand update check includes the Token Harness npm package when the running entry point
+resolves inside npm's current global `token-harness` package and both its package manifest and npm
+global inventory agree on the installed version. It resolves an exact npm version and shows it in
+the same preview as provider updates. An explicit confirmation installs that version globally and
+verifies the package manifest, npm inventory and global package root afterward. A package inventory
+is captured before mutation so rollback can reinstall the previous version.
+
+When Token Harness is running from a source checkout, an `npx` cache, or another installation
+channel, the check reports that self-update is unavailable and does not guess how to replace that
+copy. The UI tells the user to use the installation's original update method. Updating from the UI
+changes the installed package on disk; the app must be restarted to load the new version.
+
 #### The last known working version is already retained
 
 "Token Harness retains the last known working version and configuration receipt" reads like a
@@ -395,4 +409,3 @@ Required behavior in every case:
 
 Every harness and provider suite includes these fixtures alongside the absent, partial,
 healthy, and broken states.
-

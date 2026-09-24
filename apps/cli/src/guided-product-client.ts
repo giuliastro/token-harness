@@ -13,7 +13,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
   const VIEWS = {
     dashboard: ['Overview', 'Your coding agents, optimization stack, health and measured results in one place.'],
-    results: ['Results', 'A dashboard of optimizer value, harness coverage, quality evidence, and recent activity.'],
+    results: ['Results', 'A dashboard of optimizer results, coding-app links, quality information, and recent activity.'],
   };
   const TOOL_INFO = {
     rtk: {
@@ -252,7 +252,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (actionable.length)
       return {
         state: 'incomplete',
-        label: 'Connections available',
+        label: 'Setup available',
         cls: 'warn',
         actionable,
         unavailable,
@@ -261,7 +261,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (unavailable.length && connected.length === 0)
       return {
         state: 'unavailable',
-        label: 'Connections unavailable',
+        label: 'Setup unavailable',
         cls: '',
         actionable,
         unavailable,
@@ -270,7 +270,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (unavailable.length)
       return {
         state: 'limited',
-        label: 'Connected',
+        label: 'Setup detected',
         cls: 'good',
         actionable,
         unavailable,
@@ -368,34 +368,34 @@ export const GUIDE_PRODUCT_JS = String.raw`
       };
     if (incomplete.length)
       return {
-        label: 'Connections available',
+        label: 'Setup available',
         cls: 'warn',
-        title: 'Your optimization stack has available connections',
-        detail: 'Manage optimizer connections in one place below. Each optimizer is configured across every compatible detected coding agent through one reviewed transaction flow.',
+        title: 'Your optimization stack has available setup options',
+        detail: 'Choose an optimizer and the coding apps to set it up for. Token Harness shows measured results separately from detected setup.',
         action: 'configure',
       };
     const unavailable = baselineUnavailableAgents();
     if (unavailable.length)
       return {
-        label: 'Connections unavailable',
+        label: 'Setup unavailable',
         cls: '',
-        title: 'No automatic optimizer connection is currently exposed',
+        title: 'No automatic optimizer setup is currently available',
         detail: 'The installed providers do not currently expose a compatible managed connection for these coding agents. This is a capability limitation, not unfinished setup.',
         action: 'none',
       };
     if (!(current?.savings?.rows || []).length)
       return {
-        label: 'Connected',
+        label: 'Setup detected',
         cls: 'good',
         title: 'Recommended setup is complete',
-        detail: 'Use your coding agents normally. Measured results will appear when Token Harness has evidence to report.',
+        detail: 'Setup has been detected. This does not prove an optimizer ran or recorded a result; check the Results page for evidence linked to each agent.',
         action: 'results',
       };
     return {
       label: 'Ready',
       cls: 'good',
-      title: 'Your recommended setup is active',
-      detail: 'No setup action is required. The summary below shows what Token Harness can actually measure.',
+      title: 'Your setup has been checked',
+      detail: 'No setup action is required. The summary below shows which results Token Harness has actually recorded.',
       action: 'results',
     };
   }
@@ -443,17 +443,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const connectedHere = targets.some(target => target.state === 'connected');
     const actionableHere = targets.some(target => target.state === 'actionable');
     if (component.installed && actionableHere && connectedHere)
-      return { label: 'Partially connected · setup available', cls: 'warn' };
+      return { label: 'Setup found · more available', cls: 'warn' };
     if (component.installed && actionableHere)
       return { label: 'Installed · setup available', cls: 'warn' };
     if (connectedHere)
       return {
-        label: component.verification === 'verified' ? 'Connected · verified' : 'Connected',
+        label: 'Setup detected',
         cls: 'good',
       };
     if (component.installed && targets.some(target => target.state === 'unavailable'))
       return { label: 'Installed · no automatic setup', cls: '' };
-    if (component.configured) return { label: 'Connected elsewhere', cls: '' };
+    if (component.configured) return { label: 'Setup detected elsewhere', cls: '' };
     if (component.installed) return { label: 'Installed', cls: '' };
     return { label: 'Not installed', cls: '' };
   }
@@ -509,17 +509,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const detail =
         baseline.state === 'incomplete'
           ? baseline.actionable.map(target => target.provider).join(', ') +
-            ' can be connected from the Optimization stack below.'
+            ' can be set up from the Optimization stack below.'
           : baseline.state === 'unavailable'
             ? 'No managed baseline connection is currently available for this agent.'
-            : 'This card is status only. Optimizer connections are managed centrally below.';
+            : 'This card shows detected setup. It does not confirm that an optimizer ran or recorded results.';
       card.append(head, node('p', detail));
       card.append(
         node(
           'p',
           agent.providers?.length
-            ? 'Connected optimizers: ' + agent.providers.join(', ')
-            : 'Connected optimizers: none yet',
+            ? 'Detected optimizer setup: ' + agent.providers.join(', ')
+            : 'Detected optimizer setup: none yet',
           'caption',
         ),
       );
@@ -566,7 +566,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             provider ? provider.name + ' · selected connections' : 'Recommended stack · selected connections',
             provider
               ? 'Only ' + provider.name + ' will be changed for ' + targetLabel + '. Other optimizers and unselected coding agents stay untouched.'
-              : 'Only the selected RTK/HarnessTrim connections for ' + targetLabel + ' are included. Connected or unsupported targets stay untouched.',
+              : 'Only the selected RTK/HarnessTrim setups for ' + targetLabel + ' are included. Existing or unsupported setups stay untouched.',
           ),
         );
         if (!changes.length) {
@@ -624,7 +624,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       messageBox(
         'Choose coding agents',
         provider
-          ? 'Select the harnesses where ' + provider.name + ' should be installed and connected. You can choose one or both; connected harnesses and unsupported targets are not changed.'
+          ? 'Select the coding apps where ' + provider.name + ' should be set up. You can choose one or both; existing setups and unsupported targets are not changed.'
           : 'Select the harnesses for the recommended RTK + HarnessTrim baseline. You can choose one or both; each selected harness is reviewed in the same transaction.',
       ),
       messageBox('Nothing changes yet', 'The next step is still read-only. Token Harness will show the exact files and provider actions before Apply becomes available.'),
@@ -742,7 +742,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function connectionPresentation(target) {
     if (!target) return { label: 'Not targeted', cls: '' };
-    if (target.state === 'connected') return { label: 'Connected', cls: 'good' };
+    if (target.state === 'connected') return { label: 'Setup detected', cls: 'good' };
     if (target.state === 'actionable') return { label: 'Available', cls: 'warn' };
     if (target.state === 'unavailable') return { label: 'Unavailable', cls: '' };
     return { label: 'Not applicable', cls: '' };
@@ -755,7 +755,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const agents = activeAgents();
     const ids = optimizerIds();
     if (!agents.length) {
-      root.append(sectionEmpty('Optimizer connections will appear when a supported coding agent is detected.'));
+      root.append(sectionEmpty('Optimizer setup will appear when a supported coding app is detected.'));
       return;
     }
 
@@ -763,7 +763,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const summaryText = node('div');
     summaryText.append(
       node('strong', ids.length + ' optimizer' + (ids.length === 1 ? '' : 's') + ' · ' + agents.length + ' coding agent' + (agents.length === 1 ? '' : 's')),
-      node('p', 'Every optimizer is monitored per harness. Choose one or more harnesses from an optimizer action; adding more harnesses never adds another action for every optimizer.', 'caption'),
+      node('p', 'This matrix shows where setup was detected, not proof that an optimizer ran. Measured results are shown separately on the Results page.', 'caption'),
     );
     summary.append(summaryText);
     const baselineActionable = ['rtk', 'harnesstrim'].some(id =>
@@ -1067,16 +1067,16 @@ export const GUIDE_PRODUCT_JS = String.raw`
   function readOnlyOperation(kind) {
     if (busy) return;
     const isVerify = kind === 'verify';
-    const run = modal(isVerify ? 'Re-check optimizer health' : 'Check for optimizer updates');
+    const run = modal(isVerify ? 'Re-check optimizer health' : 'Check for updates');
     $('modal-content').append(
       messageBox(
         isVerify ? 'Troubleshooting check' : 'Update preview',
         isVerify
           ? 'Re-checks the configured optimizer integrations without repairing or changing them. Normal setup already performs its own safety checks.'
-          : 'Checks provider update channels first. If an installable update exists, you can approve it from this window; the active executable is re-checked after installation before success is reported.',
+          : 'Checks Token Harness and optimizer update channels first. If an update is available, you can approve it from this window; installed versions are checked again after installation.',
       ),
       progress(
-        isVerify ? 'Checking configured optimizers' : 'Checking update channels',
+        isVerify ? 'Checking configured optimizers' : 'Checking Token Harness and optimizer updates',
         'Nothing changes during this check.',
       ),
     );
@@ -1179,12 +1179,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const updateText = node('div');
     const available = (current?.stack?.components || []).filter(component => component.update === 'available');
     updateText.append(
-      node('strong', 'Optimizer updates'),
+      node('strong', 'Token Harness and optimizer updates'),
       node(
         'p',
         available.length
           ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
-          : 'Check installed optimizer versions. If an update is available, you can install it from the same dialog; Token Harness verifies the active runtime after installation.',
+          : 'Checks Token Harness and installed optimizer versions. If an update is available, install it from the same dialog; restart this app after updating Token Harness.',
         'caption',
       ),
     );
@@ -1231,7 +1231,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const values = [
         ['Recorded change', row.before !== null && row.after !== null ? count(row.before) + ' → ' + count(row.after) + ' ' + row.unit : count(Math.abs(row.saved)) + ' ' + row.unit],
         ['Operations', count(row.operations)],
-        ['Agents', row.agents?.length ? row.agents.join(', ') : 'not attributed'],
+        ['Coding agent', row.agents?.length ? row.agents.join(', ') : 'Not linked to an agent'],
       ];
       for (const [label, value] of values) {
         const wrap = node('div');
@@ -1239,6 +1239,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
         facts.append(wrap);
       }
       card.append(facts);
+      if (!row.agents?.length) {
+        card.append(
+          node(
+            'p',
+            row.providerId === 'rtk'
+              ? 'RTK records these reductions but does not record whether Codex or Claude ran each command. The result is real, but Token Harness cannot assign it to either agent.'
+              : 'The source did not include a coding-agent identity, so Token Harness keeps this result unassigned.',
+            'caption',
+          ),
+        );
+      }
       root.append(card);
     }
   }
@@ -1247,6 +1258,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     modal('How Token Harness measures results');
     $('modal-content').append(
       messageBox('Tool output', 'Local output reductions are shown only from recorded optimizer evidence. Different providers are never silently added together.'),
+      messageBox('Setup and results', 'A detected setup does not prove the optimizer ran. RTK records command reductions but its history does not say whether Codex or Claude ran each command, so those results cannot be shown under either app. HarnessTrim appears under an app only when its saved result names that app.'),
       messageBox('5h / 7d allowance', 'Subscription-plan savings appear only when authoritative paired allowance evidence exists and quality is preserved.'),
       messageBox('API cost', 'Money is shown only when billed-token evidence and a verified price basis exist. Token Harness does not convert local output reduction into invented dollars or euros.'),
       messageBox('Quality', 'Quality is evaluated separately. A regression can block a positive savings claim.'),
@@ -1287,17 +1299,25 @@ export const GUIDE_PRODUCT_JS = String.raw`
       card.append(head, node('p', info.role));
       const facts = node('div', undefined, 'tool-facts');
       facts.append(
-        node('span', 'Connected to'),
+        node('span', 'Setup detected for'),
         node('strong', component?.configuredHarnesses?.length ? component.configuredHarnesses.map(agentName).join(', ') : 'No detected agent'),
       );
       const measured = rows.filter(row => row.providerId === id);
       facts.append(
-        node('span', 'Measurements'),
+        node('span', 'Recorded results'),
         node('strong', measured.length ? measured.length + ' recorded result' + (measured.length === 1 ? '' : 's') : 'None in this period'),
       );
       card.append(facts);
       if (!measured.length) {
-        card.append(node('p', component?.configured ? 'Configured, but no attributable measurement is available for the selected period.' : 'No active measured result for this optimizer.', 'caption'));
+        card.append(
+          node(
+            'p',
+            component?.configured
+              ? 'Setup is detected, but no result was recorded in the selected period.'
+              : 'No result was recorded for this optimizer in the selected period.',
+            'caption',
+          ),
+        );
       } else {
         for (const row of measured) {
           const evidence = node('div', undefined, 'result-signal');
@@ -1323,25 +1343,51 @@ export const GUIDE_PRODUCT_JS = String.raw`
       return;
     }
     for (const agent of activeAgents()) {
-      const connected = configuredProviders().filter(component =>
+      const setupDetected = configuredProviders().filter(component =>
         component.configuredHarnesses?.includes(agent.id),
       );
       const measured = rows.filter(row => row.harnesses?.includes(agent.id));
+      const rtkUnattributed = rows.some(row =>
+        row.providerId === 'rtk' && !row.agents?.length,
+      );
+      const notes = [];
+      if (
+        setupDetected.some(component => component.providerId === 'rtk') &&
+        !measured.some(row => row.providerId === 'rtk')
+      ) {
+        notes.push(
+          rtkUnattributed
+            ? 'RTK has saved command-output data, but its history does not say whether Codex or Claude ran each command. Token Harness keeps those results under RTK instead of guessing.'
+            : 'RTK setup is detected, but no RTK result can be linked to this agent in the selected period.',
+        );
+      }
+      if (
+        setupDetected.some(component => component.providerId === 'harnesstrim') &&
+        !measured.some(row => row.providerId === 'harnesstrim')
+      ) {
+        notes.push(
+          'HarnessTrim setup is detected, but no HarnessTrim result is linked to this app in the selected period. Setup alone does not mean it was used.',
+        );
+      }
+      if (!setupDetected.length && !measured.length) {
+        notes.push('No optimizer setup or agent-linked result was found for this coding app.');
+      }
       const card = node('article', undefined, 'tool-card result-overview-card');
       const head = node('div', undefined, 'tool-head');
-      head.append(node('h3', agent.name), pill(connected.length ? 'Covered' : 'No optimizer', connected.length ? 'good' : ''));
+      head.append(node('h3', agent.name), pill(setupDetected.length ? 'Setup detected' : 'No setup', setupDetected.length ? 'good' : ''));
       card.append(
         head,
         node('p', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
       );
       const facts = node('div', undefined, 'tool-facts');
       facts.append(
-        node('span', 'Connected optimizers'),
-        node('strong', connected.length ? connected.map(component => optimizerInfo(component.providerId).name).join(', ') : 'None'),
-        node('span', 'Attributed results'),
-        node('strong', measured.length ? measured.map(row => row.provider).join(', ') : 'No harness-attributed measurement'),
+        node('span', 'Setup found'),
+        node('strong', setupDetected.length ? setupDetected.map(component => optimizerInfo(component.providerId).name).join(', ') : 'None'),
+        node('span', 'Results linked to this agent'),
+        node('strong', measured.length ? measured.map(row => row.provider).join(', ') : 'None in this period'),
       );
       card.append(facts);
+      for (const note of notes) card.append(node('p', note, 'caption'));
       root.append(card);
     }
   }
@@ -1359,8 +1405,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
     );
     $('result-summary').replaceChildren(
       metricCard('Configured optimizers', count(configured.length), optimizerIds().length + ' optimizer(s) tracked in the stack.', configured.length ? 'positive' : ''),
-      metricCard('Active connections', count(connectionCount), 'Optimizer-to-agent connections currently detected.', connectionCount ? 'positive' : ''),
-      metricCard('Measured optimizers', count(measuredProviders.size), 'Providers with attributable evidence in the selected period.'),
+      metricCard('Setups detected', count(connectionCount), 'Detected optimizer setup links; this is not proof of measured activity.', connectionCount ? 'positive' : ''),
+      metricCard('Optimizers with results', count(measuredProviders.size), 'Providers with recorded measurements in the selected period.'),
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );

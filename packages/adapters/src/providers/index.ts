@@ -91,7 +91,7 @@ export { gitnexusManagedProviderAdapter } from './gitnexus-provider.js';
 export { headroomManagedProviderAdapter } from './headroom-provider.js';
 export { mcptoonManagedProviderAdapter } from './mcptoon-provider.js';
 export { scopeProviderVerificationToHarness } from './harness-verification.js';
-export { parseRtkAnalytics, harnessesWiredToRtk, rtkDatabasePath } from './rtk.js';
+export { harnessesWiredToRtk, rtkDatabasePath, rtkHarnessDatabasePath } from './rtk.js';
 export {
   compareCapabilities,
   harnessesWiredToHarnessTrim,

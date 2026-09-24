@@ -695,9 +695,8 @@ noted:
   against the five required behaviours that apply to it;
 - added median planning overhead is negligible — measured, with the ceiling stated as a number
   and the reason for its generosity recorded next to it;
-- provider hot-path overhead remains attributable to the provider, not the control CLI —
-  structural: Token Harness is not in the hot path, and the assertion is over the hook commands
-  a plan actually writes;
+- the RTK attribution proxy remains limited to RTK-owned hook entries; its runtime overhead is
+  measured separately before release. Other provider hooks remain direct;
 - every harness has a declared verification tier — and every provider, per harness.
 
 Deferred to `0.2.0` and `1.0.0`:
@@ -1107,8 +1106,7 @@ Suggested first implementation issues:
     `tests/integration/release-gates.test.ts`; the eighth is assigned rather than assumed, per §8.2.
     Two of the assertions were kept only after being shown to have power: a single-claimant control
     proves the overlap scenario's exit 3 comes from the *second* claimant and not from any unowned
-    entry, and the hot-path claim reads the hook commands a plan really writes instead of trusting a
-    manifest to declare them.
+    entry, and the RTK attribution-proxy scope is checked against hook commands a plan really writes.
 
 21. Implement `update` (§12, RFC 0001 §CLI contract). **Done** — the last of the nine commands
     RFC 0001 declares, so `PLANNED_COMMANDS` is now empty. Implementing it forced RFC 0004
@@ -2818,3 +2816,12 @@ The product positioning that this phase should make true is:
 
 The optimization stack remains how Token Harness obtains specialized mechanisms. The efficiency
 controller becomes how it decides when and how to use them.
+
+### 19.17 Application self-update
+
+The on-demand **Check for updates** flow includes Token Harness itself when the running process can
+be tied unambiguously to its global npm installation. It previews the exact package version, waits
+for approval, records the previous npm inventory, installs the exact target and verifies the
+installed manifest and global inventory. Source, `npx`, and other package-manager launches are
+reported as unsupported for automatic self-update rather than guessed. Updating from the browser
+requires restarting the app to load the new package.

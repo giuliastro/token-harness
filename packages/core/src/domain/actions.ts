@@ -21,6 +21,7 @@
 
 import type { NativeConfigurationEnvironment } from './process.js';
 import type { HarnessId, ProviderId } from './ids.js';
+import type { Diagnostic } from './diagnostics.js';
 import type { JsonMergeOperation, JsonValue } from './json.js';
 import type { YamlMergeOperation } from './yaml.js';
 import type { OwnedArtifact } from './ownership.js';
@@ -315,6 +316,8 @@ export interface ProviderPlan {
   providerId: ProviderId;
   desiredState: 'configured' | 'absent';
   actions: PlannedAction[];
+  /** Non-blocking or actionable notes discovered while preparing this provider's plan. */
+  diagnostics?: Diagnostic[];
   /**
    * Harnesses the actions in this plan actually mutate.
    *

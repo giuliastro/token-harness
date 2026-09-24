@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { after, before, describe, it } from 'node:test';
 
-import type { CliEnvelope, PlanReport, PlatformFacts } from '@token-harness/core';
+import type { CliEnvelope, PlanReport, PlatformFacts, ProcessRunner } from '@token-harness/core';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { fakeResolve, nodeVersionRows } from '@token-harness/tests';
 import { run } from 'token-harness';
@@ -56,6 +56,43 @@ function homeWith(settings: unknown | null): string {
 
 async function planIn(home: string): Promise<{ exitCode: number; report: PlanReport | null }> {
   const fs = new NodeFileSystem(FACTS);
+  const nodeRunner = new NodeProcessRunner({
+    facts: FACTS,
+    env: process.env,
+    // `rtk` and `claude` resolve to the Node binary; nothing else does.
+    //
+    // The suite needs both versions observed: RFC 0009 admits a managed mutation only
+    // inside a compatibility row, and a row cannot admit a version nothing reported. The
+    // `claude --version` probe would spawn the real binary on the developer's machine and
+    // nothing on Linux, so resolving to the running Node keeps the suite honest on every
+    // runner — AGENTS.md forbids a test requiring an upstream executable, and Node is the
+    // interpreter the test already runs under.
+    resolve: fakeResolve,
+  });
+  const runner: ProcessRunner = {
+    run(request) {
+      if (
+        request.executable === 'token-harness' &&
+        request.args.join(' ') === '__internal-rtk-hook claude --check'
+      ) {
+        return Promise.resolve({
+          displayCommand: 'token-harness __internal-rtk-hook claude --check',
+          interpreter: 'direct',
+          executablePath: '/test/token-harness',
+          exitCode: 0,
+          signal: null,
+          stdout: 'token-harness-rtk-hook-proxy-v1\n',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 0,
+          timedOut: false,
+          failure: null,
+        });
+      }
+      return nodeRunner.run(request);
+    },
+  };
   let stdout = '';
   const exitCode = await run({
     argv: ['plan', '--json'],
@@ -66,19 +103,7 @@ async function planIn(home: string): Promise<{ exitCode: number; report: PlanRep
     stateRoot: join(sandbox, 'state'),
     adapters: {
       fs,
-      runner: new NodeProcessRunner({
-        facts: FACTS,
-        env: process.env,
-        // `rtk` and `claude` resolve to the Node binary; nothing else does.
-        //
-        // The suite needs both versions observed: RFC 0009 admits a managed mutation only
-        // inside a compatibility row, and a row cannot admit a version nothing reported. The
-        // `claude --version` probe would spawn the real binary on the developer's machine and
-        // nothing on Linux, so resolving to the running Node keeps the suite honest on every
-        // runner — AGENTS.md forbids a test requiring an upstream executable, and Node is the
-        // interpreter the test already runs under.
-        resolve: fakeResolve,
-      }),
+      runner,
       paths: {
         home,
         config: join(home, 'config'),
@@ -143,30 +168,40 @@ describe('a home with Claude present and no hook', () => {
 });
 
 describe('a home already carrying the RTK hook', () => {
-  it('does not register the hook a second time', async () => {
+  it('routes the existing native hook through the per-agent tracker', async () => {
     const { exitCode, report } = await planIn(homeWith(RTK_HOOK));
 
     assert.equal(exitCode, 0);
     assert.ok(report);
-    // RFC 0004 §Brownfield adoption: for the *configuration*, the desired state is the current
-    // state. This asserts the absence of a `merge-json` rather than of every action, because
-    // the hook already covers the tool family and nothing about that can improve by rewriting.
-    assert.equal(
-      report.actions.some((action) => action.kind === 'merge-json'),
-      false,
-      `expected no hook action, got ${JSON.stringify(report.actions.map((a) => a.kind))}`,
+    const migrationActions = report.actions.filter((action) => action.kind === 'merge-json');
+    const expectedPointers =
+      FACTS.os === 'windows'
+        ? ['hooks.PreToolUse.0.hooks.0.command', 'hooks.PreToolUse.1.hooks.0.command']
+        : ['hooks.PreToolUse.0.hooks.0.command'];
+    assert.deepEqual(
+      migrationActions.flatMap((action) => action.ownedPointers).sort(),
+      expectedPointers,
+      'every existing direct RTK hook must be migrated',
     );
+    const bashHook = migrationActions.find((action) =>
+      action.ownedPointers.includes('hooks.PreToolUse.0.hooks.0.command'),
+    );
+    assert.ok(bashHook, 'the existing Bash hook must be migrated');
+    assert.deepEqual(bashHook.operations, [
+      {
+        kind: 'set',
+        pointer: 'hooks.PreToolUse.0.hooks.0.command',
+        value: 'token-harness __internal-rtk-hook claude --restore-rtk',
+        expectedValueDigest: bashHook.operations[0]?.expectedValueDigest,
+      },
+    ]);
   });
 
-  it('reports the plan as empty once RTK is also present', async () => {
-    // The complete brownfield state — configured *and* installed — is asserted against the
-    // adapter directly in `packages/adapters/test/rtk-plan.test.ts`, where `installed` is an
-    // input rather than a property of the machine the suite runs on.
+  it('keeps ownership visible while the native hook still needs migration', async () => {
     const { report } = await planIn(homeWith(RTK_HOOK));
     assert.ok(report);
-    // `rtk` resolves in this suite, so it reads as installed and the hook is already
-    // registered: the honest plan is empty, and the gate has nothing to admit or refuse.
-    assert.deepEqual(report.actions, []);
+    assert.equal(report.actions.length, FACTS.os === 'windows' ? 2 : 1);
+    assert.ok(report.ownership.some((entry) => entry.owner === 'rtk'));
   });
 
   it('still resolves ownership', async () => {

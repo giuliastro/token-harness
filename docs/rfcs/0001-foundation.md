@@ -102,9 +102,12 @@ have:
 - built-in `node:test` unless a test need justifies another runner;
 - a bundled CLI artifact for npm distribution.
 
-The CLI is not in the hot path of every tool result. Performance-sensitive filtering
-remains inside providers such as RTK. TypeScript therefore optimizes contributor speed
-and cross-platform integration without compromising the runtime path that matters.
+Performance-sensitive filtering remains inside providers such as RTK. Token Harness adds a
+small, RTK-only hook proxy when separate per-agent metrics databases are enabled, so the
+rewritten command retains the correct agent attribution. That proxy's runtime overhead must be
+measured separately; other providers continue to run directly. TypeScript therefore optimizes
+contributor speed and cross-platform integration without moving output filtering into the control
+CLI.
 
 ### Repository shape
 
@@ -258,4 +261,3 @@ bundled into Token Harness without a specific licensing review.
 - No upstream HarnessTrim release is a `0.1.0` gate: accepted.
 - Windows is the primary development platform for the platform and state layers:
   accepted.
-

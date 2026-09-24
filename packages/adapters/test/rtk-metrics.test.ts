@@ -43,6 +43,8 @@ const PATHS = {
 };
 
 const DB = 'C:\\Users\\dev\\AppData\\Local\\rtk\\history.db';
+const CLAUDE_DB = 'C:\\Users\\dev\\AppData\\Local\\TokenHarness\\rtk-claude.db';
+const CODEX_DB = 'C:\\Users\\dev\\AppData\\Local\\TokenHarness\\rtk-codex.db';
 
 /** Verbatim column names and value shapes from the installed tool. */
 const HISTORY: LocalDatabaseRow[] = [
@@ -67,10 +69,14 @@ const HISTORY: LocalDatabaseRow[] = [
   },
 ];
 
-interface FakeDatabaseOptions {
+interface FakeDatabaseSourceOptions {
   rows?: LocalDatabaseRow[];
   generation?: LocalDatabaseRow;
   failure?: LocalDatabaseResult['failure'];
+}
+
+interface FakeDatabaseOptions extends FakeDatabaseSourceOptions {
+  sources?: Record<string, FakeDatabaseSourceOptions>;
 }
 
 interface FakeDatabase extends LocalDatabasePort {
@@ -79,14 +85,18 @@ interface FakeDatabase extends LocalDatabasePort {
 
 function database(options: FakeDatabaseOptions = {}): FakeDatabase {
   const queries: LocalDatabaseQuery[] = [];
-  const rows = options.rows ?? HISTORY;
   return {
     queries,
     query: (query) => {
       queries.push(query);
-      if (options.failure !== undefined) {
-        return Promise.resolve({ rows: [], failure: options.failure, detail: 'fake' });
+      const source = query.path === DB ? options : options.sources?.[query.path];
+      if (source === undefined) {
+        return Promise.resolve({ rows: [], failure: 'not-found', detail: 'fake' });
       }
+      if (source.failure !== undefined) {
+        return Promise.resolve({ rows: [], failure: source.failure, detail: 'fake' });
+      }
+      const rows = source.rows ?? HISTORY;
       if (query.sql.includes('MIN(id)')) {
         const ids = rows.map((row) => row['id'] as number);
         return Promise.resolve({
@@ -117,7 +127,10 @@ interface FakeStore extends MetricsStore {
   readonly cursors: ImportCursor[];
 }
 
-function store(existing: ImportCursor | null = null): FakeStore {
+function store(
+  existing: ImportCursor | null = null,
+  existingBySource: Record<string, ImportCursor> = {},
+): FakeStore {
   const events: OptimizationEvent[] = [];
   const cursors: ImportCursor[] = [];
   return {
@@ -127,7 +140,12 @@ function store(existing: ImportCursor | null = null): FakeStore {
       events.push(...batch);
       return Promise.resolve();
     },
-    readCursor: () => Promise.resolve(cursors.at(-1) ?? existing),
+    readCursor: (_providerId, sourceId) =>
+      Promise.resolve(
+        [...cursors].reverse().find((cursor) => cursor.sourceId === sourceId) ??
+          existingBySource[sourceId] ??
+          (sourceId === DB ? existing : null),
+      ),
     writeCursor: (cursor) => {
       cursors.push(cursor);
       return Promise.resolve();
@@ -186,7 +204,7 @@ describe('a native import', () => {
     const result = await rtkAdapter.collectMetrics(context(), target);
 
     assert.equal(result.mode, 'native');
-    assert.equal(result.source, 'rtk history.db (commands)');
+    assert.equal(result.source, 'RTK command history databases');
     assert.equal(result.imported, 2);
     assert.equal(result.skipped, 0);
   });
@@ -270,7 +288,20 @@ describe('a native import', () => {
 
   it('leaves the harness unknown rather than guessing from current wiring', async () => {
     const target = store();
-    await rtkAdapter.collectMetrics(context(), target);
+    const wiredContext: ProviderContext = {
+      ...context(),
+      harnessConfigs: [
+        {
+          harnessId: 'claude' as ProviderContext['harnessConfigs'][number]['harnessId'],
+          configPath: 'C:\\Users\\dev\\.claude\\settings.json',
+          scope: 'user',
+          interceptionPoints: ['pre-tool-use'],
+          matchers: ['Bash'],
+          commands: ['token-harness __internal-rtk-hook claude'],
+        },
+      ],
+    };
+    await rtkAdapter.collectMetrics(wiredContext, target);
     // A row carries no harness. Reading one off today's configuration would attribute
     // months of history to whichever harness happens to be wired now.
     assert.equal(target.events[0]?.context.harnessId, 'unknown');
@@ -410,6 +441,59 @@ describe('the cursor', () => {
     // The other order would move the cursor past records that were never stored, and
     // nothing afterwards could tell that they were missing.
     assert.deepEqual(order, ['append', 'cursor']);
+  });
+});
+
+describe('per-harness command histories', () => {
+  it('separates identical RTK row identifiers from Claude Code and Codex', async () => {
+    const row = HISTORY[0] as LocalDatabaseRow;
+    const target = store();
+    await rtkAdapter.collectMetrics(
+      context({
+        localDatabase: database({
+          sources: {
+            [CLAUDE_DB]: { rows: [row] },
+            [CODEX_DB]: { rows: [row] },
+          },
+        }),
+      }),
+      target,
+    );
+
+    const byHarness = new Map(target.events.map((event) => [event.context.harnessId, event]));
+    assert.equal(byHarness.get('claude')?.eventId, 'rtk-history-claude-2827');
+    assert.equal(byHarness.get('codex')?.eventId, 'rtk-history-codex-2827');
+    assert.equal(new Set(target.events.map((event) => event.eventId)).size, 4);
+    assert.ok(target.events.some((event) => event.eventId === 'rtk-history-2827'));
+  });
+
+  it('keeps a separate cursor for every history database', async () => {
+    const target = store();
+    const result = await rtkAdapter.collectMetrics(
+      context({
+        localDatabase: database({
+          sources: {
+            [CLAUDE_DB]: { rows: [HISTORY[0] as LocalDatabaseRow] },
+            [CODEX_DB]: { rows: [HISTORY[1] as LocalDatabaseRow] },
+          },
+        }),
+      }),
+      target,
+    );
+
+    assert.deepEqual(
+      target.cursors.map((cursor) => cursor.sourceId).sort(),
+      [CLAUDE_DB, CODEX_DB, DB].sort(),
+    );
+    assert.equal(
+      target.cursors.find((cursor) => cursor.sourceId === CLAUDE_DB)?.highWaterMark,
+      '2827',
+    );
+    assert.equal(
+      target.cursors.find((cursor) => cursor.sourceId === CODEX_DB)?.highWaterMark,
+      '2829',
+    );
+    assert.equal(result.cursor, null);
   });
 });
 

@@ -131,6 +131,23 @@ export interface ProviderUpdateRow {
   pin: string | null;
 }
 
+/** Update state for the Token Harness CLI package itself, kept separate from optimizer rows. */
+export interface ApplicationUpdateRow {
+  applicationId: 'token-harness';
+  installed: string | null;
+  available: string | null;
+  channel: 'npm' | null;
+  /** True only in the mutating command result that installed the offered version. */
+  updated?: boolean;
+  verdict:
+    | 'current'
+    | 'upgradable'
+    | 'unknown'
+    | 'unavailable'
+    /** This process is not running from a verified global npm installation. */
+    | 'unsupported-installation';
+}
+
 /**
  * What `update` did — RFC 0001 §CLI contract, the last command it declares.
  *
@@ -140,6 +157,8 @@ export interface ProviderUpdateRow {
  */
 export interface UpdateReport {
   providers: ProviderUpdateRow[];
+  /** Present in the real CLI when its own installation can be inspected. */
+  application?: ApplicationUpdateRow;
   /**
    * Network destinations this command reached to answer the question — RFC 0004 §Network policy.
    *

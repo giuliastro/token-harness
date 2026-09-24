@@ -102,6 +102,15 @@ describe('Codex adapter', () => {
   it('reads the separate hooks file and exposes its command without interpreting ownership', async () => {
     const inspection = await codexAdapter.inspect(context({ [HOOKS]: DECLARED }));
     assert.deepEqual(inspection.summaries[0]?.commands, ['rtk hook codex']);
+    assert.deepEqual(inspection.summaries[0]?.hookCommands, [
+      {
+        eventName: 'PostToolUse',
+        matcher: '^Bash$',
+        command: 'rtk hook codex',
+        entryPointer: 'hooks.PostToolUse.0',
+        commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+      },
+    ]);
     assert.equal(inspection.enabled, null);
   });
 

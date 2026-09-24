@@ -6,8 +6,8 @@ import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('guided optional managed optimizers', () => {
   it('places reviewed tools under Optional optimizers instead of Experimental tools', () => {
-    assert.match(GUIDE_HTML, /<h2>Optimizer connections<\/h2>/);
-    assert.match(GUIDE_HTML, /Select one or more harnesses/);
+    assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
+    assert.match(GUIDE_JS, /Select the coding apps where/);
     assert.match(GUIDE_JS, /Optional optimizer/);
     assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
     assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
@@ -27,7 +27,7 @@ describe('guided optional managed optimizers', () => {
     assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /Optional optimizer/);
-    assert.match(GUIDE_HTML, /not counted as savings until measured evidence exists/);
+    assert.match(GUIDE_HTML, /does not confirm runtime activity/);
   });
 
   it('keeps experimental benchmark evidence separate from managed setup', () => {

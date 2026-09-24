@@ -93,13 +93,15 @@ function readHooks(document: JsonValue): {
   points: string[];
   matchers: string[];
   commands: string[];
+  hookCommands: NonNullable<ResolvedHarnessConfig['hookCommands']>;
 } {
   if (!isRecord(document) || !isRecord(document['hooks']))
-    return { points: [], matchers: [], commands: [] };
+    return { points: [], matchers: [], commands: [], hookCommands: [] };
   const hooks = document['hooks'];
   const points: string[] = [];
   const matchers: string[] = [];
   const commands: string[] = [];
+  const hookCommands: NonNullable<ResolvedHarnessConfig['hookCommands']> = [];
 
   // Driven by the manifest rather than by a literal event name, so adding an interception point
   // above is the whole change; a second list here would be a second place to forget.
@@ -107,13 +109,22 @@ function readHooks(document: JsonValue): {
     const entries = hooks[point.eventName];
     if (!Array.isArray(entries)) continue;
     let carries = false;
-    for (const entry of entries) {
+    for (const [entryIndex, entry] of entries.entries()) {
       if (!isRecord(entry)) continue;
-      if (typeof entry['matcher'] === 'string') matchers.push(entry['matcher']);
+      const matcher = typeof entry['matcher'] === 'string' ? entry['matcher'] : null;
+      if (matcher !== null) matchers.push(matcher);
       if (Array.isArray(entry['hooks'])) {
-        for (const hook of entry['hooks']) {
+        for (const [hookIndex, hook] of entry['hooks'].entries()) {
           if (isRecord(hook) && typeof hook['command'] === 'string') {
             commands.push(hook['command']);
+            const entryPointer = `hooks.${point.eventName}.${String(entryIndex)}`;
+            hookCommands.push({
+              eventName: point.eventName,
+              matcher,
+              command: hook['command'],
+              entryPointer,
+              commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.command`,
+            });
             carries = true;
           }
         }
@@ -126,6 +137,7 @@ function readHooks(document: JsonValue): {
     points,
     matchers: [...new Set(matchers)],
     commands: [...new Set(commands)],
+    hookCommands,
   };
 }
 
@@ -144,6 +156,7 @@ async function resolveConfig(
       configuredPoints: [],
       matchers: [],
       commands: [],
+      hookCommands: [],
     };
   const text = new TextDecoder().decode(await context.fs.readFile(path));
   if (declaration.parser === 'toml') {
@@ -157,6 +170,7 @@ async function resolveConfig(
       configuredPoints: [],
       matchers: [],
       commands: [],
+      hookCommands: [],
     };
   }
   try {
@@ -169,6 +183,7 @@ async function resolveConfig(
       configuredPoints: hooks.points,
       matchers: hooks.matchers,
       commands: hooks.commands,
+      hookCommands: hooks.hookCommands,
     };
   } catch {
     return {
@@ -352,6 +367,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
         interceptionPoints: config.configuredPoints,
         matchers: config.matchers,
         commands: config.commands,
+        hookCommands: config.hookCommands ?? [],
       })),
     diagnostics,
   };

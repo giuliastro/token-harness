@@ -10,7 +10,7 @@
  * provider whose channel could not be read render as a provider that is current.
  */
 
-import type { ProviderUpdateRow, UpdateReport } from '@token-harness/core';
+import type { ApplicationUpdateRow, ProviderUpdateRow, UpdateReport } from '@token-harness/core';
 
 import { MAX_WIDTH, document, pluralize, row, truncate, type RenderContext } from './layout.js';
 
@@ -58,10 +58,25 @@ function detail(row: ProviderUpdateRow): string {
   }
 }
 
+function applicationDetail(row: ApplicationUpdateRow): string {
+  switch (row.verdict) {
+    case 'upgradable':
+      return `${String(row.installed)} → ${String(row.available)} via npm`;
+    case 'current':
+      return `${String(row.installed)} is the newest npm offers`;
+    case 'unknown':
+      return 'npm inventory or version could not be verified';
+    case 'unavailable':
+      return 'npm could not be asked';
+    case 'unsupported-installation':
+      return 'this copy is not installed globally through npm';
+  }
+}
+
 export function renderUpdateReport(report: UpdateReport, _context: RenderContext): string {
   const lines: string[] = [];
 
-  if (report.providers.length === 0) {
+  if (report.providers.length === 0 && report.application === undefined) {
     lines.push('No provider was inspected.');
     return document(lines);
   }
@@ -77,7 +92,10 @@ export function renderUpdateReport(report: UpdateReport, _context: RenderContext
   const providerWidth = Math.min(
     20,
     widthOf(
-      report.providers.map((entry) => entry.providerId),
+      [
+        ...report.providers.map((entry) => entry.providerId),
+        ...(report.application === undefined ? [] : ['Token Harness']),
+      ],
       PROVIDER_WIDTH,
     ),
   );
@@ -89,6 +107,18 @@ export function renderUpdateReport(report: UpdateReport, _context: RenderContext
           [entry.providerId, providerWidth],
           [entry.verdict, VERDICT_WIDTH],
           [truncate(detail(entry), MAX_WIDTH - detailStart), 0],
+        ]),
+        MAX_WIDTH,
+      ),
+    );
+  }
+  if (report.application !== undefined) {
+    lines.push(
+      truncate(
+        row([
+          ['Token Harness', providerWidth],
+          [report.application.verdict, VERDICT_WIDTH],
+          [truncate(applicationDetail(report.application), MAX_WIDTH - detailStart), 0],
         ]),
         MAX_WIDTH,
       ),
@@ -108,16 +138,27 @@ export function renderUpdateReport(report: UpdateReport, _context: RenderContext
   }
 
   const upgradable = report.providers.filter((row) => row.verdict === 'upgradable').length;
+  const applicationUpgradable = report.application?.verdict === 'upgradable';
   const execution = report.execution;
   lines.push('');
   if (execution === null || execution.outcome === 'nothing-to-do') {
-    lines.push('Nothing to update.');
-  } else if (execution.outcome === 'confirmation-required') {
     lines.push(
-      `${String(upgradable)} ${pluralize(upgradable, 'provider')} would be updated. Re-run with --yes.`,
+      report.application?.verdict === 'unsupported-installation'
+        ? 'No supported update found. This Token Harness installation must be updated with its original install method.'
+        : 'Nothing to update.',
     );
+  } else if (execution.outcome === 'confirmation-required') {
+    const parts = [
+      ...(applicationUpgradable ? ['Token Harness'] : []),
+      ...(upgradable > 0 ? [`${String(upgradable)} ${pluralize(upgradable, 'provider')}`] : []),
+    ];
+    lines.push(`${parts.join(' and ')} would be updated. Re-run with --yes.`);
   } else if (execution.outcome === 'committed') {
-    lines.push(`Updated ${String(upgradable)} ${pluralize(upgradable, 'provider')}.`);
+    const parts = [
+      ...(report.application?.updated === true ? ['Token Harness'] : []),
+      ...(upgradable > 0 ? [`${String(upgradable)} ${pluralize(upgradable, 'provider')}`] : []),
+    ];
+    lines.push(`Updated ${parts.join(' and ')}.`);
   } else {
     // Deliberately not "a step failed": an update that rolled back restored files and left the
     // package, and the executor's own diagnostic is what says which. Overstating it here would

@@ -853,6 +853,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     context,
     observed?.capabilities ?? null,
   );
+  const runtimeConfigured = harnessesWiredToHarnessTrim(context.harnessConfigs);
   const warnings: Diagnostic[] = [];
   const evidenceItems: Evidence[] = [...probe.evidence, ...(observed?.evidence ?? [])];
 
@@ -861,13 +862,22 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
   }
 
   for (const harness of configured) {
+    const isRuntimeConfigured = runtimeConfigured.includes(harness);
     evidenceItems.push(
       evidence({
         kind: 'config-entry',
-        source: `${harness} hook`,
-        path:
-          context.harnessConfigs.find((config) => config.harnessId === harness)?.configPath ?? null,
-        detail: 'names harnesstrim in a hook command',
+        source: isRuntimeConfigured ? `${harness} integration` : `${harness} skills`,
+        path: isRuntimeConfigured
+          ? (context.harnessConfigs.find((config) => config.harnessId === harness)?.configPath ??
+            null)
+          : context.fs.join(
+              context.projectRoot,
+              SKILLS_INSTALL[harness]?.directory ?? `.${harness}`,
+              'skills',
+            ),
+        detail: isRuntimeConfigured
+          ? 'names HarnessTrim in a runtime hook, plugin, or extension'
+          : 'matching HarnessTrim skills are installed; this alone does not prove output reduction or measurement',
       }),
     );
   }
@@ -1023,7 +1033,7 @@ function parseTrimEvent(line: string): TrimEvent | null {
  * events, and `ts` "is not unique under concurrency".
  */
 export function synthesizeEventId(sourceId: string, ordinal: number, line: string): string {
-  const digest = digestText(`${sourceId} ${String(ordinal)} ${line}`);
+  const digest = digestText(`${sourceId}\u0000${String(ordinal)}\u0000${line}`);
   return `harnesstrim-${digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 17)}`;
 }
 
@@ -1190,16 +1200,24 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     context,
     currentCapabilities?.capabilities ?? null,
   );
+  const runtimeConfigured = harnessesWiredToHarnessTrim(context.harnessConfigs);
+  const skillsOnly = configured.filter((harness) => !runtimeConfigured.includes(harness));
   checks.push({
     id: 'integration-configured',
-    status: configured.length > 0 ? 'pass' : 'not-exercised',
+    status:
+      runtimeConfigured.length > 0 ? 'pass' : skillsOnly.length > 0 ? 'info' : 'not-exercised',
     summary:
-      configured.length > 0
-        ? `configured for ${configured.join(', ')}`
-        : 'no HarnessTrim hook, plugin, or matching skills-only installation was found',
-    achievedTier: configured.length > 0 ? 'config-only' : null,
+      runtimeConfigured.length > 0
+        ? `runtime integration configured for ${runtimeConfigured.join(', ')}`
+        : skillsOnly.length > 0
+          ? `HarnessTrim skills found for ${skillsOnly.join(', ')}, but no runtime reduction hook or plugin is configured`
+          : 'no HarnessTrim hook, plugin, or matching skills-only installation was found',
+    achievedTier: runtimeConfigured.length > 0 ? 'config-only' : null,
     evidence: [],
-    remediation: null,
+    remediation:
+      runtimeConfigured.length > 0 || skillsOnly.length === 0
+        ? null
+        : 'Skills provide guidance; they do not produce a measured reduction without a compatible runtime integration.',
   });
 
   /**
@@ -1234,7 +1252,11 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     achievedTier: receipt === null ? null : 'canary',
     evidence: [],
     remediation:
-      receipt === null ? 'Pass `--metrics <path>` on the hook command to record telemetry' : null,
+      receipt !== null
+        ? null
+        : runtimeConfigured.length > 0
+          ? 'Enable telemetry on the runtime integration, then use it on an output it can reduce.'
+          : 'A skills-only setup does not write reduction telemetry. Configure a compatible measurement path before expecting agent-attributed results.',
   });
 
   // RFC 0003 §The instruction-level path: guidance in AGENTS.md is a second shell-reduction path
