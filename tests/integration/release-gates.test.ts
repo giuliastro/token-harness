@@ -187,7 +187,8 @@ function resolve(name: string): ResolvedExecutable | null {
 
 /** RFC 0009 rows covering every provider × harness combination these fixtures wire up. */
 const RELEASE_ROWS = [
-  rowFor('rtk', 'claude', FACTS),
+  { ...rowFor('rtk', 'claude', FACTS), providerVersion: '0.50.0' },
+  { ...rowFor('rtk', 'codex', FACTS), providerVersion: '0.50.0' },
   rowFor('harnesstrim', 'claude', FACTS),
   rowFor('harnesstrim', 'codex', FACTS),
 ];
@@ -200,6 +201,47 @@ async function invoke<T>(
   const now = new Date(Date.UTC(2026, 6, 31, 14, 0, clock)).toISOString();
   const fs = new NodeFileSystem(FACTS);
   let stdout = '';
+  const nodeRunner = new NodeProcessRunner({ facts: FACTS, env: process.env, resolve });
+  const runner: ProcessRunner = {
+    run(request) {
+      if (request.executable === 'rtk' && request.args.join(' ') === '--version') {
+        return Promise.resolve({
+          displayCommand: 'rtk --version',
+          interpreter: 'direct',
+          executablePath: '/test/rtk',
+          exitCode: 0,
+          signal: null,
+          stdout: 'rtk 0.50.0\n',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 0,
+          timedOut: false,
+          failure: null,
+        });
+      }
+      if (
+        request.executable === 'token-harness' &&
+        request.args.join(' ') === '__internal-rtk-hook claude --check'
+      ) {
+        return Promise.resolve({
+          displayCommand: 'token-harness __internal-rtk-hook claude --check',
+          interpreter: 'direct',
+          executablePath: '/test/token-harness',
+          exitCode: 0,
+          signal: null,
+          stdout: 'token-harness-rtk-hook-proxy-v1\n',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 0,
+          timedOut: false,
+          failure: null,
+        });
+      }
+      return nodeRunner.run(request);
+    },
+  };
   const options: RunOptions = {
     argv: [...argv, '--json'],
     streams: {
@@ -214,7 +256,7 @@ async function invoke<T>(
     stateRoot: place.state,
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve }),
+      runner,
       paths: {
         home: place.home,
         config: join(place.home, 'config'),
@@ -270,7 +312,13 @@ describe('brownfield adoption', () => {
     const codexActions = (plan.data?.actions ?? []).filter((action) =>
       action.affectedPaths.includes(place.codexHooks),
     );
-    assert.ok(codexActions.length > 0, 'the missing RTK Codex connection should be planned');
+    assert.ok(
+      codexActions.length > 0,
+      `the missing RTK Codex connection should be planned: ${JSON.stringify({
+        actions: plan.data?.actions,
+        diagnostics: plan.envelope.diagnostics,
+      })}`,
+    );
     assert.ok(
       plan.data?.ownership.some(
         (entry) => entry.owner === 'rtk' && entry.scope.harness === 'codex',
@@ -313,7 +361,13 @@ describe('brownfield adoption', () => {
     const codexActions = (plan.data?.actions ?? []).filter((action) =>
       action.affectedPaths.includes(place.codexHooks),
     );
-    assert.ok(codexActions.length > 0, 'RTK should remain independently actionable for Codex');
+    assert.ok(
+      codexActions.length > 0,
+      `RTK should remain independently actionable for Codex: ${JSON.stringify({
+        actions: plan.data?.actions,
+        diagnostics: plan.envelope.diagnostics,
+      })}`,
+    );
     for (const action of codexActions) {
       assert.equal(action.kind, 'merge-json');
       assert.deepEqual((action as MergeJsonAction).ownedPointers, ['hooks.PreToolUse']);
@@ -998,32 +1052,43 @@ describe('every harness declares a verification tier', () => {
 });
 
 /**
- * PLAN §8.2: "added median planning overhead is negligible" and "provider hot-path overhead remains
- * attributable to the provider, not the control CLI".
+ * PLAN §8.2: "added median planning overhead is negligible". RTK's per-agent tracking also needs
+ * a small control-CLI proxy on its own hook path so the rewritten command keeps its agent-specific
+ * database selection. The proxy is deliberately limited to RTK; other providers still run directly.
  *
- * The second one is structural rather than measurable, and worth stating plainly: Token Harness is
- * not in the hot path. It does not intercept anything — the harness hook calls the *provider*
- * directly, and Token Harness only writes the line that names it. Whatever a rewritten command
- * costs at run time is the provider's, because our process is not running. The test below asserts
- * the property that makes that true.
+ * This integration assertion keeps the new proxy scoped to RTK-owned hooks. Its runtime cost must
+ * be measured separately; it can no longer be described as zero control-CLI work on that path.
  */
 describe('overhead', () => {
-  it('adds nothing to the hot path, because it is not in it', async () => {
+  it('uses the tracking proxy only for RTK hooks', async () => {
     /**
-     * Asserted over what a plan actually writes, not over the manifests.
-     *
-     * Every hook command a plan produces must name the *provider*. The moment one named
-     * `token-harness`, the control CLI would be spawned once per intercepted tool call and the
-     * attribution claim above would be false — so this reads the real planned operations rather
-     * than trusting a declaration.
+     * Asserted over what a plan actually writes, not over the manifests. RTK's proxy is required
+     * for per-agent database selection; any other provider must still own its own hook command.
      */
     const plan = await invoke<PlanReport>(['plan'], world({ handEditedHook: true }));
     const actions = plan.data?.actions ?? [];
     assert.ok(actions.length > 0, 'a plan with no actions could not fail this');
 
+    const written = actions.flatMap((action) => {
+      const operations = Reflect.get(action, 'operations');
+      return Array.isArray(operations)
+        ? operations.map((operation) => JSON.stringify(operation))
+        : [];
+    });
+    const trackingProxyWrites = written.filter((operation) => operation.includes('token-harness'));
+    assert.ok(trackingProxyWrites.length > 0, 'RTK tracking must use the attribution proxy');
+    for (const operation of trackingProxyWrites) {
+      assert.match(operation, /token-harness __internal-rtk-hook (?:claude|codex)/);
+    }
     for (const action of actions) {
-      const written = JSON.stringify(Reflect.get(action, 'operations') ?? null);
-      assert.doesNotMatch(written, /token-harness/, `${action.kind} writes the control CLI`);
+      const operations = Reflect.get(action, 'operations');
+      if (!Array.isArray(operations)) continue;
+      for (const operation of operations) {
+        const value = JSON.stringify(operation);
+        if (value.includes('token-harness')) {
+          assert.match(value, /token-harness __internal-rtk-hook (?:claude|codex)/);
+        }
+      }
     }
     assert.equal(
       listProviderAdapters().some((adapter) => adapter.identifiesCommand('token-harness hook')),

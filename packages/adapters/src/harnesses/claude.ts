@@ -108,10 +108,12 @@ const MANIFEST: HarnessManifest = {
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 interface HookEntry {
+  eventName: string;
   matcher: string | null;
   count: number;
   /** The `command` strings on this entry, verbatim. */
   commands: string[];
+  hookCommands: NonNullable<ResolvedHarnessConfig['hookCommands']>;
 }
 
 function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
@@ -137,19 +139,32 @@ function readHooks(document: JsonValue): Map<string, HookEntry[]> {
     const list = hooks[point.eventName];
     if (!Array.isArray(list) || list.length === 0) continue;
     const entries: HookEntry[] = [];
-    for (const item of list) {
+    for (const [entryIndex, item] of list.entries()) {
       if (!isRecord(item)) continue;
       const matcher = item['matcher'];
       const inner = item['hooks'];
-      const commands = Array.isArray(inner)
-        ? inner
-            .map((hook) => (isRecord(hook) ? hook['command'] : undefined))
-            .filter((command): command is string => typeof command === 'string')
+      const hookCommands = Array.isArray(inner)
+        ? inner.flatMap((hook, hookIndex) => {
+            if (!isRecord(hook) || typeof hook['command'] !== 'string') return [];
+            const eventSegment = point.eventName.replace(/\./g, '\\.');
+            const entryPointer = `hooks.${eventSegment}.${String(entryIndex)}`;
+            return [
+              {
+                eventName: point.eventName,
+                matcher: typeof matcher === 'string' ? matcher : null,
+                command: hook['command'],
+                entryPointer,
+                commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.command`,
+              },
+            ];
+          })
         : [];
       entries.push({
+        eventName: point.eventName,
         matcher: typeof matcher === 'string' ? matcher : null,
         count: Array.isArray(inner) ? inner.length : 0,
-        commands,
+        commands: hookCommands.map((entry) => entry.command),
+        hookCommands,
       });
     }
     if (entries.length > 0) found.set(point.scopeId, entries);
@@ -172,6 +187,7 @@ async function resolveConfig(
       configuredPoints: [],
       matchers: [],
       commands: [],
+      hookCommands: [],
     };
   }
 
@@ -190,6 +206,7 @@ async function resolveConfig(
       configuredPoints: [],
       matchers: [],
       commands: [],
+      hookCommands: [],
     };
   }
 
@@ -207,6 +224,7 @@ async function resolveConfig(
     configuredPoints: [...hooks.keys()],
     matchers: [...new Set(matchers)],
     commands: [...new Set([...hooks.values()].flat().flatMap((entry) => entry.commands))],
+    hookCommands: [...hooks.values()].flat().flatMap((entry) => entry.hookCommands),
   };
 }
 
@@ -443,6 +461,7 @@ async function inspect(context: HarnessContext): Promise<HarnessInspection> {
         interceptionPoints: config.configuredPoints,
         matchers: config.matchers,
         commands: config.commands,
+        hookCommands: config.hookCommands ?? [],
       })),
     diagnostics,
   };

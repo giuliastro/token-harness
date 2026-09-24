@@ -1,35 +1,11 @@
 /**
- * RTK — PLAN §10, written against RFC 0007.
+ * RTK — PLAN §10, RFC 0005 metrics, and RFC 0007 verification.
  *
- * This is the adapter that closes the verification loop. The Phase 2.5 spike proved tier
- * 3 on Claude Code by hand: it ran one command through the Bash tool and watched RTK's
- * recorded command count move by exactly one. Everything since has been able to *declare*
- * that tier without demonstrating it, and the Claude adapter reports the canary check as
- * `not-exercised` for exactly that reason. This is what makes it a `pass`.
- *
- * ## The receipt
- *
- * `rtk gain --all --format json` returns machine-readable analytics:
- *
- * ```json
- * { "summary": { "total_commands": 2815, "total_saved": 91426, … },
- *   "daily": [ { "date": "2026-07-30", "commands": 500, "saved_tokens": 20130, … } ] }
- * ```
- *
- * PLAN §10 forbids parsing human `rtk gain` output "when JSON is available". It is
- * available, and the `--format json` flag is what this adapter uses.
- *
- * The `daily` array is what makes the receipt *dated*. A cumulative counter proves
- * interception happened at some point in the tool's history; a dated entry proves it
- * happened on a day, which is the claim RFC 0007 requires a passive receipt to be able to
- * make.
- *
- * ## What this adapter does not do
- *
- * It does not duplicate RTK's rewrite registry — PLAN §10's first constraint. It knows
- * which commands RTK intercepts only in the sense that RTK told it how many, and it never
- * decides what should have been rewritten. There is no installation plan here either:
- * that is a separate lifecycle stage, and PLAN §15 asks for one per PR when large.
+ * RTK's shared history rows contain no coding-agent identity. Token Harness therefore keeps
+ * those old rows `unknown` and routes new Claude Code and Codex command rewrites to separate
+ * RTK databases through its hook proxy. Metrics and passive verification read those databases
+ * by harness, never RTK's mixed daily aggregate. The proxy preserves RTK's own rewrite and
+ * command-safety behavior; it only selects the database used to record the command.
  */
 
 import {
@@ -47,7 +23,6 @@ import {
   type Evidence,
   type HarnessId,
   type ImportCursor,
-  type JsonValue,
   type LocalDatabaseRow,
   type MetricsStore,
   type OptimizationEvent,
@@ -73,6 +48,8 @@ const RTK = providerId('rtk');
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const OPENCODE = harnessId('opencode');
+const TRACKED_HARNESSES = [CLAUDE, CODEX] as const;
+const RTK_CODEX_HOOK_VERSION = '0.50.0';
 
 /**
  * The tested range is observation-backed. RTK 0.44.0 and 0.48.0 were exercised with real
@@ -115,7 +92,7 @@ const MANIFEST: ProviderManifest = {
       },
     },
     /**
-     * Codex, from RTK 0.49.0's published hook contract.
+     * Codex, from RTK 0.50.0's native hook contract.
      *
      * RTK exposes the same pre-execution command-rewrite model through `rtk hook codex`, with a
      * Bash matcher stored in Codex hooks.json. Token Harness writes only that reviewed hook entry;
@@ -128,7 +105,7 @@ const MANIFEST: ProviderManifest = {
       surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
         sourceReference: 'docs/spikes/rtk-codex-upstream-contract.md',
-        upstreamVersion: '0.49.0',
+        upstreamVersion: '0.50.0',
       },
     },
     {
@@ -138,7 +115,7 @@ const MANIFEST: ProviderManifest = {
       surfaces: [{ toolFamily: 'Bash', interceptionPoint: 'pre-tool-use' }],
       evidence: {
         sourceReference: 'docs/spikes/rtk-codex-upstream-contract.md',
-        upstreamVersion: '0.49.0',
+        upstreamVersion: '0.50.0',
       },
     },
     /**
@@ -200,11 +177,10 @@ const MANIFEST: ProviderManifest = {
     },
     {
       harness: CODEX,
-      // The hook-list schema was observed by the Codex adapter at 0.146.0. RTK 0.49.0 publishes
-      // the corresponding Bash/PreToolUse protocol. Verification stays config-only because RTK's
-      // aggregate analytics cannot attribute a receipt to one harness when several use RTK.
+      // RTK added its native Codex PreToolUse rewriter in 0.50.0. Earlier releases only wrote
+      // prompt instructions; a hooks.json entry alone did not activate it.
       testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
-      verificationTier: 'config-only',
+      verificationTier: 'canary',
     },
     {
       harness: OPENCODE,
@@ -213,22 +189,7 @@ const MANIFEST: ProviderManifest = {
       // platform limitation below rather than a narrower range, because it is a property of the
       // host application and not of the OpenCode version — the same 1.18.x plugin loads in both.
       testedVersions: { minimum: '1.18.11', maximum: '1.18.14' },
-      /**
-       * `config-only`, even though spike 9.1 watched a canary-grade interception here — the counter
-       * moved by exactly the number of shell calls the OpenCode session made.
-       *
-       * A tier is what `verify` can prove on the user's machine, not what a spike proved once on a
-       * clean one. RTK's receipt is its history database, and the `commands` table carries
-       * `timestamp`, token counts, `exec_time_ms`, and `project_path` — no harness column, and no
-       * column standing in for one. The spike could attribute those rows because it ran OpenCode
-       * alone in a scratch directory and read the counter either side; `verify` runs where both
-       * harnesses are wired to the same binary and writing into the same table, and cannot say
-       * which of them a row came from.
-       *
-       * Declaring `canary` here would credit RTK's whole command history to whichever harness the
-       * reader happened to be looking at. Claude Code keeps `canary` because its own hook receipt
-       * is per-harness; this one is provider-wide, and RFC 0007 asks the question per harness.
-       */
+      /** OpenCode still writes to RTK's shared database and has no managed attribution wrapper. */
       verificationTier: 'config-only',
     },
   ],
@@ -269,12 +230,16 @@ const MANIFEST: ProviderManifest = {
     mode: 'native',
     // Resolved from the platform data directory rather than stated absolutely, because the
     // location differs per platform; `rtkDatabasePath` is the single derivation.
-    locations: ['<user data directory>/rtk/history.db'],
+    locations: [
+      '<user data directory>/rtk/history.db',
+      '<Token Harness state directory>/rtk-claude.db',
+      '<Token Harness state directory>/rtk-codex.db',
+    ],
   },
   delegatedInstallReviews: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.48.0' };
+const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.50.0' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */
@@ -294,59 +259,6 @@ const HOOK_COMMAND_PATTERN = /(^|[\\/\s"'])rtk(\.exe)?([\s"']|$)/i;
  * `.config/opencode/plugins/rtk.ts`; the installer refuses to write it anywhere project-local.
  */
 const PLUGIN_MODULE_PATTERN = /(^|[\\/])rtk\.(ts|js|mjs|cjs|mts|cts)$/i;
-
-function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-interface Analytics {
-  totalCommands: number;
-  totalSaved: number;
-  /** Most recent day carrying at least one command, or null when there is none. */
-  latestDay: { date: string; commands: number } | null;
-}
-
-/**
- * Reads `rtk gain --all --format json`.
- *
- * Returns null when the document is not the shape this build understands, rather than
- * guessing at a partial read: an analytics document from a future RTK could carry the same
- * keys with different meanings, and a savings figure derived from a guess is exactly what
- * RFC 0005 exists to prevent.
- */
-export function parseRtkAnalytics(text: string): Analytics | null {
-  let document: JsonValue;
-  try {
-    document = JSON.parse(text) as JsonValue;
-  } catch {
-    return null;
-  }
-  if (!isRecord(document)) return null;
-
-  const summary = document['summary'];
-  if (!isRecord(summary)) return null;
-  const totalCommands = summary['total_commands'];
-  const totalSaved = summary['total_saved'];
-  if (typeof totalCommands !== 'number') return null;
-
-  const daily = document['daily'];
-  let latestDay: Analytics['latestDay'] = null;
-  if (Array.isArray(daily)) {
-    for (const entry of daily) {
-      if (!isRecord(entry)) continue;
-      const date = entry['date'];
-      const commands = entry['commands'];
-      if (typeof date !== 'string' || typeof commands !== 'number' || commands <= 0) continue;
-      if (latestDay === null || date > latestDay.date) latestDay = { date, commands };
-    }
-  }
-
-  return {
-    totalCommands,
-    totalSaved: typeof totalSaved === 'number' ? totalSaved : 0,
-    latestDay,
-  };
-}
 
 /** Harnesses whose configuration names RTK, as a hook command or as an installed plugin module. */
 export function harnessesWiredToRtk(
@@ -405,41 +317,52 @@ async function readVersion(context: ProviderContext): Promise<{
   };
 }
 
-async function readAnalytics(
+const HARNESS_ACTIVITY_QUERY =
+  'SELECT COUNT(*) AS operation_count, MAX(timestamp) AS latest_timestamp FROM commands';
+
+interface RtkHarnessActivity {
+  count: number;
+  latestTimestamp: string | null;
+  failure: string | null;
+}
+
+async function readHarnessActivity(
   context: ProviderContext,
-): Promise<{ analytics: Analytics | null; evidence: Evidence[] }> {
-  const outcome = await context.runner.run({
-    executable: 'rtk',
-    args: ['gain', '--all', '--format', 'json'],
-    cwd: context.projectRoot,
-    timeoutMs: 30_000,
+  harness: HarnessId,
+): Promise<RtkHarnessActivity> {
+  if (context.localDatabase === null) {
+    return { count: 0, latestTimestamp: null, failure: 'database reader unavailable' };
+  }
+  const path = rtkHarnessDatabasePath(context, harness);
+  const result = await context.localDatabase.query({
+    path,
+    sql: HARNESS_ACTIVITY_QUERY,
+    parameters: [],
   });
-  if (outcome.failure !== null || outcome.exitCode !== 0) {
+  if (result.failure !== null) {
     return {
-      analytics: null,
-      evidence: [
-        evidence({
-          kind: 'absence',
-          source: 'rtk gain --all --format json',
-          detail: 'analytics could not be read',
-        }),
-      ],
+      count: 0,
+      latestTimestamp: null,
+      failure: result.failure === 'not-found' ? null : result.failure,
     };
   }
-  const analytics = parseRtkAnalytics(outcome.stdout);
+  const row = result.rows[0];
   return {
-    analytics,
-    evidence: [
-      evidence({
-        kind: 'provider-doctor',
-        source: 'rtk gain --all --format json',
-        detail:
-          analytics === null
-            ? 'analytics document was not in a shape this build understands'
-            : `${String(analytics.totalCommands)} operations recorded`,
-      }),
-    ],
+    count: row === undefined ? 0 : (numberAt(row, 'operation_count') ?? 0),
+    latestTimestamp: row === undefined ? null : stringAt(row, 'latest_timestamp'),
+    failure: null,
   };
+}
+
+function hasAttributionHook(context: ProviderContext, harness: HarnessId): boolean {
+  const command = new RegExp(
+    `^token-harness __internal-rtk-hook ${harness}(?: --restore-rtk)?$`,
+    'i',
+  );
+  return context.harnessConfigs.some(
+    (config) =>
+      config.harnessId === harness && config.commands.some((entry) => command.test(entry.trim())),
+  );
 }
 
 async function detect(context: ProviderContext): Promise<ProviderDetection> {
@@ -473,6 +396,20 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     );
   }
 
+  const codexHookSupported = version.version === RTK_CODEX_HOOK_VERSION;
+  const codexConfiguredWithoutHookSupport = configured.includes(CODEX) && !codexHookSupported;
+  if (codexConfiguredWithoutHookSupport) {
+    warnings.push(
+      diagnostic({
+        severity: 'error',
+        code: 'rtk-codex-hook-unsupported',
+        subject: CODEX,
+        message: `RTK ${String(version.version)} does not provide the Codex hook; its configuration entry cannot capture commands`,
+        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION}, then refresh and apply the attribution plan`,
+      }),
+    );
+  }
+
   // RFC 0002 §Detection: never infer from a configuration string alone. A harness wired to
   // rtk with no runnable rtk is `broken` — the integration is present and cannot work.
   const state: ProviderState =
@@ -480,11 +417,13 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
       ? configured.length > 0
         ? 'broken'
         : 'absent'
-      : configured.length > 0
-        ? 'configured'
-        : 'installed';
+      : codexConfiguredWithoutHookSupport && configured.length === 1
+        ? 'broken'
+        : configured.length > 0
+          ? 'configured'
+          : 'installed';
 
-  if (state === 'broken') {
+  if (state === 'broken' && version.version === null) {
     warnings.push(
       diagnostic({
         severity: 'error',
@@ -532,21 +471,14 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
      * its integration is a plugin module installed by `rtk init -g --opencode`, which this build
      * deliberately does not delegate without a reviewed write set.
      */
-    assignableHarnesses: [CLAUDE, CODEX],
+    assignableHarnesses:
+      version.version === null || codexHookSupported ? [CLAUDE, CODEX] : [CLAUDE],
     evidence: evidenceItems,
     warnings,
   };
 }
 
-/**
- * Verification, passive.
- *
- * The canary check is the point of this adapter. RTK records each intercepted command in
- * its own analytics, dated by day, so an operation the harness performed anyway leaves a
- * receipt — and reading it costs nothing. RFC 0007 §Active and passive canaries makes that
- * the default for a routine `verify`; the active form costs a model call and is never run
- * by a read-only command.
- */
+/** Verification uses only isolated per-harness command history; shared history proves no agent. */
 async function verify(context: ProviderContext): Promise<ProviderVerification> {
   const checks: VerificationCheck[] = [];
   const diagnostics: Diagnostic[] = [];
@@ -562,65 +494,151 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   });
 
   const configured = harnessesWiredToRtk(context.harnessConfigs);
+  const configuredSupported = configured.filter(
+    (harness) =>
+      harness === CLAUDE || (harness === CODEX && version.version === RTK_CODEX_HOOK_VERSION),
+  );
   checks.push({
     id: 'hook-registered',
-    status: configured.length > 0 ? 'pass' : 'not-exercised',
+    status:
+      configuredSupported.length > 0 ? 'pass' : configured.length > 0 ? 'fail' : 'not-exercised',
     summary:
-      configured.length > 0
-        ? `wired to ${configured.join(', ')}`
-        : 'no harness configuration names rtk',
-    achievedTier: configured.length > 0 ? 'config-only' : null,
+      configuredSupported.length > 0
+        ? `wired to ${configuredSupported.join(', ')}`
+        : configured.length > 0
+          ? `RTK ${String(version.version)} cannot run its Codex hook`
+          : 'no harness configuration names rtk',
+    achievedTier: configuredSupported.length > 0 ? 'config-only' : null,
     evidence: [],
-    remediation: null,
+    remediation:
+      configured.length > 0 && configuredSupported.length === 0
+        ? `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION} for Codex hook support`
+        : null,
   });
 
-  const { analytics, evidence: analyticsEvidence } = await readAnalytics(context);
   let receipt: PassiveReceipt | null = null;
+  let bestReceiptTime = Number.NEGATIVE_INFINITY;
 
-  if (analytics === null) {
+  for (const harness of TRACKED_HARNESSES) {
+    if (!configured.includes(harness)) continue;
+    const label = harness === CLAUDE ? 'Claude Code' : 'Codex';
+    const supported = harness !== CODEX || version.version === RTK_CODEX_HOOK_VERSION;
+    if (!supported) {
+      checks.push({
+        id: `rtk-attribution-${harness}`,
+        status: 'fail',
+        summary: `RTK ${String(version.version)} does not provide an active ${label} hook`,
+        achievedTier: null,
+        evidence: [],
+        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION}, then refresh and apply the tracking update`,
+      });
+      continue;
+    }
+
+    if (!hasAttributionHook(context, harness)) {
+      checks.push({
+        id: `rtk-attribution-${harness}`,
+        status: 'not-exercised',
+        summary: `${label} uses RTK's shared history, which cannot be assigned to one agent`,
+        achievedTier: null,
+        evidence: [],
+        remediation: 'Apply the reviewed per-agent tracking update in Token Harness',
+      });
+      continue;
+    }
+
+    const activity = await readHarnessActivity(context, harness);
+    const path = rtkHarnessDatabasePath(context, harness);
+    if (activity.failure !== null) {
+      checks.push({
+        id: `rtk-attribution-${harness}`,
+        status: 'fail',
+        summary: `${label}'s RTK-specific history could not be read (${activity.failure})`,
+        achievedTier: null,
+        evidence: [
+          evidence({
+            kind: 'absence',
+            source: 'RTK per-agent history',
+            detail: activity.failure,
+            path,
+          }),
+        ],
+        remediation: 'Check that Token Harness can read its private data directory',
+      });
+      continue;
+    }
+    if (activity.count === 0 || activity.latestTimestamp === null) {
+      checks.push({
+        id: `rtk-attribution-${harness}`,
+        status: 'not-exercised',
+        summary: `no RTK command has been recorded for ${label} since per-agent tracking was enabled`,
+        achievedTier: null,
+        evidence: [
+          evidence({
+            kind: 'absence',
+            source: 'RTK per-agent history',
+            detail: 'No commands recorded since per-agent tracking was enabled',
+            path,
+          }),
+        ],
+        remediation: `Run a shell command through ${label}, then refresh Results`,
+      });
+      continue;
+    }
+
+    const instant = new Date(activity.latestTimestamp);
+    if (Number.isNaN(instant.getTime())) {
+      checks.push({
+        id: `rtk-attribution-${harness}`,
+        status: 'fail',
+        summary: `${label}'s RTK history contains an invalid timestamp`,
+        achievedTier: null,
+        evidence: [
+          evidence({
+            kind: 'absence',
+            source: 'RTK per-agent history',
+            detail: 'RTK history timestamp could not be parsed',
+            path,
+          }),
+        ],
+        remediation: 'Check whether RTK changed its history schema',
+      });
+      continue;
+    }
+
+    const observedAt = instant.toISOString();
     checks.push({
-      id: 'analytics-readable',
-      status: 'fail',
-      summary: 'rtk analytics could not be read as JSON',
-      achievedTier: null,
-      evidence: analyticsEvidence,
-      remediation: 'Check that `rtk gain --all --format json` succeeds',
-    });
-  } else if (analytics.latestDay === null) {
-    // RFC 0007: a passive canary with no observed operation is not a pass. Nothing is
-    // wrong; nothing has happened yet.
-    checks.push({
-      id: 'canary-intercepted',
-      status: 'not-exercised',
-      summary: 'rtk has recorded no intercepted command yet',
-      achievedTier: null,
-      evidence: analyticsEvidence,
-      remediation: 'Run a command through the harness, then verify again',
-    });
-  } else {
-    receipt = {
-      observedAt: analytics.latestDay.date,
-      operations: analytics.latestDay.commands,
-      source: 'rtk gain --all --format json',
-    };
-    checks.push({
-      id: 'canary-intercepted',
+      id: `rtk-attribution-${harness}`,
       status: 'pass',
-      summary: `${String(analytics.latestDay.commands)} commands intercepted on ${analytics.latestDay.date}`,
-      // The tier the spike demonstrated by hand, now read from the provider's own record.
+      summary: `${String(activity.count)} RTK commands recorded for ${label}`,
       achievedTier: 'canary',
-      evidence: analyticsEvidence,
+      evidence: [
+        evidence({
+          kind: 'provider-doctor',
+          source: 'RTK per-agent history',
+          path,
+          detail: `${String(activity.count)} operations; latest ${observedAt}`,
+        }),
+      ],
       remediation: null,
     });
+    const observedTime = instant.getTime();
+    if (observedTime > bestReceiptTime) {
+      bestReceiptTime = observedTime;
+      receipt = {
+        observedAt,
+        operations: activity.count,
+        source: `RTK per-agent history (${harness})`,
+        harnessId: harness,
+      };
+    }
 
-    // RFC 0007: the receipt states *when*. A stale one is not a failure, and saying so
-    // out loud is the difference between "working" and "worked at some point".
-    const ageDays = receiptAgeInDays(analytics.latestDay.date, context);
+    const ageDays = receiptAgeInDays(observedAt.slice(0, 10), context);
     if (ageDays !== null && ageDays > STALE_RECEIPT_DAYS) {
       checks.push({
-        id: 'receipt-freshness',
+        id: `receipt-freshness-${harness}`,
         status: 'info',
-        summary: `the most recent intercepted command was ${String(ageDays)} days ago`,
+        summary: `the latest ${label} command was ${String(ageDays)} days ago`,
         achievedTier: null,
         evidence: [],
         remediation: null,
@@ -690,8 +708,9 @@ function receiptAgeInDays(date: string, context: ProviderContext): number | null
  * `outcome.changed` precisely so coverage and bypass metrics stay correct, and only the
  * per-operation source can set it.
  *
- * The CLI analytics keep the job they already had: the passive verification receipt above.
- * They are not turned into events.
+ * The daily aggregate is not used for savings or verification because it does not identify
+ * which harness produced a command. Only the separated history databases can provide an
+ * agent-attributed receipt.
  *
  * ### What is deliberately not read
  *
@@ -737,6 +756,14 @@ export function rtkDatabasePath(context: ProviderContext): string {
   return context.fs.join(dataRoot, 'rtk', 'history.db');
 }
 
+/** The isolated RTK history file written by Token Harness's attribution hook. */
+export function rtkHarnessDatabasePath(context: ProviderContext, harness: HarnessId): string {
+  if (harness !== 'claude' && harness !== 'codex') {
+    throw new Error(`RTK per-agent history is not supported for ${harness}`);
+  }
+  return context.fs.join(context.paths.state, `rtk-${harness}.db`);
+}
+
 /**
  * The cursor's `fileIdentity` for this source.
  *
@@ -768,7 +795,11 @@ function cursorGeneration(low: number | null): string {
  * filtering". `tokenizer: 'rtk'` records that the counts come from RTK's tokenizer rather
  * than the model provider's, so a reader can judge the figure instead of trusting it.
  */
-function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationEvent | null {
+function toEvent(
+  row: LocalDatabaseRow,
+  context: ProviderContext,
+  attributedHarness: HarnessId | 'unknown',
+): OptimizationEvent | null {
   const id = numberAt(row, 'id');
   const timestamp = stringAt(row, 'timestamp');
   const before = numberAt(row, 'input_tokens');
@@ -785,7 +816,12 @@ function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationE
     schemaVersion: OPTIMIZATION_EVENT_SCHEMA_VERSION,
     // Native, not synthesized: RFC 0005 prefers the upstream identifier when there is one,
     // and this one is a primary key.
-    eventId: `rtk-history-${String(id)}`,
+    // Preserve legacy shared event identities so an upgrade does not duplicate already imported
+    // rows. Isolated per-agent databases can reuse SQLite ids, so their identities are namespaced.
+    eventId:
+      attributedHarness === 'unknown'
+        ? `rtk-history-${String(id)}`
+        : `rtk-history-${attributedHarness}-${String(id)}`,
     timestamp: instant.toISOString(),
     provider: { id: RTK, version: null },
     context: {
@@ -799,9 +835,12 @@ function toEvent(row: LocalDatabaseRow, context: ProviderContext): OptimizationE
       // The hook that wires it is per harness, but a *row* carries no harness, and reading
       // one off the current configuration would attribute months of history to today's
       // wiring.
-      harnessId: 'unknown',
+      harnessId: attributedHarness,
       sessionId: null,
-      operationId: `rtk-history-${String(id)}`,
+      operationId:
+        attributedHarness === 'unknown'
+          ? `rtk-history-${String(id)}`
+          : `rtk-history-${attributedHarness}-${String(id)}`,
       pipelineId: null,
       pipelineOrder: null,
       toolFamily: null,
@@ -867,21 +906,7 @@ async function collectMetrics(
   context: ProviderContext,
   store: MetricsStore,
 ): Promise<MetricsImport> {
-  const diagnostics: Diagnostic[] = [];
-  const path = rtkDatabasePath(context);
-
-  const unavailable = (detail: string, remediation: string | null): MetricsImport => {
-    diagnostics.push(
-      diagnostic({
-        // Not a warning. RFC 0005: running in a degraded mode "is a supported steady state,
-        // not a warning". What would be a defect is presenting a degraded figure as exact.
-        severity: 'info',
-        code: 'provider-metrics-unavailable',
-        message: detail,
-        path,
-        remediation,
-      }),
-    );
+  if (context.localDatabase === null) {
     return {
       providerId: RTK,
       mode: 'unavailable',
@@ -889,29 +914,111 @@ async function collectMetrics(
       imported: 0,
       skipped: 0,
       cursor: null,
-      diagnostics,
+      diagnostics: [
+        diagnostic({
+          severity: 'info',
+          code: 'provider-metrics-unavailable',
+          message: 'this host supplied no local-database reader, so RTK metrics were not imported',
+          path: rtkDatabasePath(context),
+          remediation: null,
+        }),
+      ],
     };
-  };
+  }
 
-  if (context.localDatabase === null) {
-    return unavailable(
-      'this host supplied no local-database reader, so RTK metrics were not imported',
-      null,
+  const sources = [
+    { path: rtkDatabasePath(context), harnessId: 'unknown' as const },
+    ...TRACKED_HARNESSES.map((harness) => ({
+      path: rtkHarnessDatabasePath(context, harness),
+      harnessId: harness,
+    })),
+  ];
+  let imported = 0;
+  let skipped = 0;
+  let cursor: ImportCursor | null = null;
+  let cursorSourceCount = 0;
+  let readableSources = 0;
+  const diagnostics: Diagnostic[] = [];
+
+  // Sequential appends keep each source's cursor and event batch ordered in the shared store.
+  for (const source of sources) {
+    const result = await importHistorySource(context, store, source.path, source.harnessId);
+    imported += result.imported;
+    skipped += result.skipped;
+    readableSources += result.readable ? 1 : 0;
+    if (result.readable && result.cursor !== null) {
+      cursorSourceCount += 1;
+      cursor = cursorSourceCount === 1 ? result.cursor : null;
+    }
+    diagnostics.push(...result.diagnostics);
+  }
+
+  if (readableSources === 0 && diagnostics.length === 0) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'provider-metrics-unavailable',
+        message: 'RTK has not recorded command history for any harness on this machine yet',
+        path: rtkDatabasePath(context),
+        remediation: null,
+      }),
     );
   }
 
-  const generation = await context.localDatabase.query({
-    path,
-    sql: GENERATION_QUERY,
-    parameters: [],
+  return {
+    providerId: RTK,
+    mode: readableSources > 0 ? 'native' : 'unavailable',
+    source: readableSources > 0 ? SOURCE_LABEL : null,
+    imported,
+    skipped,
+    // This result can represent the single cursor in a legacy-only import. Once multiple
+    // independent databases contribute, their cursors are stored separately and there is no
+    // honest aggregate cursor to return in this singular compatibility field.
+    cursor: cursorSourceCount === 1 ? cursor : null,
+    diagnostics,
+  };
+}
+
+interface SourceImportResult {
+  readable: boolean;
+  imported: number;
+  skipped: number;
+  cursor: ImportCursor | null;
+  diagnostics: Diagnostic[];
+}
+
+async function importHistorySource(
+  context: ProviderContext,
+  store: MetricsStore,
+  path: string,
+  attributedHarness: HarnessId | 'unknown',
+): Promise<SourceImportResult> {
+  const unavailable = (message: string, remediation: string | null): SourceImportResult => ({
+    readable: false,
+    imported: 0,
+    skipped: 0,
+    cursor: null,
+    diagnostics:
+      message.length === 0
+        ? []
+        : [
+            diagnostic({
+              severity: 'info',
+              code: 'provider-metrics-unavailable',
+              message,
+              path,
+              remediation,
+            }),
+          ],
   });
+  const localDatabase = context.localDatabase;
+  if (localDatabase === null) return unavailable('', null);
+
+  const generation = await localDatabase.query({ path, sql: GENERATION_QUERY, parameters: [] });
   if (generation.failure !== null) {
-    const message =
-      generation.failure === 'not-found'
-        ? 'RTK has recorded no command history on this machine yet'
-        : `RTK's command history could not be read (${generation.failure})`;
+    if (generation.failure === 'not-found') return unavailable('', null);
     return unavailable(
-      message,
+      `RTK's ${attributedHarness} command history could not be read (${generation.failure})`,
       generation.failure === 'driver-unavailable'
         ? 'Run Token Harness on a Node build that provides node:sqlite'
         : null,
@@ -922,16 +1029,11 @@ async function collectMetrics(
   const low = first === undefined ? null : numberAt(first, 'low');
   const high = first === undefined ? null : numberAt(first, 'high');
   const identity = cursorGeneration(low);
-
   const stored = await store.readCursor(RTK, path);
   let from = 0;
+  const diagnostics: Diagnostic[] = [];
   if (stored !== null && stored.highWaterMark !== null) {
     const previous = Number(stored.highWaterMark);
-    // A generation change means the table was reset, so the stored mark refers to rows that
-    // no longer exist. Restarting from zero is correct and safe: the event identity is the
-    // native row id, so anything already stored keeps its identity.
-    // `high < previous` catches a reset that happened to reproduce the same `MIN(id)`: rows
-    // this cursor claims are gone, so the mark refers to nothing.
     const sameGeneration = stored.fileIdentity === identity && (high === null || high >= previous);
     if (sameGeneration && Number.isFinite(previous)) {
       from = previous;
@@ -940,8 +1042,7 @@ async function collectMetrics(
         diagnostic({
           severity: 'info',
           code: 'provider-metrics-source-reset',
-          message:
-            "RTK's command history was reset since the last import, so it is being read from the start",
+          message: `RTK's ${attributedHarness} command history was reset and is being read from the start`,
           path,
           remediation: null,
         }),
@@ -949,27 +1050,20 @@ async function collectMetrics(
     }
   }
 
-  // Nothing new. Reported as a successful native import of zero rather than as an absence:
-  // the source is there and readable, and `status` should not show it as unavailable.
   if (high !== null && from >= high) {
-    return {
-      providerId: RTK,
-      mode: 'native',
-      source: SOURCE_LABEL,
-      imported: 0,
-      skipped: 0,
-      cursor: stored,
-      diagnostics,
-    };
+    return { readable: true, imported: 0, skipped: 0, cursor: stored, diagnostics };
   }
 
-  const batch = await context.localDatabase.query({
+  const batch = await localDatabase.query({
     path,
     sql: HISTORY_QUERY,
     parameters: [from, IMPORT_BATCH_SIZE],
   });
   if (batch.failure !== null) {
-    return unavailable(`RTK's command history could not be read (${batch.failure})`, null);
+    return unavailable(
+      `RTK's ${attributedHarness} command history could not be read (${batch.failure})`,
+      null,
+    );
   }
 
   const events: OptimizationEvent[] = [];
@@ -978,7 +1072,7 @@ async function collectMetrics(
   for (const row of batch.rows) {
     const id = numberAt(row, 'id');
     if (id !== null && id > highest) highest = id;
-    const event = toEvent(row, context);
+    const event = toEvent(row, context, attributedHarness);
     if (event === null) {
       skipped += 1;
       continue;
@@ -989,9 +1083,6 @@ async function collectMetrics(
   if (skipped > 0) {
     diagnostics.push(
       diagnostic({
-        // A warning, unlike the degraded mode above: a row this build cannot read means the
-        // upstream schema moved, and a savings total quietly missing rows is the failure
-        // RFC 0005 exists to prevent.
         severity: 'warning',
         code: 'provider-metrics-rows-skipped',
         message: `${String(skipped)} of ${String(batch.rows.length)} RTK history rows were not in a shape this build understands`,
@@ -1001,22 +1092,18 @@ async function collectMetrics(
     );
   }
 
-  // The append happens before the cursor moves. The other order would advance past records
-  // that were never stored if the write failed, and nothing afterwards could tell.
   await store.appendEvents(events);
-
-  const cursor: ImportCursor = {
+  const nextCursor: ImportCursor = {
     providerId: RTK,
     sourceId: path,
     absolutePath: path,
     fileIdentity: identity,
-    // Meaningless for this source; the RFC 0005 amendment says which member is authoritative.
     byteOffset: 0,
     lastLineDigest: null,
     highWaterMark: String(highest),
     updatedAt: context.now(),
   };
-  await store.writeCursor(cursor);
+  await store.writeCursor(nextCursor);
 
   if (batch.rows.length === IMPORT_BATCH_SIZE) {
     diagnostics.push(
@@ -1031,17 +1118,15 @@ async function collectMetrics(
   }
 
   return {
-    providerId: RTK,
-    mode: 'native',
-    source: SOURCE_LABEL,
+    readable: true,
     imported: events.length,
     skipped,
-    cursor,
+    cursor: nextCursor,
     diagnostics,
   };
 }
 
-const SOURCE_LABEL = 'rtk history.db (commands)';
+const SOURCE_LABEL = 'RTK command history databases';
 
 /**
  * Recognises RTK's own invocation, whether it arrives as a hook command or as the path of the
@@ -1053,7 +1138,11 @@ const SOURCE_LABEL = 'rtk history.db (commands)';
  * was rewriting every shell call on it.
  */
 function identifiesCommand(command: string): boolean {
-  return HOOK_COMMAND_PATTERN.test(command) || PLUGIN_MODULE_PATTERN.test(command);
+  return (
+    HOOK_COMMAND_PATTERN.test(command) ||
+    PLUGIN_MODULE_PATTERN.test(command) ||
+    /(^|[\\/\s"'])token-harness(?:\.cmd|\.exe)?\s+__internal-rtk-hook(?:\s|$)/i.test(command)
+  );
 }
 
 /**
@@ -1065,12 +1154,27 @@ function identifiesCommand(command: string): boolean {
  */
 async function plan(context: ProviderContext, request: ProviderPlanRequest): Promise<ProviderPlan> {
   const version = await readVersion(context);
+  let hookProxyAvailable = false;
+  if (request.desiredState === 'configured' && request.ownership.length > 0) {
+    const proxy = await context.runner.run({
+      executable: 'token-harness',
+      args: ['__internal-rtk-hook', 'claude', '--check'],
+      cwd: context.projectRoot,
+      timeoutMs: 5_000,
+      maxOutputBytes: 4_096,
+    });
+    hookProxyAvailable =
+      proxy.failure === null &&
+      proxy.exitCode === 0 &&
+      proxy.stdout.trim() === 'token-harness-rtk-hook-proxy-v1';
+  }
   return buildRtkPlan({
     context,
     request,
     installed: version.version !== null,
     identifiesCommand,
     installationChannels: MANIFEST.installationChannels,
+    hookProxyAvailable,
   });
 }
 

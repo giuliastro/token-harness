@@ -269,4 +269,19 @@ export interface HarnessConfigSummary {
   matchers: string[];
   /** Hook command strings, verbatim. Never parsed here. */
   commands: string[];
+  /**
+   * Exact command locations within hook entries, when the harness adapter can identify them.
+   * Providers use these only for a reviewed, digest-guarded migration of one known command.
+   */
+  hookCommands?: HarnessHookCommandSummary[];
+}
+
+export interface HarnessHookCommandSummary {
+  eventName: string;
+  matcher: string | null;
+  command: string;
+  /** Dotted JSON pointer understood by `merge-json`, e.g. `hooks.PreToolUse.0.hooks.0.command`. */
+  commandPointer: string;
+  /** Dotted JSON pointer to the containing hook entry. */
+  entryPointer: string;
 }

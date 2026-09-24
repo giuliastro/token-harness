@@ -32,6 +32,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
 it('checks updates on demand and applies only after the returned approval ticket', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
+  let applicationVersion = '0.1.17';
   const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
@@ -76,6 +77,14 @@ it('checks updates on demand and applies only after the returned approval ticket
         pin: null,
       },
     ],
+    application: {
+      applicationId: 'token-harness',
+      installed: applicationVersion,
+      available: '0.1.18',
+      channel: 'npm',
+      verdict: applicationVersion === '0.1.17' ? 'upgradable' : 'current',
+      ...(confirmed && applicationVersion === '0.1.18' ? { updated: true } : {}),
+    },
     network: ['crates.io'],
     execution: confirmed
       ? {
@@ -89,6 +98,12 @@ it('checks updates on demand and applies only after the returned approval ticket
               kind: 'provider-update',
               status: 'applied',
               path: '/tools/rtk',
+            },
+            {
+              actionId: 'token-harness-update',
+              kind: 'package-manager-install',
+              status: 'applied',
+              path: null,
             },
           ],
           unrestored: [],
@@ -110,8 +125,11 @@ it('checks updates on demand and applies only after the returned approval ticket
     if (command === 'doctor') return envelope(command, doctor() as T);
     if (command === 'update') {
       const confirmed = args.includes('--yes');
+      if (confirmed) {
+        providerVersion = '0.45.0';
+        applicationVersion = '0.1.18';
+      }
       const report = update(confirmed);
-      if (confirmed) providerVersion = '0.45.0';
       return envelope(command, report as T);
     }
     return envelope(command, null as T);
@@ -156,11 +174,15 @@ it('checks updates on demand and applies only after the returned approval ticket
       ok: boolean;
       ticket?: string | null;
       stack?: GuideOverview['stack'];
+      messages: string[];
     };
     assert.equal(result.ok, true);
     assert.equal(result.ticket, 'update-ticket');
     assert.equal(result.stack?.components[0]?.update, 'available');
     assert.equal(result.stack?.components[0]?.updateAvailableVersion, '0.45.0');
+    assert.ok(
+      result.messages.some((message) => message.includes('Token Harness: 0.1.17 → 0.1.18')),
+    );
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
       [['update']],
@@ -181,10 +203,12 @@ it('checks updates on demand and applies only after the returned approval ticket
       ok: boolean;
       title: string;
       appliedPlans: number;
+      messages: string[];
     };
     assert.equal(appliedResult.ok, true);
-    assert.equal(appliedResult.title, 'Optimizer updated');
-    assert.equal(appliedResult.appliedPlans, 1);
+    assert.equal(appliedResult.title, 'Token Harness updated');
+    assert.equal(appliedResult.appliedPlans, 2);
+    assert.ok(appliedResult.messages.some((message) => message.includes('Restart this app')));
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
       [['update'], ['update'], ['update', '--yes']],

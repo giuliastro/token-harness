@@ -6,7 +6,7 @@ import {
 } from '@token-harness/core';
 
 import type { PassiveReceipt, ProviderContext, ProviderVerification } from './contract.js';
-import { metricsLocations } from './harnesstrim.js';
+import { harnessesWiredToHarnessTrim, metricsLocations } from './harnesstrim.js';
 
 const HARNESSTRIM = providerId('harnesstrim');
 
@@ -110,6 +110,7 @@ function scopeCanaryCheck(
   input: {
     harnessId: HarnessId;
     configured: boolean;
+    runtimeConfigured: boolean;
     configuredHarnesses: readonly HarnessId[];
     receipt: PassiveReceipt | null;
     providerHasAttributableReceipt: boolean;
@@ -133,6 +134,9 @@ function scopeCanaryCheck(
         status: 'not-exercised',
         summary: `no telemetry receipt attributed to ${input.harnessId} yet`,
         achievedTier: null,
+        remediation: input.runtimeConfigured
+          ? 'Enable telemetry on this runtime integration and use it on an output it can reduce.'
+          : 'Skills or instructions alone do not write reduction telemetry; a compatible measurement path is required.',
       };
     }
     return {
@@ -158,6 +162,38 @@ function scopeCanaryCheck(
   return check;
 }
 
+function scopeIntegrationCheck(
+  check: VerificationCheck,
+  input: { harnessId: HarnessId; configured: boolean; runtimeConfigured: boolean },
+): VerificationCheck {
+  if (check.id !== 'integration-configured') return check;
+  if (!input.configured) {
+    return {
+      ...check,
+      status: 'not-exercised',
+      summary: `no HarnessTrim integration is configured for ${input.harnessId}`,
+      achievedTier: null,
+      remediation: 'Set up a compatible HarnessTrim measurement path for this coding agent.',
+    };
+  }
+  if (!input.runtimeConfigured) {
+    return {
+      ...check,
+      status: 'info',
+      summary: `HarnessTrim skills or instructions were found for ${input.harnessId}, but no runtime reduction hook or plugin is configured`,
+      achievedTier: null,
+      remediation: 'Skills provide guidance; they do not prove an output reduction was recorded.',
+    };
+  }
+  return {
+    ...check,
+    status: 'pass',
+    summary: `runtime HarnessTrim integration configured for ${input.harnessId}`,
+    achievedTier: 'config-only',
+    remediation: null,
+  };
+}
+
 /**
  * Project one provider-wide verification onto one exact provider × harness integration.
  *
@@ -165,8 +201,9 @@ function scopeCanaryCheck(
  * Reusing the same passive receipt on every row overclaims evidence whenever a provider serves more
  * than one harness. This function is the conservative attribution boundary:
  *
- * - HarnessTrim can attribute receipts exactly because every TrimEvent carries `harness`;
+ * - HarnessTrim can attribute receipts exactly when a TrimEvent names the requested harness;
  * - a provider-wide receipt can be attributed by exclusion only when exactly one harness is wired;
+ * - a skills-only setup is not a runtime hook and cannot raise verification above provider presence;
  * - otherwise the provider may still be healthy/configured, but its runtime receipt is unavailable
  *   as evidence for any exact harness row.
  *
@@ -180,6 +217,9 @@ export async function scopeProviderVerificationToHarness(
 ): Promise<ProviderVerification> {
   const configured = configuredHarnesses.includes(harnessId);
   const harnessTrim = verification.providerId === HARNESSTRIM;
+  const runtimeConfigured = harnessTrim
+    ? harnessesWiredToHarnessTrim(context.harnessConfigs).includes(harnessId)
+    : configured;
   const attributableByExclusion =
     configured && configuredHarnesses.length === 1 && configuredHarnesses[0] === harnessId;
 
@@ -193,13 +233,20 @@ export async function scopeProviderVerificationToHarness(
   const providerHasAttributableReceipt = harnessTrim || attributableByExclusion;
 
   const checks = verification.checks.map((check) =>
-    scopeCanaryCheck(scopeHookCheck(check, harnessId, configured), {
-      harnessId,
-      configured,
-      configuredHarnesses,
-      receipt,
-      providerHasAttributableReceipt,
-    }),
+    scopeCanaryCheck(
+      scopeIntegrationCheck(
+        scopeHookCheck(check, harnessId, harnessTrim ? runtimeConfigured : configured),
+        { harnessId, configured, runtimeConfigured },
+      ),
+      {
+        harnessId,
+        configured,
+        runtimeConfigured,
+        configuredHarnesses,
+        receipt,
+        providerHasAttributableReceipt,
+      },
+    ),
   );
 
   return {

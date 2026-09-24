@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -26,7 +26,7 @@ import {
   type UpdateReport,
 } from '@token-harness/core';
 import { NodeFileSystem } from '@token-harness/platform';
-import { run, type RunOptions } from 'token-harness';
+import { DEFAULT_COMMANDS, run, runUpdateCheck, type RunOptions } from 'token-harness';
 
 const FACTS: PlatformFacts = {
   os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
@@ -166,6 +166,12 @@ interface FakeChannel {
   installExitCode?: number;
   installDoesNotChangeResolvedVersion?: boolean;
   compatibilityRows?: readonly CompatibilityRow[];
+  application?: {
+    npmRoot: string;
+    packageRoot: string;
+    installedVersion: string;
+    availableVersion: string;
+  };
 }
 
 function harnesstrimCapabilityAnswer(version: string): string {
@@ -229,6 +235,7 @@ function harnesstrimCapabilityAnswer(version: string): string {
 function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunner } {
   const asked: string[] = [];
   const installed: Record<string, string> = { ...(config.installed ?? {}) };
+  let applicationVersion = config.application?.installedVersion ?? null;
   const channelStdout = config.channelStdout ?? {};
   const inventoryStdout = config.inventoryStdout ?? {};
 
@@ -249,6 +256,46 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
 
     const inventory = inventoryStdout[line];
     if (inventory !== undefined) return { ...base, exitCode: 0, stdout: inventory };
+
+    if (config.application !== undefined && request.executable === 'npm') {
+      if (request.args[0] === 'root' && request.args.includes('--global')) {
+        return { ...base, exitCode: 0, stdout: `${config.application.npmRoot}\n` };
+      }
+      if (
+        request.args[0] === 'view' &&
+        request.args[1] === 'token-harness' &&
+        request.args[2] === 'version'
+      ) {
+        return { ...base, exitCode: 0, stdout: `${config.application.availableVersion}\n` };
+      }
+      if (
+        request.args[0] === 'ls' &&
+        request.args.includes('--global') &&
+        request.args.includes('--json')
+      ) {
+        return {
+          ...base,
+          exitCode: 0,
+          stdout: JSON.stringify({
+            dependencies: {
+              'token-harness': { version: applicationVersion },
+            },
+          }),
+        };
+      }
+      if (request.args[0] === 'install' && request.args.includes('--global')) {
+        const spec = request.args.find((arg) => arg.startsWith('token-harness@'));
+        const version = spec?.slice('token-harness@'.length) ?? null;
+        if (version !== null) {
+          applicationVersion = version;
+          writeFileSync(
+            join(config.application.packageRoot, 'package.json'),
+            JSON.stringify({ name: 'token-harness', version }),
+          );
+        }
+        return { ...base, exitCode: version === null ? 1 : 0, stdout: '' };
+      }
+    }
 
     if (request.executable === 'harnesstrim' && request.args[0] === 'capabilities') {
       const raw = installed['harnesstrim'];
@@ -311,10 +358,13 @@ async function invoke(
   argv: readonly string[],
   place: World,
   config: FakeChannel,
+  applicationEntryScript?: string,
+  readOnlyUpdateCheck = false,
 ): Promise<{ exitCode: number; data: UpdateReport | null; codes: string[]; asked: string[] }> {
   const known = new Set([
     'rtk',
     'harnesstrim',
+    ...(config.application === undefined ? [] : ['npm']),
     ...Object.keys(config.channelStdout ?? {}),
     ...Object.keys(config.installed ?? {}),
   ]);
@@ -333,6 +383,7 @@ async function invoke(
     },
     platform: FACTS,
     cwd: place.project,
+    ...(applicationEntryScript === undefined ? {} : { applicationEntryScript }),
     home: place.home,
     stateRoot: place.state,
     adapters: {
@@ -369,6 +420,7 @@ async function invoke(
     metrics: null,
     compatibilityRows: config.compatibilityRows ?? null,
     now: () => '2026-08-01T09:00:00.000Z',
+    ...(readOnlyUpdateCheck ? { commands: { ...DEFAULT_COMMANDS, update: runUpdateCheck } } : {}),
   };
 
   const exitCode = await run(options);
@@ -679,5 +731,100 @@ describe('update', () => {
 
     assert.notEqual(result.data?.execution?.outcome, 'committed');
     assert.ok(result.codes.includes('install-command-failed'));
+  });
+
+  it('checks and updates Token Harness itself from its verified global npm installation', async () => {
+    const place = world();
+    const npmRoot = join(place.home, 'npm', 'lib', 'node_modules');
+    const packageRoot = join(npmRoot, 'token-harness');
+    const entryScript = join(packageRoot, 'token-harness.mjs');
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({ name: 'token-harness', version: '0.1.17' }),
+    );
+    writeFileSync(entryScript, '');
+    const config: FakeChannel = {
+      application: {
+        npmRoot,
+        packageRoot,
+        installedVersion: '0.1.17',
+        availableVersion: '0.1.18',
+      },
+    };
+
+    const preview = await invoke(['update'], place, config, entryScript, true);
+    assert.equal(preview.exitCode, EXIT_CODES.ok);
+    assert.equal(
+      preview.data?.application?.verdict,
+      'upgradable',
+      JSON.stringify(
+        { data: preview.data, diagnostics: preview.codes, asked: preview.asked },
+        null,
+        2,
+      ),
+    );
+    assert.equal(preview.data?.application?.installed, '0.1.17');
+    assert.equal(preview.data?.application?.available, '0.1.18');
+    assert.equal(preview.data?.execution?.outcome, 'confirmation-required');
+    assert.equal(
+      preview.asked.some((line) => line.startsWith('npm install ')),
+      false,
+    );
+
+    const applied = await invoke(['update', '--yes'], place, config, entryScript);
+    assert.equal(applied.exitCode, EXIT_CODES.ok);
+    assert.equal(applied.data?.execution?.outcome, 'committed');
+    assert.equal(applied.data?.application?.installed, '0.1.18');
+    assert.equal(applied.data?.application?.verdict, 'current');
+    assert.equal(applied.data?.application?.updated, true);
+    assert.ok(applied.codes.includes('application-update-version-verified'));
+    assert.ok(applied.asked.includes('npm install --global token-harness@0.1.18'));
+    assert.equal(
+      JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version,
+      '0.1.18',
+    );
+  });
+
+  it('does not update a source or temporary copy just because a global npm package exists', async () => {
+    const place = world();
+    const npmRoot = join(place.home, 'npm', 'lib', 'node_modules');
+    const globalPackageRoot = join(npmRoot, 'token-harness');
+    const localPackageRoot = join(place.project, 'node_modules', 'token-harness');
+    const localEntryScript = join(localPackageRoot, 'token-harness.mjs');
+    mkdirSync(globalPackageRoot, { recursive: true });
+    mkdirSync(localPackageRoot, { recursive: true });
+    writeFileSync(
+      join(globalPackageRoot, 'package.json'),
+      JSON.stringify({ name: 'token-harness', version: '0.1.17' }),
+    );
+    writeFileSync(
+      join(localPackageRoot, 'package.json'),
+      JSON.stringify({ name: 'token-harness', version: '0.1.17' }),
+    );
+    writeFileSync(localEntryScript, '');
+    const result = await invoke(
+      ['update'],
+      place,
+      {
+        application: {
+          npmRoot,
+          packageRoot: globalPackageRoot,
+          installedVersion: '0.1.17',
+          availableVersion: '0.1.18',
+        },
+      },
+      localEntryScript,
+      true,
+    );
+
+    assert.equal(result.exitCode, EXIT_CODES.ok);
+    assert.equal(result.data?.application?.verdict, 'unsupported-installation');
+    assert.equal(result.asked.includes('npm root --global'), true);
+    assert.equal(result.asked.includes('npm view token-harness version'), false);
+    assert.equal(
+      result.asked.some((line) => line.startsWith('npm install ')),
+      false,
+    );
   });
 });

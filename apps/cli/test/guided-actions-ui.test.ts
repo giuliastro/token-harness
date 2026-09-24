@@ -16,7 +16,7 @@ describe('guided setup UX', () => {
   it('uses one central connection action per optimizer with explicit harness selection', () => {
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
-    assert.match(GUIDE_HTML, /<h2>Optimizer connections<\/h2>/);
+    assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
     assert.match(GUIDE_HTML, /id="connection-overview"/);
     assert.match(GUIDE_JS, /renderConnectionOverview/);
     assert.match(GUIDE_JS, /actionButton\('Set up recommended stack'/);

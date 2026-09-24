@@ -152,6 +152,25 @@ function trimEvent(harness: string, eventId: string, ts: string): string {
 }
 
 describe('harness-scoped passive verification', () => {
+  it('does not treat a HarnessTrim skills-only setup as a configured runtime reducer', async () => {
+    const provider = verification('harnesstrim', null);
+    provider.checks.push({
+      id: 'integration-configured',
+      status: 'pass',
+      summary: 'configured for codex',
+      achievedTier: 'config-only',
+      evidence: [],
+      remediation: null,
+    });
+
+    const scoped = await scopeProviderVerificationToHarness(context(), provider, CODEX, [CODEX]);
+    const integration = scoped.checks.find((check) => check.id === 'integration-configured');
+    assert.equal(integration?.status, 'info');
+    assert.equal(integration?.achievedTier, null);
+    assert.match(integration?.summary ?? '', /no runtime reduction hook or plugin is configured/);
+    assert.equal(scoped.achievedTier, 'presence');
+  });
+
   it('attributes HarnessTrim receipts to the exact native harness', async () => {
     const metrics = [
       trimEvent('codex', 'codex-1', '2026-09-12T10:00:00.000Z'),
@@ -200,7 +219,7 @@ describe('harness-scoped passive verification', () => {
     assert.equal(canary?.status, 'not-exercised');
     assert.equal(canary?.achievedTier, null);
     assert.match(canary?.summary ?? '', /no telemetry receipt attributed to opencode yet/);
-    assert.equal(scoped.achievedTier, 'config-only');
+    assert.equal(scoped.achievedTier, 'presence');
   });
 
   it('does not duplicate provider-wide RTK runtime evidence across multiple harnesses', async () => {

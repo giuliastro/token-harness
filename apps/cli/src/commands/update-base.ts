@@ -2,8 +2,8 @@
  * `token-harness update` package-channel implementation.
  *
  * Kept byte-for-byte in behavior while the Windows RTK release coordinator is layered in front of
- * it. The direct RTK path is provider-specific; every ordinary package-manager update continues to
- * use this transaction engine unchanged.
+ * it. The direct RTK path is provider-specific; ordinary provider package updates and Token
+ * Harness' own npm update use this transaction engine.
  */
 
 import {
@@ -23,6 +23,7 @@ import {
   readPins,
   statusForExitCode,
   type ApplyReport,
+  type ApplicationUpdateRow,
   type CommandResult,
   type Diagnostic,
   type ExitCode,
@@ -39,6 +40,8 @@ import {
 
 import type { CommandContext } from './context.js';
 import { repositoryRootForBackupSafety } from './snapshot-safety.js';
+import { inspectApplicationUpdate, verifyApplicationUpdate } from './application-update.js';
+import { TOOL_VERSION } from '../version.js';
 
 function transactionIdFor(seed: string, at: string): string {
   const digest = digestText(`${seed} ${at}`);
@@ -124,6 +127,11 @@ export async function runPackageChannelUpdate(
   }
 
   const adapters = context.adapters;
+  const appInspection = context.provider === null ? await inspectApplicationUpdate(context) : null;
+  if (appInspection !== null) {
+    report.application = appInspection.row;
+    diagnostics.push(...appInspection.diagnostics);
+  }
   const providerAdapters = listProviderAdapters().filter(
     (adapter) => context.provider === null || adapter.manifest.id === context.provider,
   );
@@ -168,13 +176,21 @@ export async function runPackageChannelUpdate(
   const actions: PackageManagerInstallAction[] = [];
   const updateTargets = new Map<
     string,
-    {
-      providerId: string;
-      target: string;
-      channel: string;
-      packageName: string;
-      adapter: (typeof providerAdapters)[number];
-    }
+    | {
+        kind: 'provider';
+        providerId: string;
+        target: string;
+        channel: string;
+        packageName: string;
+        adapter: (typeof providerAdapters)[number];
+      }
+    | {
+        kind: 'application';
+        target: string;
+        channel: 'npm';
+        packageName: 'token-harness';
+        installationRoot: string;
+      }
   >();
   const blockedUpdates: Array<{
     providerId: string;
@@ -182,7 +198,11 @@ export async function runPackageChannelUpdate(
     target: string;
     reason: string;
   }> = [];
-  const destinations = new Set<string>();
+  const destinations = new Set<string>(
+    appInspection?.destination === null || appInspection?.destination === undefined
+      ? []
+      : [appInspection.destination],
+  );
 
   for (const adapter of providerAdapters) {
     const detection = await adapter.detect(providerContext);
@@ -281,11 +301,36 @@ export async function runPackageChannelUpdate(
     });
     actions.push(action);
     updateTargets.set(action.id, {
+      kind: 'provider',
       providerId: adapter.manifest.id,
       target: query.version,
       channel: channel.id,
       packageName,
       adapter,
+    });
+  }
+
+  if (
+    appInspection?.row.verdict === 'upgradable' &&
+    appInspection.row.available !== null &&
+    appInspection.installationRoot !== null
+  ) {
+    const action = upgradeAction({
+      providerId: 'token-harness',
+      channel: 'npm',
+      packageName: 'token-harness',
+      target: appInspection.row.available,
+      requiresNetwork: true,
+      requiresElevation: false,
+      installed: appInspection.row.installed ?? TOOL_VERSION,
+    });
+    actions.push(action);
+    updateTargets.set(action.id, {
+      kind: 'application',
+      target: appInspection.row.available,
+      channel: 'npm',
+      packageName: 'token-harness',
+      installationRoot: appInspection.installationRoot,
     });
   }
 
@@ -325,7 +370,7 @@ export async function runPackageChannelUpdate(
       diagnostic({
         severity: 'info',
         code: 'nothing-to-update',
-        message: 'No provider has a newer version available through its channel',
+        message: 'No provider or Token Harness has a newer version available through its channel',
         remediation: null,
       }),
     );
@@ -333,10 +378,19 @@ export async function runPackageChannelUpdate(
   }
 
   if (!context.confirmed) {
-    const summary = report.providers
+    const providerSummary = report.providers
       .filter((entry) => entry.verdict === 'upgradable')
-      .map((entry) => `${entry.providerId} ${String(entry.installed)} → ${String(entry.available)}`)
-      .join(', ');
+      .map(
+        (entry) => `${entry.providerId} ${String(entry.installed)} → ${String(entry.available)}`,
+      );
+    const summary = [
+      ...(report.application?.verdict === 'upgradable'
+        ? [
+            `Token Harness ${String(report.application.installed)} → ${String(report.application.available)}`,
+          ]
+        : []),
+      ...providerSummary,
+    ].join(', ');
     diagnostics.push(
       diagnostic({
         severity: 'error',
@@ -398,6 +452,13 @@ export async function runPackageChannelUpdate(
         if (outcome.status !== 'applied' && outcome.status !== 'already-satisfied') continue;
         const target = updateTargets.get(outcome.actionId);
         if (target === undefined) continue;
+
+        if (target.kind === 'application') {
+          postconditions.push(
+            ...(await verifyApplicationUpdate(context, target.installationRoot, target.target)),
+          );
+          continue;
+        }
 
         const detection = await target.adapter.detect(providerContext);
         const observed =
@@ -530,6 +591,23 @@ export async function runPackageChannelUpdate(
     unrestored: transaction.unrestored,
     receiptId: transaction.journal.outcome === 'committed' ? transactionId : null,
   };
+
+  if (
+    transaction.journal.outcome === 'committed' &&
+    report.application !== undefined &&
+    [...updateTargets.values()].some((target) => target.kind === 'application')
+  ) {
+    const target = [...updateTargets.values()].find((entry) => entry.kind === 'application');
+    if (target?.kind === 'application') {
+      report.application = {
+        ...report.application,
+        installed: target.target,
+        available: target.target,
+        verdict: 'current',
+        updated: true,
+      } satisfies ApplicationUpdateRow;
+    }
+  }
 
   return finish(transaction.exitCode, report);
 }

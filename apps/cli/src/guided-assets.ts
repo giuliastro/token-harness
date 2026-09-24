@@ -41,11 +41,11 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>Detected harnesses are shown here as status. Optimizer connections are managed centrally in the optimization stack below, so adding more harnesses does not multiply setup controls.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Detected coding apps are shown here as status. Optimizer setup is managed centrally below; a detected setup does not prove that it ran or recorded results.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
 <summary>Agent details and optional reasoning settings</summary>
-<p class="caption">Allowance, connected-tool observations and reasoning preferences are advanced information. They are not required to finish optimizer setup.</p>
+<p class="caption">Allowance, tool observations and reasoning preferences are advanced information. They are not required to finish optimizer setup.</p>
 <div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div>
 <div class="subsection-heading"><h3>Optional reasoning settings</h3><p class="caption">Persistent agent preferences are separate from optimizer setup.</p></div>
 <div id="agent-tuning" class="tool-grid"><article class="tool-card"><h3>Checking reasoning controls…</h3></article></div>
@@ -53,7 +53,7 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section class="setup-step" id="optimizers">
-<div class="section-title"><div><h2>Optimizer connections</h2><p>One matrix is the source of truth for every optimizer, harness and monitored connection. Select one or more harnesses from the optimizer row you want to install or connect. A configured connection is not counted as savings until measured evidence exists.</p></div></div>
+<div class="section-title"><div><h2>Optimizer setup</h2><p>This matrix shows which optimizer setup Token Harness detected for each coding app. It does not confirm runtime activity; measured results appear separately when evidence is recorded.</p></div></div>
 <div id="connection-overview" class="connection-overview"><p class="empty">Checking optimizer connections…</p></div>
 <details class="disclosure"><summary>Remove Token Harness-managed configuration</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration it owns; installed provider software and user-owned configuration may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details>
 </section>
@@ -65,12 +65,12 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
-<div class="results-header"><div><h2>Results dashboard</h2><p>One overview across every configured optimizer and coding agent, with measured evidence kept separate by source and measurement class.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How measurement works</button></div></div>
+<div class="results-header"><div><h2>Results dashboard</h2><p>See which optimizer setups Token Harness found and which results it actually recorded for each coding app.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How results are recorded</button></div></div>
 <div id="result-summary" class="impact-grid" aria-label="Results overview"><article class="metric-card"><span class="metric-label">Optimization stack</span><strong class="metric-value">Checking…</strong></article></div>
-<div class="section-title"><div><h2>By optimizer</h2><p>Lifecycle, connections and attributable value for every optimizer in the managed stack.</p></div></div>
+<div class="section-title"><div><h2>By optimizer</h2><p>Detected setup and recorded results for every optimizer in the stack.</p></div></div>
 <div id="result-optimizers" class="tool-grid"><article class="tool-card"><h3>Checking optimizer results…</h3></article></div>
-<div class="section-title"><div><h2>By coding agent</h2><p>Which optimizers are connected to each detected harness and which results can be attributed there.</p></div></div>
-<div id="result-agents" class="tool-grid"><article class="tool-card"><h3>Checking harness coverage…</h3></article></div>
+<div class="section-title"><div><h2>By coding agent</h2><p>Which optimizer setups were detected for each app and which measured results can be linked to it.</p></div></div>
+<div id="result-agents" class="tool-grid"><article class="tool-card"><h3>Checking results by coding app…</h3></article></div>
 <div class="section-title"><div><h2>Measurement evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div><section class="panel"><div id="result-savings" class="evidence-list"><p class="empty">Checking recorded results…</p></div></section>
 <div class="section-title"><div><h2>Experimental benchmark results</h2><p>Candidate evidence is evaluation only; it never promotes a tool automatically.</p></div></div><section class="panel"><div id="candidate-results" class="evidence-list"><p class="empty">Checking candidate evidence…</p></div></section>
 <div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this local app session.</p></div></div><section class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></section>

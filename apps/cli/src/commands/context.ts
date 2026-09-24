@@ -28,6 +28,8 @@ export interface CommandContext {
   platform: PlatformFacts;
   /** Absolute project root: `--project <dir>` when given, otherwise the cwd. */
   projectRoot: string;
+  /** Entry script for this running Token Harness process; used only to identify its install channel. */
+  applicationEntryScript?: string | null;
   /** Absolute home directory, used only to abbreviate displayed paths. */
   home: string | null;
   /** Absolute Token Harness state root, or null while it is not resolved. */

@@ -154,9 +154,9 @@ it('keeps Headroom and arbitrary selectors outside the managed candidate UI boun
 });
 
 it('keeps historical candidate lifecycle bounded after the tools move into optional optimizer setup', () => {
-  assert.match(GUIDE_HTML, /<h2>Optimizer connections<\/h2>/);
+  assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
   assert.match(GUIDE_HTML, /id="connection-overview"/);
-  assert.match(GUIDE_HTML, /Select one or more harnesses/);
+  assert.match(GUIDE_JS, /Select the coding apps where/);
   assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
   assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
   assert.match(GUIDE_JS, /candidate-setup/);

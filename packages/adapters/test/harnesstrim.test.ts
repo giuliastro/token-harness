@@ -1223,7 +1223,7 @@ describe('planning', () => {
     ]);
   });
 
-  it('recognizes a matching HarnessTrim 0.3 skills-only install as configured and verified', async () => {
+  it('recognizes skills-only setup without claiming runtime measurement verification', async () => {
     const skill = '# Latest HarnessTrim skill\n';
     const capabilities = dynamicCapabilities('0.3.0', skill);
     const skillPath = `${PROJECT}\\.claude\\skills\\latest\\SKILL.md`;
@@ -1239,12 +1239,28 @@ describe('planning', () => {
     assert.equal(detection.state, 'configured');
     assert.ok(detection.configuredHarnesses.includes('claude' as never));
     assert.ok(detection.assignableHarnesses.includes('claude' as never));
+    assert.ok(detection.evidence.some((item) => item.source === 'claude skills'));
+    assert.ok(
+      detection.evidence.some(
+        (item) =>
+          item.detail ===
+          'matching HarnessTrim skills are installed; this alone does not prove output reduction or measurement',
+      ),
+    );
 
     const verification = await harnesstrimAdapter.verify(ctx);
-    assert.equal(verification.achievedTier, 'config-only');
+    assert.equal(verification.achievedTier, 'presence');
+    const integration = verification.checks.find((check) => check.id === 'integration-configured');
+    assert.equal(integration?.status, 'info');
+    assert.equal(integration?.achievedTier, null);
+    assert.match(integration?.summary ?? '', /no runtime reduction hook or plugin is configured/);
     assert.equal(
-      verification.checks.find((check) => check.id === 'integration-configured')?.status,
-      'pass',
+      verification.checks.find((check) => check.id === 'canary-intercepted')?.status,
+      'not-exercised',
+    );
+    assert.match(
+      verification.checks.find((check) => check.id === 'canary-intercepted')?.remediation ?? '',
+      /skills-only setup does not write reduction telemetry/,
     );
   });
 

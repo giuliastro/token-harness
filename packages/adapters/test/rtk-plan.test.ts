@@ -191,24 +191,55 @@ function codexOwnership(capabilities: readonly string[]): ResolvedCapability[] {
 
 /** The live configuration as the harness adapter would report it. */
 function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
+  const hookCommands = matchers.map((matcher, index) => ({
+    eventName: 'PreToolUse',
+    matcher,
+    command: 'rtk hook claude',
+    entryPointer: `hooks.PreToolUse.${String(index)}`,
+    commandPointer: `hooks.PreToolUse.${String(index)}.hooks.0.command`,
+  }));
   return {
     harnessId: CLAUDE,
     configPath: SETTINGS,
     scope: 'user',
     interceptionPoints: ['pre-tool-use'],
     matchers,
-    commands: ['rtk hook claude'],
+    commands: hookCommands.map((entry) => entry.command),
+    hookCommands,
   };
 }
 
 function configuredCodexWithRtk(): HarnessConfigSummary {
+  const hookCommands = [
+    {
+      eventName: 'PreToolUse',
+      matcher: 'Bash',
+      command: 'rtk hook codex',
+      entryPointer: 'hooks.PreToolUse.0',
+      commandPointer: 'hooks.PreToolUse.0.hooks.0.command',
+    },
+  ];
   return {
     harnessId: CODEX,
     configPath: CODEX_HOOKS,
     scope: 'user',
     interceptionPoints: ['pre-tool-use'],
     matchers: ['Bash'],
-    commands: ['rtk hook codex'],
+    commands: hookCommands.map((entry) => entry.command),
+    hookCommands,
+  };
+}
+
+function configuredWithAttributionProxy(matchers: string[] = ['Bash']): HarnessConfigSummary {
+  const config = configuredWithRtk(matchers);
+  const hookCommands = (config.hookCommands ?? []).map((entry) => ({
+    ...entry,
+    command: `token-harness __internal-rtk-hook ${String(config.harnessId)}`,
+  }));
+  return {
+    ...config,
+    commands: hookCommands.map((entry) => entry.command),
+    hookCommands,
   };
 }
 
@@ -274,6 +305,7 @@ const identifiesCommand = (command: string): boolean =>
 function plan(options: {
   installed?: boolean;
   configs?: HarnessConfigSummary[];
+  hookProxyAvailable?: boolean;
   os?: PlatformFacts['os'];
   request?: ProviderPlanRequest;
 }) {
@@ -286,6 +318,9 @@ function plan(options: {
     installed: options.installed ?? true,
     identifiesCommand,
     installationChannels: CHANNELS,
+    ...(options.hookProxyAvailable === undefined
+      ? {}
+      : { hookProxyAvailable: options.hookProxyAvailable }),
   });
 }
 
@@ -304,11 +339,11 @@ describe('a machine with nothing on it', () => {
       [
         {
           matcher: 'Bash',
-          hooks: [{ type: 'command', command: 'rtk hook claude' }],
+          hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
         },
         {
           matcher: 'PowerShell',
-          hooks: [{ type: 'command', command: 'rtk hook claude' }],
+          hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
         },
       ],
     );
@@ -337,9 +372,9 @@ describe('a machine with nothing on it', () => {
     assert.match(install.preconditions.join(' '), /publishes no digest/);
   });
 
-  it('does not pin a version it has not tested', () => {
+  it('pins RTK to the first release with a Codex hook', () => {
     const result = plan({ installed: false });
-    assert.equal((result.actions[0] as { version?: string | null }).version, null);
+    assert.equal((result.actions[0] as { version?: string | null }).version, '0.50.0');
   });
 
   it('classifies installation as delegated rather than reversible', () => {
@@ -357,6 +392,13 @@ describe('a machine with nothing on it', () => {
 });
 
 describe('installed but not wired', () => {
+  it('does not install or wire RTK when the attribution helper is unavailable', () => {
+    const result = plan({ installed: false, hookProxyAvailable: false });
+    assert.deepEqual(result.actions, []);
+    assert.equal(result.targetHarnesses?.length, 0);
+    assert.equal(result.diagnostics?.[0]?.code, 'rtk-attribution-helper-unavailable');
+  });
+
   it('plans one hook per Windows shell family', () => {
     const result = plan({ installed: true });
     assert.deepEqual(
@@ -382,7 +424,7 @@ describe('installed but not wired', () => {
     const action = result.actions[0] as MergeJsonAction;
     assert.deepEqual(action.operations[0]?.value, {
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 
@@ -391,7 +433,7 @@ describe('installed but not wired', () => {
     const action = result.actions[1] as MergeJsonAction;
     assert.deepEqual(action.operations[0]?.value, {
       matcher: 'PowerShell',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 
@@ -435,7 +477,7 @@ describe('installed but not wired', () => {
     assert.equal(result.actions.length, 1);
     assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 
@@ -468,65 +510,81 @@ describe('Codex hook-list integration', () => {
     assert.equal(action.operations[0]?.pointer, 'hooks.PreToolUse');
     assert.deepEqual(action.operations[0]?.value, {
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: 'rtk hook codex' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook codex' }],
     });
     assert.deepEqual(result.targetHarnesses, [CODEX]);
   });
 
-  it('does not duplicate a brownfield Codex RTK hook', () => {
+  it('migrates a brownfield Codex RTK hook through the attribution proxy', () => {
     const result = plan({
       installed: true,
       configs: [configuredCodexWithRtk()],
       request: codexRequest(),
     });
-    assert.deepEqual(result.actions, []);
+    assert.equal(result.actions.length, 1);
+    const action = result.actions[0] as MergeJsonAction;
+    assert.equal(action.operations[0]?.kind, 'set');
+    assert.equal(action.operations[0]?.pointer, 'hooks.PreToolUse.0.hooks.0.command');
+    assert.equal(
+      action.operations[0]?.value,
+      'token-harness __internal-rtk-hook codex --restore-rtk',
+    );
   });
 
-  it('removes only the exact Codex hook entry it owns', () => {
+  it('leaves user-installed RTK hooks in place when uninstalling Token Harness changes', () => {
     const result = plan({
       installed: true,
       configs: [configuredCodexWithRtk()],
       request: codexRequest({ desiredState: 'absent' }),
     });
-    assert.equal(result.actions.length, 1);
-    const action = result.actions[0] as RemoveOwnedChangeAction;
-    assert.equal(action.target.kind, 'owned-json-entry');
-    if (action.target.kind !== 'owned-json-entry') assert.fail('expected an owned JSON entry');
-    assert.equal(action.target.path, CODEX_HOOKS);
-    assert.equal(action.target.pointer, 'hooks.PreToolUse');
-    assert.equal(action.target.placement, 'array-element');
+    assert.deepEqual(result.actions, []);
   });
 });
 
 describe('brownfield: RTK already configured in the surface we would claim', () => {
-  it('plans only the missing PowerShell coverage on Windows', () => {
+  it('attributes an existing Bash hook and adds the missing PowerShell coverage', () => {
     const result = plan({ installed: true, configs: [configuredWithRtk()] });
 
-    assert.equal(result.actions.length, 1);
-    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+    assert.equal(result.actions.length, 2);
+    const migrated = result.actions[0] as MergeJsonAction;
+    assert.equal(migrated.operations[0]?.kind, 'set');
+    assert.equal(migrated.operations[0]?.pointer, 'hooks.PreToolUse.0.hooks.0.command');
+    assert.equal(
+      migrated.operations[0]?.value,
+      'token-harness __internal-rtk-hook claude --restore-rtk',
+    );
+    assert.deepEqual((result.actions[1] as MergeJsonAction).operations[0]?.value, {
       matcher: 'PowerShell',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 
-  it('does not duplicate a user-owned combined Bash|PowerShell matcher', () => {
+  it('migrates one user-owned combined Bash|PowerShell matcher only once', () => {
     const result = plan({
       installed: true,
       configs: [configuredWithRtk(['Bash|PowerShell'])],
     });
-    assert.deepEqual(result.actions, []);
+    assert.equal(result.actions.length, 1);
+    assert.equal(
+      (result.actions[0] as MergeJsonAction).operations[0]?.value,
+      'token-harness __internal-rtk-hook claude --restore-rtk',
+    );
   });
 
-  it('still plans only the missing family when a third party shares the surface', () => {
+  it('migrates the RTK entry and adds coverage when a third party shares the surface', () => {
     const shared: HarnessConfigSummary = {
       ...configuredWithRtk(),
       commands: ['rtk hook claude', 'somebody-elses-tool'],
     };
     const result = plan({ installed: true, configs: [shared] });
-    assert.equal(result.actions.length, 1);
-    assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
+    assert.equal(result.actions.length, 2);
+    assert.equal(
+      (result.actions[0] as MergeJsonAction).operations[0]?.value,
+      'token-harness __internal-rtk-hook claude --restore-rtk',
+    );
+    assert.deepEqual((result.actions[1] as MergeJsonAction).operations[0]?.value, {
       matcher: 'PowerShell',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 
@@ -534,14 +592,19 @@ describe('brownfield: RTK already configured in the surface we would claim', () 
     const elsewhere: HarnessConfigSummary = {
       ...configuredWithRtk(),
       matchers: ['PowerShell'],
+      hookCommands: configuredWithRtk(['PowerShell']).hookCommands ?? [],
     };
     const result = plan({ installed: true, configs: [elsewhere] });
     // PowerShell is covered; Bash is not.
-    assert.equal(result.actions.length, 1);
+    assert.equal(result.actions.length, 2);
     assert.deepEqual((result.actions[0] as MergeJsonAction).operations[0]?.value, {
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
+    assert.equal(
+      (result.actions[1] as MergeJsonAction).operations[0]?.value,
+      'token-harness __internal-rtk-hook claude --restore-rtk',
+    );
   });
 
   it('plans both hooks when the entry is on a different interception point', () => {
@@ -565,11 +628,15 @@ describe('brownfield: RTK already configured in the surface we would claim', () 
     const result = plan({ installed: false, configs: [configuredWithRtk()] });
     assert.deepEqual(
       result.actions.map((action) => action.kind),
-      ['package-manager-install', 'merge-json'],
+      ['package-manager-install', 'merge-json', 'merge-json'],
     );
-    assert.deepEqual((result.actions[1] as MergeJsonAction).operations[0]?.value, {
+    assert.equal(
+      (result.actions[1] as MergeJsonAction).operations[0]?.value,
+      'token-harness __internal-rtk-hook claude --restore-rtk',
+    );
+    assert.deepEqual((result.actions[2] as MergeJsonAction).operations[0]?.value, {
       matcher: 'PowerShell',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 });
@@ -578,7 +645,7 @@ describe('the uninstall plan', () => {
   it('removes only what is actually registered', () => {
     const result = plan({
       installed: true,
-      configs: [configuredWithRtk()],
+      configs: [configuredWithAttributionProxy()],
       request: request({ desiredState: 'absent' }),
     });
 
@@ -608,7 +675,7 @@ describe('the uninstall plan', () => {
   it('states what it believes it owns, so a user edit can block the deletion', () => {
     const result = plan({
       installed: true,
-      configs: [configuredWithRtk()],
+      configs: [configuredWithAttributionProxy()],
       request: request({ desiredState: 'absent' }),
     });
     const action = result.actions[0] as RemoveOwnedChangeAction;
@@ -626,7 +693,7 @@ describe('the uninstall plan', () => {
     const configured = plan({ installed: true });
     const removal = plan({
       installed: true,
-      configs: [configuredWithRtk()],
+      configs: [configuredWithAttributionProxy()],
       request: request({ desiredState: 'absent' }),
     });
     // The install and the removal address the same Bash entry, so the removal can name the action
@@ -640,7 +707,7 @@ describe('the uninstall plan', () => {
   it('leaves RTK itself installed', () => {
     const result = plan({
       installed: true,
-      configs: [configuredWithRtk()],
+      configs: [configuredWithAttributionProxy()],
       request: request({ desiredState: 'absent' }),
     });
     // RFC 0004: Token Harness removes what it owns. On a machine where RTK was already present
@@ -728,7 +795,7 @@ describe('the pointer and the entry', () => {
   it('names the harness in the command, as the observed hook does', () => {
     assert.deepEqual(hookEntryFor('claude', 'Bash'), {
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: 'rtk hook claude' }],
+      hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook claude' }],
     });
   });
 });

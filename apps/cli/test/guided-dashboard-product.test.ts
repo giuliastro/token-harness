@@ -17,9 +17,9 @@ describe('first-run guided overview', () => {
 
   it('keeps coding agents and the optimization stack as the two visible setup entities', () => {
     assert.match(GUIDE_HTML, /<h2>Coding agents<\/h2>/);
-    assert.match(GUIDE_HTML, /<h2>Optimizer connections<\/h2>/);
+    assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
     assert.match(GUIDE_HTML, /id="connection-overview"/);
-    assert.match(GUIDE_HTML, /Select one or more harnesses/);
+    assert.match(GUIDE_HTML, /This matrix shows which optimizer setup/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
     assert.doesNotMatch(GUIDE_HTML, /managed-tools|optional-tools|Optional optimizers/);
@@ -29,10 +29,10 @@ describe('first-run guided overview', () => {
   });
 
   it('keeps coding-agent cards status-only and moves setup into the stack', () => {
-    assert.match(GUIDE_JS, /Connections available/);
+    assert.match(GUIDE_JS, /Setup available/);
     assert.match(GUIDE_JS, /baselineStatusFor/);
     assert.match(GUIDE_JS, /target\.state === 'actionable'/);
-    assert.match(GUIDE_JS, /This card is status only/);
+    assert.match(GUIDE_JS, /This card shows detected setup/);
     assert.match(GUIDE_JS, /Optimization stack below/);
     assert.doesNotMatch(GUIDE_JS, /Finish setup/);
     assert.doesNotMatch(GUIDE_JS, /Finish setup for /);
@@ -47,7 +47,7 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /setupChoiceData/);
     assert.match(GUIDE_JS, /setup-choice/);
     assert.match(GUIDE_JS, /Set up recommended stack/);
-    assert.match(GUIDE_JS, /Connected to/);
+    assert.match(GUIDE_JS, /Setup detected/);
     assert.match(GUIDE_JS, /Available/);
     assert.match(GUIDE_JS, /Not applicable/);
     assert.match(GUIDE_JS, /setup-choice-limitation/);
@@ -73,8 +73,14 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /row\.providerId === id/);
     assert.match(GUIDE_JS, /row\.harnesses\?\.includes\(agent\.id\)/);
     assert.match(GUIDE_JS, /Configured optimizers/);
-    assert.match(GUIDE_JS, /Active connections/);
-    assert.match(GUIDE_JS, /Measured optimizers/);
+    assert.match(GUIDE_JS, /Setups detected/);
+    assert.match(GUIDE_JS, /Optimizers with results/);
+    assert.match(GUIDE_JS, /Results linked to this agent/);
+    assert.match(
+      GUIDE_JS,
+      /RTK has saved command-output data, but its history does not say whether Codex or Claude ran each command/,
+    );
+    assert.match(GUIDE_JS, /A detected setup does not prove the optimizer ran/);
   });
 
   it('makes Overview a real measured-impact summary', () => {

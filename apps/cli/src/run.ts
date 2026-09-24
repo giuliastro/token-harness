@@ -103,6 +103,8 @@ export interface RunOptions {
   platform: PlatformFacts | null;
   /** Absolute working directory. */
   cwd: string;
+  /** The Node entry script, used by the updater to verify a global npm installation. */
+  applicationEntryScript?: string | null;
   /** Absolute home directory, or null when it could not be resolved. */
   home: string | null;
   /** Absolute state root, or null when path resolution failed. */
@@ -410,6 +412,9 @@ export async function run(options: RunOptions): Promise<number> {
     now: options.now ?? (() => new Date().toISOString()),
     platform: options.platform,
     projectRoot: invocation.options.project ?? options.cwd,
+    ...(options.applicationEntryScript === undefined
+      ? {}
+      : { applicationEntryScript: options.applicationEntryScript }),
     home: options.home,
     stateRoot: options.stateRoot ?? null,
     harness: invocation.options.harness,

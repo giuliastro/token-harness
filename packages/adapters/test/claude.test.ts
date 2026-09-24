@@ -378,6 +378,9 @@ describe('brownfield adoption', () => {
     const user = inspection.configs.find((config) => config.path === USER_SETTINGS);
     assert.deepEqual(user?.configuredPoints, ['pre-tool-use']);
     assert.deepEqual(user?.matchers, ['Bash']);
+    assert.equal(user?.hookCommands?.[0]?.eventName, 'PreToolUse');
+    assert.equal(user?.hookCommands?.[0]?.matcher, 'Bash');
+    assert.equal(user?.hookCommands?.[0]?.commandPointer, 'hooks.PreToolUse.0.hooks.0.command');
   });
 
   it('preserves the user keys it read past, because it only ever reads', async () => {

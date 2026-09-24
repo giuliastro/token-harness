@@ -8,7 +8,7 @@ describe('guided agent capability state UI', () => {
     assert.match(GUIDE_HTML, /Agent details and optional reasoning settings/);
     assert.match(
       GUIDE_HTML,
-      /Allowance, connected-tool observations and reasoning preferences are advanced information/,
+      /Allowance, tool observations and reasoning preferences are advanced information/,
     );
     assert.match(GUIDE_JS, /In-session guidance/);
     assert.match(GUIDE_JS, /agent\.guidance\?\.label/);
