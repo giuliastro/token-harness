@@ -151,6 +151,47 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
   }
   lines.push('  most recently observed local session; it may not be the active session');
 
+  const governed = report.harnesses.filter((item) => item.contextGovernor !== undefined);
+  if (governed.length > 0) {
+    lines.push('', 'CONTEXT GOVERNOR');
+    for (const harness of governed) {
+      const decision = harness.contextGovernor;
+      if (decision === undefined) continue;
+      lines.push(
+        truncate(
+          '  ' +
+            harness.harnessId +
+            ': ' +
+            decision.action +
+            '; observed=' +
+            String(decision.observedBytes) +
+            'B; actionable=' +
+            String(decision.actionableBytes) +
+            'B',
+          78,
+        ),
+      );
+      for (const material of decision.materials.slice(0, 4)) {
+        lines.push(
+          ...wrap(
+            material.action +
+              ' ' +
+              material.kind +
+              ' ' +
+              (material.byteLength === null ? '?B' : String(material.byteLength) + 'B') +
+              ': ' +
+              material.evidence.summary,
+            4,
+            78,
+          ),
+        );
+      }
+      if (decision.materials.length > 4)
+        lines.push('    ' + String(decision.materials.length - 4) + ' more material observations');
+    }
+    lines.push('  local byte counts only; no token or quota savings inferred');
+  }
+
   lines.push('', 'ADVICE');
   let adviceCount = 0;
   for (const harness of report.harnesses) {
