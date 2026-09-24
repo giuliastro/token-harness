@@ -50,6 +50,8 @@ export interface CommandContext {
   reservePercent?: number | null;
   /** Explicit accepted-task backlog for the current observed allowance; never inferred. */
   tasksRemaining?: number | null;
+  /** Optional bounded active-session metadata file; only optimize reads it. */
+  contextSnapshotPath?: string | null;
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
   /** RFC 0028 CCR routing script export, metrics view, and explicit telemetry pruning. */

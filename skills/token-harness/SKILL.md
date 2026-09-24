@@ -26,6 +26,16 @@ Use Token Harness as a local deterministic policy engine. Do not reproduce its q
 
 Do not run Token Harness before every trivial tool call. One observation at a meaningful task boundary is normally enough; re-observe when the task class changes materially, after a quota reset, after a substantial session/context change, or when the user asks.
 
+## Active context evidence
+
+When the current conversation or your own tool results directly establish useful task-state evidence, you may pass a short-lived `--context-snapshot` file to `optimize`. This metadata is for the CLI; never ask the user to write or understand the JSON. Skip the snapshot when no actionable evidence is directly observable or a temporary file cannot be safely created and removed.
+
+- Set task boundary, validation and quality only from explicit task state and checks you observed. Use `unknown` when those facts are missing or ambiguous.
+- Mark material superseded or condensable only when its current state is directly clear. Include `byteLength` only when tooling measured the exact local bytes; otherwise use `null`. Never estimate bytes from tokens.
+- Set reducer attribution only when directly known; otherwise use `unknown`. Do not include transcript text, prompts, tool payloads, source text, paths, MCP names or schemas.
+- Add a checkpoint byte ceiling only when you will use that same ceiling for the existing bounded `token-harness handoff` command. Omit it when no artifact budget is configured.
+- Create the metadata file temporarily, run `optimize`, then remove it. Treat the decision as advice; do not mask, summarize, compact or start a session on the user's behalf.
+
 ## Explicit workload
 
 Only pass `--tasks-left N` when the remaining accepted-task count is explicit from the user or an explicit task list already in the conversation. Never infer it from token history, source files, GitHub issues, or a guessed backlog. When it is explicit, add it to the same advisory call:

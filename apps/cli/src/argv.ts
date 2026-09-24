@@ -103,6 +103,8 @@ export interface CommandOptions {
   reservePercent: number | null;
   /** Explicit accepted tasks remaining before the next allowance re-observation. */
   tasksLeft: number | null;
+  /** Optional bounded active-session metadata file for optimize. */
+  contextSnapshot: string | null;
   /** Phase 18.4: include reviewed native harness policy edits in plan/apply. */
   nativePolicy: boolean;
   /** RFC 0028 CCR script export and local routing telemetry actions. */
@@ -149,6 +151,7 @@ const VALUE_FLAGS = new Set([
   '--reserve',
   '--tasks-left',
   '--route-mode',
+  '--context-snapshot',
 ]);
 
 /**
@@ -241,6 +244,7 @@ export function parseArgv(
     profile: null,
     reservePercent: null,
     tasksLeft: null,
+    contextSnapshot: null,
     nativePolicy: false,
     routingScript: false,
     routingMetrics: false,
@@ -551,6 +555,9 @@ export function parseArgv(
         } else {
           options.routingMode = value;
         }
+        break;
+      case '--context-snapshot':
+        options.contextSnapshot = value;
         break;
       case '--transaction':
         // Kept deliberately opaque here. The rollback command compares it only with a journal id

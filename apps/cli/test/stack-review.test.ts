@@ -41,6 +41,7 @@ describe('stack-review CLI', () => {
         profile: null,
         reservePercent: null,
         tasksLeft: null,
+        contextSnapshot: null,
         nativePolicy: false,
         routingScript: false,
         routingMetrics: false,

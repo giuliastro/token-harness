@@ -15,6 +15,7 @@ import {
   commandResult,
   constrainBudgetForWorkload,
   diagnostic,
+  decideContextGovernor,
   effectiveMcpExposure,
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
@@ -23,12 +24,15 @@ import {
   refineModelWithOutcomes,
   refineVerbosityForAllowance,
   refineVerbosityWithOutcomes,
+  parseContextGovernorSnapshot,
   VERBOSITY_LEVELS,
   type BudgetProfile,
   type BudgetReport,
   type CommandResult,
   type ContextPressure,
   type ContextReport,
+  type ContextGovernorDecision,
+  type ContextGovernorSnapshot,
   type Diagnostic,
   type HarnessContextObservation,
   type HarnessOptimizationAdvice,
@@ -49,6 +53,7 @@ import { runHistory } from './history.js';
 import { readOptimizationHistory } from './optimization-history.js';
 
 const DEFAULT_RESERVE = 20;
+const MAX_CONTEXT_SNAPSHOT_BYTES = 64 * 1024;
 
 function dedupeDiagnostics(items: readonly Diagnostic[]): Diagnostic[] {
   const seen = new Set<string>();
@@ -176,6 +181,121 @@ function quotaEvidence(pace: readonly WindowPaceAssessment[]): RecommendationEvi
     }));
 }
 
+function contextGovernorRecommendation(
+  decision: ContextGovernorDecision,
+): OptimizationRecommendation {
+  const recommendations = {
+    keep: {
+      priority: 'optional',
+      action: 'Keep current context; no reviewed reduction is supported',
+    },
+    mask: { priority: 'first', action: 'Mask explicitly superseded tool or repository output' },
+    summarize: { priority: 'first', action: 'Summarize explicitly condensable durable context' },
+    compact: { priority: 'first', action: 'Compact durable task state before continuing' },
+    checkpoint: { priority: 'first', action: 'Checkpoint durable task state before this boundary' },
+    'fresh-session': {
+      priority: 'next',
+      action: 'Start a fresh harness session at this task boundary',
+    },
+    unknown: {
+      priority: 'optional',
+      action: 'Keep context unchanged until task-state evidence is sufficient',
+    },
+  } satisfies Record<
+    ContextGovernorDecision['action'],
+    { priority: OptimizationRecommendation['priority']; action: string }
+  >;
+  const recommendation = recommendations[decision.action];
+  return {
+    area: 'context',
+    priority: recommendation.priority,
+    action: recommendation.action,
+    target: decision.action,
+    evidence: decision.evidence,
+  };
+}
+
+function contextSnapshotError(
+  code: string,
+  message: string,
+  remediation: string,
+): CommandResult<OptimizeReport> {
+  return commandResult({
+    command: 'optimize',
+    exitCode: EXIT_CODES['usage-error'],
+    diagnostics: [diagnostic({ severity: 'error', code, message, remediation })],
+  });
+}
+
+async function readContextGovernorSnapshot(
+  context: CommandContext,
+): Promise<
+  | { ok: true; snapshot: ContextGovernorSnapshot | null }
+  | { ok: false; result: CommandResult<OptimizeReport> }
+> {
+  const path = context.contextSnapshotPath;
+  if (path == null) return { ok: true, snapshot: null };
+  if (path.length === 0) {
+    return {
+      ok: false,
+      result: contextSnapshotError(
+        'context-snapshot-invalid',
+        'The context snapshot path must not be empty',
+        'Pass a path to a UTF-8 JSON snapshot, or omit --context-snapshot',
+      ),
+    };
+  }
+  if (context.adapters === null) {
+    return {
+      ok: false,
+      result: contextSnapshotError(
+        'context-snapshot-unavailable',
+        'The context snapshot could not be read because filesystem access is unavailable',
+        'Run optimize with the normal local filesystem adapter or omit --context-snapshot',
+      ),
+    };
+  }
+
+  try {
+    const fs = context.adapters.fs;
+    const stat = await fs.stat(path);
+    if (
+      stat === null ||
+      stat.kind !== 'file' ||
+      !Number.isSafeInteger(stat.byteLength) ||
+      stat.byteLength < 0 ||
+      stat.byteLength > MAX_CONTEXT_SNAPSHOT_BYTES
+    )
+      throw new Error('invalid snapshot file');
+    const bytes = await fs.readFile(path);
+    if (bytes.byteLength !== stat.byteLength || bytes.byteLength > MAX_CONTEXT_SNAPSHOT_BYTES)
+      throw new Error('changing snapshot file');
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const parsed = parseContextGovernorSnapshot(JSON.parse(decoded) as unknown);
+    if (parsed === null) throw new Error('invalid snapshot schema');
+    if (context.harness !== null && context.harness !== parsed.harnessId) {
+      return {
+        ok: false,
+        result: contextSnapshotError(
+          'context-snapshot-harness-mismatch',
+          'The context snapshot harness does not match --harness',
+          'Use a snapshot for the selected harness, or omit --harness',
+        ),
+      };
+    }
+    return { ok: true, snapshot: parsed };
+  } catch {
+    return {
+      ok: false,
+      result: contextSnapshotError(
+        'context-snapshot-invalid',
+        'The context snapshot is unreadable, oversized, malformed, or outside the accepted schema',
+        'Use a UTF-8 JSON snapshot no larger than 64 KiB with schemaVersion 1 and content-free metadata only',
+      ),
+    };
+  }
+}
+
 function adviceForHarness(input: {
   contextReport: ContextReport;
   context: HarnessContextObservation;
@@ -189,6 +309,7 @@ function adviceForHarness(input: {
   recentSession: SessionBoundarySignal | null;
   taskClass: TaskClass;
   profile: BudgetProfile;
+  contextGovernor?: ContextGovernorDecision;
 }): HarnessOptimizationAdvice {
   const {
     context,
@@ -255,7 +376,10 @@ function adviceForHarness(input: {
 
   const mcpAssessments = context.mcpServers.map((server) => assessMcpServer(server));
 
-  if (pressure.pressure === 'high') {
+  const preciseContextAction =
+    input.contextGovernor !== undefined &&
+    !['keep', 'unknown'].includes(input.contextGovernor.action);
+  if (pressure.pressure === 'high' && !preciseContextAction) {
     recommendations.push({
       area: 'context',
       priority: 'first',
@@ -263,7 +387,7 @@ function adviceForHarness(input: {
       target: null,
       evidence: pressure.evidence,
     });
-  } else if (pressure.pressure === 'moderate') {
+  } else if (pressure.pressure === 'moderate' && !preciseContextAction) {
     recommendations.push({
       area: 'context',
       priority: 'next',
@@ -272,6 +396,9 @@ function adviceForHarness(input: {
       evidence: pressure.evidence,
     });
   }
+
+  if (input.contextGovernor !== undefined)
+    recommendations.push(contextGovernorRecommendation(input.contextGovernor));
 
   for (const assessment of mcpAssessments.filter((item) => item.usability === 'attention')) {
     recommendations.push({
@@ -767,6 +894,7 @@ function adviceForHarness(input: {
     currentVerbosity: context.verbosity,
     recommendedVerbosity,
     contextPressure: pressure.pressure,
+    ...(input.contextGovernor === undefined ? {} : { contextGovernor: input.contextGovernor }),
     localBurnTrend,
     recentSession,
     pace: budgetWindows,
@@ -795,6 +923,9 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
     });
   }
   const reservePercent = context.reservePercent ?? DEFAULT_RESERVE;
+  const snapshotResult = await readContextGovernorSnapshot(context);
+  if (!snapshotResult.ok) return snapshotResult.result;
+  const contextSnapshot = snapshotResult.snapshot;
 
   const [budgetResult, contextResult, historyResult, outcomeHistory] = await Promise.all([
     runBudget(context),
@@ -805,6 +936,19 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
   const contextReport = contextResult.data;
   const budgetReport = budgetResult.data;
   const historyReport = historyResult.data;
+
+  if (
+    contextSnapshot !== null &&
+    (contextReport === null ||
+      budgetReport === null ||
+      !contextReport.harnesses.some((item) => item.harnessId === contextSnapshot.harnessId))
+  ) {
+    return contextSnapshotError(
+      'context-snapshot-harness-unavailable',
+      'The context snapshot does not match a harness available to optimize',
+      'Select an available Claude Code or Codex harness, or omit --context-snapshot',
+    );
+  }
 
   const report: OptimizeReport = {
     platform: context.platform,
@@ -841,6 +985,27 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
             assessWindowPace(window, report.observedAt, reservePercent),
           )
         : [];
+    const contextGovernor =
+      contextSnapshot?.harnessId === harnessContext.harnessId
+        ? decideContextGovernor({
+            harnessId: contextSnapshot.harnessId,
+            pressure: contextEvidence(contextReport, harnessContext).pressure,
+            taskBoundary: contextSnapshot.taskBoundary,
+            validation: contextSnapshot.validation,
+            quality: contextSnapshot.quality,
+            reuse: contextSnapshot.reuse,
+            materials: contextSnapshot.materials,
+            ...(contextSnapshot.retryRegression === undefined
+              ? {}
+              : { retryRegression: contextSnapshot.retryRegression }),
+            ...(contextSnapshot.checkpointRequired === undefined
+              ? {}
+              : { checkpointRequired: contextSnapshot.checkpointRequired }),
+            ...(contextSnapshot.checkpointMaxBytes === undefined
+              ? {}
+              : { checkpointMaxBytes: contextSnapshot.checkpointMaxBytes }),
+          })
+        : undefined;
     report.harnesses.push(
       adviceForHarness({
         contextReport,
@@ -859,6 +1024,7 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
             ?.recentSession ?? null,
         taskClass,
         profile,
+        ...(contextGovernor === undefined ? {} : { contextGovernor }),
       }),
     );
   }

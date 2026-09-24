@@ -59,4 +59,12 @@ describe('agent-native Token Harness skill', () => {
     assert.match(SKILL, /Do not add an MCP server or background model/);
     assert.match(SKILL, /Do not run Token Harness before every trivial tool call/);
   });
+
+  it('keeps active context snapshots agent-authored, temporary and evidence-bound', () => {
+    assert.match(SKILL, /--context-snapshot/);
+    assert.match(SKILL, /never ask the user to write or understand the JSON/i);
+    assert.match(SKILL, /Include `byteLength` only when tooling measured the exact local bytes/);
+    assert.match(SKILL, /then remove it/);
+    assert.match(SKILL, /Use `unknown` when those facts are missing or ambiguous/);
+  });
 });

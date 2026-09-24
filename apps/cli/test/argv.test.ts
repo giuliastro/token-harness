@@ -28,6 +28,18 @@ describe('argv', () => {
     assert.equal(parsed.topic, 'plan');
   });
 
+  it('parses the optional context snapshot path', () => {
+    const parsed = parseArgv(['optimize', '--context-snapshot=./context.json']);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind !== 'command') return;
+    assert.equal(parsed.options.contextSnapshot, './context.json');
+
+    const missing = parseArgv(['optimize', '--context-snapshot']);
+    assert.equal(missing.kind, 'usage-error');
+    if (missing.kind === 'usage-error')
+      assert.equal(missing.diagnostics[0]?.code, 'flag-missing-value');
+  });
+
   it('parses a command with its flags in either spelling', () => {
     for (const argv of [
       ['plan', '--harness', 'claude', '--provider', 'rtk'],
