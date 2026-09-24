@@ -181,8 +181,11 @@ interface Approval {
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
-  updateTargets?: Array<{ provider: ReturnType<typeof providerId>; version: string }>;
+  updateTargets?: GuideUpdateTarget[];
 }
+type GuideUpdateTarget =
+  | { kind: 'provider'; provider: ReturnType<typeof providerId>; version: string }
+  | { kind: 'application'; version: string };
 type GuideUndoTarget =
   | { kind: 'plan'; plan: string; network: boolean }
   | {
@@ -220,8 +223,18 @@ const NAMES: Readonly<Record<string, string>> = {
   mcptoon: 'mcptoon',
   gitnexus: 'GitNexus',
   headroom: 'Headroom',
+  'token-harness': 'Token Harness',
 };
 const name = (id: string): string => NAMES[id] ?? id;
+const guideUpdateTargetId = (target: GuideUpdateTarget): string =>
+  target.kind === 'application' ? 'token-harness' : String(target.provider);
+const guideUpdateTargetName = (target: GuideUpdateTarget): string =>
+  target.kind === 'application' ? 'Token Harness' : name(String(target.provider));
+function guideUpdateTargetRow(report: UpdateReport, target: GuideUpdateTarget) {
+  return target.kind === 'application'
+    ? report.application
+    : report.providers.find((candidate) => candidate.providerId === target.provider);
+}
 const sameGuideVersion = (left: string | null, right: string | null): boolean =>
   left !== null &&
   right !== null &&
@@ -1595,11 +1608,11 @@ export class GuideService {
         if (approvedUpdates.length === 0)
           throw new GuideError(
             409,
-            'This update preview contains no concrete provider version. Review it again.',
+            'This update preview contains no concrete application or provider version. Review it again.',
           );
 
         this.record(
-          'Re-checking the exact provider versions you approved before installing them.',
+          'Re-checking the exact Token Harness and optimizer versions you approved.',
           'working',
         );
 
@@ -1633,18 +1646,28 @@ export class GuideService {
           };
         }
 
-        const approvedByProvider = new Map(
-          approvedUpdates.map((target) => [String(target.provider), target.version] as const),
+        const approvedById = new Map(
+          approvedUpdates.map((target) => [guideUpdateTargetId(target), target.version] as const),
         );
-        const freshUpgradable = fresh.data.providers.filter((row) => row.verdict === 'upgradable');
+        const freshUpgradable = [
+          ...fresh.data.providers
+            .filter((row) => row.verdict === 'upgradable')
+            .map((row) => ({ id: String(row.providerId), available: row.available })),
+          ...(fresh.data.application?.verdict === 'upgradable'
+            ? [
+                {
+                  id: 'token-harness',
+                  available: fresh.data.application.available,
+                },
+              ]
+            : []),
+        ];
         const unexpected = freshUpgradable.find((row) => {
-          const approved = approvedByProvider.get(String(row.providerId)) ?? null;
+          const approved = approvedById.get(row.id) ?? null;
           return approved === null || !sameGuideVersion(row.available, approved);
         });
         const unresolved = approvedUpdates.find((target) => {
-          const row = fresh.data?.providers.find(
-            (candidate) => candidate.providerId === target.provider,
-          );
+          const row = guideUpdateTargetRow(fresh.data!, target);
           return !(
             row !== undefined &&
             ((row.verdict === 'upgradable' && sameGuideVersion(row.available, target.version)) ||
@@ -1655,8 +1678,8 @@ export class GuideService {
         if (unexpected !== undefined || unresolved !== undefined) {
           const changed =
             unexpected !== undefined
-              ? `${name(unexpected.providerId)} now offers ${unexpected.available ?? 'a different version'}.`
-              : `${name(unresolved!.provider)} no longer reports the approved target ${unresolved!.version}.`;
+              ? `${name(unexpected.id)} now offers ${unexpected.available ?? 'a different version'}.`
+              : `${guideUpdateTargetName(unresolved!)} no longer reports the approved target ${unresolved!.version}.`;
           const message =
             changed +
             ' Nothing was installed because the live update state no longer matches the preview. Review a fresh update preview.';
@@ -1671,22 +1694,21 @@ export class GuideService {
         }
 
         const pending = approvedUpdates.filter((target) => {
-          const row = fresh.data?.providers.find(
-            (candidate) => candidate.providerId === target.provider,
-          );
+          const row = guideUpdateTargetRow(fresh.data!, target);
           return row?.verdict === 'upgradable';
         });
 
         let appliedCount = 0;
+        let updateEvidence = fresh.data;
         if (pending.length > 0) {
-          this.record('Installing the provider versions from the approved preview.', 'working');
+          this.record('Installing the approved Token Harness and optimizer updates.', 'working');
           let result: CliEnvelope<UpdateReport>;
           try {
             result = await this.call<UpdateReport>(['update', '--yes']);
           } catch {
             this.invalidateObservedState();
             const message =
-              'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect the installed optimizer versions before retrying.';
+              'The update stopped before its final result could be read. No automatic retry was made. Refresh and inspect Token Harness and optimizer versions before retrying.';
             this.record(message, 'attention');
             return {
               ok: false,
@@ -1698,48 +1720,77 @@ export class GuideService {
           if (result.exitCode !== 0 || result.data === null) {
             const message = explainGuideIssue(
               result.diagnostics,
-              'The optimizer update was not applied. The installed version, update channel or runtime capability state changed after the preview, so nothing was forced.',
+              'The approved update was not applied. The installed version, update channel or runtime capability state changed after the preview, so nothing was forced.',
             );
             this.invalidateObservedState();
             this.record(message, 'attention');
             return {
               ok: false,
-              title: 'Optimizer update was not applied',
+              title: 'Update was not applied',
               messages: [message],
               appliedPlans: 0,
             };
           }
+          updateEvidence = result.data;
           appliedCount =
             result.data.execution?.results.filter((row) => row.status === 'applied').length ?? 0;
         }
 
-        let inventory: CliEnvelope<DoctorReport>;
-        try {
-          inventory = await this.call<DoctorReport>(['doctor']);
-        } catch {
-          this.invalidateObservedState();
-          const message =
-            'The installer returned, but Token Harness could not re-read the active optimizer runtimes. The update is not being reported as successful. Refresh and inspect the installed versions.';
-          this.record(message, 'attention');
-          return {
-            ok: false,
-            title: 'Update result needs checking',
-            messages: [message],
-            appliedPlans: appliedCount,
-          };
+        const providerTargets = approvedUpdates.filter(
+          (target): target is Extract<GuideUpdateTarget, { kind: 'provider' }> =>
+            target.kind === 'provider',
+        );
+        let inventory: CliEnvelope<DoctorReport> | null = null;
+        if (providerTargets.length > 0) {
+          try {
+            inventory = await this.call<DoctorReport>(['doctor']);
+          } catch {
+            this.invalidateObservedState();
+            const message =
+              'The installer returned, but Token Harness could not re-read the active optimizer runtimes. The update is not being reported as successful. Refresh and inspect the installed versions.';
+            this.record(message, 'attention');
+            return {
+              ok: false,
+              title: 'Update result needs checking',
+              messages: [message],
+              appliedPlans: appliedCount,
+            };
+          }
         }
 
-        const missing = approvedUpdates.filter((target) => {
-          const detection = inventory.data?.providers.find(
+        const missingProviders = providerTargets.filter((target) => {
+          const detection = inventory?.data?.providers.find(
             (candidate) => candidate.providerId === target.provider,
           );
           return !sameGuideVersion(detection?.version ?? null, target.version);
         });
-        if (inventory.data === null || missing.length > 0) {
+        const applicationTarget = approvedUpdates.find(
+          (target): target is Extract<GuideUpdateTarget, { kind: 'application' }> =>
+            target.kind === 'application',
+        );
+        const applicationRow = updateEvidence.application;
+        const applicationMissing =
+          applicationTarget !== undefined &&
+          !(
+            applicationRow?.verdict === 'current' &&
+            sameGuideVersion(applicationRow.installed, applicationTarget.version)
+          );
+        if (
+          (providerTargets.length > 0 && inventory?.data === null) ||
+          missingProviders.length > 0 ||
+          applicationMissing
+        ) {
           const message =
-            missing.length > 0
-              ? 'The approved update target was not observed on the active PATH after installation: ' +
-                missing.map((target) => `${name(target.provider)} ${target.version}`).join(', ') +
+            missingProviders.length > 0 || applicationMissing
+              ? 'These approved update targets were not verified after installation: ' +
+                [
+                  ...missingProviders.map(
+                    (target) => `${name(String(target.provider))} ${target.version}`,
+                  ),
+                  ...(applicationMissing && applicationTarget !== undefined
+                    ? [`Token Harness ${applicationTarget.version}`]
+                    : []),
+                ].join(', ') +
                 '. This is not being reported as a successful update.'
               : 'The active optimizer versions could not be verified after installation. This is not being reported as a successful update.';
           this.invalidateObservedState();
@@ -1758,24 +1809,36 @@ export class GuideService {
         this.lastApplied = null;
         this.invalidateObservedState();
         const versions = approvedUpdates
-          .map((target) => `${name(target.provider)} ${target.version}`)
+          .map((target) => `${guideUpdateTargetName(target)} ${target.version}`)
           .join(', ');
         const messages = [
           appliedCount > 0
-            ? `Installed and verified the approved optimizer version${approvedUpdates.length === 1 ? '' : 's'}: ${versions}.`
-            : `The approved optimizer version${approvedUpdates.length === 1 ? ' was' : 's were'} already active when the final check ran: ${versions}.`,
-          'The active runtime was re-read after the operation; success is shown only because it matches the approved target.',
-          'Reopen a coding agent if the updated optimizer requires it.',
+            ? `Installed and verified the approved update${approvedUpdates.length === 1 ? '' : 's'}: ${versions}.`
+            : `The approved update${approvedUpdates.length === 1 ? ' was' : 's were'} already at the target version: ${versions}.`,
+          ...(applicationTarget === undefined
+            ? []
+            : ['Token Harness is updated on disk. Restart this app to load the new version.']),
+          ...(providerTargets.length === 0
+            ? []
+            : [
+                'The active optimizer runtimes were re-read after the operation and match the approved targets.',
+                'Reopen a coding agent if an updated optimizer requires it.',
+              ]),
         ];
         this.record(
           appliedCount > 0
-            ? 'Optimizer update installed and verified.'
-            : 'Approved optimizer version already active and verified.',
+            ? 'Approved updates installed and verified.'
+            : 'Approved updates are already at their target versions.',
           'success',
         );
         return {
           ok: true,
-          title: appliedCount > 0 ? 'Optimizer updated' : 'Approved version already active',
+          title:
+            applicationTarget !== undefined
+              ? 'Token Harness updated'
+              : appliedCount > 0
+                ? 'Optimizers updated'
+                : 'Approved versions already active',
           messages,
           appliedPlans: appliedCount,
         };
@@ -2010,7 +2073,10 @@ export class GuideService {
   async checkUpdates(): Promise<GuideResult> {
     return this.exclusive(async () => {
       this.approval = null;
-      this.record('Checking provider update channels without changing software.', 'working');
+      this.record(
+        'Checking Token Harness and optimizer update channels without changing software.',
+        'working',
+      );
       const updateResult = await this.call<UpdateReport>(['update']);
       const inventory = await this.call<DoctorReport>(['doctor']);
 
@@ -2057,13 +2123,41 @@ export class GuideService {
 
       this.updates = { fingerprint, report: updateResult.data };
       const available = updateResult.data.providers.filter((row) => row.verdict === 'upgradable');
-      const updateTargets = available.flatMap((row) =>
-        row.available === null ? [] : [{ provider: row.providerId, version: row.available }],
-      );
+      const updateTargets: GuideUpdateTarget[] = [
+        ...available.flatMap((row) =>
+          row.available === null
+            ? []
+            : [{ kind: 'provider' as const, provider: row.providerId, version: row.available }],
+        ),
+        ...(updateResult.data.application?.verdict === 'upgradable' &&
+        updateResult.data.application.available !== null
+          ? [
+              {
+                kind: 'application' as const,
+                version: updateResult.data.application.available,
+              },
+            ]
+          : []),
+      ];
+      const applicationUpgradable = updateResult.data.application?.verdict === 'upgradable';
       const blocked = updateResult.data.providers.filter(
         (row) => row.verdict === 'blocked-unreviewed',
       );
       const messages: string[] = [];
+      const application = updateResult.data.application;
+      if (application?.verdict === 'upgradable') {
+        messages.push(
+          `Token Harness: ${application.installed ?? 'installed version'} → ${application.available ?? 'new version'} is available through npm. After installation, restart this app to load the updated version.`,
+        );
+      } else if (application?.verdict === 'unsupported-installation') {
+        messages.push(
+          'This Token Harness copy is not installed globally through npm, so it cannot update itself here. Update it with its original install method; the global npm command is `npm install --global token-harness@latest`.',
+        );
+      } else if (application?.verdict === 'unavailable' || application?.verdict === 'unknown') {
+        messages.push(
+          'Token Harness itself could not be checked through npm. No application update was installed.',
+        );
+      }
       if (available.length > 0) {
         messages.push(
           ...available.map(
@@ -2080,13 +2174,17 @@ export class GuideService {
           ),
         );
       }
-      if (available.length === 0 && blocked.length === 0)
+      if (available.length === 0 && blocked.length === 0 && application?.verdict === 'current') {
+        messages.push('Token Harness and your managed optimizers are up to date.');
+      } else if (available.length === 0 && blocked.length === 0 && application === undefined) {
         messages.push('Your managed optimizers are up to date on their configured channels.');
+      }
 
       let ticket: string | null = null;
-      if (available.length > 0 && updateTargets.length !== available.length) {
+      const upgradableCount = available.length + (applicationUpgradable ? 1 : 0);
+      if (upgradableCount > updateTargets.length) {
         messages.push(
-          'An update channel reported an upgradable optimizer without a concrete target version. No install approval was created.',
+          'An update channel reported an update without a concrete target version. No install approval was created.',
         );
       } else if (updateTargets.length > 0) {
         ticket = this.random();
@@ -2097,13 +2195,18 @@ export class GuideService {
           plans: [],
           transactionId: null,
           provider: null,
-          description: 'Optimizer updates',
+          description:
+            applicationUpgradable && available.length > 0
+              ? 'Token Harness and optimizer updates'
+              : applicationUpgradable
+                ? 'Token Harness update'
+                : 'Optimizer updates',
           operation: 'update',
           network: updateResult.data.network.length > 0,
           updateTargets,
         };
         messages.push(
-          'Review the versions above, then choose Install updates. Token Harness will re-check the update channels and transaction safety rules before changing software.',
+          'Review the versions above, then choose Install updates. Token Harness will re-check every update channel and safety rule before changing software.',
         );
       } else {
         messages.push('No software was changed.');
@@ -2113,10 +2216,10 @@ export class GuideService {
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
       this.record(
         ticket !== null
-          ? 'Optimizer update available. Waiting for your approval.'
-          : available.length > 0
-            ? 'Provider update check could not produce an exact install target.'
-            : 'Provider update check completed. No update is pending.',
+          ? 'Token Harness or optimizer update available. Waiting for your approval.'
+          : upgradableCount > 0
+            ? 'Update check could not produce an exact install target.'
+            : 'Token Harness and optimizer update check completed.',
         'success',
       );
       return {
@@ -2124,9 +2227,11 @@ export class GuideService {
         title:
           ticket !== null
             ? 'Updates available'
-            : available.length > 0
+            : upgradableCount > 0
               ? 'Update check needs attention'
-              : 'Optimizers up to date',
+              : application?.verdict === 'current'
+                ? 'Token Harness and optimizers up to date'
+                : 'Update check completed',
         messages,
         appliedPlans: 0,
         stack,

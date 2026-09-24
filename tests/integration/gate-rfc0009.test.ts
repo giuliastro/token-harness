@@ -28,7 +28,13 @@ import type {
 } from '@token-harness/core';
 import { EXIT_CODES } from '@token-harness/core';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
-import { fakeResolve, nodeVersionRows, rowFor, NODE_VERSION } from '@token-harness/tests';
+import {
+  fakeResolve,
+  nodeVersionRows,
+  rowFor,
+  NODE_VERSION,
+  withRtkHookProxyAvailable,
+} from '@token-harness/tests';
 import { planExitCode, run } from 'token-harness';
 
 const FACTS: PlatformFacts = {
@@ -107,7 +113,9 @@ async function invoke<T>(
     stateRoot: join(sandbox, 'state'),
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: fakeResolve }),
+      runner: withRtkHookProxyAvailable(
+        new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: fakeResolve }),
+      ),
       paths: {
         home,
         config: join(home, 'config'),
@@ -213,7 +221,7 @@ describe('apply refuses the same combinations', () => {
     );
     const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
     assert.notEqual(updated, original);
-    assert.match(updated, /rtk hook claude/);
+    assert.match(updated, /token-harness __internal-rtk-hook claude/);
   });
 
   it('reports a missing stored plan before resolving an unrelated default scope', async () => {
@@ -248,7 +256,7 @@ describe('apply refuses the same combinations', () => {
     );
     const updated = readFileSync(join(home, '.claude', 'settings.json'), 'utf8');
     assert.notEqual(updated, original);
-    assert.match(updated, /rtk hook claude/);
+    assert.match(updated, /token-harness __internal-rtk-hook claude/);
   });
 });
 

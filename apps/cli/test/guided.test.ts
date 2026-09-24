@@ -742,7 +742,7 @@ describe('reasoning explanations and contextual actions', () => {
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
     assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
-    assert.ok(GUIDE_HTML.includes('<h2>Optimizer connections</h2>'));
+    assert.ok(GUIDE_HTML.includes('<h2>Optimizer setup</h2>'));
     assert.ok(GUIDE_HTML.includes('id="connection-overview"'));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));

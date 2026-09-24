@@ -43,9 +43,12 @@
 import {
   channelCanReportInventory,
   digestText,
+  diagnostic,
   jsonValueDigest,
   preferredInstallationChannel,
+  providerId,
   type CapabilityScope,
+  type Diagnostic,
   type HarnessManifest,
   type JsonValue,
   type MergeJsonAction,
@@ -55,8 +58,9 @@ import {
 
 import type { ProviderContext, ProviderPlanRequest } from './contract.js';
 
-/** The command RTK's own hook uses, as observed in a configured installation. */
-export const RTK_HOOK_COMMAND_PREFIX = 'rtk hook';
+/** The stable app command that can assign the native RTK hook to one agent. */
+export const RTK_HOOK_PROXY_COMMAND = 'token-harness __internal-rtk-hook';
+const RTK_NATIVE_HOOK_PREFIX = 'rtk hook';
 
 const CLAUDE = 'claude';
 const BASH = 'Bash';
@@ -74,10 +78,19 @@ export function hookListPointer(eventName: string): string {
 }
 
 /** The entry Token Harness would append: one matcher, one command. */
-export function hookEntryFor(harnessId: string, matcher: string): JsonValue {
+export function hookEntryFor(
+  harnessId: string,
+  matcher: string,
+  restoreNativeHookOnUninstall = false,
+): JsonValue {
   return {
     matcher,
-    hooks: [{ type: 'command', command: `${RTK_HOOK_COMMAND_PREFIX} ${harnessId}` }],
+    hooks: [
+      {
+        type: 'command',
+        command: `${RTK_HOOK_PROXY_COMMAND} ${harnessId}${restoreNativeHookOnUninstall ? ' --restore-rtk' : ''}`,
+      },
+    ],
   };
 }
 
@@ -180,7 +193,6 @@ export function planTargets(context: ProviderContext, request: ProviderPlanReque
 function alreadyRegistered(
   context: ProviderContext,
   target: PlanTarget,
-  identifies: (command: string) => boolean,
   allowRegexCoverage: boolean,
 ): boolean {
   return context.harnessConfigs.some(
@@ -193,8 +205,26 @@ function alreadyRegistered(
           ? matcherCoversFamily(matcher, target.scope.toolFamily)
           : matcher === target.scope.toolFamily,
       ) &&
-      config.commands.some((command) => identifies(command)),
+      (config.hookCommands ?? []).some(
+        (entry) =>
+          entry.eventName === target.eventName &&
+          entry.matcher !== null &&
+          (allowRegexCoverage
+            ? matcherCoversFamily(entry.matcher, target.scope.toolFamily)
+            : entry.matcher === target.scope.toolFamily) &&
+          isRtkAttributionCommand(entry.command, target.harness.id),
+      ),
   );
+}
+
+function isRtkAttributionCommand(command: string, harness: string): boolean {
+  return new RegExp(`^token-harness __internal-rtk-hook ${harness}(?: --restore-rtk)?$`, 'i').test(
+    command.trim(),
+  );
+}
+
+function isCanonicalNativeHook(command: string, harness: string): boolean {
+  return command.trim() === `${RTK_NATIVE_HOOK_PREFIX} ${harness}`;
 }
 
 function deterministicId(parts: readonly string[]): string {
@@ -232,7 +262,7 @@ function hookAction(target: PlanTarget, entry: JsonValue): MergeJsonAction {
       'every other entry in the list is unchanged',
     ],
     rollbackData: 'file-snapshot',
-    explanation: `Register rtk on ${target.harness.displayName}'s ${target.eventName} hook for ${target.scope.toolFamily} tools`,
+    explanation: `Register RTK with separate savings tracking for ${target.harness.displayName} on ${target.scope.toolFamily} tools`,
     path: target.configPath,
     // The pointer names the *list*, and the operation owns one element of it. What Token
     // Harness may later remove is that element, never the list.
@@ -251,6 +281,68 @@ function hookAction(target: PlanTarget, entry: JsonValue): MergeJsonAction {
     // install may not have written it yet, and refusing to create it would make the plan fail
     // on exactly the machine with nothing to lose.
     createIfMissing: true,
+  };
+}
+
+function migrationAction(
+  target: PlanTarget,
+  current: NonNullable<ProviderContext['harnessConfigs'][number]['hookCommands']>[number],
+): MergeJsonAction {
+  const wrapped = `${RTK_HOOK_PROXY_COMMAND} ${target.harness.id} --restore-rtk`;
+  return {
+    kind: 'merge-json',
+    id: deterministicId(['rtk', 'attribute', target.configPath, current.commandPointer]),
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [target.configPath],
+    affectedProcesses: [],
+    preconditions: [`${current.commandPointer} still contains the reviewed RTK command`],
+    postconditions: [`${current.commandPointer} routes RTK through per-agent tracking`],
+    rollbackData: 'file-snapshot',
+    explanation: `Enable separate ${target.harness.displayName} savings while preserving its existing RTK hook`,
+    path: target.configPath,
+    ownedPointers: [current.commandPointer],
+    operations: [
+      {
+        kind: 'set',
+        pointer: current.commandPointer,
+        value: wrapped,
+        expectedValueDigest: jsonValueDigest(current.command),
+      },
+    ],
+    createIfMissing: false,
+  };
+}
+
+function restoreNativeHookAction(
+  target: PlanTarget,
+  current: NonNullable<ProviderContext['harnessConfigs'][number]['hookCommands']>[number],
+): MergeJsonAction {
+  const native = `${RTK_NATIVE_HOOK_PREFIX} ${target.harness.id}`;
+  return {
+    kind: 'merge-json',
+    id: deterministicId(['rtk', 'restore-native', target.configPath, current.commandPointer]),
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [target.configPath],
+    affectedProcesses: [],
+    preconditions: [`${current.commandPointer} still contains Token Harness's attribution wrapper`],
+    postconditions: [`${current.commandPointer} is restored to ${native}`],
+    rollbackData: 'file-snapshot',
+    explanation: `Restore the RTK hook that was present before per-agent tracking was enabled`,
+    path: target.configPath,
+    ownedPointers: [current.commandPointer],
+    operations: [
+      {
+        kind: 'set',
+        pointer: current.commandPointer,
+        value: native,
+        expectedValueDigest: jsonValueDigest(current.command),
+      },
+    ],
+    createIfMissing: false,
   };
 }
 
@@ -340,9 +432,9 @@ export function installAction(
     // The channel's own name for the package, because they differ: `rtk-ai.rtk` on winget and
     // `rtk` as a crate. Defaulting to the provider id would install nothing on winget.
     packageName: channel.packageId ?? 'rtk',
-    // Unpinned deliberately: pinning a version Token Harness has not tested against would be a
-    // stronger claim than the manifest's tested range supports.
-    version: null,
+    // The managed Codex hook first exists in this RTK release. Pinning makes a fresh setup's
+    // promised surface deterministic instead of installing an older prompt-only build.
+    version: '0.50.0',
   };
 }
 
@@ -364,6 +456,8 @@ export interface RtkPlanInput {
   installed: boolean;
   identifiesCommand(command: string): boolean;
   installationChannels: ProviderManifestChannels;
+  /** Whether this Token Harness CLI can be called by the harness hook process. */
+  hookProxyAvailable?: boolean;
 }
 
 /**
@@ -377,6 +471,7 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
   const { context, request } = input;
   const targets = planTargets(context, request);
   const actions: PlannedAction[] = [];
+  const diagnostics: Diagnostic[] = [];
   const targetHarnesses = [...new Set(targets.map((target) => target.harness.id))];
 
   if (request.desiredState === 'absent') {
@@ -384,8 +479,22 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     // `Bash|PowerShell` can satisfy coverage while configured, but Token Harness must not claim it
     // as an entry it wrote and later remove it under one of the individual family digests.
     for (const target of targets) {
-      if (!alreadyRegistered(context, target, input.identifiesCommand, false)) continue;
-      actions.push(removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
+      const existing = context.harnessConfigs
+        .flatMap((config) => config.hookCommands ?? [])
+        .find(
+          (entry) =>
+            entry.eventName === target.eventName &&
+            entry.matcher === target.scope.toolFamily &&
+            isRtkAttributionCommand(entry.command, target.harness.id),
+        );
+      if (existing === undefined) continue;
+      if (existing.command.endsWith(' --restore-rtk')) {
+        actions.push(restoreNativeHookAction(target, existing));
+      } else {
+        actions.push(
+          removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)),
+        );
+      }
     }
     // RTK itself is deliberately left installed. RFC 0004: Token Harness removes what it owns,
     // and on a machine where RTK was already present it never owned the installation. Removing
@@ -394,7 +503,29 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       providerId: 'rtk' as ProviderPlan['providerId'],
       desiredState: 'absent',
       actions,
+      diagnostics,
       targetHarnesses: actions.length === 0 ? [] : targetHarnesses,
+    };
+  }
+
+  if (input.hookProxyAvailable === false) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'rtk-attribution-helper-unavailable',
+        subject: providerId('rtk'),
+        message:
+          'Token Harness cannot find its CLI command, so RTK cannot be wrapped for per-agent savings',
+        remediation:
+          'Install or update Token Harness so this CLI version is available on PATH, then refresh this plan',
+      }),
+    );
+    return {
+      providerId: 'rtk' as ProviderPlan['providerId'],
+      desiredState: 'configured',
+      actions,
+      diagnostics,
+      targetHarnesses: [],
     };
   }
 
@@ -403,8 +534,74 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     if (install !== null) actions.push(install);
   }
 
+  const migratedPointers = new Set<string>();
+
   for (const target of targets) {
-    if (alreadyRegistered(context, target, input.identifiesCommand, true)) continue;
+    if (alreadyRegistered(context, target, true)) continue;
+    const matchingEntries = context.harnessConfigs
+      .filter(
+        (config) =>
+          config.harnessId === target.harness.id &&
+          config.configPath === target.configPath &&
+          config.interceptionPoints.includes(target.scope.interceptionPoint),
+      )
+      .flatMap((config) => config.hookCommands ?? [])
+      .filter(
+        (entry) =>
+          entry.eventName === target.eventName &&
+          entry.matcher !== null &&
+          matcherCoversFamily(entry.matcher, target.scope.toolFamily) &&
+          input.identifiesCommand(entry.command),
+      );
+    const native = matchingEntries.find((entry) =>
+      isCanonicalNativeHook(entry.command, target.harness.id),
+    );
+    if (native !== undefined) {
+      if (!migratedPointers.has(native.commandPointer)) {
+        actions.push(migrationAction(target, native));
+        migratedPointers.add(native.commandPointer);
+      }
+      continue;
+    }
+    if (matchingEntries.length > 0) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'rtk-custom-hook-needs-review',
+          subject: target.harness.id,
+          message: `An existing RTK hook on ${target.harness.displayName} uses a custom command and was left unchanged`,
+          path: target.configPath,
+          remediation: 'Review the hook command before enabling per-agent tracking',
+        }),
+      );
+      continue;
+    }
+    const configuredButUnlocatable = context.harnessConfigs
+      .filter(
+        (config) =>
+          config.harnessId === target.harness.id &&
+          config.configPath === target.configPath &&
+          config.interceptionPoints.includes(target.scope.interceptionPoint),
+      )
+      .some(
+        (config) =>
+          config.hookCommands === undefined &&
+          config.commands.some((command) => input.identifiesCommand(command)),
+      );
+    if (configuredButUnlocatable) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'rtk-hook-location-unavailable',
+          subject: target.harness.id,
+          message: `The existing RTK hook on ${target.harness.displayName} could not be located precisely and was left unchanged`,
+          path: target.configPath,
+          remediation:
+            'Refresh the harness configuration, then review the per-agent tracking update',
+        }),
+      );
+      continue;
+    }
     actions.push(hookAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
   }
 
@@ -412,6 +609,7 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
     providerId: 'rtk' as ProviderPlan['providerId'],
     desiredState: 'configured',
     actions,
+    diagnostics,
     targetHarnesses: actions.length === 0 ? [] : targetHarnesses,
   };
 }

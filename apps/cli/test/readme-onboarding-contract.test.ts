@@ -33,7 +33,7 @@ describe('README onboarding contract', () => {
     }
     assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
     assert.match(readme, /There is no separate Setup page to learn/i);
-    assert.match(readme, /Optimizer connections/);
+    assert.match(readme, /Optimizer setup/);
     assert.doesNotMatch(readme, /Finish setup/);
     assert.match(readme, /Install updates/);
 

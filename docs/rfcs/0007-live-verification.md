@@ -53,6 +53,13 @@ Three consequences are normative:
    configuring. This interacts directly with the ownership model in RFC 0004 §Ownership:
    owning an entry and keeping it live are not the same guarantee.
 
+The same boundary applies to instruction and skill bundles. Finding HarnessTrim skills for
+Codex or Claude Code proves that guidance files are present; it does not prove a reducer hook
+is configured, that the agent followed the guidance, or that a reduction was recorded. A
+skills-only setup therefore remains at the provider-presence tier until runtime integration
+or provider telemetry supplies stronger evidence. The Results view must label detected setup
+separately from agent-attributed measurements.
+
 ## What a receipt is
 
 A receipt is an observation that survives the operation. There are two families, they

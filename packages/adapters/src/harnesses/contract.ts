@@ -21,6 +21,7 @@ import type {
   FileSystemPort,
   HarnessConfigFile,
   HarnessConfigSummary,
+  HarnessHookCommandSummary,
   HarnessDetection,
   HarnessId,
   HarnessManifest,
@@ -69,6 +70,8 @@ export interface ResolvedHarnessConfig {
    * knowing how to parse a harness configuration file.
    */
   commands: string[];
+  /** Exact hook command locations, where the adapter's parser can provide them. */
+  hookCommands?: HarnessHookCommandSummary[];
 }
 
 /**

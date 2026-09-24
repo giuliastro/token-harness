@@ -46,7 +46,7 @@ correct and that nothing available can show it ran.
 | Provider | Harness | Declared tier | Harness ceiling | Gap |
 | --- | --- | --- | --- | --- |
 | rtk | claude | canary | canary | at the harness ceiling |
-| rtk | codex | config-only | config-only | at the harness ceiling |
+| rtk | codex | canary | config-only | below the harness ceiling — see Known limitations |
 | rtk | opencode | config-only | config-only | at the harness ceiling |
 | harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | harnesstrim | codex | config-only | config-only | at the harness ceiling |
@@ -87,7 +87,7 @@ RFC 0005 §Importer degradation policy: an importer states the fidelity mode it 
 
 | Provider | Metrics source | Importer mode | Default locations |
 | --- | --- | --- | --- |
-| rtk | local-database | native | `<user data directory>/rtk/history.db` |
+| rtk | local-database | native | `<user data directory>/rtk/history.db`, `<Token Harness state directory>/rtk-claude.db`, `<Token Harness state directory>/rtk-codex.db` |
 | harnesstrim | jsonl | native | `.harnesstrim/metrics.jsonl`, `.hermes/harnesstrim-metrics.jsonl` |
 | mcptoon | none | unavailable | — |
 | gitnexus | none | unavailable | — |

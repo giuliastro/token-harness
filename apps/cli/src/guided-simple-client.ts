@@ -240,7 +240,7 @@ async function checkUpdates() {
   const run = showDialog('Checking updates');
   setLocked(true, false);
   $('close').textContent = 'Cancel';
-  $('review-content').append(progress('Checking optimizer updates', 'Read-only. Nothing will be installed.'));
+  $('review-content').append(progress('Checking Token Harness and optimizer updates', 'Read-only. Nothing will be installed.'));
   try {
     const result = await request('/api/update-check', {});
     if (run !== dialogRun) return;

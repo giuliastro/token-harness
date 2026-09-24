@@ -208,12 +208,18 @@ deferred decision rather than an assumption baked into every importer and report
 ### RTK
 
 Source: RTK's own command history database, `<user data directory>/rtk/history.db`, table
-`commands`. One row per intercepted command, with a monotonic `INTEGER PRIMARY KEY`.
+`commands`, for historical/shared activity, plus `<Token Harness state directory>/rtk-<harness>.db`
+for activity recorded through Token Harness's per-harness hook proxy. Each has one row per
+intercepted command and a monotonic `INTEGER PRIMARY KEY`.
 
 This section originally named `rtk gain --all --format json` as the metrics source. That was
 wrong, and the correction is recorded here rather than only in the adapter, because the
 reason generalises: **an aggregate is not a stream of events, and no cursor can make it
 one.**
+
+The same aggregate also cannot verify an exact coding agent. RTK's shared database remains
+historical and unattributed; Token Harness routes new Claude Code and Codex command rewrites
+to separate databases so their measurements and passive receipts can be attributed honestly.
 
 What was observed against RTK 0.42.0:
 
@@ -248,7 +254,7 @@ Mapping to the normalized event:
 | `measurement.beforeChars` / `afterChars` | `null` — never derived from the token counts |
 | `measurement.tokenizer` | `rtk`, recorded so a reader can judge a figure counted by RTK's tokenizer rather than the model provider's |
 | `context.projectId` | `project_path`, normalized and salted per §Privacy |
-| `context.harnessId` | `unknown` — a row carries no harness, and reading one off today's configuration would attribute months of history to today's wiring |
+| `context.harnessId` | `unknown` for RTK's shared `history.db`; the explicit database chosen by the Token Harness proxy identifies new Claude Code and Codex rows |
 | `context.capability` | `shell.output.reduce`: the command ran either way, and what shrank was its output |
 | `outcome.changed` | `output_tokens < input_tokens` |
 | `outcome.latencyMs` | `exec_time_ms` |
@@ -269,10 +275,11 @@ identifier it is authoritative, and `byteOffset` and `lastLineDigest` are not us
 them with placeholders would make the cursor a record of nothing.
 
 `fileIdentity` carries the *generation* instead of a device or inode: for RTK it is the lowest
-surviving `id` and the row count. §Deduplicating a stream without event IDs wanted the digest
+surviving `id`. §Deduplicating a stream without event IDs wanted the digest
 to confirm "the file was appended to rather than rewritten"; `rtk gain --reset` empties the
 table, and a repopulated one starts again from a low `id`. When the generation changes the
-import restarts from zero, which is safe because the event identity is the native row id.
+import restarts from zero. Event identity retains RTK's native row id; the per-harness imports
+also namespace the identity by harness because separate databases can reuse the same id.
 
 Without that check a stored mark higher than the new table's maximum would suppress every row
 forever, and the importer would report a healthy no-op on each run.
@@ -518,4 +525,3 @@ Every A/B run records:
 
 A saving is not accepted if task success regresses beyond the benchmark's declared
 tolerance.
-

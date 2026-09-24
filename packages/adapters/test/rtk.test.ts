@@ -1,14 +1,9 @@
 /**
  * The RTK adapter — PLAN §10 acceptance.
  *
- * "Fixtures for absent, installed, configured, old, unknown-new, and broken states" and
- * "the brownfield fixtures, including RTK already configured in the surface Token Harness
- * would claim". No installed RTK is required: the analytics come from a fake runner
- * returning the document shape observed on a real machine.
- *
- * The load-bearing test is the passive canary. The Phase 2.5 spike demonstrated tier 3 by
- * hand; these assert that the adapter reaches it from the provider's own record, and — just
- * as importantly — that it refuses to when the record is empty.
+ * Detection and verification use fake process and database ports, so no installed RTK is
+ * required. The load-bearing tests make sure old shared totals cannot be attributed to Claude
+ * or Codex, and that each canary comes only from its dedicated database.
  */
 
 import assert from 'node:assert/strict';
@@ -24,12 +19,7 @@ import type {
   ProcessRunner,
 } from '@token-harness/core';
 
-import {
-  harnessesWiredToRtk,
-  parseRtkAnalytics,
-  rtkAdapter,
-  type ProviderContext,
-} from '../src/index.js';
+import { harnessesWiredToRtk, rtkAdapter, type ProviderContext } from '../src/index.js';
 
 const FACTS: PlatformFacts = {
   os: 'windows',
@@ -124,6 +114,46 @@ const WIRED: HarnessConfigSummary = {
   commands: ['rtk hook claude'],
 };
 
+function attributionProxyConfig(harness: 'claude' | 'codex'): HarnessConfigSummary {
+  return {
+    ...WIRED,
+    harnessId: harness as HarnessConfigSummary['harnessId'],
+    configPath:
+      harness === 'claude'
+        ? 'C:\\Users\\dev\\.claude\\settings.json'
+        : 'C:\\Users\\dev\\.codex\\hooks.json',
+    commands: [`token-harness __internal-rtk-hook ${harness}`],
+  };
+}
+
+function historyDatabase(options: {
+  claude?: { count: number; latest: string | null };
+  codex?: { count: number; latest: string | null };
+}): LocalDatabasePort {
+  return {
+    query: (query) => {
+      const harness = query.path.endsWith('rtk-claude.db')
+        ? options.claude
+        : query.path.endsWith('rtk-codex.db')
+          ? options.codex
+          : undefined;
+      return Promise.resolve({
+        rows:
+          harness === undefined
+            ? []
+            : [
+                {
+                  operation_count: harness.count,
+                  latest_timestamp: harness.latest,
+                },
+              ],
+        failure: null,
+        detail: null,
+      });
+    },
+  };
+}
+
 const SOMEONE_ELSE: HarnessConfigSummary = {
   ...WIRED,
   matchers: ['Bash'],
@@ -157,58 +187,6 @@ function context(
     projectIdFor: (path) => `p_${path.length.toString(16)}`,
   };
 }
-
-describe('the analytics document', () => {
-  it('reads the shape a real rtk returned', () => {
-    const analytics = parseRtkAnalytics(
-      analyticsDocument([
-        { date: '2026-07-29', commands: 300 },
-        { date: '2026-07-30', commands: 500 },
-      ]),
-    );
-    assert.equal(analytics?.totalCommands, 800);
-    assert.deepEqual(analytics?.latestDay, { date: '2026-07-30', commands: 500 });
-  });
-
-  it('picks the latest day regardless of array order', () => {
-    const analytics = parseRtkAnalytics(
-      analyticsDocument([
-        { date: '2026-07-30', commands: 500 },
-        { date: '2026-07-29', commands: 300 },
-      ]),
-    );
-    assert.equal(analytics?.latestDay?.date, '2026-07-30');
-  });
-
-  it('ignores a day with no commands, because it is not a receipt', () => {
-    const analytics = parseRtkAnalytics(
-      analyticsDocument([
-        { date: '2026-07-29', commands: 300 },
-        { date: '2026-07-30', commands: 0 },
-      ]),
-    );
-    assert.equal(analytics?.latestDay?.date, '2026-07-29');
-  });
-
-  it('returns no latest day when nothing has been intercepted', () => {
-    const analytics = parseRtkAnalytics(analyticsDocument([]));
-    assert.equal(analytics?.totalCommands, 0);
-    assert.equal(analytics?.latestDay, null);
-  });
-
-  const refused: ReadonlyArray<readonly [string, string]> = [
-    ['not JSON at all', 'RTK Token Savings (Global Scope)'],
-    ['a JSON array', '[]'],
-    ['an object with no summary', '{ "daily": [] }'],
-    ['a summary with no command count', '{ "summary": { "total_saved": 1 } }'],
-  ];
-  for (const [name, text] of refused) {
-    it(`refuses ${name} rather than guessing at a partial read`, () => {
-      // A savings figure derived from a guess is what RFC 0005 exists to prevent.
-      assert.equal(parseRtkAnalytics(text), null);
-    });
-  }
-});
 
 describe('recognising itself in a harness configuration', () => {
   const cases: ReadonlyArray<readonly [string, boolean]> = [
@@ -311,9 +289,26 @@ describe('detection', () => {
     assert.equal(detection.installationChannel, null);
   });
 
-  it('offers managed hook setup for Claude Code and Codex', async () => {
-    const detection = await rtkAdapter.detect(context({}));
+  it('offers Codex hook setup only on RTK 0.50.0', async () => {
+    const old = await rtkAdapter.detect(context({ version: 'rtk 0.49.0' }));
+    assert.deepEqual(old.assignableHarnesses, ['claude']);
+
+    const detection = await rtkAdapter.detect(context({ version: 'rtk 0.50.0' }));
     assert.deepEqual(detection.assignableHarnesses, ['claude', 'codex']);
+  });
+
+  it('marks Codex configuration broken when installed RTK predates the native hook', async () => {
+    const config: HarnessConfigSummary = {
+      ...WIRED,
+      harnessId: 'codex' as HarnessConfigSummary['harnessId'],
+      configPath: 'C:\\Users\\dev\\.codex\\hooks.json',
+      commands: ['rtk hook codex'],
+    };
+    const detection = await rtkAdapter.detect(
+      context({ version: 'rtk 0.49.0', configs: [config] }),
+    );
+    assert.equal(detection.state, 'broken');
+    assert.ok(detection.warnings.some((warning) => warning.code === 'rtk-codex-hook-unsupported'));
   });
 
   it('does not claim a managed surface it does not have', async () => {
@@ -325,78 +320,81 @@ describe('detection', () => {
   });
 });
 
-/** RFC 0007 §Active and passive canaries. This is what the spike proved by hand. */
-describe('the passive canary', () => {
-  it('reaches canary from the provider own dated record', async () => {
-    const verification = await rtkAdapter.verify(context({ configs: [WIRED] }));
-    assert.equal(verification.declaredTier, 'canary');
-    assert.equal(verification.achievedTier, 'canary');
-    assert.deepEqual(verification.receipt, {
-      observedAt: '2026-07-30',
-      operations: 500,
-      source: 'rtk gain --all --format json',
-    });
-
-    const check = verification.checks.find((entry) => entry.id === 'canary-intercepted');
-    assert.equal(check?.status, 'pass');
-    assert.equal(check?.achievedTier, 'canary');
-    assert.match(check?.summary ?? '', /500 commands intercepted on 2026-07-30/);
-  });
-
-  it('reports not-exercised, not pass, when nothing has been intercepted', async () => {
-    const verification = await rtkAdapter.verify(
-      context({ configs: [WIRED], analytics: analyticsDocument([]) }),
-    );
-    // Nothing is wrong and nothing has happened. Asserting a pass here would claim
-    // interception on no evidence.
-    assert.equal(
-      verification.checks.find((entry) => entry.id === 'canary-intercepted')?.status,
-      'not-exercised',
-    );
-    assert.equal(verification.receipt, null);
-    assert.equal(verification.achievedTier, 'config-only');
-  });
-
-  it('says out loud when the receipt is stale', async () => {
+describe('per-harness verification', () => {
+  it('does not infer Claude activity from RTK shared totals', async () => {
     const verification = await rtkAdapter.verify(
       context({
         configs: [WIRED],
-        analytics: analyticsDocument([{ date: '2026-07-01', commands: 12 }]),
-        now: '2026-07-30T12:00:00.000Z',
+        analytics: analyticsDocument([{ date: '2026-07-30', commands: 500 }]),
       }),
-    );
-    // RFC 0007: "working as of three weeks ago" and "working as of a minute ago" are
-    // different claims. Still a pass — nothing is broken — with the age recorded.
-    assert.equal(
-      verification.checks.find((entry) => entry.id === 'canary-intercepted')?.status,
-      'pass',
-    );
-    const freshness = verification.checks.find((entry) => entry.id === 'receipt-freshness');
-    assert.equal(freshness?.status, 'info');
-    assert.match(freshness?.summary ?? '', /29 days ago/);
-  });
-
-  it('stays quiet about freshness for a receipt from today', async () => {
-    const verification = await rtkAdapter.verify(context({ configs: [WIRED] }));
-    assert.equal(
-      verification.checks.some((entry) => entry.id === 'receipt-freshness'),
-      false,
-    );
-  });
-
-  it('fails the analytics check rather than the canary when the document is unreadable', async () => {
-    const verification = await rtkAdapter.verify(
-      context({ configs: [WIRED], analytics: 'RTK Token Savings (Global Scope)' }),
-    );
-    assert.equal(
-      verification.checks.find((entry) => entry.id === 'analytics-readable')?.status,
-      'fail',
     );
     assert.equal(verification.receipt, null);
     assert.equal(verification.achievedTier, 'config-only');
+    assert.equal(
+      verification.checks.find((entry) => entry.id === 'rtk-attribution-claude')?.status,
+      'not-exercised',
+    );
   });
 
-  it('reports not-exercised for the hook when no harness names rtk', async () => {
+  it('records a Claude canary only from the Claude-specific history', async () => {
+    const verification = await rtkAdapter.verify(
+      context({
+        configs: [attributionProxyConfig('claude')],
+        localDatabase: historyDatabase({
+          claude: { count: 17, latest: '2026-07-30T10:15:00.000Z' },
+        }),
+      }),
+    );
+    assert.equal(verification.achievedTier, 'canary');
+    assert.deepEqual(verification.receipt, {
+      observedAt: '2026-07-30T10:15:00.000Z',
+      operations: 17,
+      source: 'RTK per-agent history (claude)',
+      harnessId: 'claude',
+    });
+    assert.equal(
+      verification.checks.find((entry) => entry.id === 'rtk-attribution-claude')?.status,
+      'pass',
+    );
+  });
+
+  it('does not claim Codex hook activity on RTK 0.49.0', async () => {
+    const codex: HarnessConfigSummary = {
+      ...WIRED,
+      harnessId: 'codex' as HarnessConfigSummary['harnessId'],
+      configPath: 'C:\\Users\\dev\\.codex\\hooks.json',
+      commands: ['token-harness __internal-rtk-hook codex'],
+    };
+    const verification = await rtkAdapter.verify(
+      context({ version: 'rtk 0.49.0', configs: [codex] }),
+    );
+    assert.equal(verification.receipt, null);
+    assert.equal(
+      verification.checks.find((entry) => entry.id === 'rtk-attribution-codex')?.status,
+      'fail',
+    );
+  });
+
+  it('records a Codex canary from Codex-specific history on RTK 0.50.0', async () => {
+    const verification = await rtkAdapter.verify(
+      context({
+        version: 'rtk 0.50.0',
+        configs: [attributionProxyConfig('codex')],
+        localDatabase: historyDatabase({
+          codex: { count: 23, latest: '2026-07-30T11:15:00.000Z' },
+        }),
+      }),
+    );
+    assert.equal(verification.achievedTier, 'canary');
+    assert.equal(verification.receipt?.harnessId, 'codex');
+    assert.equal(verification.receipt?.operations, 23);
+    assert.equal(
+      verification.checks.find((entry) => entry.id === 'rtk-attribution-codex')?.status,
+      'pass',
+    );
+  });
+
+  it('reports not-exercised for the hook when no harness names RTK', async () => {
     const verification = await rtkAdapter.verify(context({}));
     assert.equal(
       verification.checks.find((entry) => entry.id === 'hook-registered')?.status,
@@ -404,7 +402,7 @@ describe('the passive canary', () => {
     );
   });
 
-  it('fails the executable check and reaches no tier when rtk is gone', async () => {
+  it('fails the executable check and reaches no tier when RTK is gone', async () => {
     const verification = await rtkAdapter.verify(context({ version: null, analytics: null }));
     assert.equal(
       verification.checks.find((entry) => entry.id === 'executable-resolves')?.status,

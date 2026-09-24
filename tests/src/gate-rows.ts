@@ -17,6 +17,7 @@ import {
   providerId,
   type CompatibilityRow,
   type PlatformFacts,
+  type ProcessRunner,
 } from '@token-harness/core';
 
 /** The version every fake executable reports: the Node this suite runs on. */
@@ -59,4 +60,41 @@ export function rowFor(
 /** The default set: RTK on Claude Code, the only managed provider at Phase 1. */
 export function nodeVersionRows(platform: PlatformFacts): readonly CompatibilityRow[] {
   return [rowFor('rtk', 'claude', platform)];
+}
+
+/**
+ * Models the internal hook proxy when tests invoke `run()` in-process rather than launching the
+ * bundled CLI executable. Other requests still go to the supplied runner unchanged.
+ */
+export function withRtkHookProxyAvailable(runner: ProcessRunner): ProcessRunner {
+  const readNativeConfigurationEnvironment = runner.readNativeConfigurationEnvironment;
+  return {
+    run(request) {
+      if (
+        request.executable === 'token-harness' &&
+        request.args.join(' ') === '__internal-rtk-hook claude --check'
+      ) {
+        return Promise.resolve({
+          displayCommand: 'token-harness __internal-rtk-hook claude --check',
+          interpreter: 'direct',
+          executablePath: '/test/token-harness',
+          exitCode: 0,
+          signal: null,
+          stdout: 'token-harness-rtk-hook-proxy-v1\n',
+          stderr: '',
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 0,
+          timedOut: false,
+          failure: null,
+        });
+      }
+      return runner.run(request);
+    },
+    ...(readNativeConfigurationEnvironment === undefined
+      ? {}
+      : {
+          readNativeConfigurationEnvironment: () => readNativeConfigurationEnvironment.call(runner),
+        }),
+  };
 }

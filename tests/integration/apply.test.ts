@@ -28,7 +28,7 @@ import {
   type PlatformFacts,
   type ResolvedExecutable,
 } from '@token-harness/core';
-import { nodeVersionRows } from '@token-harness/tests';
+import { nodeVersionRows, withRtkHookProxyAvailable } from '@token-harness/tests';
 import { NodeFileSystem, NodeProcessRunner } from '@token-harness/platform';
 import { run, type RunOptions } from 'token-harness';
 
@@ -124,7 +124,9 @@ async function invoke<T>(
     stateRoot: place.state,
     adapters: {
       fs,
-      runner: new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: resolveRunner }),
+      runner: withRtkHookProxyAvailable(
+        new NodeProcessRunner({ facts: FACTS, env: process.env, resolve: resolveRunner }),
+      ),
       paths: {
         home: place.home,
         config: join(place.home, 'config'),
@@ -186,7 +188,7 @@ describe('a committed apply', () => {
 
     assert.equal(result.exitCode, 0);
     assert.equal(result.data?.outcome, 'committed');
-    assert.match(readFileSync(place.settings, 'utf8'), /rtk hook claude/);
+    assert.match(readFileSync(place.settings, 'utf8'), /token-harness __internal-rtk-hook claude/);
   });
 
   it("leaves the user's own hook entry in place, and first", async () => {
@@ -328,7 +330,7 @@ describe('plan persistence', () => {
     const applied = await invoke<ApplyReport>(['apply', '--yes', '--plan', planId], place);
     assert.equal(applied.exitCode, 0);
     assert.equal(applied.data?.fromStoredPlan, true);
-    assert.match(readFileSync(place.settings, 'utf8'), /rtk hook claude/);
+    assert.match(readFileSync(place.settings, 'utf8'), /token-harness __internal-rtk-hook claude/);
   });
 
   it('rejects a plan id that does not exist', async () => {
@@ -366,7 +368,10 @@ describe('plan persistence', () => {
     // RFC 0006: rejected with the precondition-drift code, "before any action executes". The id
     // a reviewer approved no longer describes the artifact.
     assert.equal(applied.exitCode, 5);
-    assert.doesNotMatch(readFileSync(place.settings, 'utf8'), /rtk hook claude/);
+    assert.doesNotMatch(
+      readFileSync(place.settings, 'utf8'),
+      /token-harness __internal-rtk-hook claude/,
+    );
   });
 
   it('rejects a stored plan computed for another project', async () => {

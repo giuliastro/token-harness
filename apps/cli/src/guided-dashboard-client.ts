@@ -197,10 +197,10 @@ async function verify() {
 }
 async function checkUpdates() {
   if (working || !csrf) return;
-  showDialog('Checking optimizer updates');
+  showDialog('Checking Token Harness and optimizer updates');
   setLocked(true);
   $('review-content').append(
-    node('p', 'This checks provider channels only. No provider will be installed or updated.'),
+    node('p', 'This checks Token Harness and provider channels. Nothing will be installed or updated during the check.'),
   );
   try {
     renderResult(await request('/api/update-check', {}));
