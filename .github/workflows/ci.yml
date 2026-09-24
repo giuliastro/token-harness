@@ -39,6 +39,17 @@ jobs:
           node-version: '22.13.0'
           cache: pnpm
 
+      # The Windows optional-provider live gate needs the two reviewed Python tool managers.
+      # setup-python keeps this deterministic; the smoke itself isolates HOME, pipx and uv state.
+      - uses: actions/setup-python@v6
+        if: runner.os == 'Windows'
+        with:
+          python-version: '3.10'
+
+      - name: Install Windows optional-provider installer prerequisites
+        if: runner.os == 'Windows'
+        run: python -m pip install --disable-pip-version-check pipx uv
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -75,9 +86,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # Windows first-run regression gate for an optional provider. This starts with current
-      # Claude Code present and GitNexus genuinely absent in isolated user/npm directories, then
-      # exercises the same guided preview/apply path a user clicks. No model call or indexing.
+      # Windows first-run regression gate for every optional provider. It starts with current
+      # Claude Code + Codex and GitNexus/mcptoon/Headroom genuinely absent in isolated user/tool
+      # directories, proves missing pipx/uv guidance is precise, then exercises reviewed npm/pipx/uv
+      # install + guided preview/apply + postcondition verification. No model call or indexing.
       - name: Optional provider live Windows first-run smoke
         if: runner.os == 'Windows'
         run: node scripts/evaluation/optional-windows-first-run-smoke.mjs
