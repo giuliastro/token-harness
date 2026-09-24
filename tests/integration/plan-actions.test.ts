@@ -173,16 +173,26 @@ describe('a home already carrying the RTK hook', () => {
 
     assert.equal(exitCode, 0);
     assert.ok(report);
-    const hook = report.actions.find((action) => action.kind === 'merge-json');
-    assert.ok(hook, 'the existing direct RTK hook must be migrated');
-    assert.equal(report.actions.filter((action) => action.kind === 'merge-json').length, 1);
-    assert.deepEqual(hook.ownedPointers, ['hooks.PreToolUse.0.hooks.0.command']);
-    assert.deepEqual(hook.operations, [
+    const migrationActions = report.actions.filter((action) => action.kind === 'merge-json');
+    const expectedPointers =
+      FACTS.os === 'windows'
+        ? ['hooks.PreToolUse.0.hooks.0.command', 'hooks.PreToolUse.1.hooks.0.command']
+        : ['hooks.PreToolUse.0.hooks.0.command'];
+    assert.deepEqual(
+      migrationActions.flatMap((action) => action.ownedPointers).sort(),
+      expectedPointers,
+      'every existing direct RTK hook must be migrated',
+    );
+    const bashHook = migrationActions.find((action) =>
+      action.ownedPointers.includes('hooks.PreToolUse.0.hooks.0.command'),
+    );
+    assert.ok(bashHook, 'the existing Bash hook must be migrated');
+    assert.deepEqual(bashHook.operations, [
       {
         kind: 'set',
         pointer: 'hooks.PreToolUse.0.hooks.0.command',
         value: 'token-harness __internal-rtk-hook claude --restore-rtk',
-        expectedValueDigest: hook.operations[0]?.expectedValueDigest,
+        expectedValueDigest: bashHook.operations[0]?.expectedValueDigest,
       },
     ]);
   });
@@ -190,7 +200,7 @@ describe('a home already carrying the RTK hook', () => {
   it('keeps ownership visible while the native hook still needs migration', async () => {
     const { report } = await planIn(homeWith(RTK_HOOK));
     assert.ok(report);
-    assert.equal(report.actions.length, 1);
+    assert.equal(report.actions.length, FACTS.os === 'windows' ? 2 : 1);
     assert.ok(report.ownership.some((entry) => entry.owner === 'rtk'));
   });
 
