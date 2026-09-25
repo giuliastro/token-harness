@@ -24,6 +24,7 @@ import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
 import { runUpdateCheck } from './commands/update.js';
+import type { SmartRoutingCommandReport } from './commands/smart-routing.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
 import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.js';
@@ -177,10 +178,14 @@ interface Approval {
     | 'uninstall'
     | 'update'
     | 'candidate-apply'
-    | 'candidate-uninstall';
+    | 'candidate-uninstall'
+    | 'routing-configure'
+    | 'routing-rollback';
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
+  routingHarness?: GuideHarness;
+  routingMode?: 'shadow' | 'conservative';
   updateTargets?: GuideUpdateTarget[];
 }
 type GuideUpdateTarget =
