@@ -116,7 +116,8 @@ export async function planDirectRtkRelease(input: {
         severity: 'warning',
         code: 'rtk-release-target-unresolved',
         subject: input.providerId,
-        message: 'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
+        message:
+          'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
         remediation: 'Check PATH, then re-run Check for updates',
       }),
     ]);
@@ -136,7 +137,8 @@ export async function planDirectRtkRelease(input: {
           path: executable.path,
           message:
             'A resolved RTK path is not a native executable, so Token Harness will not replace it',
-          remediation: 'Remove the non-native RTK shim from PATH or install RTK as a native binary, then retry the update check',
+          remediation:
+            'Remove the non-native RTK shim from PATH or install RTK as a native binary, then retry the update check',
         }),
       ]);
     }
@@ -173,7 +175,8 @@ export async function planDirectRtkRelease(input: {
         severity: 'warning',
         code: 'rtk-release-target-ambiguous',
         subject: input.providerId,
-        message: `The verified GitHub release update was not planned because ${String(uniqueTargets.size)} distinct RTK binaries resolve from PATH: ${aliases}`,
+        message:
+          `The verified GitHub release update was not planned because ${String(uniqueTargets.size)} distinct RTK binaries resolve from PATH: ${aliases}`,
         remediation:
           'Keep only the intended RTK installation on PATH, then re-run Check for updates; aliases or symlinks to the same real binary are accepted',
       }),
