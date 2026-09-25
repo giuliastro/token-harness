@@ -2143,6 +2143,11 @@ export class GuideService {
       const blocked = updateResult.data.providers.filter(
         (row) => row.verdict === 'blocked-unreviewed',
       );
+      const unresolved = updateResult.data.providers.filter(
+        (row) =>
+          row.installed !== null &&
+          (row.verdict === 'unknown' || row.verdict === 'unavailable' || row.verdict === 'no-channel'),
+      );
       const messages: string[] = [];
       const application = updateResult.data.application;
       if (application?.verdict === 'upgradable') {
@@ -2174,9 +2179,34 @@ export class GuideService {
           ),
         );
       }
-      if (available.length === 0 && blocked.length === 0 && application?.verdict === 'current') {
+      if (unresolved.length > 0) {
+        messages.push(
+          ...unresolved.map((row) => {
+            const diagnostic = updateResult.diagnostics.find(
+              (entry) =>
+                entry.subject === row.providerId &&
+                (entry.severity === 'warning' || entry.severity === 'error'),
+            );
+            const detail =
+              diagnostic?.message ??
+              'The update channel or safe replacement target could not be resolved.';
+            return `${name(row.providerId)}: update status could not be verified from installed ${row.installed ?? 'version unknown'}. ${detail} Token Harness is not treating this provider as up to date.`;
+          }),
+        );
+      }
+      if (
+        available.length === 0 &&
+        blocked.length === 0 &&
+        unresolved.length === 0 &&
+        application?.verdict === 'current'
+      ) {
         messages.push('Token Harness and your managed optimizers are up to date.');
-      } else if (available.length === 0 && blocked.length === 0 && application === undefined) {
+      } else if (
+        available.length === 0 &&
+        blocked.length === 0 &&
+        unresolved.length === 0 &&
+        application === undefined
+      ) {
         messages.push('Your managed optimizers are up to date on their configured channels.');
       }
 
@@ -2214,20 +2244,25 @@ export class GuideService {
 
       const stack = this.stackSnapshot();
       if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
+      const needsAttention = unresolved.length > 0 || upgradableCount > updateTargets.length;
       this.record(
         ticket !== null
-          ? 'Token Harness or optimizer update available. Waiting for your approval.'
-          : upgradableCount > 0
-            ? 'Update check could not produce an exact install target.'
+          ? needsAttention
+            ? 'Updates are available, but at least one optimizer update check also needs attention.'
+            : 'Token Harness or optimizer update available. Waiting for your approval.'
+          : needsAttention
+            ? 'Update check could not safely determine every installed optimizer update.'
             : 'Token Harness and optimizer update check completed.',
-        'success',
+        needsAttention ? 'attention' : 'success',
       );
       return {
-        ok: true,
+        ok: !needsAttention,
         title:
           ticket !== null
-            ? 'Updates available'
-            : upgradableCount > 0
+            ? needsAttention
+              ? 'Updates available; some checks need attention'
+              : 'Updates available'
+            : needsAttention
               ? 'Update check needs attention'
               : application?.verdict === 'current'
                 ? 'Token Harness and optimizers up to date'
