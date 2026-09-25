@@ -58,6 +58,11 @@ export const GUIDE_HTML = `<!doctype html>
 <details class="disclosure"><summary>Remove Token Harness-managed configuration</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration it owns; installed provider software and user-owned configuration may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details>
 </section>
 
+<section class="setup-step" id="smart-routing">
+<div class="section-title"><div><h2>Smart Model Routing</h2><p>Optional shadow-first request routing for Claude Code and Codex. Shadow mode observes locally without changing models; conservative routing is an explicit opt-in.</p></div></div>
+<div id="routing-overview" class="maintenance-list"><p class="empty">Checking supported coding agents…</p></div>
+</section>
+
 <section class="setup-step" id="maintenance">
 <div class="section-title"><div><h2>Health and updates</h2><p>These are maintenance actions, not onboarding steps. Setup already performs its own safety checks.</p></div></div>
 <div id="maintenance-actions" class="maintenance-list"><p class="empty">Checking…</p></div>

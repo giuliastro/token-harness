@@ -110,26 +110,44 @@ export async function planDirectRtkRelease(input: {
   const admission = admitProviderPackageUpdate(input.providerId, targetText);
   if (admission.state !== 'admitted') return empty('unavailable');
 
-  if (input.executables.length !== 1) {
-    const detail =
-      input.executables.length === 0
-        ? 'no concrete RTK executable path could be resolved'
-        : `${String(input.executables.length)} RTK executable paths resolve: ${input.executables.map((entry) => entry.path).join(', ')}`;
+  if (input.executables.length === 0) {
     return empty('unavailable', [
       diagnostic({
         severity: 'warning',
-        code: 'rtk-release-target-ambiguous',
+        code: 'rtk-release-target-unresolved',
         subject: input.providerId,
-        message: `The verified GitHub release update was not planned because ${detail}`,
+        message:
+          'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
         remediation:
-          'Make exactly one intended RTK executable resolve on PATH, then re-run Check for updates; Token Harness will not choose an arbitrary binary to replace',
+          'Make the intended RTK executable available on PATH, then re-run Check for updates',
       }),
     ]);
   }
 
+  // PATH order already decides which RTK the process runner and provider detector execute.
+  // A second, shadowed RTK later on PATH does not make the active executable ambiguous: updating
+  // the first resolved path and verifying that same path is safer and more useful than refusing
+  // every real machine that happens to retain an older Cargo or ~/.local/bin copy.
   const executable = input.executables[0];
+  const shadowedDiagnostics =
+    input.executables.length > 1
+      ? [
+          diagnostic({
+            severity: 'info',
+            code: 'rtk-release-shadowed-executables',
+            subject: input.providerId,
+            path: executable?.path ?? null,
+            message: `RTK update will target the active PATH executable ${executable?.path ?? 'unknown'}; ${String(input.executables.length - 1)} shadowed RTK executable${input.executables.length === 2 ? '' : 's'} will be left unchanged: ${input.executables
+              .slice(1)
+              .map((entry) => entry.path)
+              .join(', ')}`,
+            remediation: null,
+          }),
+        ]
+      : [];
   if (executable === undefined || executable.kind !== 'native') {
     return empty('unavailable', [
+      ...shadowedDiagnostics,
       diagnostic({
         severity: 'warning',
         code: 'rtk-release-target-not-native',
@@ -146,6 +164,7 @@ export async function planDirectRtkRelease(input: {
   const targetPath = await canonicalPath.call(input.fs, executable.path);
   if (targetPath === null) {
     return empty('unavailable', [
+      ...shadowedDiagnostics,
       diagnostic({
         severity: 'warning',
         code: 'rtk-release-target-unresolved',
@@ -163,6 +182,7 @@ export async function planDirectRtkRelease(input: {
   if (queried.status !== 'found') {
     return {
       ...empty('unavailable', [
+        ...shadowedDiagnostics,
         diagnostic({
           severity: 'warning',
           code: 'rtk-release-fallback-unavailable',
@@ -191,7 +211,7 @@ export async function planDirectRtkRelease(input: {
     },
     availableVersion: targetText,
     verdict: 'upgradable',
-    diagnostics: [],
+    diagnostics: shadowedDiagnostics,
     destinations: [RTK_RELEASE_METADATA_DESTINATION],
   };
 }
