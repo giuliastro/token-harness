@@ -2441,6 +2441,9 @@ export class GuideService {
       const blocked = updateResult.data.providers.filter(
         (row) => row.verdict === 'blocked-unreviewed',
       );
+      const updateWarnings = updateResult.diagnostics.filter(
+        (entry) => entry.severity === 'warning',
+      );
       const messages: string[] = [];
       const application = updateResult.data.application;
       if (application?.verdict === 'upgradable') {
@@ -2472,9 +2475,34 @@ export class GuideService {
           ),
         );
       }
-      if (available.length === 0 && blocked.length === 0 && application?.verdict === 'current') {
+      if (updateWarnings.length > 0) {
+        messages.push(
+          ...updateWarnings.map((entry) => {
+            const label = entry.subject === null || entry.subject === undefined ? 'Update check' : name(entry.subject);
+            return (
+              label +
+              ': ' +
+              entry.message +
+              (entry.remediation === null || entry.remediation === undefined
+                ? ''
+                : ' ' + entry.remediation)
+            );
+          }),
+        );
+      }
+      if (
+        available.length === 0 &&
+        blocked.length === 0 &&
+        updateWarnings.length === 0 &&
+        application?.verdict === 'current'
+      ) {
         messages.push('Token Harness and your managed optimizers are up to date.');
-      } else if (available.length === 0 && blocked.length === 0 && application === undefined) {
+      } else if (
+        available.length === 0 &&
+        blocked.length === 0 &&
+        updateWarnings.length === 0 &&
+        application === undefined
+      ) {
         messages.push('Your managed optimizers are up to date on their configured channels.');
       }
 
@@ -2515,17 +2543,17 @@ export class GuideService {
       this.record(
         ticket !== null
           ? 'Token Harness or optimizer update available. Waiting for your approval.'
-          : upgradableCount > 0
-            ? 'Update check could not produce an exact install target.'
+          : upgradableCount > 0 || updateWarnings.length > 0
+            ? 'Update check needs attention.'
             : 'Token Harness and optimizer update check completed.',
-        'success',
+        upgradableCount > 0 || updateWarnings.length > 0 ? 'attention' : 'success',
       );
       return {
         ok: true,
         title:
           ticket !== null
             ? 'Updates available'
-            : upgradableCount > 0
+            : upgradableCount > 0 || updateWarnings.length > 0
               ? 'Update check needs attention'
               : application?.verdict === 'current'
                 ? 'Token Harness and optimizers up to date'
