@@ -1216,9 +1216,15 @@ export class GuideService {
     if (
       Object.keys(data).some(
         (key) =>
-          !['action', 'harness', 'harnesses', 'task', 'provider', 'candidate', 'routeMode'].includes(
-            key,
-          ),
+          ![
+            'action',
+            'harness',
+            'harnesses',
+            'task',
+            'provider',
+            'candidate',
+            'routeMode',
+          ].includes(key),
       ) ||
       ![
         'setup',
@@ -1273,8 +1279,8 @@ export class GuideService {
       this.approval = null;
       if (routingAction) {
         const harness = String(data['harness']) as GuideHarness;
-        const mode =
-          data['routeMode'] === 'conservative' ? ('conservative' as const) : ('shadow' as const);
+        const mode: 'shadow' | 'conservative' =
+          data['routeMode'] === 'conservative' ? 'conservative' : 'shadow';
 
         if (action === 'routing-metrics') {
           this.record(
