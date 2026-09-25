@@ -1718,35 +1718,9 @@ export async function runSmartRouting(
     if (managed.kind === 'external') return ccrConfiguration(context);
     const ensured = await ensureManagedCcrRuntime({ context, action: 'configure' });
     if (ensured.kind === 'result') return ensured.result;
-    if (ensured.changed) {
-      const state =
-        ensured.lifecycleAction === 'install'
-          ? 'installed'
-          : ensured.lifecycleAction === 'update'
-            ? 'updated'
-            : 'started';
-      return commandResult({
-        command: 'routing',
-        exitCode: EXIT_CODES.ok,
-        data: {
-          kind: 'ccr-lifecycle',
-          action: ensured.lifecycleAction,
-          state,
-          version: CCR_REVIEWED_VERSION,
-          packagePath: ensured.packagePath,
-          executablePath: ensured.executablePath,
-          managementEndpoint: ensured.endpoint,
-        },
-        diagnostics: [
-          diagnostic({
-            severity: 'info',
-            code: `ccr-${ensured.lifecycleAction}-verified`,
-            message: `Token Harness ${state} and verified the local CCR CLI and gateway`,
-            remediation: `Next preview and configure the ${context.routingMode ?? 'shadow'} routing rule with token-harness routing --configure-ccr --harness ${String(context.harness ?? '<claude|codex>')}; provider login/import remains a separate CCR choice`,
-          }),
-        ],
-      });
-    }
+    // One approved Enable owns the whole reviewed operation: prepare the local management
+    // runtime when necessary, then reuse the coding-agent login, save the owned rule/profile,
+    // start the gateway and verify the final state. The user should not need a second hidden step.
     const configured = await ccrConfiguration({
       ...context,
       env: {
