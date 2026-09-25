@@ -805,31 +805,52 @@ async function ccrConfiguration(
     });
   }
 
-  const requestedProfileModel = context.env?.['TOKEN_HARNESS_ROUTING_PROFILE_MODEL'];
-  const profilePlan = planCcrProfile(ccr.config, harnessId, requestedProfileModel);
+  const preparedProvider = await prepareHarnessProvider(ccr.client, ccr.config, harnessId);
+  if (!preparedProvider.ok) {
+    return error(
+      preparedProvider.issue.code,
+      preparedProvider.issue.message,
+      preparedProvider.issue.remediation,
+    );
+  }
+  ccr = { ...ccr, config: preparedProvider.value.config };
+
+  const requestedProfileModel =
+    context.routingProfileModel ?? context.env?.['TOKEN_HARNESS_ROUTING_PROFILE_MODEL'];
+  const profilePlan = planCcrProfile(ccr.config, harnessId, requestedProfileModel ?? undefined);
   const profileModelWarning =
-    requestedProfileModel?.trim() &&
-    (profilePlan.profile === null || profilePlan.profile['model'] !== requestedProfileModel.trim())
+    requestedProfileModel?.trim() && profilePlan.profile === null
       ? diagnostic({
           severity: 'warning',
           code: 'ccr-profile-model-not-configured',
-          message:
-            'TOKEN_HARNESS_ROUTING_PROFILE_MODEL did not match a model in the selected CCR provider and was not applied',
-          remediation:
-            'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
+          message: profilePlan.reason ?? 'The selected base model is not available in the local subscription provider',
+          remediation: 'Choose one of the models reported for this coding agent and retry',
         })
       : null;
-  const requestedSimpleModel = context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
-  const configuredSimpleModel = configuredCcrModel(ccr.config, requestedSimpleModel);
+
+  const requestedSimpleModel =
+    context.routingSimpleModel ?? context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
+  const configuredSimpleModel = configuredCcrModel(
+    ccr.config,
+    harnessId,
+    requestedSimpleModel ?? undefined,
+  );
+  if (mode === 'conservative' && configuredSimpleModel === null) {
+    return error(
+      'ccr-simple-model-required',
+      requestedSimpleModel?.trim()
+        ? `The selected simple model ${requestedSimpleModel.trim()} is not available in ${LOCAL_PROVIDER[harnessId].name}`
+        : 'Conservative routing needs an explicit simple-model target',
+      'Choose a simple model in Smart Model Routing configuration. Shadow mode needs no simple-model target.',
+    );
+  }
   const simpleModelWarning =
-    requestedSimpleModel?.trim() && configuredSimpleModel === null
+    mode === 'shadow' && requestedSimpleModel?.trim() && configuredSimpleModel === null
       ? diagnostic({
           severity: 'warning',
           code: 'ccr-simple-model-not-configured',
-          message:
-            'TOKEN_HARNESS_ROUTING_SIMPLE_MODEL did not match a model in the selected CCR configuration and was not embedded',
-          remediation:
-            'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
+          message: 'The optional simple model is not available in the local subscription provider and is ignored in Shadow mode',
+          remediation: 'Choose an available model before switching to Conservative mode',
         })
       : null;
   const script = createCcrSmartRoutingScript({
