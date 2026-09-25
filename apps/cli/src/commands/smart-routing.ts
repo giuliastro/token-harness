@@ -817,7 +817,7 @@ async function ccrConfiguration(
 
   const requestedProfileModel =
     context.routingProfileModel ?? context.env?.['TOKEN_HARNESS_ROUTING_PROFILE_MODEL'];
-  const profilePlan = planCcrProfile(ccr.config, harnessId, requestedProfileModel ?? undefined);
+  let profilePlan = planCcrProfile(ccr.config, harnessId, requestedProfileModel ?? undefined);
   const profileModelWarning =
     requestedProfileModel?.trim() && profilePlan.profile === null
       ? diagnostic({
@@ -958,9 +958,10 @@ async function ccrConfiguration(
           }
           try {
             const currentConfig = await ccr.client.call('getConfig');
-            if (!isSameCcrConfig(currentConfig, ccr.config))
-              throw new CcrManagementError('config-drift');
-            await ccr.client.call('saveConfig', [profileConfig, { applyProfile: false }]);
+            if (!isJsonRecord(currentConfig)) throw new CcrManagementError('invalid-response');
+            const freshProfileConfig = withCcrProfile(currentConfig, profilePlan.profile);
+            if (freshProfileConfig === null) throw new CcrManagementError('config-drift');
+            await ccr.client.call('saveConfig', [freshProfileConfig, { applyProfile: false }]);
             const afterConfig = await ccr.client.call('getConfig');
             const afterRouter = isJsonRecord(afterConfig) ? afterConfig['Router'] : null;
             const afterRules =
@@ -1146,13 +1147,44 @@ async function ccrConfiguration(
     await writeJson(context, receiptPath(context, harnessId), ownership);
     await fs.writeFile(path, new TextEncoder().encode(script));
     const currentConfig = await ccr.client.call('getConfig');
-    if (!isSameCcrConfig(currentConfig, ccr.config)) {
+    if (!isJsonRecord(currentConfig)) throw new CcrManagementError('invalid-response');
+    const freshProvider = await prepareHarnessProvider(ccr.client, currentConfig, harnessId);
+    if (!freshProvider.ok) throw new CcrManagementError('config-drift');
+    const freshProfilePlan = planCcrProfile(
+      freshProvider.value.config,
+      harnessId,
+      requestedProfileModel ?? undefined,
+    );
+    if (
+      profilePlan.profile !== null &&
+      (freshProfilePlan.profile === null ||
+        stableJson(freshProfilePlan.profile) !== stableJson(profilePlan.profile))
+    ) {
       throw new CcrManagementError('config-drift');
     }
+    const freshSimpleModel = configuredCcrModel(
+      freshProvider.value.config,
+      harnessId,
+      requestedSimpleModel ?? undefined,
+    );
+    if (mode === 'conservative' && freshSimpleModel !== configuredSimpleModel) {
+      throw new CcrManagementError('config-drift');
+    }
+    const freshWithRule = addCcrSmartRoutingRule(freshProvider.value.config, expectedRule);
+    if (freshWithRule === null) throw new CcrManagementError('config-drift');
+    const freshNextConfig =
+      freshProfilePlan.profile === null
+        ? freshWithRule
+        : withCcrProfile(freshWithRule, freshProfilePlan.profile);
+    if (freshNextConfig === null) throw new CcrManagementError('config-drift');
+    profilePlan = freshProfilePlan;
     saveAttempted = true;
-    await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+    await ccr.client.call('saveConfig', [freshNextConfig, { applyProfile: false }]);
     const afterConfig = await ccr.client.call('getConfig');
-    const afterRouter = isJsonRecord(afterConfig) ? afterConfig['Router'] : null;
+    if (!isJsonRecord(afterConfig)) throw new CcrManagementError('invalid-response');
+    const savedProviders = harnessProviderRows(afterConfig, harnessId);
+    if (savedProviders.length !== 1) throw new CcrManagementError('request-failed');
+    const afterRouter = afterConfig['Router'];
     const afterRules =
       isJsonRecord(afterRouter) && Array.isArray(afterRouter['rules']) ? afterRouter['rules'] : [];
     if (!afterRules.some((item) => isExactCcrSmartRoutingRule(item, expectedRule))) {
@@ -1167,9 +1199,15 @@ async function ccrConfiguration(
         throw new CcrManagementError('request-failed');
       savedProfile = saved;
     }
+    await ccr.client.call('startGateway');
+    const runningGateway = safeGatewayState(await ccr.client.call('getGatewayStatus'));
+    if (runningGateway !== 'running') throw new CcrManagementError('request-failed');
+
     const activeOwnership: CcrOwnershipReceipt = {
       ...ownership,
       status: 'active',
+      ...(profilePlan.profile === null ? {} : { profileModel: String(profilePlan.profile['model']) }),
+      ...(configuredSimpleModel === null ? {} : { simpleModel: configuredSimpleModel }),
       ...(savedProfile === null || profilePlan.profile === null
         ? {}
         : {
@@ -1178,9 +1216,8 @@ async function ccrConfiguration(
           }),
     };
     await writeJson(context, receiptPath(context, harnessId), activeOwnership);
-    const gatewayValue = await ccr.client.call('getGatewayStatus');
-    const gatewayState = safeGatewayState(gatewayValue);
-    const finalCcr = { ...ccr, gatewayState };
+    const gatewayState = runningGateway;
+    const finalCcr = { ...ccr, config: afterConfig, gatewayState };
     const profileDiagnostic = profilePlanDiagnostic(profilePlan);
     return configurationResult(
       'configure',
