@@ -2102,6 +2102,17 @@ export class GuideService {
             appliedPlans: report.state === 'already-current' ? 0 : 1,
           };
         }
+        if (report.kind !== 'ccr-configuration') {
+          const message =
+            'The routing command returned an unexpected result shape after approval. No success is being reported; review the local CCR routing state before retrying.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Routing result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
 
         const changed = report.state === 'configured' || report.state === 'rolled-back';
         const messages = removing
