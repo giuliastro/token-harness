@@ -2025,6 +2025,122 @@ export class GuideService {
           appliedPlans: appliedCount,
         };
       }
+
+      if (
+        approval.operation === 'routing-configure' ||
+        approval.operation === 'routing-rollback'
+      ) {
+        if (approval.routingHarness === undefined || approval.routingMode === undefined)
+          throw new GuideError(409, 'This Smart Model Routing preview is incomplete. Review it again.');
+        const harness = approval.routingHarness;
+        const mode = approval.routingMode;
+        const removing = approval.operation === 'routing-rollback';
+        this.record(
+          (removing ? 'Removing' : 'Applying') + ' Smart Model Routing for ' + name(harness) + '.',
+          'working',
+        );
+        let result: CliEnvelope<SmartRoutingCommandReport>;
+        try {
+          result = await this.call<SmartRoutingCommandReport>(
+            removing
+              ? ['routing', '--rollback-ccr', '--harness', harness, '--yes']
+              : [
+                  'routing',
+                  '--configure-ccr',
+                  '--harness',
+                  harness,
+                  '--route-mode',
+                  mode,
+                  '--yes',
+                ],
+          );
+        } catch {
+          this.invalidateObservedState();
+          const message =
+            'The Smart Model Routing operation stopped before its final result could be read. No automatic retry was made. Review the local routing state before retrying.';
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Routing result needs checking',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+        if (result.exitCode !== 0 || result.data === null) {
+          const message = explainGuideIssue(
+            result.diagnostics,
+            'Smart Model Routing for ' +
+              name(harness) +
+              ' was not changed. The local CCR runtime, provider model selection or owned rule state no longer matches the preview.',
+          );
+          this.invalidateObservedState();
+          this.record(message, 'attention');
+          return {
+            ok: false,
+            title: 'Routing change was not applied',
+            messages: [message],
+            appliedPlans: 0,
+          };
+        }
+
+        const report = result.data;
+        this.lastApplied = null;
+        this.invalidateObservedState();
+        if (report.kind === 'ccr-lifecycle') {
+          const message =
+            'The Token Harness-owned CCR ' +
+            report.version +
+            ' runtime is ready and verified on loopback. No routing rule has been assumed from this runtime step. Open Manage routing again to review the exact shadow or conservative rule/profile.';
+          this.record('CCR routing runtime prepared and verified.', 'success');
+          return {
+            ok: true,
+            title: 'Routing runtime ready',
+            messages: [
+              message,
+              'Provider login/import remains an explicit CCR choice; Token Harness did not change Claude Code or Codex native endpoints.',
+            ],
+            appliedPlans: report.state === 'already-current' ? 0 : 1,
+          };
+        }
+
+        const changed = report.state === 'configured' || report.state === 'rolled-back';
+        const messages = removing
+          ? [
+              report.state === 'already-absent'
+                ? name(harness) + ' already had no Token Harness-owned routing rule.'
+                : 'The Token Harness-owned Smart Model Routing rule/profile for ' +
+                  name(harness) +
+                  ' was removed. CCR and provider credentials were left in place.',
+            ]
+          : [
+              report.state === 'already-configured'
+                ? name(harness) + ' already has the Token Harness-owned ' + mode + ' routing rule.'
+                : name(harness) + ' Smart Model Routing is configured in ' + mode + ' mode.',
+              ...(mode === 'shadow'
+                ? [
+                    'Shadow mode records local routing decisions but does not change the request model.',
+                  ]
+                : [
+                    'Conservative mode may request the configured simple model only for high-confidence simple prompts; safety-gated requests pass through unchanged.',
+                  ]),
+              ...(report.launchCommand
+                ? ['Launch through the CCR profile to use the rule: ' + report.launchCommand]
+                : [
+                    'CCR still needs an unambiguous provider/model profile before a routed launch can be verified.',
+                  ]),
+            ];
+        this.record(
+          removing ? 'Smart Model Routing rule removed.' : 'Smart Model Routing configured.',
+          'success',
+        );
+        return {
+          ok: true,
+          title: removing ? 'Routing removed' : 'Smart Model Routing configured',
+          messages,
+          appliedPlans: changed ? 1 : 0,
+        };
+      }
+
       if (
         approval.operation === 'candidate-apply' ||
         approval.operation === 'candidate-uninstall'
