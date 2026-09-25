@@ -467,7 +467,8 @@ async function invoke(
   const { asked, runner } = fakeRunner(config);
   const rtkExecutablePath = config.rtkExecutablePath;
   const rtkExecutablePaths =
-    config.rtkExecutablePaths ?? (rtkExecutablePath === undefined ? undefined : [rtkExecutablePath]);
+    config.rtkExecutablePaths ??
+    (rtkExecutablePath === undefined ? undefined : [rtkExecutablePath]);
   let stdout = '';
   const options: RunOptions = {
     argv: [...argv, '--json'],
