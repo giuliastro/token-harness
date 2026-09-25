@@ -245,6 +245,19 @@ export async function runPackageChannelUpdate(
       continue;
     }
 
+    // RTK's Cargo package name collides with a different project on crates.io. Linux and macOS
+    // release checks are resolved by the dedicated, digest-verified GitHub release path instead.
+    if (
+      adapter.manifest.id === 'rtk' &&
+      context.adapters.resolveExecutables !== undefined &&
+      (context.platform.os === 'linux' || context.platform.os === 'macos')
+    ) {
+      row.channel = 'github-release';
+      row.verdict = 'unknown';
+      report.providers.push(row);
+      continue;
+    }
+
     const packageName = channel.packageId ?? adapter.manifest.id;
     const query = await queryAvailableVersion({
       packageManager: channel.id,

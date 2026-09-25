@@ -2,10 +2,9 @@
  * `token-harness update` coordinator.
  *
  * Provider package updates and Token Harness' own npm update stay in `update-base.ts` and retain
- * the existing package-manager transaction. Native Windows gets one additional RTK-only route:
- * when WinGet is behind the newest
- * provider release Token Harness has already source-reviewed, the exact official GitHub release can
- * replace the one unambiguous resolved `rtk.exe` after SHA-256 verification.
+ * the existing package-manager transaction. RTK uses an exact official GitHub release on
+ * Linux/macOS, where the Cargo registry package name collides with another project, and as a
+ * fallback on native Windows when WinGet is behind.
  *
  * The direct route still participates in Token Harness' normal durability contract: the exact
  * pre-update binary is snapshotted under a transaction id and an in-progress journal is persisted
@@ -36,18 +35,19 @@ import type { CommandContext } from './context.js';
 import { repositoryRootForBackupSafety } from './snapshot-safety.js';
 import { runPackageChannelUpdate, runPackageChannelUpdateCheck } from './update-base.js';
 import {
-  planDirectRtkWindowsRelease,
-  type DirectRtkWindowsReleasePlan,
+  planDirectRtkRelease,
+  type DirectRtkReleasePlan,
+  type DirectRtkReleasePlanningResult,
 } from './rtk-release-update.js';
 
 interface PreparedDirectUpdate {
   ordinary: CommandResult<UpdateReport>;
   report: UpdateReport;
-  plan: DirectRtkWindowsReleasePlan | null;
+  plan: DirectRtkReleasePlan | null;
   directDiagnostics: Diagnostic[];
 }
 
-function directTransactionId(plan: DirectRtkWindowsReleasePlan, at: string): string {
+function directTransactionId(plan: DirectRtkReleasePlan, at: string): string {
   const digest = digestText(`rtk github-release ${plan.id} ${at}`);
   return digest.slice(digest.indexOf(':') + 1, digest.indexOf(':') + 13);
 }
@@ -55,7 +55,7 @@ function directTransactionId(plan: DirectRtkWindowsReleasePlan, at: string): str
 function execution(input: {
   transactionId: string | null;
   outcome: ApplyReport['outcome'];
-  directPlan: DirectRtkWindowsReleasePlan;
+  directPlan: DirectRtkReleasePlan;
   directStatus: string;
   base?: ApplyReport | null;
   unrestored?: string[];
@@ -79,24 +79,21 @@ function execution(input: {
   };
 }
 
-function withDirectRow(
-  report: UpdateReport,
-  plan: DirectRtkWindowsReleasePlan,
-  destinations: readonly string[],
-): UpdateReport {
+function withDirectRow(report: UpdateReport, direct: DirectRtkReleasePlanningResult): UpdateReport {
   return {
     providers: report.providers.map((row) =>
-      row.providerId === plan.providerId
+      row.providerId === 'rtk'
         ? {
             ...row,
-            available: plan.target,
+            available: direct.availableVersion,
             channel: 'github-release',
-            verdict: 'upgradable' as const,
+            verdict:
+              direct.verdict === 'current' ? 'current' : direct.plan ? 'upgradable' : 'unavailable',
           }
         : row,
     ),
     ...(report.application === undefined ? {} : { application: report.application }),
-    network: [...new Set([...report.network, ...destinations])].sort(),
+    network: [...new Set([...report.network, ...direct.destinations])].sort(),
     execution: report.execution,
   };
 }
@@ -105,32 +102,33 @@ async function prepareDirectRtkUpdate(
   context: CommandContext,
 ): Promise<PreparedDirectUpdate | null> {
   if (context.adapters === null) return null;
-  if (context.platform.os !== 'windows' || context.platform.isWsl) return null;
+  if (!['windows', 'linux', 'macos'].includes(context.platform.os)) return null;
   if (context.provider !== null && context.provider !== 'rtk') return null;
+  if (context.adapters.resolveExecutables === undefined) return null;
 
   const ordinary = await runPackageChannelUpdateCheck(context);
   if (ordinary.data === null) return null;
   const row = ordinary.data.providers.find((entry) => entry.providerId === 'rtk');
   if (row === undefined || row.installed === null || row.pin !== null) return null;
 
-  const resolved = context.adapters.resolveExecutables?.('rtk') ?? [];
-  const direct = await planDirectRtkWindowsRelease({
+  const executables = context.adapters.resolveExecutables('rtk');
+  const direct = await planDirectRtkRelease({
     providerId: row.providerId,
     installedVersion: row.installed,
-    executablePaths: resolved.map((entry) => entry.path),
+    executables,
     channelAvailableVersion: row.available,
     platform: context.platform,
     fs: context.adapters.fs,
     runner: context.adapters.runner,
+    ...(context.adapters.rtkReleaseFetch === undefined
+      ? {}
+      : { releaseFetch: context.adapters.rtkReleaseFetch }),
   });
 
-  if (direct.plan === null && direct.diagnostics.length === 0) return null;
+  if (direct.verdict === 'defer' || direct.verdict === 'unsupported') return null;
   return {
     ordinary,
-    report:
-      direct.plan === null
-        ? ordinary.data
-        : withDirectRow(ordinary.data, direct.plan, direct.destinations),
+    report: withDirectRow(ordinary.data, direct),
     plan: direct.plan,
     directDiagnostics: direct.diagnostics,
   };
@@ -149,7 +147,7 @@ function confirmationDiagnostic(report: UpdateReport): Diagnostic {
   });
 }
 
-function adoptionConfirmationDiagnostic(plan: DirectRtkWindowsReleasePlan): Diagnostic {
+function adoptionConfirmationDiagnostic(plan: DirectRtkReleasePlan): Diagnostic {
   return diagnostic({
     severity: 'error',
     code: 'rtk-release-existing-binary-adoption-required',
@@ -161,7 +159,7 @@ function adoptionConfirmationDiagnostic(plan: DirectRtkWindowsReleasePlan): Diag
   });
 }
 
-function provenanceDiagnostic(plan: DirectRtkWindowsReleasePlan): Diagnostic {
+function provenanceDiagnostic(plan: DirectRtkReleasePlan): Diagnostic {
   return diagnostic({
     severity: 'info',
     code: 'rtk-release-provenance',
@@ -180,6 +178,25 @@ function result(
   return commandResult({ command: 'update', exitCode, data, diagnostics: [...diagnostics] });
 }
 
+function mergePreparedRtkRow(
+  report: UpdateReport | null,
+  prepared: UpdateReport,
+): UpdateReport | null {
+  if (report === null) return null;
+  const rtk = prepared.providers.find((row) => row.providerId === 'rtk');
+  if (rtk === undefined) return report;
+  return {
+    ...report,
+    providers: report.providers.some((row) => row.providerId === 'rtk')
+      ? report.providers.map((row) => (row.providerId === 'rtk' ? rtk : row))
+      : [...report.providers, rtk],
+    ...(report.application === undefined && prepared.application !== undefined
+      ? { application: prepared.application }
+      : {}),
+    network: [...new Set([...report.network, ...prepared.network])].sort(),
+  };
+}
+
 /** Public mutating update path. */
 export async function runUpdate(context: CommandContext): Promise<CommandResult<UpdateReport>> {
   const prepared = await prepareDirectRtkUpdate(context);
@@ -187,7 +204,8 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
 
   if (prepared.plan === null) {
     const ordinary = await runPackageChannelUpdate(context);
-    return result(ordinary.exitCode, ordinary.data, [
+    const report = mergePreparedRtkRow(ordinary.data, prepared.report);
+    return result(ordinary.exitCode, report, [
       ...ordinary.diagnostics,
       ...prepared.directDiagnostics,
     ]);
@@ -391,7 +409,7 @@ export async function runUpdate(context: CommandContext): Promise<CommandResult<
       remediation:
         installed.status === 'dirty'
           ? `Recovery backup: ${installed.backupPath ?? 'unavailable'}. Do not retry until the executable path is inspected.`
-          : 'Correct the reported release or Windows application-control problem, then retry the update',
+          : 'Correct the reported release or executable policy problem, then retry the update',
     });
     try {
       await finishDirectJournal(installed.status === 'dirty' ? 'dirty' : 'rolled-back', 'failed', [
@@ -562,7 +580,7 @@ export async function runUpdateCheck(
   const prepared = await prepareDirectRtkUpdate({ ...context, confirmed: false });
   if (prepared === null) return runPackageChannelUpdateCheck(context);
   if (prepared.plan === null) {
-    return result(prepared.ordinary.exitCode, prepared.ordinary.data, [
+    return result(prepared.ordinary.exitCode, prepared.report, [
       ...prepared.ordinary.diagnostics,
       ...prepared.directDiagnostics,
     ]);

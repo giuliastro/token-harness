@@ -23,6 +23,7 @@ import type {
   TaskClass,
   TaskQualityGate,
 } from '@token-harness/core';
+import type { ReleaseFetch } from '@token-harness/platform';
 
 export interface CommandContext {
   platform: PlatformFacts;
@@ -126,6 +127,8 @@ export interface AdapterAccess {
   runner: ProcessRunner;
   /** All same-name executable matches in PATH resolution order. */
   resolveExecutables?: (name: string) => ResolvedExecutable[];
+  /** Injectable only for deterministic release-update verification. Production uses global fetch. */
+  rtkReleaseFetch?: ReleaseFetch;
   paths: PlatformPaths;
   /**
    * A reader for a provider's own local database, or null when this host has none —

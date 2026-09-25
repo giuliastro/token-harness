@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { gzipSync } from 'node:zlib';
 import { afterEach, describe, it } from 'node:test';
 
 import type { PlatformFacts } from '@token-harness/core';
@@ -11,14 +12,15 @@ import type { PlatformFacts } from '@token-harness/core';
 import {
   FakeProcessRunner,
   NodeFileSystem,
-  NodeRtkWindowsReleaseRuntime,
-  RTK_WINDOWS_RELEASE_ASSET,
+  NodeRtkReleaseRuntime,
+  extractRtkBinaryFromVerifiedTarGz,
   extractRtkExeFromVerifiedZip,
+  rtkReleaseAssetForPlatform,
   type ReleaseFetch,
 } from '../src/index.js';
 
 const FACTS: PlatformFacts = {
-  os: process.platform === 'darwin' ? 'macos' : 'linux',
+  os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
   osDisplayName: 'test',
   arch: 'x64',
   nodeVersion: process.versions.node,
@@ -75,6 +77,27 @@ function storedZip(name: string, payload: Uint8Array): Uint8Array {
   return new Uint8Array(Buffer.concat([local, fileName, content, central, fileName, eocd]));
 }
 
+function storedTarGz(name: string, payload: Uint8Array): Uint8Array {
+  const content = Buffer.from(payload);
+  const header = Buffer.alloc(512);
+  header.write(name, 0, 100, 'utf8');
+  header.write('0000755\0', 100, 8, 'ascii');
+  header.write('0000000\0', 108, 8, 'ascii');
+  header.write('0000000\0', 116, 8, 'ascii');
+  header.write(`${content.length.toString(8).padStart(11, '0')}\0`, 124, 12, 'ascii');
+  header.write('00000000000\0', 136, 12, 'ascii');
+  header.fill(0x20, 148, 156);
+  header[156] = 0x30;
+  header.write('ustar\0', 257, 6, 'ascii');
+  header.write('00', 263, 2, 'ascii');
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii');
+
+  const padded = Buffer.alloc(Math.ceil(content.length / 512) * 512);
+  content.copy(padded);
+  return new Uint8Array(gzipSync(Buffer.concat([header, padded, Buffer.alloc(1024)])));
+}
+
 function response(bytes: Uint8Array, status = 200, extraHeaders: Record<string, string> = {}) {
   let read = false;
   const headers = new Map<string, string>([
@@ -101,12 +124,16 @@ function response(bytes: Uint8Array, status = 200, extraHeaders: Record<string, 
 }
 
 function releaseFixture(input?: { digest?: string; payload?: Uint8Array }) {
+  const selection = rtkReleaseAssetForPlatform(FACTS);
+  assert.ok(selection, `no RTK release fixture for ${FACTS.os}/${FACTS.arch}`);
   const executable = input?.payload ?? new TextEncoder().encode('rtk 0.49 fixture');
-  const archive = storedZip('rtk.exe', executable);
+  const archive =
+    selection.archiveFormat === 'zip'
+      ? storedZip(selection.executableName, executable)
+      : storedTarGz(selection.executableName, executable);
   const actualDigest = createHash('sha256').update(archive).digest('hex');
   const publishedDigest = input?.digest ?? actualDigest;
-  const downloadUrl =
-    'https://github.com/rtk-ai/rtk/releases/download/v0.49.0/rtk-x86_64-pc-windows-msvc.zip';
+  const downloadUrl = `https://github.com/rtk-ai/rtk/releases/download/v0.49.0/${selection.name}`;
   const metadata = new TextEncoder().encode(
     JSON.stringify({
       tag_name: 'v0.49.0',
@@ -114,9 +141,9 @@ function releaseFixture(input?: { digest?: string; payload?: Uint8Array }) {
       prerelease: false,
       assets: [
         {
-          name: RTK_WINDOWS_RELEASE_ASSET,
+          name: selection.name,
           browser_download_url: downloadUrl,
-          content_type: 'application/zip',
+          content_type: selection.archiveFormat === 'zip' ? 'application/zip' : 'application/gzip',
           size: archive.byteLength,
           digest: `sha256:${publishedDigest}`,
         },
@@ -128,7 +155,7 @@ function releaseFixture(input?: { digest?: string; payload?: Uint8Array }) {
     if (url === downloadUrl) return response(archive);
     throw new Error(`unexpected URL ${url}`);
   };
-  return { executable, archive, actualDigest, downloadUrl, fetchImpl };
+  return { executable, archive, actualDigest, downloadUrl, fetchImpl, selection };
 }
 
 async function sandbox(): Promise<{ root: string; fs: NodeFileSystem }> {
@@ -137,7 +164,22 @@ async function sandbox(): Promise<{ root: string; fs: NodeFileSystem }> {
   return { root, fs: new NodeFileSystem(FACTS) };
 }
 
-describe('verified RTK Windows release artifact', () => {
+describe('verified RTK release artifact', () => {
+  it('selects only reviewed native OS and architecture release assets', () => {
+    const cases = [
+      ['windows', 'x64', 'rtk-x86_64-pc-windows-msvc.zip'],
+      ['linux', 'x64', 'rtk-x86_64-unknown-linux-musl.tar.gz'],
+      ['linux', 'arm64', 'rtk-aarch64-unknown-linux-gnu.tar.gz'],
+      ['macos', 'x64', 'rtk-x86_64-apple-darwin.tar.gz'],
+      ['macos', 'arm64', 'rtk-aarch64-apple-darwin.tar.gz'],
+    ] as const;
+    for (const [os, arch, name] of cases) {
+      assert.equal(rtkReleaseAssetForPlatform({ ...FACTS, os, arch })?.name, name);
+    }
+    assert.equal(rtkReleaseAssetForPlatform({ ...FACTS, os: 'linux', arch: 'arm' }), null);
+    assert.equal(rtkReleaseAssetForPlatform({ ...FACTS, os: 'windows', arch: 'arm64' }), null);
+  });
+
   it('extracts only the root rtk.exe bytes from a bounded ZIP', () => {
     const expected = new TextEncoder().encode('hello rtk');
     assert.deepEqual(extractRtkExeFromVerifiedZip(storedZip('rtk.exe', expected)), expected);
@@ -147,19 +189,28 @@ describe('verified RTK Windows release artifact', () => {
     );
   });
 
+  it('extracts only the root rtk bytes from a bounded tar.gz archive', () => {
+    const expected = new TextEncoder().encode('hello rtk');
+    assert.deepEqual(extractRtkBinaryFromVerifiedTarGz(storedTarGz('rtk', expected)), expected);
+    assert.throws(
+      () => extractRtkBinaryFromVerifiedTarGz(storedTarGz('../rtk', expected)),
+      /no root rtk file/,
+    );
+  });
+
   it('selects the exact stable reviewed release asset and its published SHA-256', async () => {
     const fixture = releaseFixture();
     const { fs } = await sandbox();
-    const runtime = new NodeRtkWindowsReleaseRuntime({
+    const runtime = new NodeRtkReleaseRuntime({
       fs,
       runner: new FakeProcessRunner(),
       fetchImpl: fixture.fetchImpl,
     });
 
-    const result = await runtime.query('0.49.0');
+    const result = await runtime.query('0.49.0', FACTS);
     assert.equal(result.status, 'found');
     if (result.status !== 'found') return;
-    assert.equal(result.asset.name, RTK_WINDOWS_RELEASE_ASSET);
+    assert.equal(result.asset.name, fixture.selection.name);
     assert.equal(result.asset.sha256, fixture.actualDigest);
     assert.equal(result.asset.downloadUrl, fixture.downloadUrl);
   });
@@ -167,10 +218,14 @@ describe('verified RTK Windows release artifact', () => {
   it('installs exact verified bytes, keeps a backup and can explicitly roll them back', async () => {
     const fixture = releaseFixture();
     const { root, fs } = await sandbox();
-    const target = fs.join(root, 'bin', 'rtk.exe');
+    const target = fs.join(root, 'bin', fixture.selection.executableName);
     const stateRoot = fs.join(root, 'state');
     const previous = new TextEncoder().encode('old rtk 0.48 fixture');
-    await fs.writeFile(target, previous);
+    await fs.writeFile(
+      target,
+      previous,
+      fixture.selection.executableName === 'rtk' ? '0755' : null,
+    );
 
     const runner = new FakeProcessRunner()
       .expect({
@@ -185,8 +240,8 @@ describe('verified RTK Windows release artifact', () => {
         times: 1,
         respond: { stdout: 'rtk 0.48.0\n' },
       });
-    const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
-    const query = await runtime.query('0.49.0');
+    const runtime = new NodeRtkReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
+    const query = await runtime.query('0.49.0', FACTS);
     assert.equal(query.status, 'found');
     if (query.status !== 'found') return;
 
@@ -200,6 +255,11 @@ describe('verified RTK Windows release artifact', () => {
     assert.equal(installed.status, 'installed');
     if (installed.status !== 'installed') return;
     assert.deepEqual(await fs.readFile(target), fixture.executable);
+    if (fixture.selection.executableName === 'rtk') {
+      const installedStat = await fs.stat(target);
+      assert.ok(installedStat?.mode !== null && installedStat?.mode !== undefined);
+      assert.notEqual(Number.parseInt(installedStat.mode, 8) & 0o111, 0);
+    }
     assert.deepEqual(await fs.readFile(installed.backupPath), previous);
 
     const rollback = await runtime.rollback(installed.handle, root);
@@ -211,9 +271,13 @@ describe('verified RTK Windows release artifact', () => {
   it('restores the previous executable when the new version cannot be started or verified', async () => {
     const fixture = releaseFixture();
     const { root, fs } = await sandbox();
-    const target = fs.join(root, 'rtk.exe');
+    const target = fs.join(root, fixture.selection.executableName);
     const previous = new TextEncoder().encode('old rtk 0.48 fixture');
-    await fs.writeFile(target, previous);
+    await fs.writeFile(
+      target,
+      previous,
+      fixture.selection.executableName === 'rtk' ? '0755' : null,
+    );
 
     const runner = new FakeProcessRunner()
       .expect({
@@ -228,8 +292,8 @@ describe('verified RTK Windows release artifact', () => {
         times: 1,
         respond: { stdout: 'rtk 0.48.0\n' },
       });
-    const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
-    const query = await runtime.query('0.49.0');
+    const runtime = new NodeRtkReleaseRuntime({ fs, runner, fetchImpl: fixture.fetchImpl });
+    const query = await runtime.query('0.49.0', FACTS);
     assert.equal(query.status, 'found');
     if (query.status !== 'found') return;
 
@@ -242,7 +306,7 @@ describe('verified RTK Windows release artifact', () => {
     });
     assert.equal(installed.status, 'rolled-back');
     assert.equal(installed.code, 'rtk-release-postcondition-failed');
-    assert.match(installed.message, /Smart App Control/);
+    assert.match(installed.message, /application-control policy/);
     assert.deepEqual(await fs.readFile(target), previous);
     runner.assertSatisfied();
   });
@@ -250,16 +314,20 @@ describe('verified RTK Windows release artifact', () => {
   it('refuses a download whose bytes do not match GitHub published SHA-256 before mutation', async () => {
     const fixture = releaseFixture({ digest: '0'.repeat(64) });
     const { root, fs } = await sandbox();
-    const target = fs.join(root, 'rtk.exe');
+    const target = fs.join(root, fixture.selection.executableName);
     const previous = new TextEncoder().encode('old rtk');
-    await fs.writeFile(target, previous);
+    await fs.writeFile(
+      target,
+      previous,
+      fixture.selection.executableName === 'rtk' ? '0755' : null,
+    );
 
-    const runtime = new NodeRtkWindowsReleaseRuntime({
+    const runtime = new NodeRtkReleaseRuntime({
       fs,
       runner: new FakeProcessRunner(),
       fetchImpl: fixture.fetchImpl,
     });
-    const query = await runtime.query('0.49.0');
+    const query = await runtime.query('0.49.0', FACTS);
     assert.equal(query.status, 'found');
     if (query.status !== 'found') return;
 

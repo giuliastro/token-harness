@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { rename, rm } from 'node:fs/promises';
-import { inflateRawSync } from 'node:zlib';
+import { gunzipSync, inflateRawSync } from 'node:zlib';
 
 import {
   digestBytes,
   parseSemanticVersion,
   processSucceeded,
   type FileSystemPort,
+  type PlatformFacts,
   type ProcessRunner,
 } from '@token-harness/core';
 
@@ -20,12 +21,66 @@ const RELEASE_API_PREFIX = 'https://api.github.com/repos/rtk-ai/rtk/releases/tag
 const RELEASE_DOWNLOAD_PREFIX = 'https://github.com/rtk-ai/rtk/releases/download/';
 const MAX_METADATA_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
+const MAX_EXPANDED_ARCHIVE_BYTES = 128 * 1024 * 1024;
 const MAX_EXECUTABLE_BYTES = 64 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 20_000;
 const ZIP_EOCD_SIGNATURE = 0x06054b50;
 const ZIP_CENTRAL_SIGNATURE = 0x02014b50;
 const ZIP_LOCAL_SIGNATURE = 0x04034b50;
+const TAR_BLOCK_BYTES = 512;
+
+export interface RtkReleaseAssetSelection {
+  name: string;
+  executableName: 'rtk' | 'rtk.exe';
+  archiveFormat: 'tar.gz' | 'zip';
+}
+
+/** Return only assets that upstream publishes for a known native OS/architecture pair. */
+export function rtkReleaseAssetForPlatform(
+  platform: PlatformFacts,
+): RtkReleaseAssetSelection | null {
+  if (platform.os === 'windows' && !platform.isWsl && platform.arch === 'x64') {
+    return {
+      name: RTK_WINDOWS_RELEASE_ASSET,
+      executableName: 'rtk.exe',
+      archiveFormat: 'zip',
+    };
+  }
+  if (platform.os === 'linux') {
+    if (platform.arch === 'x64') {
+      return {
+        name: 'rtk-x86_64-unknown-linux-musl.tar.gz',
+        executableName: 'rtk',
+        archiveFormat: 'tar.gz',
+      };
+    }
+    if (platform.arch === 'arm64') {
+      return {
+        name: 'rtk-aarch64-unknown-linux-gnu.tar.gz',
+        executableName: 'rtk',
+        archiveFormat: 'tar.gz',
+      };
+    }
+  }
+  if (platform.os === 'macos') {
+    if (platform.arch === 'x64') {
+      return {
+        name: 'rtk-x86_64-apple-darwin.tar.gz',
+        executableName: 'rtk',
+        archiveFormat: 'tar.gz',
+      };
+    }
+    if (platform.arch === 'arm64') {
+      return {
+        name: 'rtk-aarch64-apple-darwin.tar.gz',
+        executableName: 'rtk',
+        archiveFormat: 'tar.gz',
+      };
+    }
+  }
+  return null;
+}
 
 interface ResponseBodyReader {
   read(): Promise<{ done: boolean; value?: Uint8Array }>;
@@ -51,32 +106,32 @@ export type ReleaseFetch = (
 
 const nativeFetch: ReleaseFetch = async (url, init) => fetch(url, init);
 
-export interface RtkWindowsReleaseAsset {
+export interface RtkReleaseAsset extends RtkReleaseAssetSelection {
   version: string;
   tag: string;
-  name: typeof RTK_WINDOWS_RELEASE_ASSET;
   downloadUrl: string;
   sha256: string;
   sizeBytes: number;
 }
 
-export type RtkWindowsReleaseQuery =
-  | { status: 'found'; asset: RtkWindowsReleaseAsset }
+export type RtkReleaseQuery =
+  | { status: 'found'; asset: RtkReleaseAsset }
   | { status: 'unavailable' | 'invalid'; message: string };
 
-export interface RtkWindowsReleaseRollbackHandle {
+export interface RtkReleaseRollbackHandle {
   targetPath: string;
   backupPath: string;
   previousDigest: string;
   replacementDigest: string;
+  previousMode: string | null;
   previousVersion: string | null;
   replacementVersion: string;
 }
 
-export type RtkWindowsReleaseInstallResult =
+export type RtkReleaseInstallResult =
   | {
       status: 'installed';
-      handle: RtkWindowsReleaseRollbackHandle;
+      handle: RtkReleaseRollbackHandle;
       backupPath: string;
     }
   | {
@@ -98,7 +153,7 @@ export type RtkWindowsReleaseInstallResult =
       backupPath: string | null;
     };
 
-export type RtkWindowsReleaseRollbackResult =
+export type RtkReleaseRollbackResult =
   | { status: 'rolled-back'; message: string }
   | { status: 'dirty'; message: string };
 
@@ -219,7 +274,11 @@ async function fetchBounded(input: {
   }
 }
 
-function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleaseQuery {
+function parseReleaseMetadata(
+  value: unknown,
+  version: string,
+  selection: RtkReleaseAssetSelection,
+): RtkReleaseQuery {
   if (!isRecord(value)) return { status: 'invalid', message: 'release metadata is not an object' };
   const tag = `v${version}`;
   if (value['tag_name'] !== tag || value['draft'] !== false || value['prerelease'] !== false) {
@@ -231,13 +290,11 @@ function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleas
   const assets = value['assets'];
   if (!Array.isArray(assets))
     return { status: 'invalid', message: 'release metadata has no asset list' };
-  const matching = assets.filter(
-    (asset) => isRecord(asset) && asset['name'] === RTK_WINDOWS_RELEASE_ASSET,
-  );
+  const matching = assets.filter((asset) => isRecord(asset) && asset['name'] === selection.name);
   if (matching.length !== 1) {
     return {
       status: 'invalid',
-      message: `release ${tag} must contain exactly one ${RTK_WINDOWS_RELEASE_ASSET} asset`,
+      message: `release ${tag} must contain exactly one ${selection.name} asset`,
     };
   }
 
@@ -248,16 +305,16 @@ function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleas
   const downloadUrl =
     typeof asset['browser_download_url'] === 'string' ? asset['browser_download_url'] : null;
   if (digest === null) {
-    return { status: 'invalid', message: `${RTK_WINDOWS_RELEASE_ASSET} has no published SHA-256` };
+    return { status: 'invalid', message: `${selection.name} has no published SHA-256` };
   }
   if (size === null || size <= 0 || size > MAX_ARCHIVE_BYTES) {
     return {
       status: 'invalid',
-      message: `${RTK_WINDOWS_RELEASE_ASSET} has an invalid or excessive published size`,
+      message: `${selection.name} has an invalid or excessive published size`,
     };
   }
   if (downloadUrl === null) {
-    return { status: 'invalid', message: `${RTK_WINDOWS_RELEASE_ASSET} has no download URL` };
+    return { status: 'invalid', message: `${selection.name} has no download URL` };
   }
   let parsedUrl: URL;
   try {
@@ -265,26 +322,31 @@ function parseReleaseMetadata(value: unknown, version: string): RtkWindowsReleas
   } catch {
     return {
       status: 'invalid',
-      message: `${RTK_WINDOWS_RELEASE_ASSET} has an invalid download URL`,
+      message: `${selection.name} has an invalid download URL`,
     };
   }
   const expectedPrefix = `${RELEASE_DOWNLOAD_PREFIX}${tag}/`;
   if (!allowedAssetUrl(parsedUrl, true) || !downloadUrl.startsWith(expectedPrefix)) {
     return {
       status: 'invalid',
-      message: `${RTK_WINDOWS_RELEASE_ASSET} points outside the reviewed rtk-ai/rtk release path`,
+      message: `${selection.name} points outside the reviewed rtk-ai/rtk release path`,
     };
   }
-  if (asset['content_type'] !== 'application/zip') {
-    return { status: 'invalid', message: `${RTK_WINDOWS_RELEASE_ASSET} is not published as a ZIP` };
+  const expectedContentType =
+    selection.archiveFormat === 'zip' ? 'application/zip' : 'application/gzip';
+  if (asset['content_type'] !== expectedContentType) {
+    return {
+      status: 'invalid',
+      message: `${selection.name} is not published as ${expectedContentType}`,
+    };
   }
 
   return {
     status: 'found',
     asset: {
+      ...selection,
       version,
       tag,
-      name: RTK_WINDOWS_RELEASE_ASSET,
       downloadUrl,
       sha256: digest,
       sizeBytes: size,
@@ -398,12 +460,80 @@ export function extractRtkExeFromVerifiedZip(bytes: Uint8Array): Uint8Array {
   return extracted;
 }
 
+function tarText(buffer: Buffer, offset: number, length: number): string {
+  const field = buffer.subarray(offset, offset + length);
+  const end = field.indexOf(0);
+  return field.subarray(0, end < 0 ? field.length : end).toString('utf8');
+}
+
+function tarOctal(buffer: Buffer, offset: number, length: number, fieldName: string): number {
+  const raw = tarText(buffer, offset, length).trim();
+  if (raw === '') return 0;
+  if (!/^[0-7]+$/.test(raw)) throw new Error(`tar ${fieldName} is not an octal value`);
+  const value = Number.parseInt(raw, 8);
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error(`tar ${fieldName} is outside the supported range`);
+  return value;
+}
+
+/** Extract exactly a root `rtk` file from a bounded gzip-compressed tar archive. */
+export function extractRtkBinaryFromVerifiedTarGz(bytes: Uint8Array): Uint8Array {
+  const compressed = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tar = gunzipSync(compressed, { maxOutputLength: MAX_EXPANDED_ARCHIVE_BYTES });
+  let cursor = 0;
+  let sawEnd = false;
+  let extracted: Uint8Array | null = null;
+
+  while (cursor + TAR_BLOCK_BYTES <= tar.length) {
+    const header = tar.subarray(cursor, cursor + TAR_BLOCK_BYTES);
+    if (header.every((byte) => byte === 0)) {
+      sawEnd = true;
+      break;
+    }
+
+    const expectedChecksum = tarOctal(header, 148, 8, 'checksum');
+    let checksum = 0;
+    for (let index = 0; index < TAR_BLOCK_BYTES; index += 1) {
+      checksum += index >= 148 && index < 156 ? 0x20 : (header[index] ?? 0);
+    }
+    if (checksum !== expectedChecksum) throw new Error('tar header checksum does not match');
+
+    const name = tarText(header, 0, 100);
+    const prefix = tarText(header, 345, 155);
+    const path = prefix === '' ? name : `${prefix}/${name}`;
+    const type = header[156] === 0 ? '\0' : String.fromCharCode(header[156] ?? 0);
+    const size = tarOctal(header, 124, 12, 'file size');
+    if (size > MAX_EXECUTABLE_BYTES)
+      throw new Error('tar entry exceeds the RTK executable size limit');
+    if (type !== '\0' && type !== '0' && type !== '5') {
+      throw new Error(`tar entry type ${JSON.stringify(type)} is not supported`);
+    }
+    const dataStart = cursor + TAR_BLOCK_BYTES;
+    const dataEnd = dataStart + size;
+    const next = dataStart + Math.ceil(size / TAR_BLOCK_BYTES) * TAR_BLOCK_BYTES;
+    if (dataEnd > tar.length || next > tar.length)
+      throw new Error('tar entry exceeds archive bounds');
+
+    if (path === 'rtk') {
+      if (type === '5') throw new Error('root rtk tar entry is a directory');
+      if (extracted !== null) throw new Error('release tar contains more than one root rtk file');
+      if (size === 0) throw new Error('root rtk tar entry is empty');
+      extracted = new Uint8Array(tar.subarray(dataStart, dataEnd));
+    }
+    cursor = next;
+  }
+
+  if (!sawEnd) throw new Error('tar end marker was not found');
+  if (extracted === null) throw new Error('release tar contains no root rtk file');
+  return extracted;
+}
+
 function versionAppears(output: string, version: string): boolean {
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\s)v?${escaped}(?:\\s|$)`, 'm').test(output.trim());
 }
 
-export class NodeRtkWindowsReleaseRuntime {
+export class NodeRtkReleaseRuntime {
   private readonly fs: NodeFileSystem;
   private readonly runner: ProcessRunner;
   private readonly fetchImpl: ReleaseFetch;
@@ -414,9 +544,16 @@ export class NodeRtkWindowsReleaseRuntime {
     this.fetchImpl = input.fetchImpl ?? nativeFetch;
   }
 
-  async query(version: string): Promise<RtkWindowsReleaseQuery> {
+  async query(version: string, platform: PlatformFacts): Promise<RtkReleaseQuery> {
     if (parseSemanticVersion(version) === null) {
       return { status: 'invalid', message: `${version} is not a semantic RTK release` };
+    }
+    const selection = rtkReleaseAssetForPlatform(platform);
+    if (selection === null) {
+      return {
+        status: 'invalid',
+        message: `RTK ${version} does not publish a managed binary for ${platform.os}/${platform.arch}`,
+      };
     }
     const url = `${RELEASE_API_PREFIX}v${version}`;
     let bytes: Uint8Array;
@@ -435,7 +572,7 @@ export class NodeRtkWindowsReleaseRuntime {
     }
     try {
       const value = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
-      return parseReleaseMetadata(value, version);
+      return parseReleaseMetadata(value, version, selection);
     } catch (error) {
       return {
         status: 'invalid',
@@ -444,7 +581,7 @@ export class NodeRtkWindowsReleaseRuntime {
     }
   }
 
-  private async download(asset: RtkWindowsReleaseAsset): Promise<Uint8Array> {
+  private async download(asset: RtkReleaseAsset): Promise<Uint8Array> {
     const archive = await fetchBounded({
       fetchImpl: this.fetchImpl,
       url: asset.downloadUrl,
@@ -458,7 +595,7 @@ export class NodeRtkWindowsReleaseRuntime {
     }
     const digest = createHash('sha256').update(archive).digest('hex');
     if (digest !== asset.sha256)
-      throw new Error('downloaded RTK ZIP does not match GitHub published SHA-256');
+      throw new Error('downloaded RTK release archive does not match GitHub published SHA-256');
     return archive;
   }
 
@@ -476,9 +613,9 @@ export class NodeRtkWindowsReleaseRuntime {
   }
 
   private async restoreFromBackup(
-    handle: RtkWindowsReleaseRollbackHandle,
+    handle: RtkReleaseRollbackHandle,
     cwd: string,
-  ): Promise<RtkWindowsReleaseRollbackResult> {
+  ): Promise<RtkReleaseRollbackResult> {
     try {
       const currentStat = await this.fs.stat(handle.targetPath);
       if (currentStat === null || currentStat.kind !== 'file') {
@@ -508,14 +645,14 @@ export class NodeRtkWindowsReleaseRuntime {
         directory,
         `.rtk.token-harness.rollback-${handle.previousDigest.slice(-12)}.tmp`,
       );
-      const displaced = this.fs.join(directory, '.rtk.token-harness.rollback-displaced.exe');
+      const displaced = this.fs.join(directory, '.rtk.token-harness.rollback-displaced');
       if ((await this.fs.stat(displaced)) !== null) {
         return {
           status: 'dirty',
           message: `RTK rollback staging path already exists: ${displaced}`,
         };
       }
-      await this.fs.writeFile(stage, backup);
+      await this.fs.writeFile(stage, backup, handle.previousMode);
       await rename(handle.targetPath, displaced);
       try {
         await rename(stage, handle.targetPath);
@@ -556,26 +693,23 @@ export class NodeRtkWindowsReleaseRuntime {
     }
   }
 
-  async rollback(
-    handle: RtkWindowsReleaseRollbackHandle,
-    cwd: string,
-  ): Promise<RtkWindowsReleaseRollbackResult> {
+  async rollback(handle: RtkReleaseRollbackHandle, cwd: string): Promise<RtkReleaseRollbackResult> {
     return this.restoreFromBackup(handle, cwd);
   }
 
   async install(input: {
-    asset: RtkWindowsReleaseAsset;
+    asset: RtkReleaseAsset;
     targetPath: string;
     previousVersion: string | null;
     stateRoot: string;
     cwd: string;
-  }): Promise<RtkWindowsReleaseInstallResult> {
+  }): Promise<RtkReleaseInstallResult> {
     const targetName = this.fs.basename(input.targetPath).toLowerCase();
-    if (targetName !== 'rtk.exe') {
+    if (targetName !== input.asset.executableName.toLowerCase()) {
       return {
         status: 'failed',
         code: 'rtk-release-target-refused',
-        message: `Resolved RTK target is not rtk.exe: ${input.targetPath}`,
+        message: `Resolved RTK target does not match the release executable name ${input.asset.executableName}: ${input.targetPath}`,
         backupPath: null,
       };
     }
@@ -588,12 +722,26 @@ export class NodeRtkWindowsReleaseRuntime {
         backupPath: null,
       };
     }
+    if (
+      input.asset.executableName === 'rtk' &&
+      (targetStat.mode === null || (Number.parseInt(targetStat.mode, 8) & 0o111) === 0)
+    ) {
+      return {
+        status: 'failed',
+        code: 'rtk-release-target-not-executable',
+        message: `Resolved RTK target does not have readable POSIX executable permissions: ${input.targetPath}`,
+        backupPath: null,
+      };
+    }
 
     let archive: Uint8Array;
     let replacement: Uint8Array;
     try {
       archive = await this.download(input.asset);
-      replacement = extractRtkExeFromVerifiedZip(archive);
+      replacement =
+        input.asset.archiveFormat === 'zip'
+          ? extractRtkExeFromVerifiedZip(archive)
+          : extractRtkBinaryFromVerifiedTarGz(archive);
     } catch (error) {
       return {
         status: 'failed',
@@ -609,7 +757,7 @@ export class NodeRtkWindowsReleaseRuntime {
     const backupDirectory = this.fs.join(input.stateRoot, 'backups', 'rtk-release');
     const backupPath = this.fs.join(
       backupDirectory,
-      `rtk-${input.previousVersion ?? 'unknown'}-${previousDigest.slice(-16)}.exe`,
+      `rtk-${input.previousVersion ?? 'unknown'}-${previousDigest.slice(-16)}.bin`,
     );
     await this.fs.createDirectory(backupDirectory);
     const existingBackup = await this.fs.stat(backupPath);
@@ -628,7 +776,7 @@ export class NodeRtkWindowsReleaseRuntime {
 
     const directory = this.fs.dirname(input.targetPath);
     const stage = this.fs.join(directory, `.rtk.token-harness-${input.asset.version}.tmp`);
-    const displaced = this.fs.join(directory, '.rtk.token-harness-previous.exe');
+    const displaced = this.fs.join(directory, '.rtk.token-harness-previous');
     if ((await this.fs.stat(stage)) !== null || (await this.fs.stat(displaced)) !== null) {
       return {
         status: 'failed',
@@ -640,9 +788,9 @@ export class NodeRtkWindowsReleaseRuntime {
     }
 
     try {
-      await this.fs.writeFile(stage, replacement);
+      await this.fs.writeFile(stage, replacement, targetStat.mode);
       if (digestBytes(await this.fs.readFile(stage)) !== replacementDigest) {
-        throw new Error('staged rtk.exe does not match the extracted bytes');
+        throw new Error('staged RTK executable does not match the extracted bytes');
       }
       await rename(input.targetPath, displaced);
       try {
@@ -675,11 +823,12 @@ export class NodeRtkWindowsReleaseRuntime {
       };
     }
 
-    const handle: RtkWindowsReleaseRollbackHandle = {
+    const handle: RtkReleaseRollbackHandle = {
       targetPath: input.targetPath,
       backupPath,
       previousDigest,
       replacementDigest,
+      previousMode: targetStat.mode,
       previousVersion: input.previousVersion,
       replacementVersion: input.asset.version,
     };
@@ -692,7 +841,7 @@ export class NodeRtkWindowsReleaseRuntime {
           status: 'rolled-back',
           code: 'rtk-release-postcondition-failed',
           message:
-            'The verified RTK release bytes were installed but Windows could not verify the new version; the previous executable was restored. Smart App Control or another application-control policy may have blocked the freshly released unsigned binary.',
+            'The verified RTK release bytes were installed but the new version could not be verified; the previous executable was restored. Check OS application-control policy and binary compatibility.',
           backupPath,
         };
       }
@@ -713,9 +862,12 @@ export class NodeRtkWindowsReleaseRuntime {
  * Production-only bridge without widening every test port. Commands still receive a FileSystemPort
  * and ProcessRunner; only the real Node filesystem opts into native verified release replacement.
  */
-export function rtkWindowsReleaseRuntimeFor(
+export function rtkReleaseRuntimeFor(
   fs: FileSystemPort,
   runner: ProcessRunner,
-): NodeRtkWindowsReleaseRuntime | null {
-  return fs instanceof NodeFileSystem ? new NodeRtkWindowsReleaseRuntime({ fs, runner }) : null;
+  fetchImpl?: ReleaseFetch,
+): NodeRtkReleaseRuntime | null {
+  return fs instanceof NodeFileSystem
+    ? new NodeRtkReleaseRuntime({ fs, runner, ...(fetchImpl === undefined ? {} : { fetchImpl }) })
+    : null;
 }
