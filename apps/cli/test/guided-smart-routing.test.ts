@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 
 import { commandResult, toEnvelope, type CliEnvelope } from '@token-harness/core';
-import {
-  GuideService,
-  type GuideCall,
-} from '../src/guided.js';
+import { GuideService, type GuideCall } from '../src/guided.js';
 import type { SmartRoutingCommandReport } from '../src/commands/smart-routing.js';
 
 function envelope<T>(command: string, data: T): CliEnvelope<T> {
@@ -105,7 +102,9 @@ it('guides Smart Model Routing through CCR runtime preparation then shadow rule 
   const configured = await service.apply({ ticket: 'routing-ticket-2' });
   assert.equal(configured.ok, true);
   assert.equal(configured.title, 'Smart Model Routing configured');
-  assert.ok(configured.messages.some((message) => /does not change the request model/i.test(message)));
+  assert.ok(
+    configured.messages.some((message) => /does not change the request model/i.test(message)),
+  );
   assert.ok(configured.messages.some((message) => /ccr "Token Harness Codex"/i.test(message)));
 
   const metrics = await service.preview({
