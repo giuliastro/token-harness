@@ -116,7 +116,8 @@ export async function planDirectRtkRelease(input: {
         severity: 'warning',
         code: 'rtk-release-target-unresolved',
         subject: input.providerId,
-        message: 'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
+        message:
+          'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
         remediation:
           'Make the intended RTK executable available on PATH, then re-run Check for updates',
       }),
