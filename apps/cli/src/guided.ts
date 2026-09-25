@@ -2534,6 +2534,68 @@ export class GuideService {
     });
   }
 
+  async routingMetrics(harness: GuideHarness): Promise<GuideResult> {
+    if (!['claude', 'codex'].includes(harness))
+      throw new GuideError(400, 'Choose Claude Code or Codex.');
+    return this.exclusive(async () => {
+      this.record(`Reading local Smart Model Routing decisions for ${name(harness)}.`, 'working');
+      let result: CliEnvelope<SmartRoutingCommandReport>;
+      try {
+        result = await this.call<SmartRoutingCommandReport>([
+          'routing',
+          '--route-metrics',
+          '--harness',
+          harness,
+        ]);
+      } catch {
+        const message =
+          'Smart Model Routing decisions could not be read. No routing or agent setting changed.';
+        this.record(message, 'attention');
+        return {
+          ok: false,
+          title: 'Routing decisions need attention',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+      if (result.exitCode !== 0 || result.data?.kind !== 'metrics') {
+        const message = explainGuideIssue(
+          result.diagnostics,
+          'Smart Model Routing decisions are not available yet. No routing or agent setting changed.',
+        );
+        this.record(message, result.exitCode === 0 ? 'success' : 'attention');
+        return {
+          ok: result.exitCode === 0,
+          title: 'Smart routing decisions',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
+      const metrics = result.data.metrics;
+      const messages = [
+        `Recorded decisions: ${String(metrics.retainedDecisionCount)} · shadow ${String(metrics.byMode.shadow)} · conservative ${String(metrics.byMode.conservative)}.`,
+        `Complexity: simple ${String(metrics.byTier.simple)} · standard ${String(metrics.byTier.standard)} · complex ${String(metrics.byTier.complex)} · critical ${String(metrics.byTier.critical)}.`,
+        `Model-switch requests: ${String(metrics.routeMutationRequestCount)}. These are routing decisions, not verified savings.`,
+        'Smart Model Routing telemetry never enters Token Harness savings totals unless separate attributable usage and quality evidence exists.',
+      ];
+      if (metrics.malformedRecordCount > 0 || metrics.prunedRecordCount > 0) {
+        messages.push(
+          `Telemetry maintenance: ${String(metrics.malformedRecordCount)} malformed record(s), ${String(metrics.prunedRecordCount)} pruned record(s).`,
+        );
+      }
+      this.record(
+        `Read ${String(metrics.retainedDecisionCount)} Smart Model Routing decision(s) for ${name(harness)}.`,
+        'success',
+      );
+      return {
+        ok: true,
+        title: `Smart routing decisions · ${name(harness)}`,
+        messages,
+        appliedPlans: 0,
+      };
+    });
+  }
+
   async verify(): Promise<GuideResult> {
     return this.exclusive(async () => {
       this.record('Checking the configured integrations without changing them.', 'working');
