@@ -1,13 +1,12 @@
-# Release checkpoint — 2026-09-24
+# Release checkpoint — 2026-09-25
 
-Token Harness `0.1.18` is prepared as an incremental release candidate from runtime merge `13d23ee15465a0accd01aa18fca3815e66ce96a4` on `main`.
+Token Harness `0.1.19` is prepared as an incremental release candidate from runtime merge `58e7753e4cf0650492ac232ac65249d773f520f0` on `main`.
 
 The release candidate includes:
 
-- PR #334: real Windows guided first-run coverage for optional providers and HarnessTrim lifecycle/update paths;
-- PR #341: an initial evidence-bound Context Governor CLI integration using read-only snapshots and local byte counts, without claiming token or quota savings;
-- PR #344: savings attribution from inspected hook-command evidence by coding agent and harness, plus a Token Harness self-update path limited to verified global npm installations, exact-version approval, post-update verification and restart guidance.
+- PR #343: shadow-first Smart Model Routing; shadow mode does not rewrite provider calls and conservative routing remains an explicit opt-in;
+- PR #346: RTK update checks on Linux and macOS use the official GitHub release rather than the ambiguous Cargo package name. Approved installs verify the release asset's published SHA-256 before replacing the executable, and native Windows keeps WinGet as its primary channel.
 
-Issue #255 remains open for real before/after receipts from the complete production stack. The broader promotion-readiness checklist is not complete; this is a stable incremental release candidate.
+Issue #255 remains open for real before/after receipts from the complete production stack. This release is incremental and does not claim broad-promotion readiness.
 
-Do not tag or publish unless the full release-preparation CI is green across Windows, macOS and Linux. The release workflow must then pass its exact-tag release gates, publish the npm artifact through Trusted Publishing, verify that npm `latest` points to `0.1.18`, and create the GitHub Release.
+Do not tag or publish unless the complete release-preparation CI is green across Windows, macOS and Linux. The exact-tag release workflow must then pass its tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing and npm-latest verification before creating the GitHub Release for `0.1.19`.
