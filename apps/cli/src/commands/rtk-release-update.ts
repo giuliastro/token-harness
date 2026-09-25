@@ -175,8 +175,7 @@ export async function planDirectRtkRelease(input: {
         severity: 'warning',
         code: 'rtk-release-target-ambiguous',
         subject: input.providerId,
-        message:
-          `The verified GitHub release update was not planned because ${String(uniqueTargets.size)} distinct RTK binaries resolve from PATH: ${aliases}`,
+        message: `The verified GitHub release update was not planned because ${String(uniqueTargets.size)} distinct RTK binaries resolve from PATH: ${aliases}`,
         remediation:
           'Keep only the intended RTK installation on PATH, then re-run Check for updates; aliases or symlinks to the same real binary are accepted',
       }),

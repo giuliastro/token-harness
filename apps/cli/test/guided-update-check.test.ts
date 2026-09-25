@@ -398,24 +398,19 @@ it('does not call an unresolved RTK release check up to date', async () => {
     return envelope(command, null as T);
   };
 
-  const service = new GuideService(call, () => 0, () => 'unused-ticket');
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'unused-ticket',
+  );
   const checked = await service.checkUpdates();
 
   assert.equal(checked.ok, false);
   assert.equal(checked.ticket, null);
   assert.equal(checked.title, 'Update check needs attention');
-  assert.match(
-    checked.messages.join(' '),
-    /RTK: update status could not be verified/,
-  );
-  assert.match(
-    checked.messages.join(' '),
-    /distinct RTK binaries resolve from PATH/,
-  );
-  assert.doesNotMatch(
-    checked.messages.join(' '),
-    /managed optimizers are up to date/i,
-  );
+  assert.match(checked.messages.join(' '), /RTK: update status could not be verified/);
+  assert.match(checked.messages.join(' '), /distinct RTK binaries resolve from PATH/);
+  assert.doesNotMatch(checked.messages.join(' '), /managed optimizers are up to date/i);
 });
 
 it('presents updates as one complete check then install flow', () => {

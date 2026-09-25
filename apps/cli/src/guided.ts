@@ -1216,9 +1216,15 @@ export class GuideService {
     if (
       Object.keys(data).some(
         (key) =>
-          !['action', 'harness', 'harnesses', 'task', 'provider', 'candidate', 'routeMode'].includes(
-            key,
-          ),
+          ![
+            'action',
+            'harness',
+            'harnesses',
+            'task',
+            'provider',
+            'candidate',
+            'routeMode',
+          ].includes(key),
       ) ||
       ![
         'setup',
@@ -1750,10 +1756,7 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
-      if (
-        approval.operation === 'routing-configure' ||
-        approval.operation === 'routing-rollback'
-      ) {
+      if (approval.operation === 'routing-configure' || approval.operation === 'routing-rollback') {
         if (approval.routingHarness === undefined)
           throw new GuideError(
             409,
@@ -1764,15 +1767,7 @@ export class GuideService {
         const mode = approval.routingMode ?? 'shadow';
         const args = removing
           ? ['routing', '--rollback-ccr', '--harness', harness, '--yes']
-          : [
-              'routing',
-              '--configure-ccr',
-              '--harness',
-              harness,
-              '--route-mode',
-              mode,
-              '--yes',
-            ];
+          : ['routing', '--configure-ccr', '--harness', harness, '--route-mode', mode, '--yes'];
         this.record(
           `${removing ? 'Removing' : 'Applying'} Smart Model Routing for ${name(harness)}.`,
           'working',
@@ -1865,7 +1860,8 @@ export class GuideService {
         );
         return {
           ok: true,
-          title: report.action === 'rollback' ? 'Smart routing removed' : 'Smart routing configured',
+          title:
+            report.action === 'rollback' ? 'Smart routing removed' : 'Smart routing configured',
           messages,
           appliedPlans: changed,
         };
@@ -2548,10 +2544,7 @@ export class GuideService {
     if (!['claude', 'codex'].includes(harness))
       throw new GuideError(400, 'Choose Claude Code or Codex.');
     return this.exclusive(async () => {
-      this.record(
-        `Reading local Smart Model Routing decisions for ${name(harness)}.`,
-        'working',
-      );
+      this.record(`Reading local Smart Model Routing decisions for ${name(harness)}.`, 'working');
       let result: CliEnvelope<SmartRoutingCommandReport>;
       try {
         result = await this.call<SmartRoutingCommandReport>([
