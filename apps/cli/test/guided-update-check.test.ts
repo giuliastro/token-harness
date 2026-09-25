@@ -316,7 +316,9 @@ it('never reports a green update when the approved version is still not active',
   assert.equal(updateCalls, 3, 'check, preflight and approved mutation all ran');
 });
 
-it('surfaces an RTK direct-release warning instead of claiming everything is up to date', async () => {
+it(
+  'surfaces an RTK direct-release warning instead of claiming everything is up to date',
+  async () => {
   const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
@@ -409,10 +411,17 @@ it('surfaces an RTK direct-release warning instead of claiming everything is up 
   assert.equal(result.ok, true);
   assert.equal(result.title, 'Update check needs attention');
   assert.equal(result.ticket, null);
-  assert.ok(result.messages.some((message) => /RTK: .*no concrete RTK executable path/i.test(message)));
-  assert.ok(result.messages.some((message) => /Make the intended RTK executable available on PATH/i.test(message)));
-  assert.doesNotMatch(result.messages.join(' '), /up to date/i);
-});
+    assert.ok(
+      result.messages.some((message) => /RTK: .*no concrete RTK executable path/i.test(message)),
+    );
+    assert.ok(
+      result.messages.some((message) =>
+        /Make the intended RTK executable available on PATH/i.test(message),
+      ),
+    );
+    assert.doesNotMatch(result.messages.join(' '), /up to date/i);
+  },
+);
 
 it('presents updates as one complete check then install flow', () => {
   assert.match(GUIDE_HTML, /Health and updates/);
