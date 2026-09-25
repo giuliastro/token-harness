@@ -52,11 +52,22 @@ it('previews and applies shadow Smart Model Routing from the guided service', as
   const applied = await service.apply({ ticket: 'routing-ticket' });
   assert.equal(applied.ok, true);
   assert.equal(applied.title, 'Smart routing configured');
-  assert.match(applied.messages.join(' '), /Shadow mode classifies and records requests locally/);
+  assert.match(
+    applied.messages.join(' '),
+    /Shadow mode classifies and records requests locally/,
+  );
   assert.match(applied.messages.join(' '), /ccr "Token Harness Codex"/);
   assert.deepEqual(calls, [
     ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow'],
-    ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow', '--yes'],
+    [
+      'routing',
+      '--configure-ccr',
+      '--harness',
+      'codex',
+      '--route-mode',
+      'shadow',
+      '--yes',
+    ],
   ]);
 });
 
