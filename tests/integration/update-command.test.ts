@@ -908,14 +908,14 @@ describe('update', () => {
     mkdirSync(packageRoot, { recursive: true });
     writeFileSync(
       join(packageRoot, 'package.json'),
-      JSON.stringify({ name: 'token-harness', version: '0.1.19' }),
+      JSON.stringify({ name: 'token-harness', version: '0.1.18' }),
     );
     writeFileSync(entryScript, '');
     const config: FakeChannel = {
       application: {
         npmRoot,
         packageRoot,
-        installedVersion: '0.1.19',
+        installedVersion: '0.1.18',
         availableVersion: '0.1.19',
       },
     };
@@ -931,7 +931,7 @@ describe('update', () => {
         2,
       ),
     );
-    assert.equal(preview.data?.application?.installed, '0.1.19');
+    assert.equal(preview.data?.application?.installed, '0.1.18');
     assert.equal(preview.data?.application?.available, '0.1.19');
     assert.equal(preview.data?.execution?.outcome, 'confirmation-required');
     assert.equal(

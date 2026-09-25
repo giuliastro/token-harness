@@ -32,7 +32,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
 it('checks updates on demand and applies only after the returned approval ticket', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
-  let applicationVersion = '0.1.19';
+  let applicationVersion = '0.1.18';
   const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
@@ -82,7 +82,7 @@ it('checks updates on demand and applies only after the returned approval ticket
       installed: applicationVersion,
       available: '0.1.19',
       channel: 'npm',
-      verdict: applicationVersion === '0.1.19' ? 'upgradable' : 'current',
+      verdict: applicationVersion === '0.1.18' ? 'upgradable' : 'current',
       ...(confirmed && applicationVersion === '0.1.19' ? { updated: true } : {}),
     },
     network: ['crates.io'],
@@ -181,7 +181,7 @@ it('checks updates on demand and applies only after the returned approval ticket
     assert.equal(result.stack?.components[0]?.update, 'available');
     assert.equal(result.stack?.components[0]?.updateAvailableVersion, '0.45.0');
     assert.ok(
-      result.messages.some((message) => message.includes('Token Harness: 0.1.19 → 0.1.19')),
+      result.messages.some((message) => message.includes('Token Harness: 0.1.18 → 0.1.19')),
     );
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
