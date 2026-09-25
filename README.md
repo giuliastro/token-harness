@@ -266,6 +266,12 @@ launching a browser.
 
 ### Smart Model Routing (advanced)
 
+The browser app now exposes **Smart Model Routing** as its own section for each detected Claude Code
+or Codex installation. The normal workflow is **Set up shadow routing** → approve the local CCR
+runtime step when needed → review the routing rule/profile → **View decisions**. Conservative mode
+and surgical removal remain under advanced routing controls. Native Claude Code/Codex endpoints are
+never rewritten; routed sessions use the scoped CCR launcher/profile reported after setup.
+
 The local TypeScript classifier needs no API key or local model. On Node.js 22+, Token Harness can
 install and start the reviewed CCR 3.1.1 CLI in its own protected state directory. Installation and
 routing configuration are separate preview/apply steps. Existing authenticated CCR services can be
