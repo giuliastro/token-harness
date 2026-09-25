@@ -89,6 +89,14 @@ export interface GuideGuidance {
   description: string;
   action?: GuideAction;
 }
+export interface GuideRoutingState {
+  state: 'off' | 'shadow' | 'conservative' | 'attention';
+  mode: 'shadow' | 'conservative' | null;
+  detail: string;
+  launchCommand: string | null;
+  profileModel: string | null;
+  simpleModel: string | null;
+}
 export interface GuideAgent {
   id: GuideHarness;
   name: string;
@@ -98,6 +106,9 @@ export interface GuideAgent {
   providers: string[];
   setup: GuideSetupTarget[];
   effort: string | null;
+  model: string | null;
+  models: Array<{ model: string; displayName: string; isDefault: boolean }>;
+  routing: GuideRoutingState;
   reasoning: GuideReasoning;
   guidance?: GuideGuidance;
   allowanceAction: GuideAction;
@@ -186,6 +197,8 @@ interface Approval {
   candidateHarness?: GuideHarness;
   routingHarness?: GuideHarness;
   routingMode?: 'shadow' | 'conservative';
+  routingProfileModel?: string | null;
+  routingSimpleModel?: string | null;
   updateTargets?: GuideUpdateTarget[];
 }
 type GuideUpdateTarget =
@@ -1059,12 +1072,56 @@ export class GuideService {
       observe<StatusReport>('checks', ['status']),
       observe<TaskBenchmarkContextMatrixReport>('value', ['benchmark-matrix']),
     ]);
+    const routing: Partial<Record<GuideHarness, GuideRoutingState>> = {};
+    if (doctor.data !== null) {
+      await Promise.all(
+        doctor.data.harnesses
+          .filter(
+            (item) =>
+              item.state !== 'absent' &&
+              (item.harnessId === 'claude' || item.harnessId === 'codex'),
+          )
+          .map(async (item) => {
+            const harness = item.harnessId as GuideHarness;
+            try {
+              const result = await this.call<SmartRoutingCommandReport>([
+                'routing',
+                '--route-status',
+                '--harness',
+                harness,
+              ]);
+              if (result.data?.kind === 'status') {
+                routing[harness] = {
+                  state: result.data.state,
+                  mode: result.data.mode,
+                  detail: result.data.detail,
+                  launchCommand: result.data.launchCommand ?? null,
+                  profileModel: result.data.profileModel ?? null,
+                  simpleModel: result.data.simpleModel ?? null,
+                };
+                return;
+              }
+            } catch {
+              // Bounded UI state below; never surface a raw local runtime error.
+            }
+            routing[harness] = {
+              state: 'attention',
+              mode: null,
+              detail: 'Smart Model Routing status could not be verified.',
+              launchCommand: null,
+              profileModel: null,
+              simpleModel: null,
+            };
+          }),
+      );
+    }
     const agents = this.agentView(
       doctor,
       budget,
       context,
       { rules: true, allowance: true },
       guidance,
+      routing,
     );
     const notices: string[] = [];
     if (doctor.data === null)
@@ -1119,6 +1176,7 @@ export class GuideService {
     context: GuideRead<ContextReport>,
     complete: { rules: boolean; allowance: boolean },
     guidance?: Partial<Record<GuideHarness, GuideGuidance>>,
+    routing: Partial<Record<GuideHarness, GuideRoutingState>> = {},
   ): GuideAgent[] {
     const present = (doctor.data?.harnesses ?? []).filter(
       (item) =>
@@ -1157,6 +1215,21 @@ export class GuideService {
         providers: providers.map(name),
         setup,
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
+        model: observed?.model ?? null,
+        models: (observed?.availableModels ?? []).map((item) => ({
+          model: item.model,
+          displayName: item.displayName,
+          isDefault: item.isDefault,
+        })),
+        routing:
+          routing[agent.harnessId as GuideHarness] ?? {
+            state: 'off',
+            mode: null,
+            detail: 'Smart Model Routing is not enabled for this coding agent.',
+            launchCommand: null,
+            profileModel: null,
+            simpleModel: null,
+          },
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
         ...(guidance?.[agent.harnessId as GuideHarness]
           ? { guidance: guidance[agent.harnessId as GuideHarness] }
