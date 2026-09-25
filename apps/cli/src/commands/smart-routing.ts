@@ -1010,11 +1010,138 @@ async function ccrConfiguration(
         scriptHash(new TextDecoder().decode(currentScript)) === owned.scriptSha256
       ) {
         if (owned.mode !== mode || owned.scriptSha256 !== scriptHash(script)) {
-          return error(
-            'ccr-route-mode-requires-rollback',
-            `CCR is already configured in ${owned.mode} mode; changing the mode requires an explicit rollback first`,
-            `Review the active routing rule, run \`token-harness routing --rollback-ccr --harness ${harnessId} --yes\`, then configure again in ${mode} mode`,
-          );
+          const currentProfileModel =
+            owned.profileModel ??
+            (isJsonRecord(currentOwnedProfile) && typeof currentOwnedProfile['model'] === 'string'
+              ? currentOwnedProfile['model']
+              : null);
+          const requestedBaseModel =
+            profilePlan.profile !== null && typeof profilePlan.profile['model'] === 'string'
+              ? profilePlan.profile['model']
+              : null;
+          if (
+            currentProfileModel !== null &&
+            requestedBaseModel !== null &&
+            currentProfileModel !== requestedBaseModel
+          ) {
+            return error(
+              'ccr-base-model-change-requires-disable',
+              'The routed launcher base model differs from the active owned profile',
+              'Disable Smart Model Routing before changing its base launcher model; mode and simple-model changes can be configured in place',
+            );
+          }
+          if (!context.confirmed) {
+            return configurationResult(
+              'configure',
+              'preview',
+              ccr,
+              harnessId,
+              mode,
+              ruleId,
+              path,
+              [
+                diagnostic({
+                  severity: 'info',
+                  code: 'ccr-routing-mode-update-preview',
+                  message:
+                    owned.mode === mode
+                      ? `Token Harness would update the owned ${mode} routing configuration`
+                      : `Token Harness would change the owned routing mode from ${owned.mode} to ${mode}`,
+                  remediation:
+                    'Only the Token Harness-owned routing script and receipt are changed; the CCR provider login and unrelated configuration remain untouched',
+                }),
+              ],
+              owned.profileId ?? null,
+              owned.profileId ? ccrLaunchCommand(harnessId) : null,
+            );
+          }
+          let validation: unknown;
+          try {
+            validation = await ccr.client.call('validateRouteScript', [
+              {
+                script: {
+                  apiVersion: 1,
+                  language: 'javascript',
+                  source: script,
+                  timeoutMs: 2_000,
+                },
+              },
+            ]);
+          } catch (errorValue) {
+            const issue = ccrFailure(errorValue);
+            return commandResult({
+              command: 'routing',
+              exitCode: EXIT_CODES['problems-found'],
+              diagnostics: [diagnostic({ severity: 'error', ...issue })],
+            });
+          }
+          if (!validateRouteRuleResult(validation)) {
+            return error(
+              'ccr-script-validation-failed',
+              'CCR did not validate the updated Smart Model Routing script',
+              'The existing active routing configuration was kept unchanged',
+            );
+          }
+
+          const previousScript = new TextDecoder().decode(currentScript);
+          const previousOwnership = { ...owned };
+          try {
+            await fs.writeFile(path, new TextEncoder().encode(script));
+            const updatedOwnership: CcrOwnershipReceipt = {
+              ...owned,
+              status: 'active',
+              mode,
+              scriptSha256: scriptHash(script),
+              ...(requestedBaseModel === null ? {} : { profileModel: requestedBaseModel }),
+              ...(configuredSimpleModel === null
+                ? { simpleModel: undefined }
+                : { simpleModel: configuredSimpleModel }),
+            };
+            await writeJson(context, receiptPath(context, harnessId), updatedOwnership);
+            await ccr.client.call('startGateway');
+            const gatewayState = safeGatewayState(await ccr.client.call('getGatewayStatus'));
+            if (gatewayState !== 'running') throw new CcrManagementError('request-failed');
+            return configurationResult(
+              'configure',
+              'configured',
+              { ...ccr, gatewayState },
+              harnessId,
+              mode,
+              ruleId,
+              path,
+              [
+                diagnostic({
+                  severity: 'info',
+                  code: 'ccr-routing-mode-update-verified',
+                  message:
+                    previousOwnership.mode === mode
+                      ? `Smart Model Routing ${mode} configuration was updated and verified`
+                      : `Smart Model Routing changed from ${previousOwnership.mode} to ${mode} and was verified`,
+                  remediation: 'Use the same routed launcher/profile; no second setup step is required',
+                }),
+              ],
+              updatedOwnership.profileId ?? null,
+              updatedOwnership.profileId ? ccrLaunchCommand(harnessId) : null,
+            );
+          } catch (errorValue) {
+            await fs.writeFile(path, new TextEncoder().encode(previousScript)).catch(() => undefined);
+            await writeJson(context, receiptPath(context, harnessId), previousOwnership).catch(
+              () => undefined,
+            );
+            const issue = ccrFailure(errorValue);
+            return commandResult({
+              command: 'routing',
+              exitCode: EXIT_CODES['problems-found'],
+              diagnostics: [
+                diagnostic({
+                  severity: 'error',
+                  code: issue.code,
+                  message: `${issue.message}; the previous owned routing mode was restored`,
+                  remediation: 'Inspect CCR gateway status and retry Configure',
+                }),
+              ],
+            });
+          }
         }
         if (
           owned.profileId === undefined &&
