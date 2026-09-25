@@ -322,6 +322,23 @@ export function createGuideHandler(input: {
         send(200, JSON.stringify(result));
         return;
       }
+      if (url.pathname === '/api/routing-metrics') {
+        if (body === null || typeof body !== 'object' || Array.isArray(body))
+          throw new GuideError(400, 'Choose a coding agent.');
+        const data = body as Record<string, unknown>;
+        if (
+          Object.keys(data).length !== 1 ||
+          !['claude', 'codex'].includes(String(data['harness']))
+        )
+          throw new GuideError(400, 'Choose Claude Code or Codex.');
+        send(
+          200,
+          JSON.stringify(
+            await input.service.routingMetrics(String(data['harness']) as 'claude' | 'codex'),
+          ),
+        );
+        return;
+      }
       if (url.pathname === '/api/update-check') {
         if (body === null || typeof body !== 'object' || Array.isArray(body))
           throw new GuideError(400, 'Only an optional reporting period is accepted.');
