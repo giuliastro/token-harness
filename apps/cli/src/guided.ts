@@ -1359,9 +1359,7 @@ export class GuideService {
 
         const report = result.data;
         const alreadyConfigured =
-          !removing &&
-          report.kind === 'ccr-configuration' &&
-          report.state === 'already-configured';
+          !removing && report.kind === 'ccr-configuration' && report.state === 'already-configured';
         const alreadyAbsent =
           removing && report.kind === 'ccr-configuration' && report.state === 'already-absent';
         if (alreadyConfigured || alreadyAbsent) {
@@ -2032,10 +2030,7 @@ export class GuideService {
         };
       }
 
-      if (
-        approval.operation === 'routing-configure' ||
-        approval.operation === 'routing-rollback'
-      ) {
+      if (approval.operation === 'routing-configure' || approval.operation === 'routing-rollback') {
         if (approval.routingHarness === undefined || approval.routingMode === undefined)
           throw new GuideError(
             409,
@@ -2053,15 +2048,7 @@ export class GuideService {
           result = await this.call<SmartRoutingCommandReport>(
             removing
               ? ['routing', '--rollback-ccr', '--harness', harness, '--yes']
-              : [
-                  'routing',
-                  '--configure-ccr',
-                  '--harness',
-                  harness,
-                  '--route-mode',
-                  mode,
-                  '--yes',
-                ],
+              : ['routing', '--configure-ccr', '--harness', harness, '--route-mode', mode, '--yes'],
           );
         } catch {
           this.invalidateObservedState();
