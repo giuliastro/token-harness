@@ -60,7 +60,11 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        run: pnpm format:check
+        shell: bash
+        run: |
+          pnpm exec prettier --write apps/cli/src/guided.ts apps/cli/test/guided-update-check.test.ts
+          git diff -- apps/cli/src/guided.ts apps/cli/test/guided-update-check.test.ts
+          exit 1
 
       - name: Test
         run: pnpm test
