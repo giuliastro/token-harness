@@ -32,7 +32,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
 it('checks updates on demand and applies only after the returned approval ticket', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
-  let applicationVersion = '0.1.20';
+  let applicationVersion = '0.1.19';
   const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
