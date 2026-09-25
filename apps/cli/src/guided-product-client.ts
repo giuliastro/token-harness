@@ -1148,15 +1148,66 @@ export const GUIDE_PRODUCT_JS = String.raw`
   }
 
 
-  function reviewRoutingAction(harness, action, routeMode, run) {
+  function routingPresentation(routing) {
+    if (!routing || routing.state === 'off') return { label: 'Off', cls: '' };
+    if (routing.state === 'shadow') return { label: 'Shadow', cls: 'good' };
+    if (routing.state === 'conservative') return { label: 'Conservative', cls: 'good' };
+    return { label: 'Needs attention', cls: 'warn' };
+  }
+
+  function bareRoutingModel(value) {
+    if (!value) return '';
+    const slash = value.indexOf('/');
+    return slash >= 0 ? value.slice(slash + 1) : value;
+  }
+
+  function routingModelChoices(agent) {
+    const choices = [];
+    for (const item of agent?.models || []) {
+      if (!item?.model || choices.some(choice => choice.model === item.model)) continue;
+      choices.push(item);
+    }
+    return choices;
+  }
+
+  function routingSelect(labelText, choices, selected, includeEmpty = false) {
+    const wrap = node('label', undefined, 'setup-choice-copy');
+    wrap.append(node('strong', labelText));
+    const select = node('select');
+    if (includeEmpty) {
+      const option = node('option', 'Choose a model…');
+      option.value = '';
+      select.append(option);
+    }
+    for (const choice of choices) {
+      const option = node(
+        'option',
+        choice.displayName && choice.displayName !== choice.model
+          ? choice.displayName + ' · ' + choice.model
+          : choice.model,
+      );
+      option.value = choice.model;
+      select.append(option);
+    }
+    if (selected && choices.some(choice => choice.model === selected)) select.value = selected;
+    else if (!includeEmpty && choices.length) {
+      const preferred = choices.find(choice => choice.isDefault);
+      select.value = preferred?.model || choices[0].model;
+    }
+    wrap.append(select);
+    return { wrap, select };
+  }
+
+  function reviewRoutingAction(harness, action, config, run) {
+    const routeMode = config?.mode || 'shadow';
     const label =
       action === 'routing-metrics'
         ? 'Reading routing activity'
         : action === 'routing-remove'
-          ? 'Reviewing routing removal'
-          : 'Reviewing ' + routeMode + ' routing setup';
+          ? 'Reviewing routing disable'
+          : 'Reviewing routing configuration';
     $('modal-content').replaceChildren(
-      progress(label, 'Nothing changes while Token Harness reads the local routing state.'),
+      progress(label, 'Nothing changes while Token Harness reads the current local routing state.'),
     );
     $('modal-actions').replaceChildren(modalClose('Cancel'));
     setBusy(true, false);
@@ -1165,7 +1216,15 @@ export const GUIDE_PRODUCT_JS = String.raw`
         request('/api/preview', {
           action,
           harness,
-          ...(action === 'routing-setup' ? { routeMode } : {}),
+          ...(action === 'routing-setup'
+            ? {
+                routeMode,
+                ...(config?.profileModel ? { routeProfileModel: config.profileModel } : {}),
+                ...(routeMode === 'conservative' && config?.simpleModel
+                  ? { routeSimpleModel: config.simpleModel }
+                  : {}),
+              }
+            : {}),
         }),
       )
       .then(data => {
@@ -1175,12 +1234,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
           messageBox(
             'Smart Model Routing · ' + agentName(harness),
             action === 'routing-metrics'
-              ? 'Local classifier and CCR activity only. Prompt text and credentials are not shown.'
+              ? 'Local routing decisions and CCR activity only. Prompt text and credentials are not shown.'
               : action === 'routing-remove'
-                ? 'Only the Token Harness-owned CCR rule/profile is eligible for removal.'
+                ? 'Disable removes only the Token Harness-owned routing rule/profile. The coding-agent login and unrelated CCR settings are kept.'
                 : routeMode === 'shadow'
-                  ? 'Shadow mode is the safe default: it classifies requests locally and records decisions without changing the selected model.'
-                  : 'Conservative mode is opt-in: only high-confidence simple requests may request one already-configured simple model; safety-gated requests pass through unchanged.',
+                  ? 'Shadow records how requests would be classified. Routing decisions do not request a model switch.'
+                  : 'Conservative may request the selected simple model only for high-confidence simple prompts. Ambiguous, complex, image and safety-gated requests pass through without a routing switch.',
           ),
         );
         for (const change of data.changes || []) {
@@ -1194,7 +1253,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           $('modal-content').append(
             messageBox(
               'Safety boundary',
-              'Token Harness owns only its exact CCR runtime/rule/profile. Provider credentials remain in CCR, native Claude Code/Codex endpoints are not rewritten, and every mutation still requires this explicit approval.',
+              'Token Harness owns only its exact local CCR runtime, rule and profile. Enabling routing may reuse the existing local Codex/Claude login, but native coding-agent settings are not rewritten.',
               'safe',
             ),
           );
@@ -1202,11 +1261,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         if (data.ticket)
           $('modal-actions').append(
             actionButton(
-              action === 'routing-remove'
-                ? 'Remove managed routing'
-                : routeMode === 'conservative'
-                  ? 'Apply conservative routing step'
-                  : 'Apply shadow routing step',
+              action === 'routing-remove' ? 'Disable routing' : 'Apply configuration',
               () => applyTicket(data.ticket),
             ),
           );
@@ -1225,75 +1280,149 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function manageRouting(harness) {
     if (busy) return;
+    const agent = activeAgents().find(item => item.id === harness);
+    if (!agent) return;
+    const routing = agent.routing || {
+      state: 'off',
+      mode: null,
+      detail: 'Smart Model Routing is not enabled.',
+      launchCommand: null,
+      profileModel: null,
+      simpleModel: null,
+    };
+    const state = routingPresentation(routing);
     const run = modal('Smart Model Routing · ' + agentName(harness));
+    const models = routingModelChoices(agent);
+    const currentProfileModel =
+      bareRoutingModel(routing.profileModel) ||
+      agent.model ||
+      models.find(choice => choice.isDefault)?.model ||
+      models[0]?.model ||
+      '';
+    const currentSimpleModel = bareRoutingModel(routing.simpleModel);
+    const currentMode =
+      routing.mode === 'conservative' ? 'conservative' : 'shadow';
+
     $('modal-content').append(
       messageBox(
-        'Shadow-first routing',
-        'The classifier runs locally with deterministic heuristics. It needs no paid routing API and no local LLM. The reviewed CCR gateway is used only as the local request-routing surface.',
-      ),
-      messageBox(
-        'How to use it',
-        'Start with Shadow. After CCR is prepared, review Shadow again to install the exact rule/profile. Launch the agent through the CCR profile shown after configuration. Conservative mode is optional and requires an exact simple model already configured in CCR.',
-      ),
-      messageBox(
-        'What is measured',
-        'Routing decisions are kept separate from optimizer token savings. A cheaper model is not counted as saved quota unless paired quality and allowance evidence proves it.',
-        'safe',
+        'Current status: ' + state.label,
+        routing.detail ||
+          'Smart Model Routing is optional and uses only the local Token Harness-managed routing runtime.',
+        routing.state === 'attention' ? 'warn' : routing.state === 'off' ? undefined : 'safe',
       ),
     );
-    $('modal-actions').append(
-      modalClose('Close'),
+
+    const form = node('div', undefined, 'setup-choice-list');
+    form.append(
+      node('h3', routing.state === 'off' ? 'Enable routing' : 'Configuration'),
+      node(
+        'p',
+        'Shadow is the recommended starting mode. Conservative is the mode that can actually switch simple requests to another model.',
+        'caption',
+      ),
+    );
+
+    const modeLabel = node('label', undefined, 'setup-choice-copy');
+    modeLabel.append(node('strong', 'Mode'));
+    const modeSelect = node('select');
+    for (const [value, label] of [
+      ['shadow', 'Shadow · observe only'],
+      ['conservative', 'Conservative · route simple requests'],
+    ]) {
+      const option = node('option', label);
+      option.value = value;
+      modeSelect.append(option);
+    }
+    modeSelect.value = currentMode;
+    modeLabel.append(modeSelect);
+    form.append(modeLabel);
+
+    const base = routingSelect(
+      'Base model',
+      models,
+      currentProfileModel,
+      models.length === 0,
+    );
+    base.wrap.append(
+      node(
+        'span',
+        'This is the model used by the routed launcher before any Conservative routing decision. Token Harness uses the agent current/default model when it can observe it.',
+        'caption',
+      ),
+    );
+    form.append(base.wrap);
+
+    const simple = routingSelect('Simple model', models, currentSimpleModel, true);
+    simple.wrap.append(
+      node(
+        'span',
+        'Used only in Conservative mode for high-confidence simple requests. Token Harness does not guess which model you consider the cheaper/simple target.',
+        'caption',
+      ),
+    );
+    form.append(simple.wrap);
+    $('modal-content').append(form);
+
+    const advanced = node('details', undefined, 'agent-details');
+    advanced.append(node('summary', 'Advanced'));
+    advanced.append(
+      node(
+        'p',
+        'Classification is local and deterministic; no paid routing API or local LLM is needed. Routing decisions are not counted as savings without separate quality and allowance evidence.',
+        'caption',
+      ),
+    );
+    if (routing.launchCommand) {
+      advanced.append(node('p', 'Routed launcher', 'caption'), copyRow(routing.launchCommand));
+    }
+    advanced.append(
       actionButton(
         'View 30-day activity',
-        () => reviewRoutingAction(harness, 'routing-metrics', 'shadow', run),
+        () => reviewRoutingAction(harness, 'routing-metrics', { mode: currentMode }, run),
         'secondary',
-      ),
-      actionButton(
-        'Remove managed rule',
-        () => reviewRoutingAction(harness, 'routing-remove', 'shadow', run),
-        'secondary',
-      ),
-      actionButton(
-        'Review conservative setup',
-        () => reviewRoutingAction(harness, 'routing-setup', 'conservative', run),
-        'secondary',
-      ),
-      actionButton(
-        'Review shadow setup',
-        () => reviewRoutingAction(harness, 'routing-setup', 'shadow', run),
       ),
     );
-  }
+    $('modal-content').append(advanced);
 
-  function renderRouting() {
-    const root = $('routing-overview');
-    if (!root) return;
-    root.replaceChildren();
-    const agents = activeAgents();
-    if (!agents.length) {
-      root.append(
-        messageBox(
-          'No supported coding agent detected',
-          'Smart Model Routing is available for Claude Code and Codex after the agent is detected.',
-          'warn',
+    const primary = actionButton(
+      routing.state === 'off'
+        ? 'Enable routing'
+        : routing.state === 'attention'
+          ? 'Repair routing'
+          : 'Save configuration',
+      () =>
+        reviewRoutingAction(
+          harness,
+          'routing-setup',
+          {
+            mode: modeSelect.value,
+            profileModel: base.select.value || null,
+            simpleModel: simple.select.value || null,
+          },
+          run,
+        ),
+    );
+    const updateAvailability = () => {
+      simple.wrap.hidden = modeSelect.value !== 'conservative';
+      primary.disabled =
+        (models.length > 0 && !base.select.value) ||
+        (modeSelect.value === 'conservative' && !simple.select.value);
+    };
+    modeSelect.addEventListener('change', updateAvailability);
+    base.select.addEventListener('change', updateAvailability);
+    simple.select.addEventListener('change', updateAvailability);
+
+    $('modal-actions').append(modalClose('Cancel'));
+    if (routing.state !== 'off' && routing.mode !== null)
+      $('modal-actions').append(
+        actionButton(
+          'Disable routing',
+          () => reviewRoutingAction(harness, 'routing-remove', { mode: routing.mode }, run),
+          'secondary',
         ),
       );
-      return;
-    }
-    for (const agent of agents) {
-      const row = node('article', undefined, 'maintenance-row');
-      const copy = node('div');
-      copy.append(
-        node('strong', agent.name),
-        node(
-          'p',
-          'Optional request routing through a local CCR profile. Shadow mode never changes models; conservative mode is explicit and safety-gated.',
-          'caption',
-        ),
-      );
-      row.append(copy, actionButton('Manage routing', () => manageRouting(agent.id), 'secondary'));
-      root.append(row);
-    }
+    $('modal-actions').append(primary);
+    updateAvailability();
   }
 
   function renderMaintenance() {
