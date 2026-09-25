@@ -316,6 +316,104 @@ it('never reports a green update when the approved version is still not active',
   assert.equal(updateCalls, 3, 'check, preflight and approved mutation all ran');
 });
 
+it('surfaces an RTK direct-release warning instead of claiming everything is up to date', async () => {
+  const doctor = (): DoctorReport => ({
+    platform,
+    problemCount: 0,
+    providers: [
+      {
+        providerId: RTK,
+        state: 'configured',
+        version: '0.44.0',
+        executable: '/tools/rtk',
+        installationChannel: 'cargo',
+        versionVerdict: 'in-range',
+        configuredHarnesses: [CLAUDE],
+        unmanagedHarnessesConfigured: [],
+        supportsUnmanagedHarnesses: false,
+        managedByTokenHarness: false,
+        assignableHarnesses: [CLAUDE],
+        evidence: [],
+        warnings: [],
+      },
+    ],
+    harnesses: [
+      {
+        harnessId: CLAUDE,
+        state: 'configured',
+        version: '2.1.261',
+        versionVerdict: 'in-range',
+        configPath: null,
+        declaredVerificationTier: 'config-only',
+        evidence: [],
+        warnings: [],
+      },
+    ],
+  });
+  const call: GuideCall = async <T>(args: readonly string[]) => {
+    const command = args[0] ?? '';
+    if (command === 'doctor') return envelope(command, doctor() as T);
+    if (command === 'update') {
+      return toEnvelope(
+        commandResult({
+          command,
+          exitCode: 0,
+          data: {
+            providers: [
+              {
+                providerId: RTK,
+                installed: '0.44.0',
+                available: null,
+                channel: 'github-release',
+                verdict: 'unavailable',
+                pin: null,
+              },
+            ],
+            network: ['api.github.com (rtk-ai/rtk release metadata)'],
+            execution: {
+              planId: null,
+              transactionId: null,
+              fromStoredPlan: false,
+              outcome: 'nothing-to-do',
+              results: [],
+              unrestored: [],
+              receiptId: null,
+            },
+          } satisfies UpdateReport,
+          diagnostics: [
+            {
+              severity: 'warning',
+              code: 'rtk-release-target-unresolved',
+              subject: RTK,
+              message:
+                'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
+              path: null,
+              remediation:
+                'Make the intended RTK executable available on PATH, then re-run Check for updates',
+            },
+          ],
+        }),
+        'test',
+      ) as CliEnvelope<T>;
+    }
+    return envelope(command, null as T);
+  };
+
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'unused-ticket',
+  );
+  const result = await service.checkUpdates();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.title, 'Update check needs attention');
+  assert.equal(result.ticket, null);
+  assert.ok(result.messages.some((message) => /RTK: .*no concrete RTK executable path/i.test(message)));
+  assert.ok(result.messages.some((message) => /Make the intended RTK executable available on PATH/i.test(message)));
+  assert.doesNotMatch(result.messages.join(' '), /up to date/i);
+});
+
 it('presents updates as one complete check then install flow', () => {
   assert.match(GUIDE_HTML, /Health and updates/);
   assert.match(GUIDE_JS, /Check for updates/);
