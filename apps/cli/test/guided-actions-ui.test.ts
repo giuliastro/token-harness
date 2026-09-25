@@ -61,6 +61,19 @@ describe('guided setup UX', () => {
     );
   });
 
+  it('exposes Smart Model Routing as a browser-first shadow workflow', () => {
+    assert.match(GUIDE_HTML, /<h2>Smart Model Routing<\/h2>/);
+    assert.match(GUIDE_HTML, /id="routing-overview"/);
+    assert.match(GUIDE_JS, /Set up shadow routing/);
+    assert.match(GUIDE_JS, /Review conservative mode/);
+    assert.match(GUIDE_JS, /Remove routing/);
+    assert.match(GUIDE_JS, /action: removing \? 'routing-remove' : 'routing-configure'/);
+    assert.match(GUIDE_JS, /\/api\/routing-metrics/);
+    assert.match(GUIDE_JS, /No API call or local LLM is used to classify the prompt/);
+    assert.match(GUIDE_JS, /Native agent endpoint/);
+    assert.match(GUIDE_JS, /Unchanged/);
+  });
+
   it('keeps advanced evaluation installation explicitly external and manual', () => {
     assert.match(GUIDE_JS, /Experimental, not managed/);
     assert.match(GUIDE_JS, /Token Harness will not execute them for you/);

@@ -4,6 +4,7 @@ import { it } from 'node:test';
 
 import {
   commandResult,
+  diagnostic,
   harnessId,
   providerId,
   toEnvelope,
@@ -314,6 +315,102 @@ it('never reports a green update when the approved version is still not active',
   assert.match(applied.messages[0] ?? '', /0\.45\.0/);
   assert.doesNotMatch(applied.messages.join(' '), /Already up to date/i);
   assert.equal(updateCalls, 3, 'check, preflight and approved mutation all ran');
+});
+
+it('does not call an unresolved RTK release check up to date', async () => {
+  const doctor: DoctorReport = {
+    platform,
+    problemCount: 0,
+    providers: [
+      {
+        providerId: RTK,
+        state: 'configured',
+        version: '0.44.0',
+        executable: '/tools/rtk',
+        installationChannel: 'cargo',
+        versionVerdict: 'in-range',
+        configuredHarnesses: [CLAUDE],
+        unmanagedHarnessesConfigured: [],
+        supportsUnmanagedHarnesses: false,
+        managedByTokenHarness: false,
+        assignableHarnesses: [CLAUDE],
+        evidence: [],
+        warnings: [],
+      },
+    ],
+    harnesses: [
+      {
+        harnessId: CLAUDE,
+        state: 'configured',
+        version: '2.1.261',
+        versionVerdict: 'in-range',
+        configPath: null,
+        declaredVerificationTier: 'config-only',
+        evidence: [],
+        warnings: [],
+      },
+    ],
+  };
+  const report: UpdateReport = {
+    providers: [
+      {
+        providerId: RTK,
+        installed: '0.44.0',
+        available: null,
+        channel: 'github-release',
+        verdict: 'unavailable',
+        pin: null,
+      },
+    ],
+    application: {
+      applicationId: 'token-harness',
+      installed: '0.1.19',
+      available: '0.1.19',
+      channel: 'npm',
+      verdict: 'current',
+    },
+    network: ['api.github.com (rtk-ai/rtk release metadata)'],
+    execution: null,
+  };
+  const call: GuideCall = async <T>(args: readonly string[]) => {
+    const command = args[0] ?? '';
+    if (command === 'doctor') return envelope(command, doctor as T);
+    if (command === 'update') {
+      return toEnvelope(
+        commandResult({
+          command,
+          data: report as T,
+          exitCode: 0,
+          diagnostics: [
+            diagnostic({
+              severity: 'warning',
+              code: 'rtk-release-target-ambiguous',
+              subject: RTK,
+              message:
+                'Two distinct RTK binaries resolve from PATH, so Token Harness will not choose one automatically.',
+              remediation: 'Keep only the intended RTK installation on PATH.',
+            }),
+          ],
+        }),
+        'test',
+      );
+    }
+    return envelope(command, null as T);
+  };
+
+  const service = new GuideService(
+    call,
+    () => 0,
+    () => 'unused-ticket',
+  );
+  const checked = await service.checkUpdates();
+
+  assert.equal(checked.ok, false);
+  assert.equal(checked.ticket, null);
+  assert.equal(checked.title, 'Update check needs attention');
+  assert.match(checked.messages.join(' '), /RTK: update status could not be verified/);
+  assert.match(checked.messages.join(' '), /distinct RTK binaries resolve from PATH/);
+  assert.doesNotMatch(checked.messages.join(' '), /managed optimizers are up to date/i);
 });
 
 it('presents updates as one complete check then install flow', () => {

@@ -8,7 +8,15 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -243,6 +251,8 @@ interface FakeChannel {
   installExitCode?: number;
   installDoesNotChangeResolvedVersion?: boolean;
   rtkExecutablePath?: string;
+  /** Every PATH match for RTK; aliases may resolve to the same canonical binary. */
+  rtkExecutablePaths?: readonly string[];
   rtkReleaseFetch?: ReleaseFetch;
   compatibilityRows?: readonly CompatibilityRow[];
   application?: {
@@ -464,6 +474,9 @@ async function invoke(
 
   const { asked, runner } = fakeRunner(config);
   const rtkExecutablePath = config.rtkExecutablePath;
+  const rtkExecutablePaths =
+    config.rtkExecutablePaths ??
+    (rtkExecutablePath === undefined ? undefined : [rtkExecutablePath]);
   let stdout = '';
   const options: RunOptions = {
     argv: [...argv, '--json'],
@@ -480,12 +493,16 @@ async function invoke(
     stateRoot: place.state,
     adapters: {
       fs: new NodeFileSystem(FACTS),
-      ...(rtkExecutablePath === undefined
+      ...(rtkExecutablePaths === undefined
         ? {}
         : {
             resolveExecutables: (name: string) =>
               name === 'rtk'
-                ? [{ requested: 'rtk', path: rtkExecutablePath, kind: 'native' as const }]
+                ? rtkExecutablePaths.map((path) => ({
+                    requested: 'rtk',
+                    path,
+                    kind: 'native' as const,
+                  }))
                 : [],
           }),
       ...(config.rtkReleaseFetch === undefined ? {} : { rtkReleaseFetch: config.rtkReleaseFetch }),
@@ -586,6 +603,40 @@ describe('update', () => {
       assert.ok(result.data?.network.includes('api.github.com (rtk-ai/rtk release metadata)'));
       assert.ok(result.codes.includes('rtk-release-target'));
       assert.deepEqual(readFileSync(executablePath), before);
+    },
+  );
+
+  it(
+    'accepts multiple Linux PATH aliases when they resolve to the same RTK binary',
+    { skip: FACTS.os !== 'linux' },
+    async () => {
+      const place = world();
+      const executablePath = join(place.home, 'bin', 'rtk');
+      const aliasDirectory = join(place.home, '.local', 'bin');
+      const aliasPath = join(aliasDirectory, 'rtk');
+      mkdirSync(join(place.home, 'bin'), { recursive: true });
+      mkdirSync(aliasDirectory, { recursive: true });
+      writeFileSync(executablePath, 'rtk 0.44.0 fixture\n', { mode: 0o755 });
+      symlinkSync(executablePath, aliasPath);
+
+      const result = await invoke(
+        ['update', '--provider', 'rtk'],
+        place,
+        {
+          installed: { rtk: 'rtk 0.44.0' },
+          channelStdout: { cargo: channelAnswer('0.1.0') },
+          rtkExecutablePath: executablePath,
+          rtkExecutablePaths: [aliasPath, executablePath],
+          rtkReleaseFetch: rtkV050ReleaseFetch(),
+        },
+        undefined,
+        true,
+      );
+
+      assert.equal(result.exitCode, EXIT_CODES.ok);
+      assert.equal(row(result.data, 'rtk')?.available, '0.50.0');
+      assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
+      assert.equal(result.codes.includes('rtk-release-target-ambiguous'), false);
     },
   );
 

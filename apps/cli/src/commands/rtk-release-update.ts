@@ -110,52 +110,83 @@ export async function planDirectRtkRelease(input: {
   const admission = admitProviderPackageUpdate(input.providerId, targetText);
   if (admission.state !== 'admitted') return empty('unavailable');
 
-  if (input.executables.length !== 1) {
-    const detail =
-      input.executables.length === 0
-        ? 'no concrete RTK executable path could be resolved'
-        : `${String(input.executables.length)} RTK executable paths resolve: ${input.executables.map((entry) => entry.path).join(', ')}`;
+  if (input.executables.length === 0) {
     return empty('unavailable', [
       diagnostic({
         severity: 'warning',
-        code: 'rtk-release-target-ambiguous',
-        subject: input.providerId,
-        message: `The verified GitHub release update was not planned because ${detail}`,
-        remediation:
-          'Make exactly one intended RTK executable resolve on PATH, then re-run Check for updates; Token Harness will not choose an arbitrary binary to replace',
-      }),
-    ]);
-  }
-
-  const executable = input.executables[0];
-  if (executable === undefined || executable.kind !== 'native') {
-    return empty('unavailable', [
-      diagnostic({
-        severity: 'warning',
-        code: 'rtk-release-target-not-native',
+        code: 'rtk-release-target-unresolved',
         subject: input.providerId,
         message:
-          'The resolved RTK path is not a native executable, so its file will not be replaced',
-        remediation: 'Install RTK as a native binary, then retry the update check',
+          'The verified GitHub release update was not planned because no concrete RTK executable path could be resolved',
+        remediation: 'Check PATH, then re-run Check for updates',
       }),
     ]);
   }
 
   const canonicalPath = input.fs.canonicalPath;
   if (canonicalPath === undefined) return empty('unavailable');
-  const targetPath = await canonicalPath.call(input.fs, executable.path);
-  if (targetPath === null) {
+
+  const canonicalExecutables: Array<{ executable: ResolvedExecutable; path: string }> = [];
+  for (const executable of input.executables) {
+    if (executable.kind !== 'native') {
+      return empty('unavailable', [
+        diagnostic({
+          severity: 'warning',
+          code: 'rtk-release-target-not-native',
+          subject: input.providerId,
+          path: executable.path,
+          message:
+            'A resolved RTK path is not a native executable, so Token Harness will not replace it',
+          remediation:
+            'Remove the non-native RTK shim from PATH or install RTK as a native binary, then retry the update check',
+        }),
+      ]);
+    }
+    const path = await canonicalPath.call(input.fs, executable.path);
+    if (path === null) {
+      return empty('unavailable', [
+        diagnostic({
+          severity: 'warning',
+          code: 'rtk-release-target-unresolved',
+          subject: input.providerId,
+          path: executable.path,
+          message: 'A resolved RTK executable path could not be canonicalized',
+          remediation: 'Check PATH and filesystem access, then retry the update check',
+        }),
+      ]);
+    }
+    canonicalExecutables.push({ executable, path });
+  }
+
+  const canonicalKey = (path: string): string => (windows ? path.toLowerCase() : path);
+  const uniqueTargets = new Map<string, { executable: ResolvedExecutable; path: string }>();
+  for (const candidate of canonicalExecutables) {
+    if (!uniqueTargets.has(canonicalKey(candidate.path))) {
+      uniqueTargets.set(canonicalKey(candidate.path), candidate);
+    }
+  }
+
+  if (uniqueTargets.size !== 1) {
+    const aliases = canonicalExecutables
+      .map(({ executable, path }) => `${executable.path} → ${path}`)
+      .join(', ');
     return empty('unavailable', [
       diagnostic({
         severity: 'warning',
-        code: 'rtk-release-target-unresolved',
+        code: 'rtk-release-target-ambiguous',
         subject: input.providerId,
-        path: executable.path,
-        message: 'The resolved RTK executable path could not be canonicalized',
-        remediation: 'Check PATH and filesystem access, then retry the update check',
+        message: `The verified GitHub release update was not planned because ${String(uniqueTargets.size)} distinct RTK binaries resolve from PATH: ${aliases}`,
+        remediation:
+          'Keep only the intended RTK installation on PATH, then re-run Check for updates; aliases or symlinks to the same real binary are accepted',
       }),
     ]);
   }
+
+  const selected = uniqueTargets.values().next().value as
+    | { executable: ResolvedExecutable; path: string }
+    | undefined;
+  if (selected === undefined) return empty('unavailable');
+  const targetPath = selected.path;
 
   const runtime = rtkReleaseRuntimeFor(input.fs, input.runner, input.releaseFetch);
   if (runtime === null) return empty('unavailable');
