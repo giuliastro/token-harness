@@ -1297,6 +1297,8 @@ export class GuideService {
             'provider',
             'candidate',
             'routeMode',
+            'routeProfileModel',
+            'routeSimpleModel',
           ].includes(key),
       ) ||
       ![
@@ -1316,6 +1318,14 @@ export class GuideService {
       (data['harnesses'] !== undefined && action !== 'setup') ||
       (data['routeMode'] !== undefined &&
         !['shadow', 'conservative'].includes(String(data['routeMode']))) ||
+      (data['routeProfileModel'] !== undefined &&
+        (typeof data['routeProfileModel'] !== 'string' ||
+          data['routeProfileModel'].length < 1 ||
+          data['routeProfileModel'].length > 160)) ||
+      (data['routeSimpleModel'] !== undefined &&
+        (typeof data['routeSimpleModel'] !== 'string' ||
+          data['routeSimpleModel'].length < 1 ||
+          data['routeSimpleModel'].length > 160)) ||
       (data['harnesses'] !== undefined && data['harness'] !== undefined) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
@@ -1327,7 +1337,10 @@ export class GuideService {
       (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||
       (action === 'skill' && data['harness'] === undefined) ||
       (routingAction && data['harness'] === undefined) ||
-      (action !== 'routing-setup' && data['routeMode'] !== undefined) ||
+      (action !== 'routing-setup' &&
+        (data['routeMode'] !== undefined ||
+          data['routeProfileModel'] !== undefined ||
+          data['routeSimpleModel'] !== undefined)) ||
       (action === 'remove' &&
         (data['provider'] === undefined ||
           data['harness'] !== undefined ||
@@ -1409,9 +1422,22 @@ export class GuideService {
           `${removing ? 'Reviewing removal of' : 'Reviewing'} Smart Model Routing for ${name(harness)}. Nothing has changed yet.`,
           'working',
         );
+        const profileModel =
+          typeof data['routeProfileModel'] === 'string' ? data['routeProfileModel'] : null;
+        const simpleModel =
+          typeof data['routeSimpleModel'] === 'string' ? data['routeSimpleModel'] : null;
         const args = removing
           ? ['routing', '--rollback-ccr', '--harness', harness]
-          : ['routing', '--configure-ccr', '--harness', harness, '--route-mode', mode];
+          : [
+              'routing',
+              '--configure-ccr',
+              '--harness',
+              harness,
+              '--route-mode',
+              mode,
+              ...(profileModel ? ['--route-profile-model', profileModel] : []),
+              ...(simpleModel ? ['--route-simple-model', simpleModel] : []),
+            ];
         const result = await this.call<SmartRoutingCommandReport>(args);
         if (result.exitCode !== 0 || result.data === null) {
           const message = explainGuideIssue(
@@ -1466,6 +1492,8 @@ export class GuideService {
           network,
           routingHarness: harness,
           routingMode: mode,
+          routingProfileModel: profileModel,
+          routingSimpleModel: simpleModel,
         };
         const change =
           report.kind === 'ccr-lifecycle'
@@ -1474,8 +1502,8 @@ export class GuideService {
                 files: 0,
                 description:
                   report.action === 'install'
-                    ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
-                    : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
+                    ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state. The approved Enable then reuses the existing ${name(harness)} login, installs only the Token Harness-owned rule/profile, starts the loopback gateway and verifies the final state.`
+                    : `Prepare the Token Harness-owned CCR ${report.version} management runtime. The same approved Enable continues through provider reuse, rule/profile setup and gateway verification.`,
               }
             : {
                 title: `${name(harness)}: ${removing ? 'remove' : 'configure'} Smart Model Routing`,
@@ -1495,12 +1523,12 @@ export class GuideService {
           changes: [change],
           notices: [
             lifecycle && !removing
-              ? 'CCR runtime preparation and routing-rule configuration are deliberately separate safety stages. After the runtime is ready, open Manage routing again to review the exact rule/profile.'
-              : 'Token Harness owns only its exact CCR rule/profile and local managed runtime. Provider credentials remain in CCR and are never imported silently.',
+              ? 'This single approved Enable may prepare the local CCR runtime and then reuse the coding-agent login already present on this machine. Native Claude Code/Codex settings are not rewritten.'
+              : 'Token Harness owns only its exact CCR rule/profile and local managed runtime. It reuses the existing local coding-agent login only as part of this explicit routing Enable.',
             mode === 'shadow' && !removing
-              ? 'Shadow mode is the default: it never changes the model selected for a request.'
+              ? 'Shadow mode is the default: routing decisions are observed and recorded but do not request a model switch.'
               : mode === 'conservative' && !removing
-                ? 'Conservative routing requires TOKEN_HARNESS_ROUTING_SIMPLE_MODEL to name an exact model already configured in CCR. Without that explicit model the preview is refused.'
+                ? `Conservative routing may request the selected simple model${simpleModel ? ` ${simpleModel}` : ''} only for high-confidence simple prompts; safety-gated requests pass through unchanged.`
                 : 'Removing routing does not uninstall CCR or delete provider credentials.',
           ],
           expiresAt: new Date(expires).toISOString(),
