@@ -7,10 +7,12 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { gzipSync } from 'node:zlib';
 import { after, before, describe, it } from 'node:test';
 
 import {
@@ -26,6 +28,7 @@ import {
   type UpdateReport,
 } from '@token-harness/core';
 import { NodeFileSystem } from '@token-harness/platform';
+import type { ReleaseFetch } from '@token-harness/platform';
 import { DEFAULT_COMMANDS, run, runUpdateCheck, type RunOptions } from 'token-harness';
 
 const FACTS: PlatformFacts = {
@@ -55,6 +58,80 @@ function inventoryAnswer(version: string): string {
     return ['Trovato rtk [rtk-ai.rtk]', 'Versione', '--------', version, ''].join('\r\n');
   }
   return `rtk v${version}:\n    /home/user/.cargo/bin/rtk\n`;
+}
+
+function rtkV050ReleaseFetch(): ReleaseFetch {
+  const downloadUrl =
+    'https://github.com/rtk-ai/rtk/releases/download/v0.50.0/rtk-x86_64-unknown-linux-musl.tar.gz';
+  const executable = new TextEncoder().encode('rtk 0.50.0 fixture\n');
+  const archive = rtkTarGz(executable);
+  const metadata = new TextEncoder().encode(
+    JSON.stringify({
+      tag_name: 'v0.50.0',
+      draft: false,
+      prerelease: false,
+      assets: [
+        {
+          name: 'rtk-x86_64-unknown-linux-musl.tar.gz',
+          browser_download_url: downloadUrl,
+          content_type: 'application/gzip',
+          size: archive.byteLength,
+          digest: `sha256:${createHash('sha256').update(archive).digest('hex')}`,
+        },
+      ],
+    }),
+  );
+  const response = (bytes: Uint8Array) => {
+    let read = false;
+    return {
+      status: 200,
+      ok: true,
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-length' ? String(bytes.length) : null,
+      },
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (read) return { done: true as const };
+            read = true;
+            return { done: false as const, value: bytes };
+          },
+        }),
+      },
+    };
+  };
+  return async (url) => {
+    if (url === 'https://api.github.com/repos/rtk-ai/rtk/releases/tags/v0.50.0')
+      return response(metadata);
+    if (url === downloadUrl) return response(archive);
+    throw new Error(`unexpected RTK release request: ${url}`);
+  };
+}
+
+function rtkTarGz(executable: Uint8Array): Uint8Array {
+  const header = new Uint8Array(512);
+  const encoder = new TextEncoder();
+  const put = (offset: number, length: number, value: string) =>
+    header.set(encoder.encode(value).subarray(0, length), offset);
+  const octal = (offset: number, length: number, value: number) =>
+    put(offset, length, `${value.toString(8).padStart(length - 1, '0')}\0`);
+  put(0, 100, 'rtk');
+  octal(100, 8, 0o755);
+  octal(108, 8, 0);
+  octal(116, 8, 0);
+  octal(124, 12, executable.byteLength);
+  octal(136, 12, 0);
+  header.fill(0x20, 148, 156);
+  put(156, 1, '0');
+  put(257, 6, 'ustar\0');
+  put(263, 2, '00');
+  let checksum = 0;
+  for (const byte of header) checksum += byte;
+  put(148, 8, `${checksum.toString(8).padStart(6, '0')}\0 `);
+  const data = new Uint8Array(Math.ceil(executable.byteLength / 512) * 512);
+  data.set(executable);
+  return gzipSync(Buffer.concat([Buffer.from(header), Buffer.from(data), Buffer.alloc(1024)]));
 }
 
 let sandbox = '';
@@ -165,6 +242,8 @@ interface FakeChannel {
   inventoryStdout?: Readonly<Record<string, string>>;
   installExitCode?: number;
   installDoesNotChangeResolvedVersion?: boolean;
+  rtkExecutablePath?: string;
+  rtkReleaseFetch?: ReleaseFetch;
   compatibilityRows?: readonly CompatibilityRow[];
   application?: {
     npmRoot: string;
@@ -304,6 +383,18 @@ function fakeRunner(config: FakeChannel): { asked: string[]; runner: ProcessRunn
         return { ...base, exitCode: 0, stdout: harnesstrimCapabilityAnswer(version) };
     }
 
+    if (
+      config.rtkExecutablePath !== undefined &&
+      request.executable === config.rtkExecutablePath &&
+      request.args[0] === '--version'
+    ) {
+      return {
+        ...base,
+        exitCode: 0,
+        stdout: readFileSync(config.rtkExecutablePath, 'utf8'),
+      };
+    }
+
     const channel = channelStdout[request.executable];
     if (channel !== undefined) {
       const isInstall = request.args[0] === 'install';
@@ -372,6 +463,7 @@ async function invoke(
     known.has(name) ? { requested: name, path: `/usr/bin/${name}`, kind: 'native' } : null;
 
   const { asked, runner } = fakeRunner(config);
+  const rtkExecutablePath = config.rtkExecutablePath;
   let stdout = '';
   const options: RunOptions = {
     argv: [...argv, '--json'],
@@ -388,9 +480,18 @@ async function invoke(
     stateRoot: place.state,
     adapters: {
       fs: new NodeFileSystem(FACTS),
+      ...(rtkExecutablePath === undefined
+        ? {}
+        : {
+            resolveExecutables: (name: string) =>
+              name === 'rtk'
+                ? [{ requested: 'rtk', path: rtkExecutablePath, kind: 'native' as const }]
+                : [],
+          }),
+      ...(config.rtkReleaseFetch === undefined ? {} : { rtkReleaseFetch: config.rtkReleaseFetch }),
       runner: {
         run: (request) =>
-          resolve(request.executable) === null
+          resolve(request.executable) === null && request.executable !== rtkExecutablePath
             ? Promise.resolve({
                 displayCommand: `${request.executable} ${request.args.join(' ')}`,
                 interpreter: 'direct' as const,
@@ -451,6 +552,72 @@ function admittedRow(): CompatibilityRow {
 }
 
 describe('update', () => {
+  it(
+    'checks RTK GitHub releases on Linux instead of Cargo registry search',
+    { skip: FACTS.os !== 'linux' },
+    async () => {
+      const place = world();
+      const executablePath = join(place.home, 'bin', 'rtk');
+      mkdirSync(join(place.home, 'bin'), { recursive: true });
+      writeFileSync(executablePath, 'rtk 0.44.0 fixture', { mode: 0o755 });
+      const before = readFileSync(executablePath);
+      const result = await invoke(
+        ['update', '--provider', 'rtk'],
+        place,
+        {
+          installed: { rtk: 'rtk 0.44.0' },
+          channelStdout: { cargo: channelAnswer('0.1.0') },
+          rtkExecutablePath: executablePath,
+          rtkReleaseFetch: rtkV050ReleaseFetch(),
+        },
+        undefined,
+        true,
+      );
+
+      assert.equal(result.exitCode, EXIT_CODES.ok);
+      assert.equal(row(result.data, 'rtk')?.installed, '0.44.0');
+      assert.equal(row(result.data, 'rtk')?.available, '0.50.0');
+      assert.equal(row(result.data, 'rtk')?.channel, 'github-release');
+      assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
+      assert.equal(
+        result.asked.some((line) => line.startsWith('cargo search')),
+        false,
+      );
+      assert.ok(result.data?.network.includes('api.github.com (rtk-ai/rtk release metadata)'));
+      assert.ok(result.codes.includes('rtk-release-target'));
+      assert.deepEqual(readFileSync(executablePath), before);
+    },
+  );
+
+  it(
+    'updates RTK from the verified Linux GitHub asset after confirmation',
+    { skip: FACTS.os !== 'linux' },
+    async () => {
+      const place = world();
+      const executablePath = join(place.home, 'bin', 'rtk');
+      mkdirSync(join(place.home, 'bin'), { recursive: true });
+      writeFileSync(executablePath, 'rtk 0.44.0 fixture\n', { mode: 0o755 });
+      const result = await invoke(['update', '--provider', 'rtk', '--yes'], place, {
+        installed: { rtk: 'rtk 0.44.0' },
+        channelStdout: { cargo: channelAnswer('0.1.0') },
+        rtkExecutablePath: executablePath,
+        rtkReleaseFetch: rtkV050ReleaseFetch(),
+      });
+
+      assert.equal(result.exitCode, EXIT_CODES.ok);
+      assert.match(readFileSync(executablePath, 'utf8'), /rtk 0\.50\.0/);
+      assert.notEqual(statSync(executablePath).mode & 0o111, 0);
+      assert.equal(
+        result.asked.some((line) => line.startsWith('cargo search')),
+        false,
+      );
+      assert.ok(result.data?.network.includes('api.github.com (rtk-ai/rtk release metadata)'));
+      assert.ok(result.data?.network.includes('github.com (rtk-ai/rtk release asset)'));
+      assert.equal(result.data?.execution?.outcome, 'committed');
+      assert.ok(result.codes.includes('rtk-release-transaction-committed'));
+    },
+  );
+
   it('refuses without --yes and names both versions', async () => {
     const result = await invoke(['update', '--provider', 'rtk'], world(), {
       installed: { rtk: 'rtk 0.42.0' },

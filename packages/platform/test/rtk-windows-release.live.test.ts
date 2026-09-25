@@ -11,7 +11,7 @@ import {
   NodeFileSystem,
   nodeExecutableProbe,
   NodeProcessRunner,
-  NodeRtkWindowsReleaseRuntime,
+  NodeRtkReleaseRuntime,
   type SystemProbe,
 } from '../src/index.js';
 
@@ -67,8 +67,8 @@ test(
       const previous = new TextEncoder().encode('token-harness previous RTK fixture');
       await fs.writeFile(target, previous);
 
-      const runtime = new NodeRtkWindowsReleaseRuntime({ fs, runner });
-      const query = await runtime.query('0.49.0');
+      const runtime = new NodeRtkReleaseRuntime({ fs, runner });
+      const query = await runtime.query('0.49.0', detection.facts);
       assert.equal(
         query.status,
         'found',

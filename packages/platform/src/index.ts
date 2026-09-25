@@ -46,7 +46,7 @@
  * here in PLAN §2.4.
  */
 
-export * from './artifacts/rtk-windows-release.js';
+export * from './artifacts/rtk-release.js';
 export * from './fs/node-filesystem.js';
 
 export * from './metrics/attribution-salt.js';
