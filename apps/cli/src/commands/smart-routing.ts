@@ -639,54 +639,18 @@ function planCcrProfile(
     };
   }
   const provider = matches[0];
-  const models = (provider['models'] as unknown[]).filter(
-    (model): model is string =>
-      typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model),
-  );
-  let model: string | undefined;
-  const selectedModelValue = selectedModel?.trim();
-  if (selectedModelValue) {
-    if (!selectedModelValue.startsWith(`${providerName}/`)) {
-      return {
-        profile: null,
-        profileContainer,
-        conflict: false,
-        reason:
-          'TOKEN_HARNESS_ROUTING_PROFILE_MODEL must name a model from the matching CCR provider',
-      };
-    }
-    const selectedId = selectedModelValue.slice(providerName.length + 1);
-    if (models.includes(selectedId)) model = selectedId;
-    else
-      return {
-        profile: null,
-        profileContainer,
-        conflict: false,
-        reason:
-          'TOKEN_HARNESS_ROUTING_PROFILE_MODEL is not present in the matching CCR provider model list',
-      };
-  }
-  const providerDefault =
-    typeof provider['defaultModel'] === 'string'
-      ? provider['defaultModel']
-      : typeof provider['model'] === 'string'
-        ? provider['model']
-        : null;
-  if (model === undefined && providerDefault !== null) {
-    const providerDefaultId = providerDefault.startsWith(`${providerName}/`)
-      ? providerDefault.slice(providerName.length + 1)
-      : providerDefault;
-    if (models.includes(providerDefaultId)) model = providerDefaultId;
-  }
-  if (model === undefined && models.length === 1) model = models[0];
-  if (model === undefined) {
+  const canonicalModel = canonicalHarnessModel(config, harness, selectedModel);
+  if (canonicalModel === null) {
     return {
       profile: null,
       profileContainer,
       conflict: false,
-      reason: `${providerName} has multiple models; set TOKEN_HARNESS_ROUTING_PROFILE_MODEL to the exact Provider/model you want as the CCR CLI default`,
+      reason: selectedModel?.trim()
+        ? `The selected base model ${selectedModel.trim()} is not available in ${providerName}`
+        : `${providerName} exposes no usable model for the routing profile`,
     };
   }
+  const model = canonicalModel.slice(providerName.length + 1);
   const id = OWNED_PROFILE_IDS[harness];
   const profile: Record<string, unknown> = {
     agent: harness === 'claude' ? 'claude-code' : 'codex',
@@ -713,22 +677,11 @@ function planCcrProfile(
 
 function configuredCcrModel(
   config: Record<string, unknown>,
+  harness: SmartRoutingHarness,
   requested: string | undefined,
 ): string | null {
-  const candidate = requested?.trim();
-  if (candidate === undefined || !/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(candidate)) return null;
-  const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
-  return providers.some(
-    (provider) =>
-      isJsonRecord(provider) &&
-      typeof provider['name'] === 'string' &&
-      Array.isArray(provider['models']) &&
-      provider['models'].some(
-        (model) => typeof model === 'string' && candidate === `${provider['name']}/${model}`,
-      ),
-  )
-    ? candidate
-    : null;
+  if (!requested?.trim()) return null;
+  return canonicalHarnessModel(config, harness, requested);
 }
 
 function stableJson(value: unknown): string {
@@ -820,7 +773,7 @@ function profilePlanDiagnostic(plan: CcrProfilePlan) {
     severity: 'warning',
     code: 'ccr-profile-not-created',
     message: plan.reason,
-    remediation: `Resolve the CCR profile setup requirement and rerun routing setup; provider login/import and credential changes remain explicit CCR actions`,
+    remediation: 'Choose an available base model and retry. Token Harness can reuse the coding agent login already present on this machine.',
   });
 }
 
