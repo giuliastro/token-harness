@@ -2031,7 +2031,10 @@ export class GuideService {
         approval.operation === 'routing-rollback'
       ) {
         if (approval.routingHarness === undefined || approval.routingMode === undefined)
-          throw new GuideError(409, 'This Smart Model Routing preview is incomplete. Review it again.');
+          throw new GuideError(
+            409,
+            'This Smart Model Routing preview is incomplete. Review it again.',
+          );
         const harness = approval.routingHarness;
         const mode = approval.routingMode;
         const removing = approval.operation === 'routing-rollback';
@@ -2489,7 +2492,10 @@ export class GuideService {
       if (updateWarnings.length > 0) {
         messages.push(
           ...updateWarnings.map((entry) => {
-            const label = entry.subject === null || entry.subject === undefined ? 'Update check' : name(entry.subject);
+            const label =
+              entry.subject === null || entry.subject === undefined
+                ? 'Update check'
+                : name(entry.subject);
             return (
               label +
               ': ' +
