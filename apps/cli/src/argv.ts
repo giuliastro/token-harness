@@ -111,6 +111,9 @@ export interface CommandOptions {
   routingScript: boolean;
   routingMetrics: boolean;
   routingMode: 'shadow' | 'conservative';
+  routingProfileModel: string | null;
+  routingSimpleModel: string | null;
+  routingStatus: boolean;
   routingPrune: boolean;
   routingCcrConfigure: boolean;
   routingCcrRollback: boolean;
@@ -152,6 +155,8 @@ const VALUE_FLAGS = new Set([
   '--reserve',
   '--tasks-left',
   '--route-mode',
+  '--route-profile-model',
+  '--route-simple-model',
   '--context-snapshot',
 ]);
 
@@ -170,6 +175,7 @@ const BOOLEAN_FLAGS = new Set([
   '--yes',
   '--script',
   '--route-metrics',
+  '--route-status',
   '--prune',
   '--configure-ccr',
   '--rollback-ccr',
@@ -251,6 +257,9 @@ export function parseArgv(
     routingScript: false,
     routingMetrics: false,
     routingMode: 'shadow',
+    routingProfileModel: null,
+    routingSimpleModel: null,
+    routingStatus: false,
     routingPrune: false,
     routingCcrConfigure: false,
     routingCcrRollback: false,
@@ -303,6 +312,7 @@ export function parseArgv(
       if (name === '--agent-skill') options.agentSkill = true;
       if (name === '--script') options.routingScript = true;
       if (name === '--route-metrics') options.routingMetrics = true;
+      if (name === '--route-status') options.routingStatus = true;
       if (name === '--prune') options.routingPrune = true;
       if (name === '--configure-ccr') options.routingCcrConfigure = true;
       if (name === '--rollback-ccr') options.routingCcrRollback = true;
@@ -546,6 +556,12 @@ export function parseArgv(
         }
         break;
       }
+      case '--route-profile-model':
+        options.routingProfileModel = value;
+        break;
+      case '--route-simple-model':
+        options.routingSimpleModel = value;
+        break;
       case '--route-mode':
         if (value !== 'shadow' && value !== 'conservative') {
           diagnostics.push(
