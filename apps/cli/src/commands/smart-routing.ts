@@ -1660,17 +1660,170 @@ async function rollbackCcrConfiguration(
   }
 }
 
+async function smartRoutingStatus(
+  context: CommandContext,
+): Promise<CommandResult<SmartRoutingCommandReport>> {
+  const fs = context.adapters?.fs;
+  if (fs === undefined || context.stateRoot === null || !isSmartRoutingHarness(context.harness)) {
+    return error(
+      'routing-status-context-required',
+      'Smart Model Routing status needs a local state directory and Claude Code or Codex',
+      'Run Token Harness locally with --harness claude or --harness codex',
+    );
+  }
+  const harnessId = context.harness;
+  const receiptStat = await fs.stat(receiptPath(context, harnessId));
+  const owned = await readOwnership(context, harnessId);
+  if (owned === null) {
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'status',
+        harnessId,
+        state: receiptStat === null ? 'off' : 'attention',
+        mode: null,
+        detail:
+          receiptStat === null
+            ? 'Smart Model Routing is not enabled for this coding agent.'
+            : 'Token Harness found an unreadable or unrecognized Smart Model Routing ownership record.',
+        launchCommand: null,
+        profileModel: null,
+        simpleModel: null,
+      },
+    });
+  }
+  if (owned.status === 'pending') {
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'status',
+        harnessId,
+        state: 'attention',
+        mode: owned.mode,
+        detail:
+          'A previous Smart Model Routing change stopped before final verification. Configure it again to recover safely.',
+        launchCommand: owned.profileId ? ccrLaunchCommand(harnessId) : null,
+        profileModel: owned.profileModel ?? null,
+        simpleModel: owned.simpleModel ?? null,
+      },
+    });
+  }
+
+  const scriptBytes = await fs.readFile(owned.scriptPath).catch(() => null);
+  if (
+    scriptBytes === null ||
+    scriptHash(new TextDecoder().decode(scriptBytes)) !== owned.scriptSha256
+  ) {
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'status',
+        harnessId,
+        state: 'attention',
+        mode: owned.mode,
+        detail: 'The Token Harness-owned routing script changed or disappeared.',
+        launchCommand: owned.profileId ? ccrLaunchCommand(harnessId) : null,
+        profileModel: owned.profileModel ?? null,
+        simpleModel: owned.simpleModel ?? null,
+      },
+    });
+  }
+
+  try {
+    const ccr = await readCcrState(context);
+    const expectedRule = createCcrSmartRoutingRule(harnessId, owned.scriptPath);
+    const router = ccr.config['Router'];
+    const rules = isJsonRecord(router) && Array.isArray(router['rules']) ? router['rules'] : [];
+    const ruleOk = rules.some((item) => isExactCcrSmartRoutingRule(item, expectedRule));
+    const profileOk =
+      owned.profileId === undefined ||
+      profileRows(ccr.config).some(
+        (item) =>
+          isJsonRecord(item) &&
+          item['id'] === owned.profileId &&
+          owned.profileSha256 === scriptHash(stableJson(item)),
+      );
+    if (!ruleOk || !profileOk) {
+      return commandResult({
+        command: 'routing',
+        exitCode: EXIT_CODES.ok,
+        data: {
+          kind: 'status',
+          harnessId,
+          state: 'attention',
+          mode: owned.mode,
+          detail:
+            'The active Token Harness ownership record no longer matches its CCR rule/profile.',
+          launchCommand: owned.profileId ? ccrLaunchCommand(harnessId) : null,
+          profileModel: owned.profileModel ?? null,
+          simpleModel: owned.simpleModel ?? null,
+        },
+      });
+    }
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'status',
+        harnessId,
+        state: owned.mode,
+        mode: owned.mode,
+        detail:
+          ccr.gatewayState === 'running'
+            ? `Smart Model Routing is enabled in ${owned.mode} mode and the local CCR gateway is running.`
+            : `Smart Model Routing is configured in ${owned.mode} mode; the local CCR gateway currently reports ${ccr.gatewayState}.`,
+        launchCommand: owned.profileId ? ccrLaunchCommand(harnessId) : null,
+        profileModel: owned.profileModel ?? null,
+        simpleModel: owned.simpleModel ?? null,
+      },
+      diagnostics:
+        ccr.gatewayState === 'running'
+          ? []
+          : [
+              diagnostic({
+                severity: 'warning',
+                code: 'ccr-gateway-not-running',
+                message: `Smart Model Routing is configured but CCR gateway reports ${ccr.gatewayState}`,
+                remediation: 'Open Configure and re-apply the current routing mode to restart and verify the managed gateway',
+              }),
+            ],
+    });
+  } catch (errorValue) {
+    const issue = ccrFailure(errorValue);
+    return commandResult({
+      command: 'routing',
+      exitCode: EXIT_CODES.ok,
+      data: {
+        kind: 'status',
+        harnessId,
+        state: 'attention',
+        mode: owned.mode,
+        detail: `Smart Model Routing is locally owned, but its CCR runtime could not be verified: ${issue.message}.`,
+        launchCommand: owned.profileId ? ccrLaunchCommand(harnessId) : null,
+        profileModel: owned.profileModel ?? null,
+        simpleModel: owned.simpleModel ?? null,
+      },
+      diagnostics: [diagnostic({ severity: 'warning', ...issue })],
+    });
+  }
+}
+
 export async function runSmartRouting(
   context: CommandContext,
 ): Promise<CommandResult<SmartRoutingCommandReport>> {
   const wantsScript = context.routingScript === true;
   const wantsMetrics = context.routingMetrics === true;
+  const wantsStatus = context.routingStatus === true;
   const wantsCcrConfigure = context.routingCcrConfigure === true;
   const wantsCcrRollback = context.routingCcrRollback === true;
   const wantsCcrUpdate = context.routingCcrUpdate === true;
   const requestedActions = [
     wantsScript,
     wantsMetrics,
+    wantsStatus,
     wantsCcrConfigure,
     wantsCcrRollback,
     wantsCcrUpdate,
@@ -1679,9 +1832,10 @@ export async function runSmartRouting(
     return error(
       'routing-action-required',
       'Choose one Smart Model Routing action',
-      'Use `token-harness routing --script --harness claude`, `--configure-ccr`, `--update-ccr`, `--rollback-ccr`, or `--route-metrics`',
+      'Use `--route-status`, `--script`, `--configure-ccr`, `--update-ccr`, `--rollback-ccr`, or `--route-metrics`',
     );
   }
+  if (wantsStatus) return smartRoutingStatus(context);
   if (context.routingPrune === true && !wantsMetrics) {
     return error(
       'routing-prune-requires-metrics',
