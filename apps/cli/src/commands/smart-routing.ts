@@ -872,7 +872,8 @@ async function ccrConfiguration(
     );
   }
   const matching = rules.filter((item) => isJsonRecord(item) && item['id'] === ruleId);
-  const owned = await readOwnership(context, harnessId);
+  let owned = await readOwnership(context, harnessId);
+  let pendingUnapplied: CcrOwnershipReceipt | null = null;
   const profileList =
     profilePlan.profileContainer && Array.isArray(profilePlan.profileContainer['profiles'])
       ? profilePlan.profileContainer['profiles']
@@ -884,6 +885,100 @@ async function ccrConfiguration(
     owned?.profileId === undefined ||
     (isJsonRecord(currentOwnedProfile) &&
       owned.profileSha256 === scriptHash(stableJson(currentOwnedProfile)));
+  if (owned?.status === 'pending') {
+    const pendingScriptBytes = await fs.readFile(owned.scriptPath).catch(() => null);
+    const pendingScriptMatches =
+      pendingScriptBytes !== null &&
+      scriptHash(new TextDecoder().decode(pendingScriptBytes)) === owned.scriptSha256;
+    const pendingRuleMatches =
+      matching.length === 1 && isExactCcrSmartRoutingRule(matching[0], expectedRule);
+    const expectedProfile = profilePlan.profile;
+    const pendingSavedProfile =
+      expectedProfile === null
+        ? null
+        : profileRows(ccr.config).find(
+            (item) => isJsonRecord(item) && item['id'] === expectedProfile['id'],
+          );
+    const pendingProfileMatches =
+      expectedProfile === null || isExpectedCcrProfile(pendingSavedProfile, expectedProfile);
+
+    if (pendingScriptMatches && pendingRuleMatches && pendingProfileMatches && owned.mode === mode) {
+      if (!context.confirmed) {
+        return configurationResult(
+          'configure',
+          'preview',
+          ccr,
+          harnessId,
+          mode,
+          ruleId,
+          path,
+          [
+            diagnostic({
+              severity: 'info',
+              code: 'ccr-pending-setup-recoverable',
+              message:
+                'A previous Smart Model Routing setup reached CCR but stopped before final verification; Enable will verify the gateway and recover the owned state',
+              remediation: 'Approve Enable to finish the existing Token Harness-owned setup; no unrelated CCR configuration will be adopted',
+            }),
+          ],
+          expectedProfile === null ? null : String(expectedProfile['id']),
+          expectedProfile === null ? null : ccrLaunchCommand(harnessId),
+        );
+      }
+      await ccr.client.call('startGateway');
+      const recoveredGateway = safeGatewayState(await ccr.client.call('getGatewayStatus'));
+      if (recoveredGateway !== 'running') {
+        return error(
+          'ccr-pending-setup-gateway-unavailable',
+          'The previous owned routing rule is present, but CCR gateway verification still does not report running',
+          'Review the local CCR gateway error, then retry Enable; Token Harness kept the pending receipt for safe recovery',
+        );
+      }
+      const recoveredOwnership: CcrOwnershipReceipt = {
+        ...owned,
+        status: 'active',
+        ...(expectedProfile === null
+          ? {}
+          : {
+              profileId: String(expectedProfile['id']),
+              profileSha256: scriptHash(stableJson(pendingSavedProfile)),
+              profileModel: String(expectedProfile['model']),
+            }),
+        ...(configuredSimpleModel === null ? {} : { simpleModel: configuredSimpleModel }),
+      };
+      await writeJson(context, receiptPath(context, harnessId), recoveredOwnership);
+      return configurationResult(
+        'configure',
+        'configured',
+        { ...ccr, gatewayState: recoveredGateway },
+        harnessId,
+        mode,
+        ruleId,
+        path,
+        [
+          diagnostic({
+            severity: 'info',
+            code: 'ccr-pending-setup-recovered',
+            message: 'Token Harness recovered and verified the interrupted Smart Model Routing setup',
+            remediation: 'Use the routed launcher/profile and inspect routing activity after real requests',
+          }),
+        ],
+        recoveredOwnership.profileId ?? null,
+        recoveredOwnership.profileId ? ccrLaunchCommand(harnessId) : null,
+      );
+    }
+
+    if (pendingScriptMatches && matching.length === 0) {
+      pendingUnapplied = owned;
+      owned = null;
+    } else if (!pendingScriptMatches || matching.length > 0) {
+      return error(
+        'ccr-pending-setup-drift',
+        'An interrupted Smart Model Routing setup no longer matches the Token Harness-owned pending state',
+        'Do not overwrite it automatically. Review the Token Harness routing receipt and CCR rule/profile before retrying.',
+      );
+    }
+  }
   if (owned !== null && !ownedProfileMatches) {
     return error(
       'ccr-owned-profile-drift',
@@ -899,7 +994,7 @@ async function ccrConfiguration(
     );
   }
   const ownershipStat = await fs.stat(receiptPath(context, harnessId));
-  if (owned === null && ownershipStat !== null) {
+  if (owned === null && ownershipStat !== null && pendingUnapplied === null) {
     return error(
       'ccr-ownership-state-invalid',
       'The local CCR ownership path already contains unrecognized data and was left unchanged',
@@ -1046,7 +1141,7 @@ async function ccrConfiguration(
       'Run `token-harness routing --rollback-ccr --harness <id> --yes` after reviewing the CCR state',
     );
   }
-  if (targetFile !== null) {
+  if (targetFile !== null && pendingUnapplied === null) {
     return error(
       'ccr-script-file-conflict',
       'The managed CCR script path already contains a file that Token Harness does not own',
@@ -1082,6 +1177,10 @@ async function ccrConfiguration(
       profilePlan.profile === null ? null : String(profilePlan.profile['id']),
       profilePlan.profile === null ? null : ccrLaunchCommand(harnessId),
     );
+  }
+
+  if (context.confirmed && pendingUnapplied !== null) {
+    await cleanupUnappliedCcrFiles(context, harnessId, pendingUnapplied);
   }
 
   let validation: unknown;
