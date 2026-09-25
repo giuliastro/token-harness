@@ -325,7 +325,277 @@ function profileSlug(value: string): string {
   );
 }
 
-/** Use only an already imported, harness-native provider; never import or select new credentials. */
+
+const LOCAL_PROVIDER: Record<
+  SmartRoutingHarness,
+  { candidateId: string; name: string; protocol: string; preferredModel: string }
+> = {
+  claude: {
+    candidateId: 'claude-code-api',
+    name: 'Claude Code API',
+    protocol: 'anthropic_messages',
+    preferredModel: 'claude-sonnet-5',
+  },
+  codex: {
+    candidateId: 'codex-api',
+    name: 'Codex API',
+    protocol: 'openai_responses',
+    preferredModel: 'gpt-5-codex',
+  },
+};
+
+function providerNameSlug(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'provider'
+  );
+}
+
+function replaceProviderTemplate(
+  value: unknown,
+  replacements: Readonly<Record<string, string>>,
+): unknown {
+  if (typeof value === 'string') {
+    let result = value;
+    for (const [from, to] of Object.entries(replacements)) result = result.split(from).join(to);
+    return result;
+  }
+  if (Array.isArray(value))
+    return value.map((item) => replaceProviderTemplate(item, replacements));
+  if (!isJsonRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      replaceProviderTemplate(item, replacements),
+    ]),
+  );
+}
+
+function harnessProviderRows(
+  config: Record<string, unknown>,
+  harness: SmartRoutingHarness,
+): Record<string, unknown>[] {
+  const spec = LOCAL_PROVIDER[harness];
+  return (Array.isArray(config['Providers']) ? config['Providers'] : []).filter(
+    (item): item is Record<string, unknown> =>
+      isJsonRecord(item) && item['name'] === spec.name && item['type'] === spec.protocol,
+  );
+}
+
+function providerModels(provider: Record<string, unknown>): string[] {
+  return (Array.isArray(provider['models']) ? provider['models'] : []).filter(
+    (model): model is string =>
+      typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model),
+  );
+}
+
+interface PreparedHarnessProvider {
+  config: Record<string, unknown>;
+  provider: Record<string, unknown>;
+  imported: boolean;
+}
+
+interface ProviderPreparationFailure {
+  code: string;
+  message: string;
+  remediation: string;
+}
+
+function localProviderFailure(
+  code: string,
+  message: string,
+  remediation: string,
+): { ok: false; issue: ProviderPreparationFailure } {
+  return { ok: false, issue: { code, message, remediation } };
+}
+
+/**
+ * Build the CCR provider from the coding agent's already-authenticated local login.
+ *
+ * CCR's import RPC only reads the local Codex/Claude credential and returns a provider payload;
+ * it does not mutate CCR. The returned payload is merged into the same reviewed saveConfig call
+ * that installs Token Harness' rule/profile, so Preview remains read-only and Enable is one
+ * explicit mutation.
+ */
+async function prepareHarnessProvider(
+  client: CcrManagementClient,
+  config: Record<string, unknown>,
+  harness: SmartRoutingHarness,
+): Promise<
+  | { ok: true; value: PreparedHarnessProvider }
+  | { ok: false; issue: ProviderPreparationFailure }
+> {
+  const existing = harnessProviderRows(config, harness);
+  if (existing.length === 1) return { ok: true, value: { config, provider: existing[0]!, imported: false } };
+  if (existing.length > 1) {
+    return localProviderFailure(
+      'ccr-local-provider-ambiguous',
+      `CCR contains multiple ${LOCAL_PROVIDER[harness].name} providers`,
+      'Keep one intended local subscription provider in CCR before enabling Smart Model Routing',
+    );
+  }
+
+  let candidatesValue: unknown;
+  try {
+    candidatesValue = await client.call('getLocalAgentProviderCandidates');
+  } catch (errorValue) {
+    const issue = ccrFailure(errorValue);
+    return localProviderFailure(issue.code, issue.message, issue.remediation);
+  }
+  const candidates = Array.isArray(candidatesValue) ? candidatesValue : [];
+  const spec = LOCAL_PROVIDER[harness];
+  const candidate = candidates.find(
+    (item) => isJsonRecord(item) && item['id'] === spec.candidateId,
+  );
+  if (!isJsonRecord(candidate) || candidate['importable'] !== true) {
+    const detail =
+      isJsonRecord(candidate) && typeof candidate['detail'] === 'string'
+        ? candidate['detail']
+        : `${harness === 'codex' ? 'Codex' : 'Claude Code'} login was not detected by CCR`;
+    return localProviderFailure(
+      'ccr-local-provider-login-unavailable',
+      detail,
+      harness === 'codex'
+        ? 'Sign in to Codex with ChatGPT in this user account, then Refresh and enable routing again'
+        : 'Sign in to Claude Code in this user account, then Refresh and enable routing again',
+    );
+  }
+
+  const providerNames = (Array.isArray(config['Providers']) ? config['Providers'] : [])
+    .filter(isJsonRecord)
+    .map((item) => item['name'])
+    .filter((name): name is string => typeof name === 'string');
+  let importedValue: unknown;
+  try {
+    importedValue = await client.call('importLocalAgentProvider', [
+      { id: spec.candidateId, providerNames },
+    ]);
+  } catch (errorValue) {
+    const issue = ccrFailure(errorValue);
+    return localProviderFailure(issue.code, issue.message, issue.remediation);
+  }
+  if (
+    !isJsonRecord(importedValue) ||
+    !isJsonRecord(importedValue['provider']) ||
+    !Array.isArray(importedValue['providerPlugins'])
+  ) {
+    return localProviderFailure(
+      'ccr-local-provider-import-invalid',
+      'CCR returned an unsupported local-login import payload',
+      'Update Token Harness/CCR compatibility before enabling routing',
+    );
+  }
+
+  const payload = importedValue['provider'];
+  const name = typeof payload['name'] === 'string' ? payload['name'].trim() : spec.name;
+  const protocol =
+    typeof payload['protocol'] === 'string' ? payload['protocol'].trim() : spec.protocol;
+  const baseUrl = typeof payload['baseUrl'] === 'string' ? payload['baseUrl'].trim() : '';
+  const models = Array.isArray(payload['models'])
+    ? payload['models'].filter(
+        (model): model is string =>
+          typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model),
+      )
+    : [];
+  const apiKey = typeof payload['apiKey'] === 'string' ? payload['apiKey'] : '';
+  if (!name || protocol !== spec.protocol || !baseUrl || models.length === 0 || !apiKey) {
+    return localProviderFailure(
+      'ccr-local-provider-import-invalid',
+      'CCR local-login import did not contain the expected provider protocol, endpoint and models',
+      'Refresh the coding-agent login/model catalog and retry',
+    );
+  }
+  const id = providerNameSlug(name);
+  const provider: Record<string, unknown> = {
+    api_base_url: baseUrl.replace(/\/+$/, ''),
+    api_key: apiKey,
+    id,
+    models,
+    name,
+    type: protocol,
+    ...(isJsonRecord(payload['account']) ? { account: payload['account'] } : {}),
+    ...(Array.isArray(payload['capabilities']) ? { capabilities: payload['capabilities'] } : {}),
+    ...(typeof payload['icon'] === 'string' ? { icon: payload['icon'] } : {}),
+    ...(isJsonRecord(payload['modelDescriptions'])
+      ? { modelDescriptions: payload['modelDescriptions'] }
+      : {}),
+    ...(isJsonRecord(payload['modelDisplayNames'])
+      ? { modelDisplayNames: payload['modelDisplayNames'] }
+      : {}),
+    ...(isJsonRecord(payload['modelMetadata']) ? { modelMetadata: payload['modelMetadata'] } : {}),
+  };
+  const replacements = {
+    __CCR_PROVIDER_INTERNAL_NAME__: `${id}::${protocol}`,
+    __CCR_PROVIDER_NAME__: name,
+    __CCR_PROVIDER_NAME_SLUG__: id,
+  };
+  const importedPlugins = importedValue['providerPlugins'].map((plugin) =>
+    replaceProviderTemplate(plugin, replacements),
+  );
+  const currentPlugins = Array.isArray(config['providerPlugins']) ? config['providerPlugins'] : [];
+  const existingPluginKeys = new Set(
+    currentPlugins
+      .filter(isJsonRecord)
+      .map((plugin) => plugin['key'])
+      .filter((key): key is string => typeof key === 'string'),
+  );
+  for (const plugin of importedPlugins) {
+    if (isJsonRecord(plugin) && typeof plugin['key'] === 'string' && existingPluginKeys.has(plugin['key'])) {
+      return localProviderFailure(
+        'ccr-local-provider-plugin-conflict',
+        'CCR already contains a provider plugin key needed by the local coding-agent login',
+        'Review the existing CCR provider plugins before enabling routing; Token Harness will not overwrite them',
+      );
+    }
+  }
+  const nextConfig: Record<string, unknown> = {
+    ...config,
+    Providers: [provider, ...(Array.isArray(config['Providers']) ? config['Providers'] : [])],
+    providerPlugins: [...currentPlugins, ...importedPlugins],
+    ...(
+      typeof config['preferredProvider'] === 'string' && config['preferredProvider'].trim()
+        ? {}
+        : { preferredProvider: name }
+    ),
+  };
+  return { ok: true, value: { config: nextConfig, provider, imported: true } };
+}
+
+function canonicalHarnessModel(
+  config: Record<string, unknown>,
+  harness: SmartRoutingHarness,
+  requested: string | null | undefined,
+): string | null {
+  const rows = harnessProviderRows(config, harness);
+  if (rows.length !== 1) return null;
+  const provider = rows[0]!;
+  const spec = LOCAL_PROVIDER[harness];
+  const models = providerModels(provider);
+  const raw = requested?.trim();
+  if (raw) {
+    const bare = raw.startsWith(`${spec.name}/`) ? raw.slice(spec.name.length + 1) : raw;
+    return models.includes(bare) ? `${spec.name}/${bare}` : null;
+  }
+  const providerDefault =
+    typeof provider['defaultModel'] === 'string'
+      ? provider['defaultModel']
+      : typeof provider['model'] === 'string'
+        ? provider['model']
+        : null;
+  if (providerDefault) {
+    const bare = providerDefault.startsWith(`${spec.name}/`)
+      ? providerDefault.slice(spec.name.length + 1)
+      : providerDefault;
+    if (models.includes(bare)) return `${spec.name}/${bare}`;
+  }
+  if (models.includes(spec.preferredModel)) return `${spec.name}/${spec.preferredModel}`;
+  return models.length > 0 ? `${spec.name}/${models[0]}` : null;
+}
+
+/** Build the scoped launcher profile only from the matching local subscription provider. */
 function planCcrProfile(
   config: Record<string, unknown>,
   harness: SmartRoutingHarness,
