@@ -69,7 +69,7 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /Review conservative setup/);
     assert.match(GUIDE_JS, /View 30-day activity/);
     assert.match(GUIDE_JS, /Remove managed rule/);
-    assert.match(GUIDE_JS, /action: 'routing-setup'/);
+    assert.match(GUIDE_JS, /reviewRoutingAction\(harness, 'routing-setup'/);
     assert.match(GUIDE_JS, /action === 'routing-metrics'/);
     assert.match(GUIDE_JS, /Shadow mode is the safe default/);
     assert.match(GUIDE_JS, /needs no paid routing API and no local LLM/);
