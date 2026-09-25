@@ -944,15 +944,15 @@ describe('update', () => {
     mkdirSync(packageRoot, { recursive: true });
     writeFileSync(
       join(packageRoot, 'package.json'),
-      JSON.stringify({ name: 'token-harness', version: '0.1.18' }),
+      JSON.stringify({ name: 'token-harness', version: '0.1.19' }),
     );
     writeFileSync(entryScript, '');
     const config: FakeChannel = {
       application: {
         npmRoot,
         packageRoot,
-        installedVersion: '0.1.18',
-        availableVersion: '0.1.19',
+        installedVersion: '0.1.19',
+        availableVersion: '0.1.20',
       },
     };
 
@@ -967,8 +967,8 @@ describe('update', () => {
         2,
       ),
     );
-    assert.equal(preview.data?.application?.installed, '0.1.18');
-    assert.equal(preview.data?.application?.available, '0.1.19');
+    assert.equal(preview.data?.application?.installed, '0.1.19');
+    assert.equal(preview.data?.application?.available, '0.1.20');
     assert.equal(preview.data?.execution?.outcome, 'confirmation-required');
     assert.equal(
       preview.asked.some((line) => line.startsWith('npm install ')),
@@ -978,14 +978,14 @@ describe('update', () => {
     const applied = await invoke(['update', '--yes'], place, config, entryScript);
     assert.equal(applied.exitCode, EXIT_CODES.ok);
     assert.equal(applied.data?.execution?.outcome, 'committed');
-    assert.equal(applied.data?.application?.installed, '0.1.19');
+    assert.equal(applied.data?.application?.installed, '0.1.20');
     assert.equal(applied.data?.application?.verdict, 'current');
     assert.equal(applied.data?.application?.updated, true);
     assert.ok(applied.codes.includes('application-update-version-verified'));
-    assert.ok(applied.asked.includes('npm install --global token-harness@0.1.19'));
+    assert.ok(applied.asked.includes('npm install --global token-harness@0.1.20'));
     assert.equal(
       JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version,
-      '0.1.19',
+      '0.1.20',
     );
   });
 
@@ -999,11 +999,11 @@ describe('update', () => {
     mkdirSync(localPackageRoot, { recursive: true });
     writeFileSync(
       join(globalPackageRoot, 'package.json'),
-      JSON.stringify({ name: 'token-harness', version: '0.1.19' }),
+      JSON.stringify({ name: 'token-harness', version: '0.1.20' }),
     );
     writeFileSync(
       join(localPackageRoot, 'package.json'),
-      JSON.stringify({ name: 'token-harness', version: '0.1.19' }),
+      JSON.stringify({ name: 'token-harness', version: '0.1.20' }),
     );
     writeFileSync(localEntryScript, '');
     const result = await invoke(
@@ -1013,8 +1013,8 @@ describe('update', () => {
         application: {
           npmRoot,
           packageRoot: globalPackageRoot,
-          installedVersion: '0.1.19',
-          availableVersion: '0.1.19',
+          installedVersion: '0.1.20',
+          availableVersion: '0.1.20',
         },
       },
       localEntryScript,
