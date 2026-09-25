@@ -294,6 +294,7 @@ async function startAndVerify(
   receipt: ManagedCcrRuntimeReceipt,
   token: string,
   expectedVersion = CCR_REVIEWED_VERSION,
+  startGateway = false,
 ): Promise<{ endpoint: string; version: string } | null> {
   const start = await runCcrExecutable(
     context,
@@ -306,7 +307,7 @@ async function startAndVerify(
       '--port',
       String(DEFAULT_WEB_PORT),
       '--no-open',
-      '--gateway',
+      startGateway ? '--gateway' : '--no-gateway',
     ],
     token,
   );
@@ -322,8 +323,11 @@ async function startAndVerify(
   });
   try {
     const version = readCcrVersion(await client.call('getAppInfo'));
-    const gateway = parseJsonRecord(await client.call('getGatewayStatus'));
-    if (version !== expectedVersion || gateway?.['state'] !== 'running') return null;
+    if (version !== expectedVersion) return null;
+    if (startGateway) {
+      const gateway = parseJsonRecord(await client.call('getGatewayStatus'));
+      if (gateway?.['state'] !== 'running') return null;
+    }
     return { endpoint, version };
   } catch {
     return null;
@@ -456,7 +460,7 @@ export async function ensureManagedCcrRuntime(input: {
         ),
       };
     const current = await verifyManagedService(context, prior, token);
-    if (current?.version === CCR_REVIEWED_VERSION && current.running) {
+    if (current?.version === CCR_REVIEWED_VERSION) {
       return input.action === 'update'
         ? { kind: 'result', result: lifecyclePreview('update', 'already-current', context, prior) }
         : {
@@ -622,8 +626,8 @@ export async function ensureManagedCcrRuntime(input: {
       kind: 'result',
       result: lifecycleError(
         'ccr-start-verification-failed',
-        'The managed CCR service did not pass its local version and gateway checks',
-        'Inspect CCR service status and retry; Token Harness did not report live routing or savings',
+        'The managed CCR service did not pass its local management/version checks',
+        'Inspect CCR service status and retry; Token Harness did not change routing or report savings',
       ),
     };
   }
