@@ -11,7 +11,6 @@ import {
   createCcrSmartRoutingRule,
   createCcrSmartRoutingScript,
   isExactCcrSmartRoutingRule,
-  isSameCcrConfig,
   readCcrVersion,
   removeOwnedCcrSmartRoutingRule,
 } from '@token-harness/adapters';
@@ -64,6 +63,16 @@ export type SmartRoutingCommandReport =
       launchCommand?: string | null;
     }
   | {
+      kind: 'status';
+      harnessId: SmartRoutingHarness;
+      state: 'off' | 'shadow' | 'conservative' | 'attention';
+      mode: SmartRoutingMode | null;
+      detail: string;
+      launchCommand?: string | null;
+      profileModel?: string | null;
+      simpleModel?: string | null;
+    }
+  | {
       kind: 'ccr-lifecycle';
       action: 'install' | 'update' | 'start';
       state: 'preview' | 'installed' | 'updated' | 'started' | 'already-current';
@@ -84,6 +93,8 @@ interface CcrOwnershipReceipt {
   installedAt: string;
   profileId?: string;
   profileSha256?: string;
+  profileModel?: string;
+  simpleModel?: string;
 }
 
 interface CcrState {
@@ -222,6 +233,8 @@ async function readOwnership(
       (value['profileSha256'] === undefined ||
         /^[a-f0-9]{64}$/.test(String(value['profileSha256']))) &&
       (value['profileId'] === undefined) === (value['profileSha256'] === undefined) &&
+      (value['profileModel'] === undefined || typeof value['profileModel'] === 'string') &&
+      (value['simpleModel'] === undefined || typeof value['simpleModel'] === 'string') &&
       typeof value['installedAt'] === 'string'
     ) {
       return value as unknown as CcrOwnershipReceipt;
