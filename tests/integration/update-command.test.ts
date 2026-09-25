@@ -243,6 +243,8 @@ interface FakeChannel {
   installExitCode?: number;
   installDoesNotChangeResolvedVersion?: boolean;
   rtkExecutablePath?: string;
+  /** Optional PATH-order RTK matches; the first is the active executable. */
+  rtkExecutablePaths?: readonly string[];
   rtkReleaseFetch?: ReleaseFetch;
   compatibilityRows?: readonly CompatibilityRow[];
   application?: {
@@ -464,6 +466,8 @@ async function invoke(
 
   const { asked, runner } = fakeRunner(config);
   const rtkExecutablePath = config.rtkExecutablePath;
+  const rtkExecutablePaths =
+    config.rtkExecutablePaths ?? (rtkExecutablePath === undefined ? [] : [rtkExecutablePath]);
   let stdout = '';
   const options: RunOptions = {
     argv: [...argv, '--json'],
@@ -480,12 +484,16 @@ async function invoke(
     stateRoot: place.state,
     adapters: {
       fs: new NodeFileSystem(FACTS),
-      ...(rtkExecutablePath === undefined
+      ...(rtkExecutablePaths.length === 0
         ? {}
         : {
             resolveExecutables: (name: string) =>
               name === 'rtk'
-                ? [{ requested: 'rtk', path: rtkExecutablePath, kind: 'native' as const }]
+                ? rtkExecutablePaths.map((path) => ({
+                    requested: 'rtk',
+                    path,
+                    kind: 'native' as const,
+                  }))
                 : [],
           }),
       ...(config.rtkReleaseFetch === undefined ? {} : { rtkReleaseFetch: config.rtkReleaseFetch }),
@@ -586,6 +594,34 @@ describe('update', () => {
       assert.ok(result.data?.network.includes('api.github.com (rtk-ai/rtk release metadata)'));
       assert.ok(result.codes.includes('rtk-release-target'));
       assert.deepEqual(readFileSync(executablePath), before);
+    },
+  );
+
+  it(
+    'updates the active RTK PATH executable even when older shadowed copies also resolve',
+    { skip: FACTS.os !== 'linux' },
+    async () => {
+      const place = world();
+      const activePath = join(place.home, 'bin', 'rtk');
+      const shadowedPath = join(place.home, 'cargo-bin', 'rtk');
+      mkdirSync(join(place.home, 'bin'), { recursive: true });
+      mkdirSync(join(place.home, 'cargo-bin'), { recursive: true });
+      writeFileSync(activePath, 'rtk 0.44.0 fixture\n', { mode: 0o755 });
+      writeFileSync(shadowedPath, 'rtk 0.42.0 shadowed fixture\n', { mode: 0o755 });
+
+      const result = await invoke(['update', '--provider', 'rtk', '--yes'], place, {
+        installed: { rtk: 'rtk 0.44.0' },
+        channelStdout: { cargo: channelAnswer('0.1.0') },
+        rtkExecutablePath: activePath,
+        rtkExecutablePaths: [activePath, shadowedPath],
+        rtkReleaseFetch: rtkV050ReleaseFetch(),
+      });
+
+      assert.equal(result.exitCode, EXIT_CODES.ok);
+      assert.match(readFileSync(activePath, 'utf8'), /rtk 0\.50\.0/);
+      assert.match(readFileSync(shadowedPath, 'utf8'), /0\.42\.0 shadowed/);
+      assert.ok(result.codes.includes('rtk-release-shadowed-executables'));
+      assert.equal(result.data?.execution?.outcome, 'committed');
     },
   );
 
