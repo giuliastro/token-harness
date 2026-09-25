@@ -1274,7 +1274,9 @@ export class GuideService {
       if (routingAction) {
         const harness = String(data['harness']) as GuideHarness;
         const removing = action === 'routing-remove';
-        const mode = (data['routeMode'] === undefined ? 'shadow' : String(data['routeMode'])) as SmartRoutingMode;
+        const mode = (
+          data['routeMode'] === undefined ? 'shadow' : String(data['routeMode'])
+        ) as SmartRoutingMode;
         this.record(
           `Reviewing ${removing ? 'Smart Model Routing removal' : `${mode} Smart Model Routing setup`} for ${name(harness)}. Nothing has changed yet.`,
           'working',
@@ -1315,7 +1317,10 @@ export class GuideService {
           this.record(message, result.exitCode === 0 ? 'success' : 'attention');
           return {
             ticket: null,
-            title: result.exitCode === 0 ? 'No smart routing change needed' : 'Smart routing needs attention',
+            title:
+              result.exitCode === 0
+                ? 'No smart routing change needed'
+                : 'Smart routing needs attention',
             changes: [],
             notices: [message],
             expiresAt: null,
@@ -1750,7 +1755,10 @@ export class GuideService {
         approval.operation === 'routing-rollback'
       ) {
         if (approval.routingHarness === undefined)
-          throw new GuideError(409, 'This Smart Model Routing preview is incomplete. Review it again.');
+          throw new GuideError(
+            409,
+            'This Smart Model Routing preview is incomplete. Review it again.',
+          );
         const harness = approval.routingHarness;
         const removing = approval.operation === 'routing-rollback';
         const mode = approval.routingMode ?? 'shadow';
@@ -2405,7 +2413,9 @@ export class GuideService {
       const unresolved = updateResult.data.providers.filter(
         (row) =>
           row.installed !== null &&
-          (row.verdict === 'unknown' || row.verdict === 'unavailable' || row.verdict === 'no-channel'),
+          (row.verdict === 'unknown' ||
+            row.verdict === 'unavailable' ||
+            row.verdict === 'no-channel'),
       );
       const messages: string[] = [];
       const application = updateResult.data.application;
@@ -2538,7 +2548,10 @@ export class GuideService {
     if (!['claude', 'codex'].includes(harness))
       throw new GuideError(400, 'Choose Claude Code or Codex.');
     return this.exclusive(async () => {
-      this.record(`Reading local Smart Model Routing decisions for ${name(harness)}.`, 'working');
+      this.record(
+        `Reading local Smart Model Routing decisions for ${name(harness)}.`,
+        'working',
+      );
       let result: CliEnvelope<SmartRoutingCommandReport>;
       try {
         result = await this.call<SmartRoutingCommandReport>([
@@ -2573,14 +2586,24 @@ export class GuideService {
       }
       const metrics = result.data.metrics;
       const messages = [
-        `Recorded decisions: ${String(metrics.retainedDecisionCount)} · shadow ${String(metrics.byMode.shadow)} · conservative ${String(metrics.byMode.conservative)}.`,
-        `Complexity: simple ${String(metrics.byTier.simple)} · standard ${String(metrics.byTier.standard)} · complex ${String(metrics.byTier.complex)} · critical ${String(metrics.byTier.critical)}.`,
-        `Model-switch requests: ${String(metrics.routeMutationRequestCount)}. These are routing decisions, not verified savings.`,
+        `Recorded decisions: ${String(metrics.retainedDecisionCount)} · shadow ${String(
+          metrics.byMode.shadow,
+        )} · conservative ${String(metrics.byMode.conservative)}.`,
+        `Complexity: simple ${String(metrics.byTier.simple)} · standard ${String(
+          metrics.byTier.standard,
+        )} · complex ${String(metrics.byTier.complex)} · critical ${String(
+          metrics.byTier.critical,
+        )}.`,
+        `Model-switch requests: ${String(
+          metrics.routeMutationRequestCount,
+        )}. These are routing decisions, not verified savings.`,
         'Smart Model Routing telemetry never enters Token Harness savings totals unless separate attributable usage and quality evidence exists.',
       ];
       if (metrics.malformedRecordCount > 0 || metrics.prunedRecordCount > 0) {
         messages.push(
-          `Telemetry maintenance: ${String(metrics.malformedRecordCount)} malformed record(s), ${String(metrics.prunedRecordCount)} pruned record(s).`,
+          `Telemetry maintenance: ${String(
+            metrics.malformedRecordCount,
+          )} malformed record(s), ${String(metrics.prunedRecordCount)} pruned record(s).`,
         );
       }
       this.record(
