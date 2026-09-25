@@ -2521,7 +2521,7 @@ export class GuideService {
         needsAttention ? 'attention' : 'success',
       );
       return {
-        ok: !needsAttention,
+        ok: ticket !== null || !needsAttention,
         title:
           ticket !== null
             ? needsAttention
