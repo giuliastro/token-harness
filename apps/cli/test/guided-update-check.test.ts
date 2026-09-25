@@ -127,7 +127,7 @@ it('checks updates on demand and applies only after the returned approval ticket
       const confirmed = args.includes('--yes');
       if (confirmed) {
         providerVersion = '0.45.0';
-        applicationVersion = '0.1.19';
+        applicationVersion = '0.1.20';
       }
       const report = update(confirmed);
       return envelope(command, report as T);
