@@ -523,6 +523,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
           'caption',
         ),
       );
+      const routingState = routingPresentation(agent.routing);
+      const routingLine = node('div', undefined, 'result-signal');
+      routingLine.append(
+        node('span', 'Smart model routing', 'caption'),
+        pill(routingState.label, routingState.cls),
+        actionButton(
+          agent.routing?.state === 'off' ? 'Enable' : 'Configure',
+          () => manageRouting(agent.id),
+          'secondary',
+        ),
+      );
+      card.append(routingLine);
       if (baseline.unavailable.length) {
         const details = node('details', undefined, 'agent-details');
         details.append(node('summary', 'Connection limitations'));
@@ -816,6 +828,37 @@ export const GUIDE_PRODUCT_JS = String.raw`
       row.append(action);
       table.append(row);
     }
+
+    const routingRow = node('div', undefined, 'connection-row');
+    const routingName = node('div', undefined, 'connection-name');
+    routingName.append(
+      node('strong', 'Smart Model Routing'),
+      node('span', 'Optional model routing', 'caption'),
+      node(
+        'span',
+        'Shadow observes locally; Conservative can route high-confidence simple requests to a selected model.',
+        'caption connection-role',
+      ),
+    );
+    routingRow.append(routingName);
+    for (const agent of agents) {
+      const state = routingPresentation(agent.routing);
+      const cell = node('div', undefined, 'connection-cell');
+      cell.append(
+        pill(state.label, state.cls),
+        actionButton(
+          agent.routing?.state === 'off' ? 'Enable' : 'Configure',
+          () => manageRouting(agent.id),
+          'secondary',
+        ),
+      );
+      routingRow.append(cell);
+    }
+    const routingAction = node('div', undefined, 'connection-action');
+    routingAction.append(node('span', 'Per agent', 'caption'));
+    routingRow.append(routingAction);
+    table.append(routingRow);
+
     scroll.append(table);
     root.append(scroll);
   }
@@ -1489,7 +1532,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
     renderManagedSetup();
     renderExperimental();
     renderTuning();
-    renderRouting();
     renderMaintenance();
   }
 
