@@ -1,12 +1,15 @@
 # Release checkpoint — 2026-09-25
 
-Token Harness `0.1.19` is prepared as an incremental release candidate from runtime merge `58e7753e4cf0650492ac232ac65249d773f520f0` on `main`.
+Token Harness `0.1.20` is prepared as a corrective patch from runtime merge `0f0654c5289733996457da9b07c7a7e0b3f1c9f1` on `main`.
 
-The release candidate includes:
+The release candidate includes PR #349, which fixes the two post-release gaps found in 0.1.19:
 
-- PR #343: shadow-first Smart Model Routing; shadow mode does not rewrite provider calls and conservative routing remains an explicit opt-in;
-- PR #346: RTK update checks on Linux and macOS use the official GitHub release rather than the ambiguous Cargo package name. Approved installs verify the release asset's published SHA-256 before replacing the executable, and native Windows keeps WinGet as its primary channel.
+- Smart Model Routing is now exposed in the guided browser UI for Claude Code and Codex, with shadow mode as the default, conservative routing as an explicit opt-in, separate CCR runtime/rule approvals, local routing activity, and managed rule removal;
+- RTK 0.44 → 0.50 updates on Linux/macOS now target the first active PATH executable even when additional shadowed RTK copies exist, while retaining official-release digest verification, backup, post-install verification and rollback;
+- direct-release RTK warnings are surfaced in the guided update dialog instead of being collapsed into an incorrect “up to date” message.
 
-Issue #255 remains open for real before/after receipts from the complete production stack. This release is incremental and does not claim broad-promotion readiness.
+PR #349 passed full cross-platform CI before merge, including the live Windows RTK release smoke. The post-merge `main` CI must also be completely green before release preparation is merged.
 
-Do not tag or publish unless the complete release-preparation CI is green across Windows, macOS and Linux. The exact-tag release workflow must then pass its tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing and npm-latest verification before creating the GitHub Release for `0.1.19`.
+Issue #255 remains open for real before/after receipts from the complete production stack. This corrective patch does not claim measured routing savings or broad-promotion readiness.
+
+Do not tag or publish unless the complete release-preparation CI is green across Windows, macOS and Linux. The exact-tag release workflow must then pass its tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing and npm-latest verification before creating the GitHub Release for `0.1.20`.
