@@ -446,6 +446,14 @@ export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: 
   return fallback;
 }
 
+function explainRoutingIssue(diagnostics: readonly Diagnostic[], fallback: string): string {
+  const issue = diagnostics.find(
+    (entry) => entry.severity === 'error' || entry.severity === 'warning',
+  );
+  if (issue === undefined) return fallback;
+  return issue.message + (issue.remediation === null ? '' : ` ${issue.remediation}`);
+}
+
 function stackFingerprint(report: DoctorReport): string {
   const harnesses = report.harnesses
     .filter((item) => item.harnessId === 'claude' || item.harnessId === 'codex')
@@ -1440,7 +1448,7 @@ export class GuideService {
             ];
         const result = await this.call<SmartRoutingCommandReport>(args);
         if (result.exitCode !== 0 || result.data === null) {
-          const message = explainGuideIssue(
+          const message = explainRoutingIssue(
             result.diagnostics,
             `No safe Smart Model Routing ${removing ? 'removal' : 'setup'} is available for ${name(harness)}. Nothing was changed.`,
           );
@@ -2149,7 +2157,21 @@ export class GuideService {
           result = await this.call<SmartRoutingCommandReport>(
             removing
               ? ['routing', '--rollback-ccr', '--harness', harness, '--yes']
-              : ['routing', '--configure-ccr', '--harness', harness, '--route-mode', mode, '--yes'],
+              : [
+                  'routing',
+                  '--configure-ccr',
+                  '--harness',
+                  harness,
+                  '--route-mode',
+                  mode,
+                  ...(approval.routingProfileModel
+                    ? ['--route-profile-model', approval.routingProfileModel]
+                    : []),
+                  ...(approval.routingSimpleModel
+                    ? ['--route-simple-model', approval.routingSimpleModel]
+                    : []),
+                  '--yes',
+                ],
           );
         } catch {
           this.invalidateObservedState();
@@ -2164,11 +2186,11 @@ export class GuideService {
           };
         }
         if (result.exitCode !== 0 || result.data === null) {
-          const message = explainGuideIssue(
+          const message = explainRoutingIssue(
             result.diagnostics,
             'Smart Model Routing for ' +
               name(harness) +
-              ' was not changed. The local CCR runtime, provider model selection or owned rule state no longer matches the preview.',
+              ' was not changed. Review the current routing state and retry.',
           );
           this.invalidateObservedState();
           this.record(message, 'attention');
@@ -2185,18 +2207,13 @@ export class GuideService {
         this.invalidateObservedState();
         if (report.kind === 'ccr-lifecycle') {
           const message =
-            'The Token Harness-owned CCR ' +
-            report.version +
-            ' runtime is ready and verified on loopback. No routing rule has been assumed from this runtime step. Open Manage routing again to review the exact shadow or conservative rule/profile.';
-          this.record('CCR routing runtime prepared and verified.', 'success');
+            'CCR runtime preparation completed but the approved routing configuration did not reach final rule/profile verification. No routing activation is being reported.';
+          this.record(message, 'attention');
           return {
-            ok: true,
-            title: 'Routing runtime ready',
-            messages: [
-              message,
-              'Provider login/import remains an explicit CCR choice; Token Harness did not change Claude Code or Codex native endpoints.',
-            ],
-            appliedPlans: report.state === 'already-current' ? 0 : 1,
+            ok: false,
+            title: 'Routing setup incomplete',
+            messages: [message],
+            appliedPlans: 0,
           };
         }
         if (report.kind !== 'ccr-configuration') {
