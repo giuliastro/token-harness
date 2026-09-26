@@ -1494,15 +1494,15 @@ export class GuideService {
                   'Replace only the Token Harness-owned routing rule/profile for this coding agent, preserving unrelated CCR settings and provider credentials.',
               }
             : report?.kind === 'ccr-lifecycle'
-            ? {
-                title: `${name(harness)}: prepare local CCR routing runtime`,
-                files: 0,
-                description:
-                  report.action === 'install'
-                    ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
-                    : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
-              }
-            : {
+              ? {
+                  title: `${name(harness)}: prepare local CCR routing runtime`,
+                  files: 0,
+                  description:
+                    report.action === 'install'
+                      ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
+                      : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
+                }
+              : {
                 title: `${name(harness)}: ${removing ? 'remove' : 'configure'} Smart Model Routing`,
                 files: 0,
                 description: removing
