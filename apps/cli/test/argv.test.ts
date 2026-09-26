@@ -91,10 +91,7 @@ describe('argv', () => {
     ]);
     assert.equal(conservative.kind, 'command');
     if (conservative.kind === 'command') {
-      assert.equal(
-        conservative.options.routingSimpleModel,
-        'Codex API/gpt-5.6-luna',
-      );
+      assert.equal(conservative.options.routingSimpleModel, 'Codex API/gpt-5.6-luna');
     }
 
     const metrics = parseArgv(['routing', '--route-metrics', '--prune', '--since', '7d']);
