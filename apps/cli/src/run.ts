@@ -437,6 +437,7 @@ export async function run(options: RunOptions): Promise<number> {
     routingMetrics: invocation.options.routingMetrics,
     routingStatus: invocation.options.routingStatus,
     routingMode: invocation.options.routingMode,
+    routingSimpleModel: invocation.options.routingSimpleModel,
     routingPrune: invocation.options.routingPrune,
     routingCcrConfigure: invocation.options.routingCcrConfigure,
     routingCcrRollback: invocation.options.routingCcrRollback,
