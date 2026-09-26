@@ -446,7 +446,11 @@ function planCcrProfile(
 function configuredCcrModels(config: Record<string, unknown>): string[] {
   const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
   const models = providers.flatMap((provider) => {
-    if (!isJsonRecord(provider) || typeof provider['name'] !== 'string' || !Array.isArray(provider['models']))
+    if (
+      !isJsonRecord(provider) ||
+      typeof provider['name'] !== 'string' ||
+      !Array.isArray(provider['models'])
+    )
       return [];
     return provider['models'].flatMap((model) =>
       typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model)
@@ -615,7 +619,11 @@ async function smartRoutingStatus(
     ccr = await readCcrState(context);
   } catch {
     return owned === null
-      ? routingStatusResult(harnessId, 'off', 'No Token Harness-owned routing configuration is active.')
+      ? routingStatusResult(
+          harnessId,
+          'off',
+          'No Token Harness-owned routing configuration is active.',
+        )
       : routingStatusResult(
           harnessId,
           'attention',
