@@ -1209,17 +1209,16 @@ export class GuideService {
         setup,
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
-        routing:
-          routing?.[agent.harnessId as GuideHarness] ?? {
-            state: 'off',
-            mode: null,
-            gatewayState: 'unknown',
-            profileId: null,
-            launchCommand: null,
-            simpleModel: null,
-            availableModels: [],
-            detail: 'Smart Model Routing is not configured.',
-          },
+        routing: routing?.[agent.harnessId as GuideHarness] ?? {
+          state: 'off',
+          mode: null,
+          gatewayState: 'unknown',
+          profileId: null,
+          launchCommand: null,
+          simpleModel: null,
+          availableModels: [],
+          detail: 'Smart Model Routing is not configured.',
+        },
         ...(guidance?.[agent.harnessId as GuideHarness]
           ? { guidance: guidance[agent.harnessId as GuideHarness] }
           : {}),
@@ -1446,9 +1445,7 @@ export class GuideService {
           report?.kind === 'ccr-configuration' &&
           report.state === 'already-configured';
         const alreadyAbsent =
-          removing &&
-          report?.kind === 'ccr-configuration' &&
-          report.state === 'already-absent';
+          removing && report?.kind === 'ccr-configuration' && report.state === 'already-absent';
         if (alreadyConfigured || alreadyAbsent) {
           const message = alreadyConfigured
             ? `${name(harness)} already has the Token Harness-owned ${mode} routing rule.`
@@ -1485,24 +1482,23 @@ export class GuideService {
           ...(simpleModel ? { routingSimpleModel: simpleModel } : {}),
           ...(replacing ? { routingReplace: true } : {}),
         };
-        const change =
-          replacing
+        const change = replacing
+          ? {
+              title: `${name(harness)}: change Smart Model Routing to ${mode}`,
+              files: 0,
+              description:
+                'Replace only the Token Harness-owned routing rule/profile for this coding agent, preserving unrelated CCR settings and provider credentials.',
+            }
+          : report?.kind === 'ccr-lifecycle'
             ? {
-                title: `${name(harness)}: change Smart Model Routing to ${mode}`,
+                title: `${name(harness)}: prepare local CCR routing runtime`,
                 files: 0,
                 description:
-                  'Replace only the Token Harness-owned routing rule/profile for this coding agent, preserving unrelated CCR settings and provider credentials.',
+                  report.action === 'install'
+                    ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
+                    : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
               }
-            : report?.kind === 'ccr-lifecycle'
-              ? {
-                  title: `${name(harness)}: prepare local CCR routing runtime`,
-                  files: 0,
-                  description:
-                    report.action === 'install'
-                      ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
-                      : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
-                }
-              : {
+            : {
                 title: `${name(harness)}: ${removing ? 'remove' : 'configure'} Smart Model Routing`,
                 files: 0,
                 description: removing
