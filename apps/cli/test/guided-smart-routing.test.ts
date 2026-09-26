@@ -9,7 +9,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
   return toEnvelope(commandResult({ command, data, exitCode: 0 }), 'test');
 }
 
-it('guides Smart Model Routing through CCR runtime preparation then shadow rule configuration', async () => {
+it('enables shadow routing in one approved flow even when CCR runtime must be prepared first', async () => {
   const calls: string[][] = [];
   let runtimeReady = false;
   const call: GuideCall = async <T>(args: readonly string[]) => {
@@ -84,22 +84,9 @@ it('guides Smart Model Routing through CCR runtime preparation then shadow rule 
   });
   assert.equal(first.ticket, 'routing-ticket-1');
   assert.match(first.changes[0]?.title ?? '', /prepare local CCR routing runtime/i);
-  assert.ok(first.notices.some((message) => /separate safety stages/i.test(message)));
+  assert.ok(first.notices.some((message) => /same flow/i.test(message)));
 
-  const runtime = await service.apply({ ticket: 'routing-ticket-1' });
-  assert.equal(runtime.ok, true);
-  assert.equal(runtime.title, 'Routing runtime ready');
-  assert.ok(runtime.messages.some((message) => /Manage routing again/i.test(message)));
-
-  const second = await service.preview({
-    action: 'routing-setup',
-    harness: 'codex',
-    routeMode: 'shadow',
-  });
-  assert.equal(second.ticket, 'routing-ticket-2');
-  assert.match(second.changes[0]?.title ?? '', /configure Smart Model Routing/i);
-
-  const configured = await service.apply({ ticket: 'routing-ticket-2' });
+  const configured = await service.apply({ ticket: 'routing-ticket-1' });
   assert.equal(configured.ok, true);
   assert.equal(configured.title, 'Smart Model Routing configured');
   assert.ok(
@@ -115,13 +102,12 @@ it('guides Smart Model Routing through CCR runtime preparation then shadow rule 
   assert.ok(metrics.notices.some((message) => /4 local routing decisions/i.test(message)));
   assert.ok(metrics.notices.some((message) => /Shadow decisions: 4/i.test(message)));
 
-  assert.deepEqual(calls.slice(0, 4), [
+  assert.deepEqual(calls.slice(0, 3), [
     ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow'],
     ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow', '--yes'],
-    ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow'],
     ['routing', '--configure-ccr', '--harness', 'codex', '--route-mode', 'shadow', '--yes'],
   ]);
-  assert.deepEqual(calls[4], [
+  assert.deepEqual(calls[3], [
     'routing',
     '--route-metrics',
     '--ccr-usage',
