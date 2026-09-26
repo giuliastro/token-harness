@@ -32,7 +32,7 @@ function envelope<T>(command: string, data: T): CliEnvelope<T> {
 it('checks updates on demand and applies only after the returned approval ticket', async () => {
   const calls: string[][] = [];
   let providerVersion = '0.44.0';
-  let applicationVersion = '0.1.21';
+  let applicationVersion = '0.1.20';
   const doctor = (): DoctorReport => ({
     platform,
     problemCount: 0,
@@ -127,7 +127,7 @@ it('checks updates on demand and applies only after the returned approval ticket
       const confirmed = args.includes('--yes');
       if (confirmed) {
         providerVersion = '0.45.0';
-        applicationVersion = '0.1.20';
+        applicationVersion = '0.1.21';
       }
       const report = update(confirmed);
       return envelope(command, report as T);
