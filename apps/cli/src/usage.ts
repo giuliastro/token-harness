@@ -63,7 +63,7 @@ Useful flags
   --route-status       Show current Smart Model Routing state for one agent
   --route-metrics      Show local routing decision telemetry
   --route-mode <mode>  shadow by default; conservative requires opt-in
-  --route-simple-model <Provider/model>  Model used for conservative simple prompts
+  --route-simple-model <Provider/model>  Simple model for conservative routing
   --prune              Keep only the 200 newest routing decision records
   --configure-ccr      Preview managed CCR setup; --yes applies the reviewed change
   --update-ccr         Preview update of the managed CCR CLI
