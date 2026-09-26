@@ -49,7 +49,7 @@ Useful flags
   --route-mode <mode>  shadow by default; conservative requires opt-in
   --route-simple-model <Provider/model>  Simple model for conservative routing
   --prune              Keep only the 200 newest routing decision records
-  --configure-ccr      Preview managed CCR setup; --yes applies the reviewed change
+  --configure-ccr      Preview CCR setup; --yes applies the reviewed change
   --update-ccr         Preview update of the managed CCR CLI
   --rollback-ccr       Preview rollback; --yes removes owned rule/profile
   --ccr-usage          Read CCR model/token aggregates for local sessions
