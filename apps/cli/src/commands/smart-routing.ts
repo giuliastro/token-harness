@@ -1050,7 +1050,7 @@ async function ccrConfiguration(
       harnessId,
       mode,
       telemetryDirectory,
-      pathSeparator: context.platform.os === 'windows' ? '\\\\' : '/',
+      pathSeparator: context.platform.os === 'windows' ? '\\' : '/',
       simpleModel: latestSimpleModel,
     });
     if (scriptHash(latestScript) !== ownership.scriptSha256)
