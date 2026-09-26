@@ -758,13 +758,6 @@ async function ccrConfiguration(
             'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
         })
       : null;
-  if (mode === 'conservative' && configuredSimpleModel === null) {
-    return error(
-      'ccr-simple-model-required',
-      'Conservative routing needs an exact simple model that already exists in CCR',
-      'Choose a configured Provider/model in Token Harness before enabling conservative routing',
-    );
-  }
   const script = createCcrSmartRoutingScript({
     harnessId,
     mode,
@@ -971,6 +964,14 @@ async function ccrConfiguration(
       'ccr-script-file-conflict',
       'The managed CCR script path already contains a file that Token Harness does not own',
       'Move that file or use the exported script with CCR Routing manually',
+    );
+  }
+
+  if (mode === 'conservative' && configuredSimpleModel === null) {
+    return error(
+      'ccr-simple-model-required',
+      'Conservative routing needs an exact simple model that already exists in CCR',
+      'Choose a configured Provider/model in Token Harness before enabling conservative routing',
     );
   }
 
