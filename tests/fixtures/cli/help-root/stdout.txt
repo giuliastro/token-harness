@@ -44,10 +44,12 @@ Useful flags
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
   --script             Export a CCR script rule (routing command)
+  --route-status       Show current Smart Model Routing state for one agent
   --route-metrics      Show local routing decision telemetry
   --route-mode <mode>  shadow by default; conservative requires opt-in
+  --route-simple-model <Provider/model>  Model used for conservative simple prompts
   --prune              Keep only the 200 newest routing decision records
-  --configure-ccr      Preview managed CCR setup; --yes applies one step
+  --configure-ccr      Preview managed CCR setup; --yes applies the reviewed change
   --update-ccr         Preview update of the managed CCR CLI
   --rollback-ccr       Preview rollback; --yes removes owned rule/profile
   --ccr-usage          Read CCR model/token aggregates for local sessions
