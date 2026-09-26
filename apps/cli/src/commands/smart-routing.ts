@@ -1063,11 +1063,7 @@ async function ccrConfiguration(
     });
     if (scriptHash(latestScript) !== ownership.scriptSha256)
       throw new CcrManagementError('config-drift');
-    const latestProfilePlan = planCcrProfile(
-      currentConfigValue,
-      harnessId,
-      requestedProfileModel,
-    );
+    const latestProfilePlan = planCcrProfile(currentConfigValue, harnessId, requestedProfileModel);
     if (
       (profilePlan.profile === null) !== (latestProfilePlan.profile === null) ||
       (profilePlan.profile !== null &&
@@ -1389,11 +1385,7 @@ async function rollbackCcrConfiguration(
     const latestNextConfig =
       ownership.profileId === undefined
         ? latestWithoutRule
-        : withoutOwnedCcrProfile(
-            latestWithoutRule,
-            ownership.profileId,
-            ownership.profileSha256!,
-          );
+        : withoutOwnedCcrProfile(latestWithoutRule, ownership.profileId, ownership.profileSha256!);
     if (latestNextConfig === null) throw new CcrManagementError('config-drift');
     await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
     const after = await ccr.client.call('getConfig');
