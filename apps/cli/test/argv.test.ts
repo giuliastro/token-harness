@@ -72,6 +72,28 @@ describe('argv', () => {
       assert.equal(script.options.harness, 'claude');
     }
 
+    const status = parseArgv(['routing', '--route-status', '--harness', 'codex']);
+    assert.equal(status.kind, 'command');
+    if (status.kind === 'command') {
+      assert.equal(status.options.routingStatus, true);
+      assert.equal(status.options.harness, 'codex');
+    }
+
+    const conservative = parseArgv([
+      'routing',
+      '--configure-ccr',
+      '--harness',
+      'codex',
+      '--route-mode',
+      'conservative',
+      '--route-simple-model',
+      'Codex API/gpt-5.6-luna',
+    ]);
+    assert.equal(conservative.kind, 'command');
+    if (conservative.kind === 'command') {
+      assert.equal(conservative.options.routingSimpleModel, 'Codex API/gpt-5.6-luna');
+    }
+
     const metrics = parseArgv(['routing', '--route-metrics', '--prune', '--since', '7d']);
     assert.equal(metrics.kind, 'command');
     if (metrics.kind === 'command') {
@@ -88,6 +110,7 @@ describe('argv', () => {
     }
 
     assert.equal(parseArgv(['routing', '--route-mode', 'aggressive']).kind, 'usage-error');
+    assert.equal(parseArgv(['routing', '--route-simple-model', 'not-a-provider-model']).kind, 'usage-error');
   });
 
   it('rejects an unknown flag', () => {
