@@ -2,6 +2,16 @@ import type { SmartRoutingCommandReport } from '../commands/smart-routing.js';
 
 export function renderSmartRoutingReport(report: SmartRoutingCommandReport): string {
   if (report.kind === 'ccr-script') return `${report.script}\n`;
+  if (report.kind === 'status') {
+    return [
+      `Smart Model Routing: ${report.state}`,
+      `Harness: ${report.harnessId}`,
+      `Gateway: ${report.gatewayState}`,
+      ...(report.simpleModel === null ? [] : [`Simple model: ${report.simpleModel}`]),
+      ...(report.launchCommand === null ? [] : [`Launch: ${report.launchCommand}`]),
+      report.detail,
+    ].join('\n');
+  }
   if (report.kind === 'ccr-configuration') {
     return [
       `CCR ${report.action}: ${report.state}`,
