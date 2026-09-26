@@ -26,7 +26,7 @@
     "matrices": "tsc -b && node tests/tools/matrices.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write apps/cli/src/commands/smart-routing.ts apps/cli/src/guided.ts apps/cli/test/argv.test.ts && git diff --exit-code -- apps/cli/src/commands/smart-routing.ts apps/cli/src/guided.ts apps/cli/test/argv.test.ts",
+    "format:check": "prettier --check .",
     "start": "npm run build && node dist/bundle/token-harness.mjs"
   },
   "devDependencies": {
