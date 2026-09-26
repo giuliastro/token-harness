@@ -11,7 +11,6 @@ import {
   createCcrSmartRoutingRule,
   createCcrSmartRoutingScript,
   isExactCcrSmartRoutingRule,
-  isSameCcrConfig,
   readCcrVersion,
   removeOwnedCcrSmartRoutingRule,
 } from '@token-harness/adapters';
@@ -983,23 +982,6 @@ async function ccrConfiguration(
     );
   }
 
-  const withRule = addCcrSmartRoutingRule(ccr.config, expectedRule);
-  if (withRule === null) {
-    return error(
-      'ccr-routing-rule-conflict',
-      'CCR routing rules changed or cannot accept a script rule',
-      'Refresh CCR state and review existing rules before retrying',
-    );
-  }
-  const nextConfig =
-    profilePlan.profile === null ? withRule : withCcrProfile(withRule, profilePlan.profile);
-  if (nextConfig === null) {
-    return error(
-      'ccr-profile-config-conflict',
-      'CCR Agent Profile settings changed or cannot accept the Token Harness profile',
-      'Review CCR Agent Config and retry from a new preview',
-    );
-  }
   const now = context.now();
   const ownership: CcrOwnershipReceipt = {
     schemaVersion: 1,
@@ -1262,10 +1244,15 @@ async function rollbackCcrConfiguration(
         );
       }
       try {
-        const currentConfig = await ccr.client.call('getConfig');
-        if (!isSameCcrConfig(currentConfig, ccr.config))
-          throw new CcrManagementError('config-drift');
-        await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+        const currentConfigValue = await ccr.client.call('getConfig');
+        if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+        const latestNextConfig = withoutOwnedCcrProfile(
+          currentConfigValue,
+          ownership.profileId,
+          ownership.profileSha256!,
+        );
+        if (latestNextConfig === null) throw new CcrManagementError('config-drift');
+        await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
         const afterConfig = await ccr.client.call('getConfig');
         if (
           profileRows(isJsonRecord(afterConfig) ? afterConfig : {}).some(
@@ -1339,31 +1326,25 @@ async function rollbackCcrConfiguration(
       ownership.profileId === undefined ? null : ccrLaunchCommand(harnessId),
     );
   }
-  const withoutRule = removeOwnedCcrSmartRoutingRule(ccr.config, ownership.ruleId, expectedRule);
-  if (withoutRule === null) {
-    return error(
-      'ccr-owned-rule-drift',
-      'CCR rules changed while rollback was being prepared',
-      'Refresh the CCR state and retry after reviewing the rule list',
-    );
-  }
-  const nextConfig =
-    ownership.profileId === undefined
-      ? withoutRule
-      : withoutOwnedCcrProfile(withoutRule, ownership.profileId, ownership.profileSha256!);
-  if (nextConfig === null) {
-    return error(
-      'ccr-owned-profile-drift',
-      'The Token Harness CCR profile changed while rollback was being prepared',
-      'Refresh CCR state and retry after reviewing the profile',
-    );
-  }
   try {
-    const currentConfig = await ccr.client.call('getConfig');
-    if (!isSameCcrConfig(currentConfig, ccr.config)) {
-      throw new CcrManagementError('config-drift');
-    }
-    await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+    const currentConfigValue = await ccr.client.call('getConfig');
+    if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+    const latestWithoutRule = removeOwnedCcrSmartRoutingRule(
+      currentConfigValue,
+      ownership.ruleId,
+      expectedRule,
+    );
+    if (latestWithoutRule === null) throw new CcrManagementError('config-drift');
+    const latestNextConfig =
+      ownership.profileId === undefined
+        ? latestWithoutRule
+        : withoutOwnedCcrProfile(
+            latestWithoutRule,
+            ownership.profileId,
+            ownership.profileSha256!,
+          );
+    if (latestNextConfig === null) throw new CcrManagementError('config-drift');
+    await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
     const after = await ccr.client.call('getConfig');
     const afterRules =
       isJsonRecord(after) &&
