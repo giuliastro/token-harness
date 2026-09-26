@@ -62,6 +62,7 @@ export interface CommandContext {
   routingMetrics?: boolean;
   routingStatus?: boolean;
   routingMode?: 'shadow' | 'conservative';
+  routingSimpleModel?: string | null;
   routingPrune?: boolean;
   routingCcrConfigure?: boolean;
   routingCcrRollback?: boolean;
