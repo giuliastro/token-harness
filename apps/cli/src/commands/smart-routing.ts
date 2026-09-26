@@ -56,6 +56,8 @@ export type SmartRoutingCommandReport =
       gatewayState: string;
       profileId: string | null;
       launchCommand: string | null;
+      simpleModel: string | null;
+      availableModels: string[];
       detail: string;
     }
   | {
@@ -93,6 +95,7 @@ interface CcrOwnershipReceipt {
   installedAt: string;
   profileId?: string;
   profileSha256?: string;
+  simpleModel?: string;
 }
 
 interface CcrState {
@@ -231,6 +234,9 @@ async function readOwnership(
       (value['profileSha256'] === undefined ||
         /^[a-f0-9]{64}$/.test(String(value['profileSha256']))) &&
       (value['profileId'] === undefined) === (value['profileSha256'] === undefined) &&
+      (value['simpleModel'] === undefined ||
+        (typeof value['simpleModel'] === 'string' &&
+          /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(value['simpleModel']))) &&
       typeof value['installedAt'] === 'string'
     ) {
       return value as unknown as CcrOwnershipReceipt;
@@ -437,6 +443,20 @@ function planCcrProfile(
   return { profile, profileContainer, conflict: false, reason: null };
 }
 
+function configuredCcrModels(config: Record<string, unknown>): string[] {
+  const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
+  const models = providers.flatMap((provider) => {
+    if (!isJsonRecord(provider) || typeof provider['name'] !== 'string' || !Array.isArray(provider['models']))
+      return [];
+    return provider['models'].flatMap((model) =>
+      typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model)
+        ? [`${provider['name']}/${model}`]
+        : [],
+    );
+  });
+  return [...new Set(models)].sort((left, right) => left.localeCompare(right)).slice(0, 200);
+}
+
 function configuredCcrModel(
   config: Record<string, unknown>,
   requested: string | undefined,
@@ -556,6 +576,8 @@ function routingStatusResult(
   detail: string,
   gatewayState = 'unknown',
   profileId: string | null = null,
+  simpleModel: string | null = null,
+  availableModels: string[] = [],
 ): CommandResult<SmartRoutingCommandReport> {
   return commandResult({
     command: 'routing',
@@ -568,6 +590,8 @@ function routingStatusResult(
       gatewayState,
       profileId,
       launchCommand: profileId === null ? null : ccrLaunchCommand(harnessId),
+      simpleModel,
+      availableModels,
       detail,
     },
   });
@@ -614,12 +638,18 @@ async function smartRoutingStatus(
           'off',
           'Smart Model Routing is off for this coding agent.',
           ccr.gatewayState,
+          null,
+          null,
+          configuredCcrModels(ccr.config),
         )
       : routingStatusResult(
           harnessId,
           'attention',
           'A routing rule uses the Token Harness id, but no matching ownership receipt exists.',
           ccr.gatewayState,
+          null,
+          null,
+          configuredCcrModels(ccr.config),
         );
   }
 
@@ -646,6 +676,8 @@ async function smartRoutingStatus(
       'The owned routing rule, script or launcher profile no longer matches the recorded Token Harness state.',
       ccr.gatewayState,
       owned.profileId ?? null,
+      owned.simpleModel ?? null,
+      configuredCcrModels(ccr.config),
     );
   }
 
@@ -657,6 +689,8 @@ async function smartRoutingStatus(
       : 'Conservative routing is configured. Eligible high-confidence simple requests may use the configured simple model.',
     ccr.gatewayState,
     owned.profileId ?? null,
+    owned.simpleModel ?? null,
+    configuredCcrModels(ccr.config),
   );
 }
 
@@ -702,7 +736,8 @@ async function ccrConfiguration(
             'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
         })
       : null;
-  const requestedSimpleModel = context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
+  const requestedSimpleModel =
+    context.routingSimpleModel ?? context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
   const configuredSimpleModel = configuredCcrModel(ccr.config, requestedSimpleModel);
   const simpleModelWarning =
     requestedSimpleModel?.trim() && configuredSimpleModel === null
@@ -715,6 +750,13 @@ async function ccrConfiguration(
             'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
         })
       : null;
+  if (mode === 'conservative' && configuredSimpleModel === null) {
+    return error(
+      'ccr-simple-model-required',
+      'Conservative routing needs an exact simple model that already exists in CCR',
+      'Choose a configured Provider/model in Token Harness before enabling conservative routing',
+    );
+  }
   const script = createCcrSmartRoutingScript({
     harnessId,
     mode,
@@ -991,6 +1033,7 @@ async function ccrConfiguration(
     ruleId,
     scriptPath: path,
     scriptSha256: scriptHash(script),
+    ...(configuredSimpleModel === null ? {} : { simpleModel: configuredSimpleModel }),
     installedAt: now,
   };
   let saveAttempted = false;
