@@ -1442,9 +1442,13 @@ export class GuideService {
 
         const report = result.data;
         const alreadyConfigured =
-          !removing && report.kind === 'ccr-configuration' && report.state === 'already-configured';
+          !removing &&
+          report?.kind === 'ccr-configuration' &&
+          report.state === 'already-configured';
         const alreadyAbsent =
-          removing && report.kind === 'ccr-configuration' && report.state === 'already-absent';
+          removing &&
+          report?.kind === 'ccr-configuration' &&
+          report.state === 'already-absent';
         if (alreadyConfigured || alreadyAbsent) {
           const message = alreadyConfigured
             ? `${name(harness)} already has the Token Harness-owned ${mode} routing rule.`
@@ -1464,7 +1468,9 @@ export class GuideService {
         const ticket = this.random();
         const expires = this.now() + 10 * 60_000;
         const lifecycle = report?.kind === 'ccr-lifecycle';
-        const network = Boolean(lifecycle && report?.kind === 'ccr-lifecycle' && report.action !== 'start');
+        const network = Boolean(
+          lifecycle && report?.kind === 'ccr-lifecycle' && report.action !== 'start',
+        );
         this.approval = {
           id: ticket,
           expires,
