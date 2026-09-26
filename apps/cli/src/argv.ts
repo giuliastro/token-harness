@@ -110,7 +110,9 @@ export interface CommandOptions {
   /** RFC 0028 CCR script export and local routing telemetry actions. */
   routingScript: boolean;
   routingMetrics: boolean;
+  routingStatus: boolean;
   routingMode: 'shadow' | 'conservative';
+  routingSimpleModel: string | null;
   routingPrune: boolean;
   routingCcrConfigure: boolean;
   routingCcrRollback: boolean;
@@ -152,6 +154,7 @@ const VALUE_FLAGS = new Set([
   '--reserve',
   '--tasks-left',
   '--route-mode',
+  '--route-simple-model',
   '--context-snapshot',
 ]);
 
@@ -170,6 +173,7 @@ const BOOLEAN_FLAGS = new Set([
   '--yes',
   '--script',
   '--route-metrics',
+  '--route-status',
   '--prune',
   '--configure-ccr',
   '--rollback-ccr',
@@ -250,7 +254,9 @@ export function parseArgv(
     nativePolicy: false,
     routingScript: false,
     routingMetrics: false,
+    routingStatus: false,
     routingMode: 'shadow',
+    routingSimpleModel: null,
     routingPrune: false,
     routingCcrConfigure: false,
     routingCcrRollback: false,
@@ -303,6 +309,7 @@ export function parseArgv(
       if (name === '--agent-skill') options.agentSkill = true;
       if (name === '--script') options.routingScript = true;
       if (name === '--route-metrics') options.routingMetrics = true;
+      if (name === '--route-status') options.routingStatus = true;
       if (name === '--prune') options.routingPrune = true;
       if (name === '--configure-ccr') options.routingCcrConfigure = true;
       if (name === '--rollback-ccr') options.routingCcrRollback = true;
@@ -546,6 +553,20 @@ export function parseArgv(
         }
         break;
       }
+      case '--route-simple-model':
+        if (!/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(value) || !value.includes('/')) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-routing-model',
+              message: 'Routing model must be an exact CCR Provider/model identifier',
+              remediation: 'Choose a configured model such as Codex API/gpt-5.6-luna',
+            }),
+          );
+        } else {
+          options.routingSimpleModel = value;
+        }
+        break;
       case '--route-mode':
         if (value !== 'shadow' && value !== 'conservative') {
           diagnostics.push(

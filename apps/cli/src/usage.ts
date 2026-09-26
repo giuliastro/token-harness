@@ -60,10 +60,12 @@ Useful flags
   --harness <id>       Restrict the operation to one harness
   --provider <id>      Restrict the operation to one provider
   --script             Export a CCR script rule (routing command)
+  --route-status       Show current Smart Model Routing state for one agent
   --route-metrics      Show local routing decision telemetry
   --route-mode <mode>  shadow by default; conservative requires opt-in
+  --route-simple-model <Provider/model>  Simple model for conservative routing
   --prune              Keep only the 200 newest routing decision records
-  --configure-ccr      Preview managed CCR setup; --yes applies one step
+  --configure-ccr      Preview CCR setup; --yes applies the reviewed change
   --update-ccr         Preview update of the managed CCR CLI
   --rollback-ccr       Preview rollback; --yes removes owned rule/profile
   --ccr-usage          Read CCR model/token aggregates for local sessions
@@ -344,7 +346,10 @@ Exits 0 whatever the figures say — an empty report is a fact, not a failure.`,
 Usage
   token-harness routing --script --harness <claude|codex>
                         [--route-mode <shadow|conservative>] [--json]
-  token-harness routing --configure-ccr --harness <claude|codex> [--yes]
+  token-harness routing --route-status --harness <claude|codex> [--json]
+  token-harness routing --configure-ccr --harness <claude|codex>
+                        [--route-mode <shadow|conservative>]
+                        [--route-simple-model <Provider/model>] [--yes]
   token-harness routing --update-ccr [--yes]
   token-harness routing --rollback-ccr --harness <claude|codex> [--yes]
   token-harness routing --route-metrics [--since <duration|date>]
@@ -362,9 +367,10 @@ telemetry write never blocks the agent request. Decision records contain no prom
 Routing choices are not measured token savings; this command keeps them separate from \`metrics\`.
 Use --prune to remove all but the 200 newest decision records.
 
-When no authenticated local CCR service is present, configure first previews an npm install/start
-of CCR 3.1.1 in Token Harness' protected local state; after approving that step, run configure again
-to preview the routing rule and optional CCR-only CLI profile. A Token Harness-owned service keeps
+When no authenticated local CCR service is present, configure previews the managed CCR runtime
+preparation required for the selected routing mode. The browser workflow completes runtime
+preparation and the reviewed routing configuration in one approved flow. Conservative mode
+requires --route-simple-model to name an exact model already configured in CCR. A Token Harness-owned service keeps
 its Web RPC token in a private local file; existing services can use CCR_WEB_AUTH_TOKEN and
 optionally CCR_WEB_URL. --update-ccr only updates a Token Harness-owned CLI to the reviewed pin.
 Rollback removes only the exact rule, profile, and script Token Harness owns. CCR usage is observed

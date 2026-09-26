@@ -11,7 +11,6 @@ import {
   createCcrSmartRoutingRule,
   createCcrSmartRoutingScript,
   isExactCcrSmartRoutingRule,
-  isSameCcrConfig,
   readCcrVersion,
   removeOwnedCcrSmartRoutingRule,
 } from '@token-harness/adapters';
@@ -50,6 +49,18 @@ export type SmartRoutingCommandReport =
       ccrUsage?: CcrUsageReport;
     }
   | {
+      kind: 'status';
+      harnessId: SmartRoutingHarness;
+      state: 'off' | 'shadow' | 'conservative' | 'attention';
+      mode: SmartRoutingMode | null;
+      gatewayState: string;
+      profileId: string | null;
+      launchCommand: string | null;
+      simpleModel: string | null;
+      availableModels: string[];
+      detail: string;
+    }
+  | {
       kind: 'ccr-configuration';
       action: 'configure' | 'rollback';
       state: 'preview' | 'configured' | 'already-configured' | 'rolled-back' | 'already-absent';
@@ -84,6 +95,7 @@ interface CcrOwnershipReceipt {
   installedAt: string;
   profileId?: string;
   profileSha256?: string;
+  simpleModel?: string;
 }
 
 interface CcrState {
@@ -222,6 +234,9 @@ async function readOwnership(
       (value['profileSha256'] === undefined ||
         /^[a-f0-9]{64}$/.test(String(value['profileSha256']))) &&
       (value['profileId'] === undefined) === (value['profileSha256'] === undefined) &&
+      (value['simpleModel'] === undefined ||
+        (typeof value['simpleModel'] === 'string' &&
+          /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(value['simpleModel']))) &&
       typeof value['installedAt'] === 'string'
     ) {
       return value as unknown as CcrOwnershipReceipt;
@@ -428,6 +443,24 @@ function planCcrProfile(
   return { profile, profileContainer, conflict: false, reason: null };
 }
 
+function configuredCcrModels(config: Record<string, unknown>): string[] {
+  const providers = Array.isArray(config['Providers']) ? config['Providers'] : [];
+  const models = providers.flatMap((provider) => {
+    if (
+      !isJsonRecord(provider) ||
+      typeof provider['name'] !== 'string' ||
+      !Array.isArray(provider['models'])
+    )
+      return [];
+    return provider['models'].flatMap((model) =>
+      typeof model === 'string' && /^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(model)
+        ? [`${provider['name']}/${model}`]
+        : [],
+    );
+  });
+  return [...new Set(models)].sort((left, right) => left.localeCompare(right)).slice(0, 200);
+}
+
 function configuredCcrModel(
   config: Record<string, unknown>,
   requested: string | undefined,
@@ -541,6 +574,134 @@ function profilePlanDiagnostic(plan: CcrProfilePlan) {
   });
 }
 
+function routingStatusResult(
+  harnessId: SmartRoutingHarness,
+  state: 'off' | 'shadow' | 'conservative' | 'attention',
+  detail: string,
+  gatewayState = 'unknown',
+  profileId: string | null = null,
+  simpleModel: string | null = null,
+  availableModels: string[] = [],
+): CommandResult<SmartRoutingCommandReport> {
+  return commandResult({
+    command: 'routing',
+    exitCode: EXIT_CODES.ok,
+    data: {
+      kind: 'status',
+      harnessId,
+      state,
+      mode: state === 'shadow' || state === 'conservative' ? state : null,
+      gatewayState,
+      profileId,
+      launchCommand: profileId === null ? null : ccrLaunchCommand(harnessId),
+      simpleModel,
+      availableModels,
+      detail,
+    },
+  });
+}
+
+async function smartRoutingStatus(
+  context: CommandContext,
+): Promise<CommandResult<SmartRoutingCommandReport>> {
+  const fs = context.adapters?.fs;
+  if (fs === undefined || context.stateRoot === null || !isSmartRoutingHarness(context.harness)) {
+    return error(
+      'routing-status-context-required',
+      'Smart Model Routing status needs local state and a Claude Code or Codex harness',
+      'Pass `--harness claude` or `--harness codex` from the local Token Harness installation',
+    );
+  }
+  const harnessId = context.harness;
+  const owned = await readOwnership(context, harnessId);
+  let ccr: CcrState;
+  try {
+    ccr = await readCcrState(context);
+  } catch {
+    return owned === null
+      ? routingStatusResult(
+          harnessId,
+          'off',
+          'No Token Harness-owned routing configuration is active.',
+        )
+      : routingStatusResult(
+          harnessId,
+          'attention',
+          'Token Harness has routing ownership state, but the local CCR service cannot currently be verified.',
+        );
+  }
+
+  const path = scriptPath(context, harnessId);
+  const expectedRule = createCcrSmartRoutingRule(harnessId, path);
+  const router = ccr.config['Router'];
+  const rules = isJsonRecord(router) && Array.isArray(router['rules']) ? router['rules'] : [];
+  const matching = rules.filter(
+    (item) => isJsonRecord(item) && item['id'] === ccrSmartRoutingRuleId(harnessId),
+  );
+
+  if (owned === null) {
+    return matching.length === 0
+      ? routingStatusResult(
+          harnessId,
+          'off',
+          'Smart Model Routing is off for this coding agent.',
+          ccr.gatewayState,
+          null,
+          null,
+          configuredCcrModels(ccr.config),
+        )
+      : routingStatusResult(
+          harnessId,
+          'attention',
+          'A routing rule uses the Token Harness id, but no matching ownership receipt exists.',
+          ccr.gatewayState,
+          null,
+          null,
+          configuredCcrModels(ccr.config),
+        );
+  }
+
+  const bytes = await fs.readFile(owned.scriptPath).catch(() => null);
+  const scriptMatches =
+    bytes !== null && scriptHash(new TextDecoder().decode(bytes)) === owned.scriptSha256;
+  const ruleMatches =
+    matching.length === 1 && isExactCcrSmartRoutingRule(matching[0], expectedRule);
+  let profileMatches = true;
+  if (owned.profileId !== undefined) {
+    const profile = profileRows(ccr.config).find(
+      (item) => isJsonRecord(item) && item['id'] === owned.profileId,
+    );
+    profileMatches =
+      isJsonRecord(profile) &&
+      owned.profileSha256 !== undefined &&
+      scriptHash(stableJson(profile)) === owned.profileSha256;
+  }
+
+  if (!scriptMatches || !ruleMatches || !profileMatches) {
+    return routingStatusResult(
+      harnessId,
+      'attention',
+      'The owned routing rule, script or launcher profile no longer matches the recorded Token Harness state.',
+      ccr.gatewayState,
+      owned.profileId ?? null,
+      owned.simpleModel ?? null,
+      configuredCcrModels(ccr.config),
+    );
+  }
+
+  return routingStatusResult(
+    harnessId,
+    owned.mode,
+    owned.mode === 'shadow'
+      ? 'Shadow routing is configured. Requests keep their selected model while local routing decisions are recorded.'
+      : 'Conservative routing is configured. Eligible high-confidence simple requests may use the configured simple model.',
+    ccr.gatewayState,
+    owned.profileId ?? null,
+    owned.simpleModel ?? null,
+    configuredCcrModels(ccr.config),
+  );
+}
+
 async function ccrConfiguration(
   context: CommandContext,
 ): Promise<CommandResult<SmartRoutingCommandReport>> {
@@ -583,7 +744,8 @@ async function ccrConfiguration(
             'Set it to the exact Provider/model alias from CCR, then roll back and preview setup again',
         })
       : null;
-  const requestedSimpleModel = context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
+  const requestedSimpleModel =
+    context.routingSimpleModel ?? context.env?.['TOKEN_HARNESS_ROUTING_SIMPLE_MODEL'];
   const configuredSimpleModel = configuredCcrModel(ccr.config, requestedSimpleModel);
   const simpleModelWarning =
     requestedSimpleModel?.trim() && configuredSimpleModel === null
@@ -700,10 +862,19 @@ async function ccrConfiguration(
             );
           }
           try {
-            const currentConfig = await ccr.client.call('getConfig');
-            if (!isSameCcrConfig(currentConfig, ccr.config))
+            const currentConfigValue = await ccr.client.call('getConfig');
+            if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+            const latestPlan = planCcrProfile(currentConfigValue, harnessId, requestedProfileModel);
+            if (
+              latestPlan.profile === null ||
+              profilePlan.profile === null ||
+              !isExpectedCcrProfile(latestPlan.profile, profilePlan.profile)
+            ) {
               throw new CcrManagementError('config-drift');
-            await ccr.client.call('saveConfig', [profileConfig, { applyProfile: false }]);
+            }
+            const latestProfileConfig = withCcrProfile(currentConfigValue, latestPlan.profile);
+            if (latestProfileConfig === null) throw new CcrManagementError('config-drift');
+            await ccr.client.call('saveConfig', [latestProfileConfig, { applyProfile: false }]);
             const afterConfig = await ccr.client.call('getConfig');
             const afterRouter = isJsonRecord(afterConfig) ? afterConfig['Router'] : null;
             const afterRules =
@@ -796,6 +967,14 @@ async function ccrConfiguration(
     );
   }
 
+  if (mode === 'conservative' && configuredSimpleModel === null) {
+    return error(
+      'ccr-simple-model-required',
+      'Conservative routing needs an exact simple model that already exists in CCR',
+      'Choose a configured Provider/model in Token Harness before enabling conservative routing',
+    );
+  }
+
   if (!context.confirmed) {
     const profileDiagnostic = profilePlanDiagnostic(profilePlan);
     return configurationResult(
@@ -854,23 +1033,6 @@ async function ccrConfiguration(
     );
   }
 
-  const withRule = addCcrSmartRoutingRule(ccr.config, expectedRule);
-  if (withRule === null) {
-    return error(
-      'ccr-routing-rule-conflict',
-      'CCR routing rules changed or cannot accept a script rule',
-      'Refresh CCR state and review existing rules before retrying',
-    );
-  }
-  const nextConfig =
-    profilePlan.profile === null ? withRule : withCcrProfile(withRule, profilePlan.profile);
-  if (nextConfig === null) {
-    return error(
-      'ccr-profile-config-conflict',
-      'CCR Agent Profile settings changed or cannot accept the Token Harness profile',
-      'Review CCR Agent Config and retry from a new preview',
-    );
-  }
   const now = context.now();
   const ownership: CcrOwnershipReceipt = {
     schemaVersion: 1,
@@ -880,6 +1042,7 @@ async function ccrConfiguration(
     ruleId,
     scriptPath: path,
     scriptSha256: scriptHash(script),
+    ...(configuredSimpleModel === null ? {} : { simpleModel: configuredSimpleModel }),
     installedAt: now,
   };
   let saveAttempted = false;
@@ -888,12 +1051,37 @@ async function ccrConfiguration(
     await fs.createDirectory(scriptDirectory(context));
     await writeJson(context, receiptPath(context, harnessId), ownership);
     await fs.writeFile(path, new TextEncoder().encode(script));
-    const currentConfig = await ccr.client.call('getConfig');
-    if (!isSameCcrConfig(currentConfig, ccr.config)) {
+    const currentConfigValue = await ccr.client.call('getConfig');
+    if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+    const latestSimpleModel = configuredCcrModel(currentConfigValue, requestedSimpleModel);
+    if (latestSimpleModel !== configuredSimpleModel) throw new CcrManagementError('config-drift');
+    const latestScript = createCcrSmartRoutingScript({
+      harnessId,
+      mode,
+      telemetryDirectory,
+      pathSeparator: context.platform.os === 'windows' ? '\\' : '/',
+      simpleModel: latestSimpleModel,
+    });
+    if (scriptHash(latestScript) !== ownership.scriptSha256)
+      throw new CcrManagementError('config-drift');
+    const latestProfilePlan = planCcrProfile(currentConfigValue, harnessId, requestedProfileModel);
+    if (
+      (profilePlan.profile === null) !== (latestProfilePlan.profile === null) ||
+      (profilePlan.profile !== null &&
+        latestProfilePlan.profile !== null &&
+        !isExpectedCcrProfile(latestProfilePlan.profile, profilePlan.profile))
+    ) {
       throw new CcrManagementError('config-drift');
     }
+    const latestWithRule = addCcrSmartRoutingRule(currentConfigValue, expectedRule);
+    if (latestWithRule === null) throw new CcrManagementError('config-drift');
+    const latestNextConfig =
+      latestProfilePlan.profile === null
+        ? latestWithRule
+        : withCcrProfile(latestWithRule, latestProfilePlan.profile);
+    if (latestNextConfig === null) throw new CcrManagementError('config-drift');
     saveAttempted = true;
-    await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+    await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
     const afterConfig = await ccr.client.call('getConfig');
     const afterRouter = isJsonRecord(afterConfig) ? afterConfig['Router'] : null;
     const afterRules =
@@ -1104,10 +1292,15 @@ async function rollbackCcrConfiguration(
         );
       }
       try {
-        const currentConfig = await ccr.client.call('getConfig');
-        if (!isSameCcrConfig(currentConfig, ccr.config))
-          throw new CcrManagementError('config-drift');
-        await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+        const currentConfigValue = await ccr.client.call('getConfig');
+        if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+        const latestNextConfig = withoutOwnedCcrProfile(
+          currentConfigValue,
+          ownership.profileId,
+          ownership.profileSha256!,
+        );
+        if (latestNextConfig === null) throw new CcrManagementError('config-drift');
+        await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
         const afterConfig = await ccr.client.call('getConfig');
         if (
           profileRows(isJsonRecord(afterConfig) ? afterConfig : {}).some(
@@ -1181,31 +1374,21 @@ async function rollbackCcrConfiguration(
       ownership.profileId === undefined ? null : ccrLaunchCommand(harnessId),
     );
   }
-  const withoutRule = removeOwnedCcrSmartRoutingRule(ccr.config, ownership.ruleId, expectedRule);
-  if (withoutRule === null) {
-    return error(
-      'ccr-owned-rule-drift',
-      'CCR rules changed while rollback was being prepared',
-      'Refresh the CCR state and retry after reviewing the rule list',
-    );
-  }
-  const nextConfig =
-    ownership.profileId === undefined
-      ? withoutRule
-      : withoutOwnedCcrProfile(withoutRule, ownership.profileId, ownership.profileSha256!);
-  if (nextConfig === null) {
-    return error(
-      'ccr-owned-profile-drift',
-      'The Token Harness CCR profile changed while rollback was being prepared',
-      'Refresh CCR state and retry after reviewing the profile',
-    );
-  }
   try {
-    const currentConfig = await ccr.client.call('getConfig');
-    if (!isSameCcrConfig(currentConfig, ccr.config)) {
-      throw new CcrManagementError('config-drift');
-    }
-    await ccr.client.call('saveConfig', [nextConfig, { applyProfile: false }]);
+    const currentConfigValue = await ccr.client.call('getConfig');
+    if (!isJsonRecord(currentConfigValue)) throw new CcrManagementError('invalid-response');
+    const latestWithoutRule = removeOwnedCcrSmartRoutingRule(
+      currentConfigValue,
+      ownership.ruleId,
+      expectedRule,
+    );
+    if (latestWithoutRule === null) throw new CcrManagementError('config-drift');
+    const latestNextConfig =
+      ownership.profileId === undefined
+        ? latestWithoutRule
+        : withoutOwnedCcrProfile(latestWithoutRule, ownership.profileId, ownership.profileSha256!);
+    if (latestNextConfig === null) throw new CcrManagementError('config-drift');
+    await ccr.client.call('saveConfig', [latestNextConfig, { applyProfile: false }]);
     const after = await ccr.client.call('getConfig');
     const afterRules =
       isJsonRecord(after) &&
@@ -1272,12 +1455,14 @@ export async function runSmartRouting(
 ): Promise<CommandResult<SmartRoutingCommandReport>> {
   const wantsScript = context.routingScript === true;
   const wantsMetrics = context.routingMetrics === true;
+  const wantsStatus = context.routingStatus === true;
   const wantsCcrConfigure = context.routingCcrConfigure === true;
   const wantsCcrRollback = context.routingCcrRollback === true;
   const wantsCcrUpdate = context.routingCcrUpdate === true;
   const requestedActions = [
     wantsScript,
     wantsMetrics,
+    wantsStatus,
     wantsCcrConfigure,
     wantsCcrRollback,
     wantsCcrUpdate,
@@ -1286,9 +1471,10 @@ export async function runSmartRouting(
     return error(
       'routing-action-required',
       'Choose one Smart Model Routing action',
-      'Use `token-harness routing --script --harness claude`, `--configure-ccr`, `--update-ccr`, `--rollback-ccr`, or `--route-metrics`',
+      'Use `token-harness routing --route-status --harness codex`, `--script`, `--configure-ccr`, `--update-ccr`, `--rollback-ccr`, or `--route-metrics`',
     );
   }
+  if (wantsStatus) return smartRoutingStatus(context);
   if (context.routingPrune === true && !wantsMetrics) {
     return error(
       'routing-prune-requires-metrics',

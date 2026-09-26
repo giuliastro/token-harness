@@ -127,6 +127,23 @@ function reads() {
   const calls: string[][] = [];
   const call: GuideCall = <T>(args: readonly string[]): Promise<CliEnvelope<T>> => {
     calls.push([...args]);
+    if (args[0] === 'routing' && args.includes('--route-status')) {
+      const harness = args[args.indexOf('--harness') + 1] ?? 'codex';
+      return Promise.resolve(
+        envelope('routing', {
+          kind: 'status',
+          harnessId: harness,
+          state: 'off',
+          mode: null,
+          gatewayState: 'unknown',
+          profileId: null,
+          launchCommand: null,
+          simpleModel: null,
+          availableModels: [],
+          detail: 'Smart Model Routing is not configured.',
+        }) as CliEnvelope<T>,
+      );
+    }
     return new Promise((resolve, reject) => {
       pending.set(args[0]!, { resolve: (value) => resolve(value as CliEnvelope<T>), reject });
     });
@@ -200,6 +217,8 @@ describe('real section progress', () => {
       'budget',
       'context',
       'doctor',
+      'routing',
+      'routing',
       'savings',
       'status',
     ]);
@@ -233,6 +252,6 @@ describe('real section progress', () => {
     f.finish('benchmark-matrix', { entries: [] });
     f.finish('budget', { harnesses: [] });
     assert.deepEqual(await first, await second);
-    assert.equal(f.calls.length, 6);
+    assert.equal(f.calls.length, 8);
   });
 });

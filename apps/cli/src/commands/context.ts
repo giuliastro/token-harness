@@ -60,7 +60,9 @@ export interface CommandContext {
   /** RFC 0028 CCR routing script export, metrics view, and explicit telemetry pruning. */
   routingScript?: boolean;
   routingMetrics?: boolean;
+  routingStatus?: boolean;
   routingMode?: 'shadow' | 'conservative';
+  routingSimpleModel?: string | null;
   routingPrune?: boolean;
   routingCcrConfigure?: boolean;
   routingCcrRollback?: boolean;

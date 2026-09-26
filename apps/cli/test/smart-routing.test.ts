@@ -240,24 +240,25 @@ describe('Smart Model Routing CLI', () => {
     assert.equal(JSON.stringify(rolledBack.data).includes('private-ccr-token'), false);
   });
 
-  it('fails closed when CCR configuration changes after the setup preview', async () => {
+  it('rebases routing onto the latest CCR config and preserves unrelated concurrent edits', async () => {
     const original: Record<string, unknown> = {
       Router: { rules: [{ id: 'user-rule', enabled: true }] },
     };
+    let savedConfig: Record<string, unknown> = original;
     let configReads = 0;
-    let saveCalled = false;
     const ccrFetch: typeof fetch = async (_input, init) => {
-      const body = JSON.parse(String(init?.body)) as { method: string };
+      const body = JSON.parse(String(init?.body)) as { method: string; args?: unknown[] };
       let value: unknown;
       if (body.method === 'getAppInfo') value = { version: '3.1.1' };
       else if (body.method === 'getConfig') {
         configReads += 1;
-        value = configReads === 1 ? original : { ...original, externalEdit: true };
+        if (configReads === 2) savedConfig = { ...savedConfig, externalEdit: { preserved: true } };
+        value = savedConfig;
       } else if (body.method === 'getGatewayStatus') value = { state: 'running' };
       else if (body.method === 'validateRouteScript') value = { ok: true };
       else if (body.method === 'saveConfig') {
-        saveCalled = true;
-        value = { ok: true };
+        savedConfig = body.args?.[0] as Record<string, unknown>;
+        value = savedConfig;
       } else value = null;
       return new Response(JSON.stringify({ ok: true, value }), { status: 200 });
     };
@@ -271,15 +272,16 @@ describe('Smart Model Routing CLI', () => {
 
     const result = await runSmartRouting(commandContext);
 
-    assert.equal(result.diagnostics[0]?.code, 'ccr-config-changed-during-operation');
-    assert.equal(saveCalled, false);
+    assert.equal(result.data?.kind, 'ccr-configuration');
+    if (result.data?.kind !== 'ccr-configuration') return;
+    assert.equal(result.data.state, 'configured');
+    assert.deepEqual(savedConfig['externalEdit'], { preserved: true });
+    const rules = (savedConfig['Router'] as { rules: Array<{ id: string }> }).rules;
+    assert.equal(rules[0]?.id, 'token-harness-smart-routing-codex-v1');
+    assert.equal(rules[1]?.id, 'user-rule');
     assert.equal(
       [...files.keys()].some((path) => path.includes('ccr-ownership-codex.json')),
-      false,
-    );
-    assert.equal(
-      [...files.keys()].some((path) => path.endsWith('smart-routing-codex.js')),
-      false,
+      true,
     );
   });
 
@@ -367,6 +369,62 @@ describe('Smart Model Routing CLI', () => {
       (savedConfig['Providers'] as Array<Record<string, unknown>>)[0]?.['apiKey'],
       'private-provider-key',
     );
+  });
+
+  it('reports configured conservative routing and the selected simple model', async () => {
+    let savedConfig: Record<string, unknown> = {
+      Providers: [
+        {
+          id: 'codex-api',
+          name: 'Codex API',
+          type: 'openai_responses',
+          models: ['gpt-5.6-sol', 'gpt-5.6-luna'],
+          defaultModel: 'gpt-5.6-sol',
+        },
+      ],
+      profile: { enabled: true, profiles: [] },
+      Router: { rules: [] },
+    };
+    const ccrFetch: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { method: string; args?: unknown[] };
+      let value: unknown;
+      if (body.method === 'getAppInfo') value = { version: '3.1.1' };
+      else if (body.method === 'getConfig') value = savedConfig;
+      else if (body.method === 'getGatewayStatus') value = { state: 'running' };
+      else if (body.method === 'validateRouteScript') value = { ok: true };
+      else if (body.method === 'saveConfig') {
+        savedConfig = body.args?.[0] as Record<string, unknown>;
+        value = savedConfig;
+      } else value = null;
+      return new Response(JSON.stringify({ ok: true, value }), { status: 200 });
+    };
+    const base = context({
+      routingCcrConfigure: true,
+      routingMode: 'conservative',
+      routingSimpleModel: 'Codex API/gpt-5.6-luna',
+      harness: 'codex' as never,
+      confirmed: true,
+      env: { CCR_WEB_AUTH_TOKEN: 'private-token' },
+      ccrFetch,
+    });
+
+    const configured = await runSmartRouting(base.commandContext);
+    assert.equal(configured.data?.kind, 'ccr-configuration');
+    if (configured.data?.kind !== 'ccr-configuration') return;
+    assert.equal(configured.data.state, 'configured');
+
+    const status = await runSmartRouting({
+      ...base.commandContext,
+      routingCcrConfigure: false,
+      routingStatus: true,
+      confirmed: false,
+    });
+    assert.equal(status.data?.kind, 'status');
+    if (status.data?.kind !== 'status') return;
+    assert.equal(status.data.state, 'conservative');
+    assert.equal(status.data.simpleModel, 'Codex API/gpt-5.6-luna');
+    assert.ok(status.data.availableModels.includes('Codex API/gpt-5.6-luna'));
+    assert.ok(status.data.availableModels.includes('Codex API/gpt-5.6-sol'));
   });
 
   it('reports metadata-only CCR request usage without claiming savings', async () => {
