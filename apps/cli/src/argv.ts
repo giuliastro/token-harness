@@ -112,6 +112,7 @@ export interface CommandOptions {
   routingMetrics: boolean;
   routingStatus: boolean;
   routingMode: 'shadow' | 'conservative';
+  routingSimpleModel: string | null;
   routingPrune: boolean;
   routingCcrConfigure: boolean;
   routingCcrRollback: boolean;
@@ -153,6 +154,7 @@ const VALUE_FLAGS = new Set([
   '--reserve',
   '--tasks-left',
   '--route-mode',
+  '--route-simple-model',
   '--context-snapshot',
 ]);
 
@@ -254,6 +256,7 @@ export function parseArgv(
     routingMetrics: false,
     routingStatus: false,
     routingMode: 'shadow',
+    routingSimpleModel: null,
     routingPrune: false,
     routingCcrConfigure: false,
     routingCcrRollback: false,
@@ -550,6 +553,20 @@ export function parseArgv(
         }
         break;
       }
+      case '--route-simple-model':
+        if (!/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(value) || !value.includes('/')) {
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-routing-model',
+              message: 'Routing model must be an exact CCR Provider/model identifier',
+              remediation: 'Choose a configured model such as Codex API/gpt-5.6-luna',
+            }),
+          );
+        } else {
+          options.routingSimpleModel = value;
+        }
+        break;
       case '--route-mode':
         if (value !== 'shadow' && value !== 'conservative') {
           diagnostics.push(
