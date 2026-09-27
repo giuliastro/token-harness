@@ -1,5 +1,11 @@
 # Development status
 
+- 2026-09-27: **Token Harness 0.1.22 release candidate.** PR #353 merged to `main` as `4e2772e`;
+  its cross-platform CI passed on Windows, macOS, and Ubuntu. The change removes the unverified CCR
+  routing integration and makes Codex RTK hook enablement and trust an explicit manual step.
+  Release-preparation CI is pending; this incremental release does not claim broad-promotion
+  readiness.
+
 - 2026-09-27: **CCR routing withdrawn.** The managed router required a separate CLI profile instead
   of the normal Codex/Claude launch path, and local configuration checks did not prove live request
   routing. The CLI, guided UI, adapter, and CCR-specific benchmark telemetry have been removed.
