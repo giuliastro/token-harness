@@ -19,7 +19,6 @@ export const CAPABILITY_IDS = [
   'instructions.progressive',
   'model.output.terse',
   'reasoning.effort.route',
-  'model.request.route',
   'metrics.observe',
 ] as const;
 
@@ -44,7 +43,6 @@ const DEFAULT_COMPOSITION_MODES: Readonly<Record<CapabilityId, CompositionMode>>
   'instructions.progressive': 'chainable',
   'model.output.terse': 'chainable',
   'reasoning.effort.route': 'exclusive',
-  'model.request.route': 'exclusive',
   'metrics.observe': 'observational',
 };
 

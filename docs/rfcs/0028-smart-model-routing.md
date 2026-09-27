@@ -1,8 +1,13 @@
 # RFC 0028 — Smart model routing, shadow-first
 
-- Status: Accepted
+- Status: Withdrawn 2026-09-27
 - Date: 2026-09-24
 - Owners: Token Harness
+
+> Withdrawn. The implementation required launching through a separate CCR CLI profile and did not
+> verify that real coding-agent requests reached the selected provider. The design and implementation
+> below are retained for historical context only; they are not current Token Harness behavior or an
+> approved future architecture.
 
 ## Summary
 

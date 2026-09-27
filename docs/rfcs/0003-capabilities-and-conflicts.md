@@ -35,15 +35,10 @@ Initial capability IDs:
 | `instructions.progressive` | Move recurring instructions behind on-demand skills |
 | `model.output.terse` | Steer the model toward shorter visible replies |
 | `reasoning.effort.route` | Select reasoning effort by turn type |
-| `model.request.route` | Select a configured model for one intercepted request |
 | `metrics.observe` | Observe savings without changing the payload |
 
 New capabilities require an RFC when they introduce a new interception surface or
 attribution rule.
-
-RFC 0028 amends this taxonomy with the exclusive `model.request.route` capability. It is kept
-separate from `reasoning.effort.route`: selecting a configured model is a different interception
-surface and carries separate cost and quality evidence.
 
 ## Composition modes
 
@@ -61,7 +56,6 @@ Defaults:
 - `tool.output.reduce`
 - `conversation.compact`
 - `reasoning.effort.route`
-- `model.request.route`
 
 ### Chainable
 

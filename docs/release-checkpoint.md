@@ -1,5 +1,9 @@
 # Release checkpoint — 2026-09-26
 
+> Superseded on 2026-09-27: the CCR-based Smart Model Routing changes described below were
+> withdrawn because they required a separate CLI launch profile and had no live request proof. They
+> are historical release notes, not current Token Harness functionality.
+
 Token Harness `0.1.21` is prepared as a corrective patch from runtime merge `e6276e2564e5ffc66e7b55f45c22dd818811473f` on `main`.
 
 The release candidate contains PR #351, which hardens and simplifies Smart Model Routing after the 0.1.20 guided setup failure:

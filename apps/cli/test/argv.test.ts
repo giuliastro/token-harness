@@ -54,68 +54,6 @@ describe('argv', () => {
     }
   });
 
-  it('parses Smart Model Routing script and metrics actions', () => {
-    const script = parseArgv([
-      'routing',
-      '--script',
-      '--harness',
-      'claude',
-      '--route-mode',
-      'conservative',
-      '--json',
-    ]);
-    assert.equal(script.kind, 'command');
-    if (script.kind === 'command') {
-      assert.equal(script.command, 'routing');
-      assert.equal(script.options.routingScript, true);
-      assert.equal(script.options.routingMode, 'conservative');
-      assert.equal(script.options.harness, 'claude');
-    }
-
-    const status = parseArgv(['routing', '--route-status', '--harness', 'codex']);
-    assert.equal(status.kind, 'command');
-    if (status.kind === 'command') {
-      assert.equal(status.options.routingStatus, true);
-      assert.equal(status.options.harness, 'codex');
-    }
-
-    const conservative = parseArgv([
-      'routing',
-      '--configure-ccr',
-      '--harness',
-      'codex',
-      '--route-mode',
-      'conservative',
-      '--route-simple-model',
-      'Codex API/gpt-5.6-luna',
-    ]);
-    assert.equal(conservative.kind, 'command');
-    if (conservative.kind === 'command') {
-      assert.equal(conservative.options.routingSimpleModel, 'Codex API/gpt-5.6-luna');
-    }
-
-    const metrics = parseArgv(['routing', '--route-metrics', '--prune', '--since', '7d']);
-    assert.equal(metrics.kind, 'command');
-    if (metrics.kind === 'command') {
-      assert.equal(metrics.options.routingMetrics, true);
-      assert.equal(metrics.options.routingPrune, true);
-      assert.equal(metrics.options.since, '7d');
-    }
-
-    const updateCcr = parseArgv(['routing', '--update-ccr', '--yes']);
-    assert.equal(updateCcr.kind, 'command');
-    if (updateCcr.kind === 'command') {
-      assert.equal(updateCcr.options.routingCcrUpdate, true);
-      assert.equal(updateCcr.options.yes, true);
-    }
-
-    assert.equal(parseArgv(['routing', '--route-mode', 'aggressive']).kind, 'usage-error');
-    assert.equal(
-      parseArgv(['routing', '--route-simple-model', 'not-a-provider-model']).kind,
-      'usage-error',
-    );
-  });
-
   it('rejects an unknown flag', () => {
     const parsed = parseArgv(['doctor', '--debug']);
     assert.equal(parsed.kind, 'usage-error');

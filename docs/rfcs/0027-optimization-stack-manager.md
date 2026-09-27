@@ -98,13 +98,10 @@ Even in these cases Token Harness starts as a recommendation engine. Automatic s
 opt-in, version-gated, benchmarked and reversible. A feature is not made dynamic merely because it
 can be.
 
-Per-request model routing is the secondary policy specified by [RFC 0028](0028-smart-model-routing.md).
-It begins with CCR shadow observation and keeps conservative route changes explicit, benchmarked,
-and reversible; it does not replace the native model/reasoning policy in the optimization stack.
-Because the gateway is an implementation dependency of that policy, Token Harness may manage an
-exact reviewed local CCR CLI copy through the same install/configure/verify/update lifecycle. The
-install and route setup are separate previewed changes. Existing global/external CCR installations
-are not replaced, and importing provider credentials remains an explicit account choice.
+Model and reasoning selection stay within native harness policy. Token Harness does not install a
+separate model gateway or change a harness endpoint. Any future request-level model selection needs
+a new accepted RFC, a supported native interception surface, and evidence that real requests reach
+the selected provider before it can enter the managed optimization stack.
 
 ## Component model
 
