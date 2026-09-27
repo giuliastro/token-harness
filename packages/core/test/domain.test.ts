@@ -112,9 +112,8 @@ describe('semantic versions', () => {
 
 describe('capabilities', () => {
   it('carries the RFC 0003 taxonomy', () => {
-    assert.equal(CAPABILITY_IDS.length, 13);
+    assert.equal(CAPABILITY_IDS.length, 12);
     assert.equal(isCapabilityId('shell.output.reduce'), true);
-    assert.equal(isCapabilityId('model.request.route'), true);
     assert.equal(isCapabilityId('shell.output.compress'), false);
   });
 
@@ -124,7 +123,6 @@ describe('capabilities', () => {
     assert.equal(defaultCompositionMode('tool.output.reduce'), 'exclusive');
     assert.equal(defaultCompositionMode('conversation.compact'), 'exclusive');
     assert.equal(defaultCompositionMode('reasoning.effort.route'), 'exclusive');
-    assert.equal(defaultCompositionMode('model.request.route'), 'exclusive');
     assert.equal(defaultCompositionMode('metrics.observe'), 'observational');
   });
 

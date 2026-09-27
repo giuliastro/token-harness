@@ -512,6 +512,8 @@ describe('Codex hook-list integration', () => {
       matcher: 'Bash',
       hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook codex' }],
     });
+    assert.match(action.explanation, /manually enable and trust this hook in Codex/i);
+    assert.match(action.explanation, /cannot activate the hook or grant trust/i);
     assert.deepEqual(result.targetHarnesses, [CODEX]);
   });
 

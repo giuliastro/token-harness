@@ -24,7 +24,6 @@ import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
 import { runMetrics } from './commands/metrics.js';
 import { runUpdateCheck } from './commands/update.js';
-import type { SmartRoutingCommandReport } from './commands/smart-routing.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
 import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.js';
@@ -89,16 +88,6 @@ export interface GuideGuidance {
   description: string;
   action?: GuideAction;
 }
-export interface GuideRouting {
-  state: 'off' | 'shadow' | 'conservative' | 'attention';
-  mode: 'shadow' | 'conservative' | null;
-  gatewayState: string;
-  profileId: string | null;
-  launchCommand: string | null;
-  simpleModel: string | null;
-  availableModels: string[];
-  detail: string;
-}
 export interface GuideAgent {
   id: GuideHarness;
   name: string;
@@ -109,7 +98,6 @@ export interface GuideAgent {
   setup: GuideSetupTarget[];
   effort: string | null;
   reasoning: GuideReasoning;
-  routing: GuideRouting;
   guidance?: GuideGuidance;
   allowanceAction: GuideAction;
   rules: GuideRule[];
@@ -189,16 +177,10 @@ interface Approval {
     | 'uninstall'
     | 'update'
     | 'candidate-apply'
-    | 'candidate-uninstall'
-    | 'routing-configure'
-    | 'routing-rollback';
+    | 'candidate-uninstall';
   network: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
-  routingHarness?: GuideHarness;
-  routingMode?: 'shadow' | 'conservative';
-  routingSimpleModel?: string;
-  routingReplace?: boolean;
   updateTargets?: GuideUpdateTarget[];
 }
 type GuideUpdateTarget =
@@ -388,14 +370,6 @@ const STACK_COMPONENTS: readonly OptimizationComponentDescriptor[] = [
   },
 ];
 const ISSUE_COPY: Readonly<Record<string, string>> = {
-  'ccr-simple-model-required':
-    'Conservative routing needs a simple model selected from the models already configured in CCR.',
-  'ccr-config-changed-during-operation':
-    'CCR changed configuration while routing was being prepared. Token Harness preserved the latest CCR state instead of overwriting it; refresh and retry.',
-  'ccr-profile-id-conflict':
-    'A Token Harness routing profile already exists but its ownership cannot be verified. Disable or repair that routing state before enabling it again.',
-  'ccr-management-operation-failed':
-    'CCR rejected the routing configuration change. The existing routing state was left unchanged.',
   'cclimits-not-installed':
     'Claude allowance needs the optional cclimits companion. Output optimization does not depend on the allowance meter.',
   'cclimits-readonly-flags-unsupported':
@@ -842,6 +816,12 @@ const TASK_RULES: GuideRule[] = [
 
 function describeChange(action: PlannedAction, harness: string): GuidePreview['changes'][number] {
   const prefix = name(harness);
+  const codexHookActivationNote =
+    harness === 'codex' &&
+    action.kind === 'merge-json' &&
+    action.explanation.includes('manually enable and trust this hook in Codex')
+      ? ' After applying, manually enable and trust this hook in Codex; Token Harness cannot activate it or grant trust.'
+      : '';
   if (action.kind === 'merge-json' && action.ownedPointers?.includes('effortLevel')) {
     const operation = action.operations.find((item) => item.kind === 'set');
     const value = operation?.kind === 'set' ? String(operation.value) : 'reviewed';
@@ -875,7 +855,8 @@ function describeChange(action: PlannedAction, harness: string): GuidePreview['c
   return {
     title: `${prefix}: ${descriptions[action.kind] ?? 'Apply the reviewed integration change'}`,
     description:
-      'Preserves unrelated settings. Existing safety checks and backups apply; unsupported versions are not forced.',
+      'Preserves unrelated settings. Existing safety checks and backups apply; unsupported versions are not forced.' +
+      codexHookActivationNote,
     files: action.affectedPaths.length,
   };
 }
@@ -1010,7 +991,6 @@ export class GuideService {
       budget = empty<BudgetReport>(),
       context = empty<ContextReport>();
     let guidance: Partial<Record<GuideHarness, GuideGuidance>> | undefined;
-    const routing: Partial<Record<GuideHarness, GuideRouting>> = {};
     const observe = async <T>(id: GuideStageId, args: string[]): Promise<GuideRead<T>> => {
       let result: GuideRead<T>;
       try {
@@ -1038,7 +1018,6 @@ export class GuideService {
           allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
         },
         guidance,
-        routing,
       );
     };
     const [, , , metrics, status, benchmark] = await Promise.all([
@@ -1082,39 +1061,12 @@ export class GuideService {
       observe<StatusReport>('checks', ['status']),
       observe<TaskBenchmarkContextMatrixReport>('value', ['benchmark-matrix']),
     ]);
-    await Promise.all(
-      (['claude', 'codex'] as const).map(async (harness) => {
-        try {
-          const result = await this.call<SmartRoutingCommandReport>([
-            'routing',
-            '--route-status',
-            '--harness',
-            harness,
-          ]);
-          if (result.exitCode === 0 && result.data?.kind === 'status') {
-            routing[harness] = {
-              state: result.data.state,
-              mode: result.data.mode,
-              gatewayState: result.data.gatewayState,
-              profileId: result.data.profileId,
-              launchCommand: result.data.launchCommand,
-              simpleModel: result.data.simpleModel,
-              availableModels: result.data.availableModels,
-              detail: result.data.detail,
-            };
-          }
-        } catch {
-          // Routing status is optional UI state; a failed observation never blocks the overview.
-        }
-      }),
-    );
     const agents = this.agentView(
       doctor,
       budget,
       context,
       { rules: true, allowance: true },
       guidance,
-      routing,
     );
     const notices: string[] = [];
     if (doctor.data === null)
@@ -1169,7 +1121,6 @@ export class GuideService {
     context: GuideRead<ContextReport>,
     complete: { rules: boolean; allowance: boolean },
     guidance?: Partial<Record<GuideHarness, GuideGuidance>>,
-    routing?: Partial<Record<GuideHarness, GuideRouting>>,
   ): GuideAgent[] {
     const present = (doctor.data?.harnesses ?? []).filter(
       (item) =>
@@ -1209,16 +1160,6 @@ export class GuideService {
         setup,
         effort: observed?.nativeEffort?.current ?? observed?.reasoningEffort ?? null,
         reasoning: reasoningView(agent.harnessId as GuideHarness, observed),
-        routing: routing?.[agent.harnessId as GuideHarness] ?? {
-          state: 'off',
-          mode: null,
-          gatewayState: 'unknown',
-          profileId: null,
-          launchCommand: null,
-          simpleModel: null,
-          availableModels: [],
-          detail: 'Smart Model Routing is not configured.',
-        },
         ...(guidance?.[agent.harnessId as GuideHarness]
           ? { guidance: guidance[agent.harnessId as GuideHarness] }
           : {}),
@@ -1263,8 +1204,6 @@ export class GuideService {
     const data = input as Record<string, unknown>;
     const action = String(data['action']);
     const candidateAction = action === 'candidate-setup' || action === 'candidate-remove';
-    const routingAction =
-      action === 'routing-setup' || action === 'routing-remove' || action === 'routing-metrics';
     const requestedHarnesses = data['harnesses'];
     const validHarnesses =
       Array.isArray(requestedHarnesses) &&
@@ -1276,17 +1215,7 @@ export class GuideService {
       new Set(requestedHarnesses).size === requestedHarnesses.length;
     if (
       Object.keys(data).some(
-        (key) =>
-          ![
-            'action',
-            'harness',
-            'harnesses',
-            'task',
-            'provider',
-            'candidate',
-            'routeMode',
-            'simpleModel',
-          ].includes(key),
+        (key) => !['action', 'harness', 'harnesses', 'task', 'provider', 'candidate'].includes(key),
       ) ||
       ![
         'setup',
@@ -1296,19 +1225,10 @@ export class GuideService {
         'remove',
         'candidate-setup',
         'candidate-remove',
-        'routing-setup',
-        'routing-remove',
-        'routing-metrics',
       ].includes(action) ||
       (data['harness'] !== undefined && !['claude', 'codex'].includes(String(data['harness']))) ||
       (data['harnesses'] !== undefined && !validHarnesses) ||
       (data['harnesses'] !== undefined && action !== 'setup') ||
-      (data['routeMode'] !== undefined &&
-        !['shadow', 'conservative'].includes(String(data['routeMode']))) ||
-      (data['simpleModel'] !== undefined &&
-        (typeof data['simpleModel'] !== 'string' ||
-          !/^[A-Za-z0-9_.:/@+ -]{1,160}$/.test(data['simpleModel']) ||
-          !String(data['simpleModel']).includes('/'))) ||
       (data['harnesses'] !== undefined && data['harness'] !== undefined) ||
       (data['task'] !== undefined && !TASKS.has(String(data['task']))) ||
       (data['provider'] !== undefined &&
@@ -1319,9 +1239,6 @@ export class GuideService {
         !['mcptoon', 'gitnexus'].includes(String(data['candidate']))) ||
       (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||
       (action === 'skill' && data['harness'] === undefined) ||
-      (routingAction && data['harness'] === undefined) ||
-      (action !== 'routing-setup' &&
-        (data['routeMode'] !== undefined || data['simpleModel'] !== undefined)) ||
       (action === 'remove' &&
         (data['provider'] === undefined ||
           data['harness'] !== undefined ||
@@ -1334,203 +1251,11 @@ export class GuideService {
           data['harness'] === undefined ||
           data['provider'] !== undefined ||
           data['task'] !== undefined)) ||
-      (!candidateAction && data['candidate'] !== undefined) ||
-      (routingAction &&
-        (data['provider'] !== undefined ||
-          data['candidate'] !== undefined ||
-          data['task'] !== undefined ||
-          data['harnesses'] !== undefined))
+      (!candidateAction && data['candidate'] !== undefined)
     )
       throw new GuideError(400, 'Choose a supported agent and action.');
     return this.exclusive(async () => {
       this.approval = null;
-      if (routingAction) {
-        const harness = String(data['harness']) as GuideHarness;
-        const mode: 'shadow' | 'conservative' =
-          data['routeMode'] === 'conservative' ? 'conservative' : 'shadow';
-
-        if (action === 'routing-metrics') {
-          this.record(
-            `Reading local Smart Model Routing decisions for ${name(harness)}. No configuration is changed.`,
-            'working',
-          );
-          const result = await this.call<SmartRoutingCommandReport>([
-            'routing',
-            '--route-metrics',
-            '--ccr-usage',
-            '--harness',
-            harness,
-            '--since',
-            '30d',
-          ]);
-          if (result.exitCode !== 0 || result.data?.kind !== 'metrics') {
-            const message = explainGuideIssue(
-              result.diagnostics,
-              `Routing activity for ${name(harness)} could not be read. No configuration changed.`,
-            );
-            this.record(message, 'attention');
-            return {
-              ticket: null,
-              title: 'Routing activity needs attention',
-              changes: [],
-              notices: [message],
-              expiresAt: null,
-              network: false,
-              restart: false,
-            };
-          }
-          const metrics = result.data.metrics;
-          const notices = [
-            `${String(metrics.retainedDecisionCount)} local routing decision${metrics.retainedDecisionCount === 1 ? '' : 's'} recorded in the last 30 days for ${name(harness)}.`,
-            `Shadow decisions: ${String(metrics.byMode.shadow)}. Conservative route requests: ${String(metrics.routeMutationRequestCount)}.`,
-            `Tiers: simple ${String(metrics.byTier.simple)}, standard ${String(metrics.byTier.standard)}, complex ${String(metrics.byTier.complex)}, critical ${String(metrics.byTier.critical)}.`,
-            'Routing telemetry stores classifier features and model identifiers, not prompt text. Subscription savings remain not measured until paired quality and allowance evidence exists.',
-          ];
-          this.record('Routing activity read successfully.', 'success');
-          return {
-            ticket: null,
-            title: `Smart Model Routing · ${name(harness)}`,
-            changes: [],
-            notices,
-            expiresAt: null,
-            network: false,
-            restart: false,
-          };
-        }
-
-        const removing = action === 'routing-remove';
-        this.record(
-          `${removing ? 'Reviewing removal of' : 'Reviewing'} Smart Model Routing for ${name(harness)}. Nothing has changed yet.`,
-          'working',
-        );
-        const simpleModel =
-          mode === 'conservative' && typeof data['simpleModel'] === 'string'
-            ? data['simpleModel']
-            : undefined;
-        const args = removing
-          ? ['routing', '--rollback-ccr', '--harness', harness]
-          : [
-              'routing',
-              '--configure-ccr',
-              '--harness',
-              harness,
-              '--route-mode',
-              mode,
-              ...(simpleModel ? ['--route-simple-model', simpleModel] : []),
-            ];
-        const result = await this.call<SmartRoutingCommandReport>(args);
-        const replacing =
-          !removing &&
-          result.diagnostics.some((entry) => entry.code === 'ccr-route-mode-requires-rollback');
-        if ((result.exitCode !== 0 || result.data === null) && !replacing) {
-          const message = explainGuideIssue(
-            result.diagnostics,
-            `No safe Smart Model Routing ${removing ? 'removal' : 'setup'} is available for ${name(harness)}. Nothing was changed.`,
-          );
-          this.record(message, 'attention');
-          return {
-            ticket: null,
-            title: 'No routing change to apply',
-            changes: [],
-            notices: [message],
-            expiresAt: null,
-            network: false,
-            restart: false,
-          };
-        }
-
-        const report = result.data;
-        const alreadyConfigured =
-          !removing &&
-          report?.kind === 'ccr-configuration' &&
-          report.state === 'already-configured';
-        const alreadyAbsent =
-          removing && report?.kind === 'ccr-configuration' && report.state === 'already-absent';
-        if (alreadyConfigured || alreadyAbsent) {
-          const message = alreadyConfigured
-            ? `${name(harness)} already has the Token Harness-owned ${mode} routing rule.`
-            : `${name(harness)} has no Token Harness-owned routing rule to remove.`;
-          this.record(message, 'success');
-          return {
-            ticket: null,
-            title: alreadyConfigured ? 'Routing already configured' : 'Routing already absent',
-            changes: [],
-            notices: [message],
-            expiresAt: null,
-            network: false,
-            restart: false,
-          };
-        }
-
-        const ticket = this.random();
-        const expires = this.now() + 10 * 60_000;
-        const lifecycle = report?.kind === 'ccr-lifecycle';
-        const network = Boolean(
-          lifecycle && report?.kind === 'ccr-lifecycle' && report.action !== 'start',
-        );
-        this.approval = {
-          id: ticket,
-          expires,
-          plans: [],
-          transactionId: null,
-          provider: null,
-          description: `Smart Model Routing ${removing ? 'removal' : mode}`,
-          operation: removing ? 'routing-rollback' : 'routing-configure',
-          network,
-          routingHarness: harness,
-          routingMode: mode,
-          ...(simpleModel ? { routingSimpleModel: simpleModel } : {}),
-          ...(replacing ? { routingReplace: true } : {}),
-        };
-        const change = replacing
-          ? {
-              title: `${name(harness)}: change Smart Model Routing to ${mode}`,
-              files: 0,
-              description:
-                'Replace only the Token Harness-owned routing rule/profile for this coding agent, preserving unrelated CCR settings and provider credentials.',
-            }
-          : report?.kind === 'ccr-lifecycle'
-            ? {
-                title: `${name(harness)}: prepare local CCR routing runtime`,
-                files: 0,
-                description:
-                  report.action === 'install'
-                    ? `Install the reviewed CCR ${report.version} CLI inside Token Harness protected local state, start its loopback gateway and verify it. No global CCR package, provider login or native harness endpoint is replaced.`
-                    : `Start or update the Token Harness-owned CCR ${report.version} runtime and verify its loopback gateway before any routing rule is configured.`,
-              }
-            : {
-                title: `${name(harness)}: ${removing ? 'remove' : 'configure'} Smart Model Routing`,
-                files: 0,
-                description: removing
-                  ? 'Remove only the Token Harness-owned CCR rule/profile for this coding agent. Provider credentials and unrelated CCR configuration are left untouched.'
-                  : mode === 'shadow'
-                    ? 'Install the Token Harness-owned CCR rule in shadow mode. Requests keep their current model; only local routing decisions are recorded.'
-                    : 'Install the conservative opt-in rule. Only high-confidence simple requests may request the already-configured simple model; complex, ambiguous, image and unsafe tool requests pass through unchanged.',
-              };
-        this.record('Smart Model Routing preview ready. Waiting for your approval.', 'success');
-        return {
-          ticket,
-          title: removing
-            ? `Remove Smart Model Routing for ${name(harness)}?`
-            : `Set up ${mode} Smart Model Routing for ${name(harness)}?`,
-          changes: [change],
-          notices: [
-            lifecycle && !removing
-              ? 'This approval prepares the Token Harness-owned CCR runtime and then completes the selected routing mode in the same flow.'
-              : replacing
-                ? 'This approval removes only the existing Token Harness-owned routing rule/profile and replaces it with the selected mode.'
-                : 'Token Harness owns only its exact CCR rule/profile and local managed runtime. Provider credentials remain in CCR and are never imported silently.',
-            mode === 'shadow' && !removing
-              ? 'Shadow mode is the default: it never changes the model selected for a request.'
-              : mode === 'conservative' && !removing
-                ? `Conservative routing will use ${simpleModel ?? 'no selected model'} for high-confidence simple requests.`
-                : 'Removing routing does not uninstall CCR or delete provider credentials.',
-          ],
-          expiresAt: new Date(expires).toISOString(),
-          network,
-          restart: false,
-        };
-      }
       if (candidateAction) {
         const candidate = String(data['candidate']) as 'mcptoon' | 'gitnexus';
         const harness = String(data['harness']) as GuideHarness;
@@ -2123,158 +1848,6 @@ export class GuideService {
                 : 'Approved versions already active',
           messages,
           appliedPlans: appliedCount,
-        };
-      }
-
-      if (approval.operation === 'routing-configure' || approval.operation === 'routing-rollback') {
-        if (approval.routingHarness === undefined || approval.routingMode === undefined)
-          throw new GuideError(
-            409,
-            'This Smart Model Routing preview is incomplete. Review it again.',
-          );
-        const harness = approval.routingHarness;
-        const mode = approval.routingMode;
-        const removing = approval.operation === 'routing-rollback';
-        this.record(
-          (removing ? 'Removing' : 'Applying') + ' Smart Model Routing for ' + name(harness) + '.',
-          'working',
-        );
-        let result: CliEnvelope<SmartRoutingCommandReport>;
-        const configureArgs = [
-          'routing',
-          '--configure-ccr',
-          '--harness',
-          harness,
-          '--route-mode',
-          mode,
-          ...(approval.routingSimpleModel
-            ? ['--route-simple-model', approval.routingSimpleModel]
-            : []),
-          '--yes',
-        ];
-        try {
-          if (!removing && approval.routingReplace) {
-            const removed = await this.call<SmartRoutingCommandReport>([
-              'routing',
-              '--rollback-ccr',
-              '--harness',
-              harness,
-              '--yes',
-            ]);
-            if (
-              removed.exitCode !== 0 ||
-              removed.data?.kind !== 'ccr-configuration' ||
-              !['rolled-back', 'already-absent'].includes(removed.data.state)
-            ) {
-              result = removed;
-            } else {
-              result = await this.call<SmartRoutingCommandReport>(configureArgs);
-            }
-          } else {
-            result = await this.call<SmartRoutingCommandReport>(
-              removing
-                ? ['routing', '--rollback-ccr', '--harness', harness, '--yes']
-                : configureArgs,
-            );
-          }
-          if (!removing && result.exitCode === 0 && result.data?.kind === 'ccr-lifecycle') {
-            result = await this.call<SmartRoutingCommandReport>(configureArgs);
-          }
-        } catch {
-          this.invalidateObservedState();
-          const message =
-            'The Smart Model Routing operation stopped before its final result could be read. No automatic retry was made. Review the local routing state before retrying.';
-          this.record(message, 'attention');
-          return {
-            ok: false,
-            title: 'Routing result needs checking',
-            messages: [message],
-            appliedPlans: 0,
-          };
-        }
-        if (result.exitCode !== 0 || result.data === null) {
-          const message = explainGuideIssue(
-            result.diagnostics,
-            'Smart Model Routing for ' +
-              name(harness) +
-              ' was not changed. The local CCR runtime, provider model selection or owned rule state no longer matches the preview.',
-          );
-          this.invalidateObservedState();
-          this.record(message, 'attention');
-          return {
-            ok: false,
-            title: 'Routing change was not applied',
-            messages: [message],
-            appliedPlans: 0,
-          };
-        }
-
-        const report = result.data;
-        this.lastApplied = null;
-        this.invalidateObservedState();
-        if (report.kind === 'ccr-lifecycle') {
-          const message =
-            'The Token Harness-owned CCR ' +
-            report.version +
-            ' runtime is ready and verified on loopback. No routing rule has been assumed from this runtime step. Open Manage routing again to review the exact shadow or conservative rule/profile.';
-          this.record('CCR routing runtime prepared and verified.', 'success');
-          return {
-            ok: true,
-            title: 'Routing runtime ready',
-            messages: [
-              message,
-              'Provider login/import remains an explicit CCR choice; Token Harness did not change Claude Code or Codex native endpoints.',
-            ],
-            appliedPlans: report.state === 'already-current' ? 0 : 1,
-          };
-        }
-        if (report.kind !== 'ccr-configuration') {
-          const message =
-            'The routing command returned an unexpected result shape after approval. No success is being reported; review the local CCR routing state before retrying.';
-          this.record(message, 'attention');
-          return {
-            ok: false,
-            title: 'Routing result needs checking',
-            messages: [message],
-            appliedPlans: 0,
-          };
-        }
-
-        const changed = report.state === 'configured' || report.state === 'rolled-back';
-        const messages = removing
-          ? [
-              report.state === 'already-absent'
-                ? name(harness) + ' already had no Token Harness-owned routing rule.'
-                : 'The Token Harness-owned Smart Model Routing rule/profile for ' +
-                  name(harness) +
-                  ' was removed. CCR and provider credentials were left in place.',
-            ]
-          : [
-              report.state === 'already-configured'
-                ? name(harness) + ' already has the Token Harness-owned ' + mode + ' routing rule.'
-                : name(harness) + ' Smart Model Routing is configured in ' + mode + ' mode.',
-              ...(mode === 'shadow'
-                ? [
-                    'Shadow mode records local routing decisions but does not change the request model.',
-                  ]
-                : [
-                    'Conservative mode may request the configured simple model only for high-confidence simple prompts; safety-gated requests pass through unchanged.',
-                  ]),
-              ...(report.launchCommand
-                ? ['Launch through the CCR profile to use the rule: ' + report.launchCommand]
-                : [
-                    'CCR still needs an unambiguous provider/model profile before a routed launch can be verified.',
-                  ]),
-            ];
-        this.record(
-          removing ? 'Smart Model Routing rule removed.' : 'Smart Model Routing configured.',
-          'success',
-        );
-        return {
-          ok: true,
-          title: removing ? 'Routing removed' : 'Smart Model Routing configured',
-          messages,
-          appliedPlans: changed ? 1 : 0,
         };
       }
 

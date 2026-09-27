@@ -61,21 +61,6 @@ describe('guided setup UX', () => {
     );
   });
 
-  it('integrates Smart Model Routing into coding-agent cards with simple controls', () => {
-    assert.doesNotMatch(GUIDE_HTML, /id="routing-overview"/);
-    assert.match(GUIDE_JS, /Smart Model Routing/);
-    assert.match(GUIDE_JS, /actionButton\('Enable'/);
-    assert.match(GUIDE_JS, /actionButton\('Configure'/);
-    assert.match(GUIDE_JS, /actionButton\('Disable'/);
-    assert.match(GUIDE_JS, /Shadow — observe only/);
-    assert.match(GUIDE_JS, /Conservative — route simple prompts/);
-    assert.match(GUIDE_JS, /Simple model/);
-    assert.match(GUIDE_JS, /View 30-day activity/);
-    assert.match(GUIDE_JS, /reviewRoutingAction\(harness, 'routing-setup'/);
-    assert.match(GUIDE_JS, /action === 'routing-metrics'/);
-    assert.doesNotThrow(() => new Script(GUIDE_JS));
-  });
-
   it('keeps advanced evaluation installation explicitly external and manual', () => {
     assert.match(GUIDE_JS, /Experimental, not managed/);
     assert.match(GUIDE_JS, /Token Harness will not execute them for you/);

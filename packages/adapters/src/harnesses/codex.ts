@@ -425,7 +425,7 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
       achievedTier: null,
       evidence: [],
       remediation: configured
-        ? 'Confirm in the Codex TUI that the hook is enabled and trusted'
+        ? 'Open Codex and manually enable and trust the hook; Token Harness cannot grant trust. Then run verify again.'
         : null,
     },
     {

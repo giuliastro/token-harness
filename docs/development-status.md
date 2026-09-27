@@ -1,5 +1,10 @@
 # Development status
 
+- 2026-09-27: **CCR routing withdrawn.** The managed router required a separate CLI profile instead
+  of the normal Codex/Claude launch path, and local configuration checks did not prove live request
+  routing. The CLI, guided UI, adapter, and CCR-specific benchmark telemetry have been removed.
+  Earlier routing entries below are historical and do not describe the current product.
+
 - 2026-09-26: **Token Harness 0.1.21 corrective release preparation.** Runtime merge `e6276e2` contains PR #351. Smart Model Routing now rebases owned CCR changes onto the latest configuration, exposes explicit Off/Shadow/Conservative/Needs-attention state on each coding-agent card, reduces the primary controls to Enable/Configure/Disable, supports Conservative model selection from configured CCR models, and completes managed CCR preparation plus routing configuration in one reviewed browser flow. Post-merge main CI run `36224889510` is fully green on Ubuntu, macOS and Windows, including Windows RTK and optional-provider live smokes. Routing decisions remain separate from measured savings.
 
 - 2026-09-25: **Token Harness 0.1.20 corrective release preparation.** Runtime merge `0f0654c` contains PR #349, which exposes Smart Model Routing in the guided browser UI and fixes RTK 0.44 → 0.50 direct-release updates when multiple RTK executables appear on PATH. Shadow routing remains the default; conservative routing is explicit opt-in; routing decisions are not counted as savings. The RTK updater targets the active PATH executable, leaves shadowed copies untouched, verifies the official digest/version and retains rollback. Release preparation must pass complete cross-platform gates before tagging.

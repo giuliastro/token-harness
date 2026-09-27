@@ -103,6 +103,12 @@ interface PlanTarget {
   configPath: string;
 }
 
+function hookActivationNote(target: PlanTarget): string {
+  return target.harness.id === 'codex'
+    ? '. After applying, manually enable and trust this hook in Codex; Token Harness writes hooks.json but cannot activate the hook or grant trust'
+    : '';
+}
+
 /**
  * Claude matchers are regular expressions. This mirrors the harness adapter's coverage rule so a
  * user-owned `Bash|PowerShell` entry is recognised as already covering both families rather than
@@ -262,7 +268,7 @@ function hookAction(target: PlanTarget, entry: JsonValue): MergeJsonAction {
       'every other entry in the list is unchanged',
     ],
     rollbackData: 'file-snapshot',
-    explanation: `Register RTK with separate savings tracking for ${target.harness.displayName} on ${target.scope.toolFamily} tools`,
+    explanation: `Register RTK with separate savings tracking for ${target.harness.displayName} on ${target.scope.toolFamily} tools${hookActivationNote(target)}`,
     path: target.configPath,
     // The pointer names the *list*, and the operation owns one element of it. What Token
     // Harness may later remove is that element, never the list.
@@ -300,7 +306,7 @@ function migrationAction(
     preconditions: [`${current.commandPointer} still contains the reviewed RTK command`],
     postconditions: [`${current.commandPointer} routes RTK through per-agent tracking`],
     rollbackData: 'file-snapshot',
-    explanation: `Enable separate ${target.harness.displayName} savings while preserving its existing RTK hook`,
+    explanation: `Enable separate ${target.harness.displayName} savings while preserving its existing RTK hook${hookActivationNote(target)}`,
     path: target.configPath,
     ownedPointers: [current.commandPointer],
     operations: [

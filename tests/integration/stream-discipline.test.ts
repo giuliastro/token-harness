@@ -64,7 +64,6 @@ const noisyCommands = {
   update: () => Promise.reject(new Error('unused')),
   status: () => Promise.reject(new Error('unused')),
   'stack-review': () => Promise.reject(new Error('unused')),
-  routing: () => Promise.reject(new Error('unused')),
 };
 
 describe('stream discipline', () => {
