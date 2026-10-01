@@ -57,6 +57,7 @@ import {
 } from '@token-harness/core';
 
 import type { ProviderContext, ProviderPlanRequest } from './contract.js';
+import { hookMatcherForFamily } from './hook-plan.js';
 
 /** The stable app command that can assign the native RTK hook to one agent. */
 export const RTK_HOOK_PROXY_COMMAND = 'token-harness __internal-rtk-hook';
@@ -99,6 +100,8 @@ interface PlanTarget {
   harness: HarnessManifest;
   /** The harness's own event name for the scope's interception point. */
   eventName: string;
+  /** The harness's exact matcher string for the tool family. */
+  matcher: string;
   /** Absolute path to the harness-declared command-hook configuration file. */
   configPath: string;
 }
@@ -174,6 +177,7 @@ export function planTargets(context: ProviderContext, request: ProviderPlanReque
       scope: owned.scope,
       harness,
       eventName: point.eventName,
+      matcher: hookMatcherForFamily(harness, owned.scope.toolFamily),
       configPath,
     });
   }
@@ -188,6 +192,7 @@ export function planTargets(context: ProviderContext, request: ProviderPlanReque
       targets.set(key, {
         ...target,
         scope: { ...target.scope, toolFamily: POWERSHELL },
+        matcher: hookMatcherForFamily(target.harness, POWERSHELL),
       });
     }
   }
@@ -217,7 +222,7 @@ function alreadyRegistered(
           entry.matcher !== null &&
           (allowRegexCoverage
             ? matcherCoversFamily(entry.matcher, target.scope.toolFamily)
-            : entry.matcher === target.scope.toolFamily) &&
+            : entry.matcher === target.matcher) &&
           isRtkAttributionCommand(entry.command, target.harness.id),
       ),
   );
@@ -490,16 +495,14 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
         .find(
           (entry) =>
             entry.eventName === target.eventName &&
-            entry.matcher === target.scope.toolFamily &&
+            entry.matcher === target.matcher &&
             isRtkAttributionCommand(entry.command, target.harness.id),
         );
       if (existing === undefined) continue;
       if (existing.command.endsWith(' --restore-rtk')) {
         actions.push(restoreNativeHookAction(target, existing));
       } else {
-        actions.push(
-          removalAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)),
-        );
+        actions.push(removalAction(target, hookEntryFor(target.harness.id, target.matcher)));
       }
     }
     // RTK itself is deliberately left installed. RFC 0004: Token Harness removes what it owns,
@@ -608,7 +611,7 @@ export function buildRtkPlan(input: RtkPlanInput): ProviderPlan {
       );
       continue;
     }
-    actions.push(hookAction(target, hookEntryFor(target.harness.id, target.scope.toolFamily)));
+    actions.push(hookAction(target, hookEntryFor(target.harness.id, target.matcher)));
   }
 
   return {

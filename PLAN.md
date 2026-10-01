@@ -2837,3 +2837,62 @@ Token Harness keeps native model/reasoning policy and does not install a bridge,
 provider-routing hook. A future request-level routing feature needs a new accepted RFC, a supported
 native interception mechanism, explicit endpoint ownership, and live request evidence before it
 can be considered for implementation.
+
+### Reassessment — prompt-only and native model routing (2026-09-30)
+
+A system prompt cannot change the model already selected for the root request. It can, however,
+drive native subagent routing: current ChatGPT/Codex docs explicitly allow requesting a model and
+reasoning effort in the prompt for a delegated agent; Codex then starts that subagent on the
+requested model. Claude Code accepts a model on the subagent invocation or in its `model`
+frontmatter. Claude Code also has native `opusplan`, which selects Opus during planning and Sonnet
+during execution. These are real prompt-guided/native subagent routes, not a way to re-route the
+already-running root request.
+
+This is a viable no-gateway direction for a future opt-in policy, with a strict cost guard: OpenAI
+warns that subagents consume more tokens than comparable single-agent runs. The prompt should
+delegate only independent, bounded work, request a cheaper supported model for those workers, and
+keep synthesis and judgment in the root session; the measured included-allowance and quality result
+must beat the extra context and agent overhead. Codex supports model defaults and custom agent
+files in `config.toml`/`.codex/agents/`; Claude Code supports aliases or full model IDs in subagent
+definitions. Neither instruction text nor a selected model name proves the executed model or a net
+saving.
+
+Model snapshot checked on 2026-09-30: ChatGPT/Codex documents GPT-6 Sol and Luna for Work/Codex;
+Codex CLI 0.159.1 adds GPT-6.1 Sol to its default catalog. The API catalog separately lists GPT-6
+Astra, GPT-6.1 Sol, and GPT-6 Luna, so API prices must not be treated as subscription allowance.
+Claude's current catalog lists Fable 5.1, Opus 5.5, Sonnet 5.5, and Haiku 4.5. On this machine the
+Codex CLI 0.159.0 passed an end-to-end canary; Claude Code 2.1.274 is installed but could not run a
+canary because authentication is unavailable. Current upstream releases are Codex CLI 0.159.1 and
+Claude Code 2.1.285. Runtime support stays pinned to the versions and platforms actually covered by
+fixtures and live receipts; neither the installed Claude version nor the newer upstream versions
+are declared canary-verified here.
+
+Keep the CCR withdrawal in force; it does not rule out native prompt-guided subagent selection.
+First evaluate an opt-in Token Harness policy that emits harness-native guidance and agent settings,
+with no external gateway. Do not route the root request by prompt. Require observed worker model
+identity, task quality, retries, and comparable included-allowance evidence before recommending or
+automating a route. Resolve model IDs from each harness's current native catalog; API prices do not
+stand in for subscription allowance.
+
+References: [ChatGPT and Codex models](https://learn.chatgpt.com/docs/models),
+[ChatGPT/Codex changelog](https://learn.chatgpt.com/docs/changelog),
+[ChatGPT/Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents),
+[OpenAI API model catalog](https://developers.openai.com/api/docs/models/all),
+[OpenAI Responses multi-agent](https://developers.openai.com/api/docs/guides/responses-multi-agent),
+[Claude model catalog](https://platform.claude.com/docs/en/models/overview),
+[Claude Code releases](https://github.com/anthropics/claude-code/releases),
+[Claude Code model configuration](https://code.claude.com/docs/en/model-config), and
+[Claude Code subagents](https://code.claude.com/docs/en/sub-agents).
+
+### Runtime reduction integrations — 2026-09-30
+
+Keep the older HarnessTrim skills-only account above as release history. The current implementation
+adds its native `PostToolUse` hook only for resolver-owned Bash scopes and passes an explicit
+project metrics path. RTK stays on `PreToolUse`; the two provider records remain separate.
+
+The ordered composition is admitted only for RTK 0.50.0, HarnessTrim 0.3.1, Claude Code 2.1.274
+or Codex 0.159.0, and native Linux. Other versions, Windows, macOS, and WSL remain fail-closed
+until they have their own fixture. Verification distinguishes configuration from observed activity:
+RTK reads per-harness command history, HarnessTrim reads telemetry carrying its harness id, and a
+missing event remains `not-exercised`. Codex hook enablement and trust remain under Codex's native
+control and must be confirmed there before a live receipt can be produced.

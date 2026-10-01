@@ -151,6 +151,14 @@ function trimEvent(harness: string, eventId: string, ts: string): string {
   });
 }
 
+function passThroughEvent(harness: string, eventId: string, ts: string): string {
+  return JSON.stringify({
+    ...JSON.parse(trimEvent(harness, eventId, ts)),
+    afterChars: 1200,
+    changed: false,
+  });
+}
+
 describe('harness-scoped passive verification', () => {
   it('does not treat a HarnessTrim skills-only setup as a configured runtime reducer', async () => {
     const provider = verification('harnesstrim', null);
@@ -205,6 +213,24 @@ describe('harness-scoped passive verification', () => {
     );
   });
 
+  it('does not call observed pass-throughs reductions or a canary', async () => {
+    const metrics = `${passThroughEvent('codex', 'codex-pass-through', '2026-09-12T11:00:00.000Z')}\n`;
+    const scoped = await scopeProviderVerificationToHarness(
+      context({ [METRICS]: metrics }),
+      verification('harnesstrim', receipt()),
+      CODEX,
+      [CODEX],
+    );
+
+    assert.equal(scoped.receipt?.operations, 0);
+    assert.equal(scoped.receipt?.attempts, 1);
+    const canary = scoped.checks.find((check) => check.id === 'canary-intercepted');
+    assert.equal(canary?.status, 'info');
+    assert.equal(canary?.achievedTier, null);
+    assert.match(canary?.summary ?? '', /observed 1 codex outputs, but none was reduced/);
+    assert.notEqual(scoped.achievedTier, 'canary');
+  });
+
   it('does not let a Codex HarnessTrim receipt satisfy OpenCode', async () => {
     const metrics = `${trimEvent('codex', 'codex-only', '2026-09-12T11:00:00.000Z')}\n`;
     const scoped = await scopeProviderVerificationToHarness(
@@ -236,6 +262,61 @@ describe('harness-scoped passive verification', () => {
       assert.equal(canary?.achievedTier, null);
       assert.match(canary?.summary ?? '', /cannot attribute that receipt/);
     }
+  });
+
+  it('keeps RTK command counts on the matching harness verification row', async () => {
+    const provider = verification('rtk', {
+      ...receipt(),
+      source: 'RTK per-agent history (codex)',
+      harnessId: CODEX,
+    });
+    provider.checks.push(
+      {
+        id: 'rtk-attribution-claude',
+        status: 'not-exercised',
+        summary: 'no Claude commands yet',
+        achievedTier: null,
+        evidence: [],
+        remediation: null,
+      },
+      {
+        id: 'rtk-attribution-codex',
+        status: 'pass',
+        summary: '42 RTK commands recorded for Codex CLI',
+        achievedTier: 'canary',
+        evidence: [],
+        remediation: null,
+      },
+      {
+        id: 'receipt-freshness-codex',
+        status: 'info',
+        summary: 'Codex receipt is recent',
+        achievedTier: null,
+        evidence: [],
+        remediation: null,
+      },
+    );
+
+    const claude = await scopeProviderVerificationToHarness(context(), provider, CLAUDE, [
+      CLAUDE,
+      CODEX,
+    ]);
+    const codex = await scopeProviderVerificationToHarness(context(), provider, CODEX, [
+      CLAUDE,
+      CODEX,
+    ]);
+
+    assert.equal(
+      claude.checks.some((check) => check.id === 'rtk-attribution-codex'),
+      false,
+    );
+    assert.equal(claude.receipt, null);
+    assert.equal(
+      codex.checks.some((check) => check.id === 'rtk-attribution-claude'),
+      false,
+    );
+    assert.equal(codex.receipt?.harnessId, CODEX);
+    assert.equal(codex.receipt?.operations, 42);
   });
 
   it('can attribute provider-wide evidence by exclusion when exactly one harness is wired', async () => {

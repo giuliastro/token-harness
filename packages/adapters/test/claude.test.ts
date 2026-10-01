@@ -94,7 +94,7 @@ function context(options: {
     fs: memoryFileSystem(options.files ?? {}),
     runner:
       options.runner ??
-      versionRunner(options.version === undefined ? '2.1.212 (Claude Code)' : options.version),
+      versionRunner(options.version === undefined ? '2.1.274 (Claude Code)' : options.version),
     facts: options.facts ?? LINUX,
     paths: {
       home: HOME,
@@ -132,7 +132,7 @@ describe('detection', () => {
   it('reports detected when the executable runs but nothing is configured', async () => {
     const detection = await claudeAdapter.detect(context({}));
     assert.equal(detection.state, 'detected');
-    assert.equal(detection.version, '2.1.212');
+    assert.equal(detection.version, '2.1.274');
     assert.equal(detection.versionVerdict, 'in-range');
     assert.equal(detection.declaredVerificationTier, 'canary');
   });

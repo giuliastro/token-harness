@@ -55,8 +55,8 @@ const CLAUDE = harnessId('claude');
 
 /**
  * The tested range is a claim about the *configuration schema*, not about a test suite.
- * `2.1.212` is the version whose `settings.json` the Phase 2.5 spike actually read and
- * whose hook shape this adapter is written against. Anything newer gets RFC 0002's
+ * `2.1.274` is the version whose `settings.json` and hook execution contract were observed
+ * for the current Linux integration. Anything newer gets RFC 0002's
  * unknown-newer warning and conservative behaviour, which is the correct answer for a
  * schema nobody has looked at.
  */
@@ -65,7 +65,7 @@ const MANIFEST: HarnessManifest = {
   id: CLAUDE,
   displayName: 'Claude Code',
   homepage: 'https://claude.com/claude-code',
-  testedVersions: { minimum: '2.0.0', maximum: '2.1.212' },
+  testedVersions: { minimum: '2.1.274', maximum: '2.1.274' },
   // RFC 0007 §Per-harness findings: tier 3 was reached on this harness, passively,
   // through the provider's receipt. The adapter alone reaches `config-only`.
   verificationTier: 'canary',
@@ -89,6 +89,7 @@ const MANIFEST: HarnessManifest = {
   toolFamilies: [
     {
       id: 'Bash',
+      matcher: 'Bash',
       platforms: ['windows', 'macos', 'linux'],
       executesShellCommands: true,
     },
@@ -96,6 +97,7 @@ const MANIFEST: HarnessManifest = {
       // Observed in a Windows session: the harness offers a separate PowerShell tool,
       // and a hook matching `Bash` did not see commands routed through it.
       id: 'PowerShell',
+      matcher: 'PowerShell',
       platforms: ['windows'],
       executesShellCommands: true,
     },

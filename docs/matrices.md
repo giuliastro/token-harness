@@ -14,11 +14,11 @@ version outside it is reported as such and treated conservatively rather than re
 
 | Provider | Harness | Tested harness versions | Capabilities claimed |
 | --- | --- | --- | --- |
-| rtk | claude | 2.0.0–2.1.251 | `shell.command.rewrite`, `shell.output.reduce` |
-| rtk | codex | 0.146.0–0.146.0 | `shell.command.rewrite`, `shell.output.reduce` |
+| rtk | claude | 2.1.274–2.1.274 | `shell.command.rewrite`, `shell.output.reduce` |
+| rtk | codex | 0.159.0–0.159.0 | `shell.command.rewrite`, `shell.output.reduce` |
 | rtk | opencode | 1.18.11–1.18.14 | `shell.command.rewrite`, `shell.output.reduce` |
-| harnesstrim | claude | 2.0.0–2.1.212 | `shell.output.reduce` |
-| harnesstrim | codex | 0.146.0–0.146.0 | `shell.output.reduce` |
+| harnesstrim | claude | 2.1.274–2.1.274 | `shell.output.reduce` |
+| harnesstrim | codex | 0.159.0–0.159.0 | `shell.output.reduce` |
 | harnesstrim | opencode | 1.18.9–1.18.9 | `tool.output.reduce` |
 | mcptoon | claude | 2.1.269–2.1.269 | none claimed |
 | mcptoon | codex | 0.152.1–0.153.0 | none claimed |
@@ -31,8 +31,8 @@ version outside it is reported as such and treated conservatively rather than re
 
 | Harness | Tested versions | Declared tier | Tool families | Receipt family | Needs enablement |
 | --- | --- | --- | --- | --- | --- |
-| claude | 2.0.0–2.1.212 | canary | `Bash`, `PowerShell` | provider-telemetry | no |
-| codex | 0.146.0–0.146.0 | config-only | `Bash` | harness-event-stream | yes |
+| claude | 2.1.274–2.1.274 | canary | `Bash`, `PowerShell` | provider-telemetry | no |
+| codex | 0.159.0–0.159.0 | config-only | `Bash` | harness-event-stream | yes |
 | hermes | 0.19.0–0.19.0 | config-only | `tool.result` | provider-telemetry | yes |
 | opencode | 1.18.9–1.18.14 | config-only | `tool.execute` | none | no |
 | pi | 0.83.0–0.83.0 | config-only | `tool.result` | none | no |
@@ -48,8 +48,8 @@ correct and that nothing available can show it ran.
 | rtk | claude | canary | canary | at the harness ceiling |
 | rtk | codex | canary | config-only | below the harness ceiling — see Known limitations |
 | rtk | opencode | config-only | config-only | at the harness ceiling |
-| harnesstrim | claude | config-only | canary | below the harness ceiling — see Known limitations |
-| harnesstrim | codex | config-only | config-only | at the harness ceiling |
+| harnesstrim | claude | canary | canary | at the harness ceiling |
+| harnesstrim | codex | canary | config-only | below the harness ceiling — see Known limitations |
 | harnesstrim | opencode | config-only | config-only | at the harness ceiling |
 | mcptoon | claude | config-only | canary | below the harness ceiling — see Known limitations |
 | mcptoon | codex | config-only | config-only | at the harness ceiling |

@@ -47,12 +47,14 @@ import {
 } from '../domain/capabilities.js';
 import {
   findCompatibilityRule,
+  staleRecordedHarnessVersions,
   staleRecordedVersions,
   type CompatibilityRule,
 } from '../domain/compatibility.js';
 import { digestText } from '../domain/digest.js';
 import type { HarnessId, ProviderId } from '../domain/ids.js';
 import type { HarnessManifest } from '../domain/manifest.js';
+import type { OperatingSystem } from '../domain/platform.js';
 import type { HardConflict, ProfileId } from '../domain/plan.js';
 
 /** A provider as the resolver sees it. */
@@ -100,6 +102,10 @@ export interface ResolveInput {
    * version could not be established — which is a valid input and is not treated as coverage.
    */
   observedVersions: Readonly<Record<string, string | null>>;
+  /** Exact harness versions, by id, for compatibility-rule evidence. */
+  observedHarnessVersions?: Readonly<Record<string, string | null>>;
+  /** The local OS and WSL state, required by any platform-scoped composition rule. */
+  platform?: { os: OperatingSystem; wsl: boolean };
   /**
    * Required when `profile` is `custom`; ignored otherwise. RFC 0003: "`custom` is explicit
    * assignment."
@@ -369,7 +375,82 @@ function narrowChannelOverlaps(context: {
     const first = group[0];
     if (first === undefined) continue;
     const { harness, toolFamily, capability } = first.scope;
-    const rule = findCompatibilityRule(input.rules, { providers: owners, harness, capability });
+    const found = findCompatibilityRule(input.rules, {
+      providers: owners,
+      harness,
+      capability,
+      ...(input.platform === undefined ? {} : { platform: input.platform }),
+      observedVersions: input.observedVersions,
+      ...(input.observedHarnessVersions === undefined
+        ? {}
+        : { observedHarnessVersions: input.observedHarnessVersions }),
+    });
+    const staleProviders =
+      found === null ? [] : staleRecordedVersions(found, input.observedVersions);
+    const staleHarnesses =
+      found === null
+        ? []
+        : staleRecordedHarnessVersions(found, input.observedHarnessVersions ?? {});
+    const stale = [...staleProviders, ...staleHarnesses];
+    const rule = stale.length > 0 ? null : found;
+
+    if (found !== null && stale.length > 0) {
+      conflicts.push({
+        code: 'compatibility-rule-stale',
+        scope: `${harness}/${toolFamily}/${capability}`,
+        claimants: [...owners].sort(),
+        detail: [
+          `${owners.join(' and ')} both use ${capability} on ${harness}/${toolFamily} at different interception points`,
+          `Rule ${found.id} was tested at ${[
+            ...staleProviders.map((entry) => `${entry.provider} ${entry.recorded}`),
+            ...staleHarnesses.map((entry) => `${entry.harness} ${entry.recorded}`),
+          ].join(', ')}`,
+          `Installed now: ${[
+            ...staleProviders.map((entry) => `${entry.provider} ${entry.observed ?? 'unknown'}`),
+            ...staleHarnesses.map((entry) => `${entry.harness} ${entry.observed ?? 'unknown'}`),
+          ].join(', ')}`,
+          'The compatibility rule does not authorize this provider tuple',
+        ],
+        remediation: `Re-test ${found.id} against the installed versions and platform, or assign one owner to ${harness}/${toolFamily}/${capability}`,
+      });
+      for (const entry of group) dropped.add(entry);
+      continue;
+    }
+
+    if (rule?.outcome === 'ordered') {
+      const conflictsBeforeOrdering = conflicts.length;
+      const order = rule.order;
+      if (order === undefined || order.length !== owners.length) {
+        conflicts.push({
+          code: 'compatibility-rule-malformed',
+          scope: `${harness}/${toolFamily}/${capability}`,
+          claimants: [...owners].sort(),
+          detail: [`Rule ${rule.id} does not order every owner in this channel`],
+          remediation: `Fix rule ${rule.id} so its order lists every provider on the channel`,
+        });
+        for (const entry of group) dropped.add(entry);
+        continue;
+      }
+      for (const entry of group) {
+        const index = order.indexOf(entry.owner);
+        if (index < 0) {
+          conflicts.push({
+            code: 'compatibility-rule-malformed',
+            scope: `${harness}/${toolFamily}/${capability}`,
+            claimants: [...owners].sort(),
+            detail: [`Rule ${rule.id} does not include ${entry.owner}`],
+            remediation: `Fix rule ${rule.id} so its order lists every provider on the channel`,
+          });
+          break;
+        }
+        entry.mode = 'chainable';
+        entry.order = index;
+      }
+      if (conflicts.length > conflictsBeforeOrdering) {
+        for (const entry of group) dropped.add(entry);
+      }
+      continue;
+    }
 
     if (rule === null || rule.outcome !== 'narrowed' || rule.retains === undefined) {
       conflicts.push({
@@ -439,6 +520,11 @@ function resolveContested(context: ContestedInput): void {
     providers: claimants,
     harness: scope.harness,
     capability,
+    ...(input.platform === undefined ? {} : { platform: input.platform }),
+    observedVersions: input.observedVersions,
+    ...(input.observedHarnessVersions === undefined
+      ? {}
+      : { observedHarnessVersions: input.observedHarnessVersions }),
   });
 
   /**

@@ -18,12 +18,12 @@
  * wrote, and an active one costs a model call. This command runs the passive form only. Nothing
  * here spends tokens, and nothing here writes.
  *
- * ## Only a failure is a problem
+ * ## Unobserved is not the same as verified
  *
- * RFC 0006 §Tier-aware verification status: "only `fail` contributes to the problems-found exit
- * code. `info` never does, and a correctly functioning `config-only` installation is a `pass`."
- * `not-exercised` is also not a failure — RFC 0007 added it precisely so "nothing has happened
- * yet" stops being reported as "something is broken".
+ * A check-level `fail` or a provider row below its declared tier is actionable. `info`,
+ * `not-exercised`, and `not-applicable` are not failures — RFC 0007 added them precisely so
+ * "nothing has happened yet" stops being reported as "something is broken". The report still
+ * distinguishes an unproven integration from one that has reached its declared tier.
  */
 
 import {
@@ -45,6 +45,12 @@ import {
 } from '@token-harness/core';
 
 import type { CommandContext } from './context.js';
+import {
+  allResultsAtDeclaredTier,
+  harnessesForVerification,
+  statusFor,
+  verificationHasProblems,
+} from './verify-status.js';
 
 export async function runVerify(context: CommandContext): Promise<CommandResult<VerifyReport>> {
   const diagnostics: Diagnostic[] = [];
@@ -80,7 +86,7 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
    * recognises itself in.
    */
   const harnessConfigs: HarnessConfigSummary[] = [];
-  const presentHarnesses: string[] = [];
+  const presentHarnesses: VerificationResult['harnessId'][] = [];
   for (const adapter of listHarnessAdapters()) {
     if (context.harness !== null && adapter.manifest.id !== context.harness) continue;
     const detection = await adapter.detect(detectionContext);
@@ -151,12 +157,11 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
      * harness, per version, and per tool family". A single row for a provider on three harnesses
      * would report one tier for three different situations.
      */
-    const harnesses =
-      detection.configuredHarnesses.length > 0
-        ? detection.configuredHarnesses
-        : // Installed but wired to nothing: still worth a row, on every present harness, because
-          // "installed and not connected here" is the finding.
-          presentHarnesses;
+    const harnesses = harnessesForVerification(
+      context.harness as VerificationResult['harnessId'] | null,
+      detection.configuredHarnesses,
+      presentHarnesses,
+    );
 
     for (const harnessId of harnesses) {
       /**
@@ -180,7 +185,7 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
       results.push({
         providerId: adapter.manifest.id,
         harnessId: harnessId as VerificationResult['harnessId'],
-        status: statusFor(scopedVerification.achievedTier, declaredTier),
+        status: statusFor(scopedVerification.achievedTier, declaredTier, scopedVerification.checks),
         declaredTier,
         managedByTokenHarness: managedIntegrations.has(`${adapter.manifest.id}\0${harnessId}`),
         providerManagedByTokenHarness: detection.managedByTokenHarness,
@@ -199,20 +204,21 @@ export async function runVerify(context: CommandContext): Promise<CommandResult<
   const latest = receipts[0] ?? null;
 
   const failures = results.flatMap((result) => result.checks.filter(contributesToProblems));
+  const hasProblems = verificationHasProblems(results, failures.length);
 
   const report: VerifyReport = {
     receiptId: latest?.receiptId ?? null,
     appliedAt: latest?.appliedAt ?? null,
     results,
-    healthyAtDeclaredTier: failures.length === 0,
+    healthyAtDeclaredTier: allResultsAtDeclaredTier(results),
   };
 
   // RFC 0006 §Exit codes: 3 means, among other things, "a verification result below its declared
-  // tier". Reserved for a `fail` — an `info` or a `not-exercised` never reaches it, which is what
-  // keeps the exit code worth reading.
+  // tier". A passive canary without a receipt is `not-applicable`, so it remains visible without
+  // making an otherwise idle installation look broken.
   return commandResult<VerifyReport>({
     command: 'verify',
-    exitCode: failures.length === 0 ? EXIT_CODES.ok : EXIT_CODES['problems-found'],
+    exitCode: hasProblems ? EXIT_CODES['problems-found'] : EXIT_CODES.ok,
     data: report,
     diagnostics,
   });
@@ -270,14 +276,3 @@ async function readReceipts(
  * `not-exercised` situation at the level of the whole result, and calling it a failure would
  * report an unused installation as a broken one.
  */
-function statusFor(
-  achieved: VerificationResult['declaredTier'] | null,
-  declared: VerificationResult['declaredTier'],
-): VerificationResult['status'] {
-  const order = ['presence', 'config-only', 'canary', 'live-receipt'];
-  if (achieved === null) return 'not-applicable';
-  const reached = order.indexOf(achieved);
-  const promised = order.indexOf(declared);
-  if (reached < 0 || promised < 0) return 'not-applicable';
-  return reached >= promised ? 'healthy' : 'degraded';
-}

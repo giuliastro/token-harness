@@ -1,0 +1,33 @@
+{
+  "providerVersions": {
+    "rtk": "0.50.0",
+    "harnesstrim": "0.3.1"
+  },
+  "harnessVersions": {
+    "claude": "2.1.274",
+    "codex": "0.159.0"
+  },
+  "platform": {
+    "os": "linux",
+    "wsl": false
+  },
+  "surfaces": [
+    {
+      "provider": "rtk",
+      "scope": "pre-tool-use",
+      "event": "PreToolUse",
+      "matcher": "Bash"
+    },
+    {
+      "provider": "harnesstrim",
+      "scope": "post-tool-use",
+      "event": "PostToolUse",
+      "matcherClaude": "Bash",
+      "matcherCodex": "^Bash$",
+      "metricsArgument": "--metrics .harnesstrim/metrics.jsonl"
+    }
+  ],
+  "order": ["rtk", "harnesstrim"],
+  "telemetry": "separate-per-provider-and-harness",
+  "liveHarnessCanary": "required-before-claiming-runtime-active"
+}

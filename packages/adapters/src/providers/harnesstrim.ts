@@ -1,10 +1,10 @@
 /**
  * HarnessTrim — PLAN §11 and RFC 0005 §Importers §HarnessTrim.
  *
- * HarnessTrim 0.0.7 can install Claude skills without either the Bash hook or the
- * reduce-pipe instruction. That is a non-intercepting integration, so it composes with RTK:
- * the resolver retains RTK as sole owner of `shell.output.reduce`, while this adapter delegates
- * only `harnesstrim install claude --apply --no-hook --no-instructions`.
+ * HarnessTrim's native Claude and Codex hooks run after the shell tool returns, while RTK runs
+ * before execution. The resolver admits that composition only for the reviewed ordered rule.
+ * Skills are delegated separately; the hook entry is written as a reversible JSON merge so its
+ * telemetry path is explicit and survives upstream installer defaults.
  */
 
 import {
@@ -17,6 +17,7 @@ import {
   digestText,
   evidence,
   harnessId,
+  jsonValueDigest,
   providerId,
   parseSemanticVersion,
   type CapabilitySurface,
@@ -24,10 +25,11 @@ import {
   type Evidence,
   type HarnessId,
   type ImportCursor,
+  type MergeJsonAction,
   type MetricsStore,
   type OptimizationEvent,
+  type PlannedAction,
   type ProviderDetection,
-  type DelegatedProviderInstallAction,
   type ProviderManifest,
   type ProviderPlan,
   type ProviderState,
@@ -42,6 +44,7 @@ import type {
   ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
+import { appendCommandHookAction, commandHookTarget } from './hook-plan.js';
 
 const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
@@ -55,7 +58,7 @@ const PI = harnessId('pi');
  * One constant for both, because it is one release and one set of files: the Codex install writes
  * the same seven artifacts with the same digests into a different directory.
  */
-const SKILLS_UPSTREAM = '0.0.7';
+const SKILLS_UPSTREAM = '0.3.1';
 const RUNTIME_SKILL_DIGESTS_MINIMUM = '0.2.0';
 
 const SKILL_ARTIFACT_DIGESTS: Readonly<Record<string, string>> = {
@@ -184,13 +187,13 @@ const MANIFEST: ProviderManifest = {
   harnesses: [
     {
       harness: CLAUDE,
-      testedVersions: { minimum: '2.0.0', maximum: '2.1.212' },
-      verificationTier: 'config-only',
+      testedVersions: { minimum: '2.1.274', maximum: '2.1.274' },
+      verificationTier: 'canary',
     },
     {
       harness: CODEX,
-      testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
-      verificationTier: 'config-only',
+      testedVersions: { minimum: '0.159.0', maximum: '0.159.0' },
+      verificationTier: 'canary',
     },
     {
       harness: OPENCODE,
@@ -232,11 +235,9 @@ const MANIFEST: ProviderManifest = {
   /**
    * One review per harness — PLAN §15 item 46b.
    *
-   * Codex was observed at `0.1.0`: `harnesstrim install codex <dir> --apply --no-instructions`
-   * writes the same seven skill artifacts as the Claude invocation, byte for byte — the digests
-   * below are shared because the files are the same files — under `.codex/skills/` instead, and
-   * skips `AGENTS.md` exactly as the Claude one skips `CLAUDE.md`. What differs is the boundary and
-   * the protected paths, which is precisely why one review could not describe both.
+   * HarnessTrim 0.3.1 declares the same seven skill artifacts on Claude and Codex, byte for byte.
+   * The delegated invocation omits runtime hooks and instructions; Token Harness adds the
+   * versioned PostToolUse hook through the harness adapter and owns that exact JSON entry.
    *
    * OpenCode is absent on purpose. Its installer writes `.opencode/plugin/harnesstrim.ts` and
    * `.opencode/package.json` *and runs an npm install*, so the containment boundary would hold a
@@ -295,7 +296,7 @@ const SKILLS_INSTALL: Readonly<
  * under npm 11 publish-time normalization. The compatibility matrix is intentionally unchanged:
  * recognising this provider build must not admit a new harness/provider/platform mutation.
  */
-const TESTED_UPSTREAM = '0.2.1';
+const TESTED_UPSTREAM = '0.3.1';
 const TESTED_VERSIONS = { minimum: '0.0.5', maximum: TESTED_UPSTREAM };
 
 /**
@@ -1233,30 +1234,45 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     if (stat === null || stat.byteLength === 0) continue;
     const text = new TextDecoder().decode(await context.fs.readFile(path));
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    const last = lines.at(-1);
-    const parsed = last === undefined ? null : parseTrimEvent(last);
-    if (parsed === null) continue;
-    receipt = { observedAt: parsed.ts, operations: lines.length, source: path };
+    const parsed = lines
+      .map(parseTrimEvent)
+      .filter((event): event is TrimEvent => event !== null)
+      .filter((event) => event.harness === 'codex' || event.harness === 'claude');
+    const latest = parsed.at(-1);
+    if (latest === undefined) continue;
+    const reductions = parsed.filter(
+      (event) =>
+        !event.reductionFailed && event.afterChars < event.beforeChars && event.changed !== false,
+    );
+    receipt = {
+      observedAt: latest.ts,
+      operations: reductions.length,
+      attempts: parsed.length,
+      source: path,
+    };
     break;
   }
 
   checks.push({
     id: 'canary-intercepted',
-    status: receipt === null ? 'not-exercised' : 'pass',
+    status: receipt === null ? 'not-exercised' : receipt.operations === 0 ? 'info' : 'pass',
     summary:
       receipt === null
         ? 'no telemetry file yet, so nothing has been observed'
-        : `${String(receipt.operations)} reductions recorded, most recently ${receipt.observedAt}`,
-    // A recorded reduction is the provider witnessing its own interception, which is what `canary`
-    // means in RFC 0007's tier table.
-    achievedTier: receipt === null ? null : 'canary',
+        : receipt.operations === 0
+          ? `HarnessTrim observed ${String(receipt.attempts ?? 0)} Claude/Codex outputs, but none was reduced; latest attempt ${receipt.observedAt}`
+          : `${String(receipt.operations)} applied reductions recorded from ${String(receipt.attempts ?? receipt.operations)} Claude/Codex outputs, most recently ${receipt.observedAt}`,
+    // Configured hooks and pass-through receipts do not prove that HarnessTrim shortened output.
+    achievedTier: receipt === null || receipt.operations === 0 ? null : 'canary',
     evidence: [],
     remediation:
-      receipt !== null
+      receipt !== null && receipt.operations > 0
         ? null
-        : runtimeConfigured.length > 0
-          ? 'Enable telemetry on the runtime integration, then use it on an output it can reduce.'
-          : 'A skills-only setup does not write reduction telemetry. Configure a compatible measurement path before expecting agent-attributed results.',
+        : receipt !== null
+          ? 'Run a canary that produces output the installed HarnessTrim reducer can shorten, then verify again.'
+          : runtimeConfigured.length > 0
+            ? 'Enable telemetry on the runtime integration, then use it on an output it can reduce.'
+            : 'A skills-only setup does not write reduction telemetry. Configure a compatible measurement path before expecting agent-attributed results.',
   });
 
   // RFC 0003 §The instruction-level path: guidance in AGENTS.md is a second shell-reduction path
@@ -1542,9 +1558,8 @@ async function collectMetrics(
 }
 
 /**
- * Safe HarnessTrim onboarding is deliberately outside payload ownership: version 0.0.7 can copy
- * Claude skills while skipping both output-reduction paths. The reviewed files are exact, and the
- * executor rejects any hook or instruction change before restoring its snapshot.
+ * The delegated upstream install is skills-only. Token Harness separately writes a reviewed,
+ * reversible hook entry from the harness manifest so the telemetry path is explicit.
  */
 /** The exact skill artifacts this installed HarnessTrim build says it will write. */
 function skillArtifacts(
@@ -1722,7 +1737,8 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     };
   }
 
-  const actions: DelegatedProviderInstallAction[] = [];
+  const actions: PlannedAction[] = [];
+  const diagnostics: Diagnostic[] = [];
   const plannedHarnesses: HarnessId[] = [];
 
   for (const harness of targets) {
@@ -1779,12 +1795,174 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     plannedHarnesses.push(harnessId(harness));
   }
 
+  // Add HarnessTrim's post-tool hook only on scopes the resolver assigned to it. The harness
+  // manifest supplies the event, matcher and config path; the provider supplies its command.
+  // Existing user hooks are adopted only when they already record to this project's file. A
+  // custom or differently routed HarnessTrim hook is left intact and reported for review.
+  for (const owned of request.ownership) {
+    if (
+      owned.owner !== HARNESSTRIM ||
+      owned.scope.capability !== 'shell.output.reduce' ||
+      owned.scope.interceptionPoint !== 'post-tool-use' ||
+      (owned.scope.harness !== CLAUDE && owned.scope.harness !== CODEX)
+    ) {
+      continue;
+    }
+    const harness = request.harnesses.find((entry) => entry.id === owned.scope.harness);
+    if (harness === undefined) continue;
+    const target = commandHookTarget(
+      context,
+      harness,
+      owned.scope.interceptionPoint,
+      owned.scope.toolFamily,
+    );
+    if (target === null) continue;
+
+    const metricsPath = '.harnesstrim/metrics.jsonl';
+    const command = `harnesstrim hook ${harness.id} --metrics ${metricsPath}`;
+    const existing = context.harnessConfigs
+      .filter(
+        (config) =>
+          config.harnessId === harness.id &&
+          config.configPath === target.configPath &&
+          config.interceptionPoints.includes(target.scopeId),
+      )
+      .flatMap((config) => config.hookCommands ?? [])
+      .filter(
+        (entry) =>
+          entry.eventName === target.eventName &&
+          entry.matcher !== null &&
+          matcherCoversFamily(entry.matcher, target.toolFamily) &&
+          isHarnessTrimHookFor(entry.command, harness.id),
+      );
+    const correctlyMonitored = existing.some((entry) =>
+      commandHasMetricsPath(entry.command, metricsPath),
+    );
+    if (correctlyMonitored) {
+      plannedHarnesses.push(harness.id);
+      continue;
+    }
+
+    const upgradable = existing.find((entry) => !hasMetricsArgument(entry.command));
+    if (upgradable !== undefined) {
+      const upgraded = `${upgradable.command.trim()} --metrics ${metricsPath}`;
+      actions.push(
+        replaceHookCommandAction({
+          target,
+          commandPointer: upgradable.commandPointer,
+          currentCommand: upgradable.command,
+          nextCommand: upgraded,
+          actionId: `harnesstrim-${harness.id}-metrics-${digestText(target.configPath).slice(7, 15)}`,
+        }),
+      );
+      plannedHarnesses.push(harness.id);
+      continue;
+    }
+
+    if (existing.length > 0) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'harnesstrim-metrics-path-needs-review',
+          subject: harness.id,
+          message: `An existing HarnessTrim hook on ${harness.displayName} uses a different telemetry path or custom command and was left unchanged`,
+          path: target.configPath,
+          remediation: `Set its --metrics path to ${metricsPath}, or review the command before changing it`,
+        }),
+      );
+      continue;
+    }
+
+    const actionId = `harnesstrim-${harness.id}-hook-${digestText(target.configPath).slice(7, 15)}`;
+    actions.push(
+      appendCommandHookAction({
+        target,
+        providerId: HARNESSTRIM,
+        actionId,
+        command,
+        explanation: `Register HarnessTrim after ${harness.displayName} Bash commands and record reductions in ${metricsPath}${codexActivationNote(harness.id)}`,
+      }),
+    );
+    plannedHarnesses.push(harness.id);
+  }
+
   return {
     providerId: HARNESSTRIM,
     desiredState: 'configured',
     actions,
-    targetHarnesses: plannedHarnesses,
+    diagnostics,
+    targetHarnesses: [...new Set(plannedHarnesses)],
   };
+}
+
+const HARNESSTRIM_HOOK_COMMAND =
+  /^(?:"?[^"\n]*[\\/]?harnesstrim(?:\.cmd|\.exe)?"?|harnesstrim(?:\.cmd|\.exe)?)\s+hook\s+(claude|codex)(?:\s+(.*))?$/i;
+
+function isHarnessTrimHookFor(command: string, harness: HarnessId): boolean {
+  const match = HARNESSTRIM_HOOK_COMMAND.exec(command.trim());
+  return match?.[1]?.toLowerCase() === harness;
+}
+
+function hasMetricsArgument(command: string): boolean {
+  return /(?:^|\s)--metrics(?:\s|=)/i.test(command);
+}
+
+function commandHasMetricsPath(command: string, metricsPath: string): boolean {
+  const match = /(?:^|\s)--metrics(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s]+))/i.exec(command);
+  const observed = match?.[1] ?? match?.[2] ?? match?.[3];
+  return observed?.replaceAll('\\', '/') === metricsPath;
+}
+
+function matcherCoversFamily(matcher: string, family: string): boolean {
+  if (matcher === family) return true;
+  try {
+    return new RegExp(matcher).test(family);
+  } catch {
+    return false;
+  }
+}
+
+function replaceHookCommandAction(input: {
+  target: NonNullable<ReturnType<typeof commandHookTarget>>;
+  commandPointer: string;
+  currentCommand: string;
+  nextCommand: string;
+  actionId: string;
+}): MergeJsonAction {
+  return {
+    kind: 'merge-json',
+    id: input.actionId,
+    riskClass: 'reversible',
+    requiresNetwork: false,
+    requiresElevation: false,
+    affectedPaths: [input.target.configPath],
+    affectedProcesses: [],
+    preconditions: [
+      `${input.commandPointer} still contains the HarnessTrim command Token Harness inspected`,
+    ],
+    postconditions: [
+      `${input.commandPointer} records HarnessTrim reductions to .harnesstrim/metrics.jsonl`,
+    ],
+    rollbackData: 'file-snapshot',
+    explanation: `Enable per-harness HarnessTrim telemetry for ${input.target.harness.displayName}${codexActivationNote(input.target.harnessId)}`,
+    path: input.target.configPath,
+    ownedPointers: [input.commandPointer],
+    operations: [
+      {
+        kind: 'set',
+        pointer: input.commandPointer,
+        value: input.nextCommand,
+        expectedValueDigest: jsonValueDigest(input.currentCommand),
+      },
+    ],
+    createIfMissing: false,
+  };
+}
+
+function codexActivationNote(harness: HarnessId): string {
+  return harness === CODEX
+    ? '. Codex must enable and trust this hook in its native UI; Token Harness can register it but cannot grant trust'
+    : '';
 }
 
 export const harnesstrimAdapter: ProviderAdapter = {

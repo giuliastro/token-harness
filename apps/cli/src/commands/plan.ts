@@ -592,6 +592,8 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
     providers,
     rules: [...COMPATIBILITY_RULES],
     observedVersions: versions.providers,
+    observedHarnessVersions: versions.harnesses,
+    platform: { os: context.platform.os, wsl: context.platform.isWsl },
     harness: context.harness,
   });
 

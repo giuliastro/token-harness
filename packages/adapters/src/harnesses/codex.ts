@@ -45,7 +45,7 @@ const MANIFEST: HarnessManifest = {
   id: CODEX,
   displayName: 'Codex CLI',
   homepage: 'https://developers.openai.com/codex',
-  testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
+  testedVersions: { minimum: '0.159.0', maximum: '0.159.0' },
   verificationTier: 'config-only',
   versionCommand: { executable: 'codex', args: ['--version'] },
   /**
@@ -76,7 +76,12 @@ const MANIFEST: HarnessManifest = {
     },
   ],
   toolFamilies: [
-    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+    {
+      id: 'Bash',
+      matcher: '^Bash$',
+      platforms: ['windows', 'macos', 'linux'],
+      executesShellCommands: true,
+    },
   ],
   requiresEnablement: true,
   enablementNote:
@@ -382,14 +387,18 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
   const checks: VerificationCheck[] = [
     {
       id: 'executable-resolves',
-      status: detection.version === null ? 'fail' : 'pass',
+      // Codex Desktop can run hooks from its own app process without exposing the optional
+      // `codex` CLI to the shell that runs Token Harness. Missing CLI access therefore means
+      // that CLI-based checks cannot be exercised; the provider rows remain responsible for
+      // proving actual hook execution from RTK/HarnessTrim telemetry.
+      status: detection.version === null ? 'not-exercised' : 'pass',
       summary:
         detection.version === null
-          ? 'codex could not be run'
+          ? 'Codex CLI is unavailable to this process; native CLI checks cannot run'
           : `Codex ${detection.version} resolves`,
       achievedTier: detection.version === null ? null : 'presence',
       evidence: detection.evidence.filter((item) => item.kind === 'version-output'),
-      remediation: detection.version === null ? 'Install Codex CLI or add it to PATH' : null,
+      remediation: null,
     },
     {
       id: 'hooks-readable',
@@ -420,18 +429,19 @@ async function verify(context: HarnessContext): Promise<HarnessVerification> {
       id: 'hook-enablement',
       status: configured ? 'info' : 'not-exercised',
       summary: configured
-        ? 'Native enablement/trust metadata was unavailable; the declared file alone does not prove activation'
+        ? 'Native enablement/trust metadata is unavailable; configuration alone does not prove activation'
         : 'No declared hook has enablement to inspect',
       achievedTier: null,
       evidence: [],
       remediation: configured
-        ? 'Open Codex and manually enable and trust the hook; Token Harness cannot grant trust. Then run verify again.'
+        ? 'Use Codex hook controls to enable and trust the declared hook, then run a provider canary; Token Harness cannot grant trust.'
         : null,
     },
     {
       id: 'canary-intercepted',
       status: 'not-exercised',
-      summary: 'No positive event-stream receipt has been observed for this integration',
+      summary:
+        'No Codex CLI event-stream receipt is available from passive verification; provider-specific runtime receipts are checked separately',
       achievedTier: null,
       evidence: [],
       remediation: null,

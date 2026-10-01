@@ -72,9 +72,11 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
 
   const present: HarnessManifest[] = [];
   const configs: HarnessConfigSummary[] = [];
+  const observedHarnessVersions: Record<string, string | null> = {};
   for (const adapter of harnessAdapters) {
     const detection = await adapter.detect(detectionContext);
     if (detection.state === 'absent') continue;
+    observedHarnessVersions[adapter.manifest.id] = detection.version;
     present.push(adapter.manifest);
     const inspection = await adapter.inspect(detectionContext);
     configs.push(...inspection.summaries);
@@ -119,6 +121,8 @@ export async function runStatus(context: CommandContext): Promise<CommandResult<
     providers,
     rules: [...COMPATIBILITY_RULES],
     observedVersions,
+    observedHarnessVersions,
+    platform: { os: context.platform.os, wsl: context.platform.isWsl },
     harness: context.harness,
   });
 
