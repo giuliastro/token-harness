@@ -60,14 +60,14 @@ function inventoryAnswer(version: string): string {
   return `rtk v${version}:\n    /home/user/.cargo/bin/rtk\n`;
 }
 
-function rtkV050ReleaseFetch(): ReleaseFetch {
+function rtkV051ReleaseFetch(): ReleaseFetch {
   const downloadUrl =
-    'https://github.com/rtk-ai/rtk/releases/download/v0.50.0/rtk-x86_64-unknown-linux-musl.tar.gz';
-  const executable = new TextEncoder().encode('rtk 0.50.0 fixture\n');
+    'https://github.com/rtk-ai/rtk/releases/download/v0.51.0/rtk-x86_64-unknown-linux-musl.tar.gz';
+  const executable = new TextEncoder().encode('rtk 0.51.0 fixture\n');
   const archive = rtkTarGz(executable);
   const metadata = new TextEncoder().encode(
     JSON.stringify({
-      tag_name: 'v0.50.0',
+      tag_name: 'v0.51.0',
       draft: false,
       prerelease: false,
       assets: [
@@ -102,7 +102,7 @@ function rtkV050ReleaseFetch(): ReleaseFetch {
     };
   };
   return async (url) => {
-    if (url === 'https://api.github.com/repos/rtk-ai/rtk/releases/tags/v0.50.0')
+    if (url === 'https://api.github.com/repos/rtk-ai/rtk/releases/tags/v0.51.0')
       return response(metadata);
     if (url === downloadUrl) return response(archive);
     throw new Error(`unexpected RTK release request: ${url}`);
@@ -576,7 +576,7 @@ describe('update', () => {
           installed: { rtk: 'rtk 0.44.0' },
           channelStdout: { cargo: channelAnswer('0.1.0') },
           rtkExecutablePath: executablePath,
-          rtkReleaseFetch: rtkV050ReleaseFetch(),
+          rtkReleaseFetch: rtkV051ReleaseFetch(),
         },
         undefined,
         true,
@@ -584,7 +584,7 @@ describe('update', () => {
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
       assert.equal(row(result.data, 'rtk')?.installed, '0.44.0');
-      assert.equal(row(result.data, 'rtk')?.available, '0.50.0');
+      assert.equal(row(result.data, 'rtk')?.available, '0.51.0');
       assert.equal(row(result.data, 'rtk')?.channel, 'github-release');
       assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
       assert.equal(
@@ -614,11 +614,11 @@ describe('update', () => {
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: activePath,
         rtkExecutablePaths: [activePath, shadowedPath],
-        rtkReleaseFetch: rtkV050ReleaseFetch(),
+        rtkReleaseFetch: rtkV051ReleaseFetch(),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(activePath, 'utf8'), /rtk 0\.50\.0/);
+      assert.match(readFileSync(activePath, 'utf8'), /rtk 0\.51\.0/);
       assert.match(readFileSync(shadowedPath, 'utf8'), /0\.42\.0 shadowed/);
       assert.ok(result.codes.includes('rtk-release-shadowed-executables'));
       assert.equal(result.data?.execution?.outcome, 'committed');
@@ -637,11 +637,11 @@ describe('update', () => {
         installed: { rtk: 'rtk 0.44.0' },
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: executablePath,
-        rtkReleaseFetch: rtkV050ReleaseFetch(),
+        rtkReleaseFetch: rtkV051ReleaseFetch(),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(executablePath, 'utf8'), /rtk 0\.50\.0/);
+      assert.match(readFileSync(executablePath, 'utf8'), /rtk 0\.51\.0/);
       assert.notEqual(statSync(executablePath).mode & 0o111, 0);
       assert.equal(
         result.asked.some((line) => line.startsWith('cargo search')),

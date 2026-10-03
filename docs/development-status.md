@@ -1,5 +1,11 @@
 # Development status
 
+- 2026-10-03: **Token Harness 0.1.25 release candidate in progress.** Windows Codex hook
+  inspection now reads the native `commandWindows` entry, RTK 0.51 is recognized for Codex, and
+  quoted Windows `.cmd` attribution wrappers are detected. Guided integration checks now separate
+  known failures from pending runtime evidence. Local tests and build pass; cross-platform PR CI,
+  exact-package/release workflow gates, and the user's Windows smoke test remain pending.
+
 - 2026-10-03: **Token Harness 0.1.24 release candidate in progress.** Automatic native prompt
   routing is available as a guided opt-in for Codex and Claude Code. It injects a short model policy
   on each prompt, records privacy-bounded prompt/subagent callbacks, and displays local token and

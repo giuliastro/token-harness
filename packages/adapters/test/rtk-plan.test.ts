@@ -198,7 +198,9 @@ function codexOwnership(capabilities: readonly string[]): ResolvedCapability[] {
 function configuredWithRtk(matchers: string[] = ['Bash']): HarnessConfigSummary {
   const hookCommands = matchers.map((matcher, index) => ({
     eventName: 'PreToolUse',
+    interceptionPoint: 'pre-tool-use',
     matcher,
+    toolFamilies: [matcher],
     command: 'rtk hook claude',
     entryPointer: `hooks.PreToolUse.${String(index)}`,
     commandPointer: `hooks.PreToolUse.${String(index)}.hooks.0.command`,
@@ -218,7 +220,9 @@ function configuredCodexWithRtk(): HarnessConfigSummary {
   const hookCommands = [
     {
       eventName: 'PreToolUse',
+      interceptionPoint: 'pre-tool-use',
       matcher: '^Bash$',
+      toolFamilies: ['Bash'],
       command: 'rtk hook codex',
       entryPointer: 'hooks.PreToolUse.0',
       commandPointer: 'hooks.PreToolUse.0.hooks.0.command',
@@ -379,7 +383,7 @@ describe('a machine with nothing on it', () => {
 
   it('pins RTK to the first release with a Codex hook', () => {
     const result = plan({ installed: false });
-    assert.equal((result.actions[0] as { version?: string | null }).version, '0.50.0');
+    assert.equal((result.actions[0] as { version?: string | null }).version, '0.51.0');
   });
 
   it('classifies installation as delegated rather than reversible', () => {

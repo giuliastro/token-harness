@@ -114,7 +114,10 @@ const WIRED: HarnessConfigSummary = {
   commands: ['rtk hook claude'],
 };
 
-function attributionProxyConfig(harness: 'claude' | 'codex'): HarnessConfigSummary {
+function attributionProxyConfig(
+  harness: 'claude' | 'codex',
+  command = `token-harness __internal-rtk-hook ${harness}`,
+): HarnessConfigSummary {
   return {
     ...WIRED,
     harnessId: harness as HarnessConfigSummary['harnessId'],
@@ -122,7 +125,7 @@ function attributionProxyConfig(harness: 'claude' | 'codex'): HarnessConfigSumma
       harness === 'claude'
         ? 'C:\\Users\\dev\\.claude\\settings.json'
         : 'C:\\Users\\dev\\.codex\\hooks.json',
-    commands: [`token-harness __internal-rtk-hook ${harness}`],
+    commands: [command],
   };
 }
 
@@ -289,12 +292,16 @@ describe('detection', () => {
     assert.equal(detection.installationChannel, null);
   });
 
-  it('offers Codex hook setup only on RTK 0.50.0', async () => {
+  it('offers Codex hook setup from RTK 0.50.0 onward', async () => {
     const old = await rtkAdapter.detect(context({ version: 'rtk 0.49.0' }));
     assert.deepEqual(old.assignableHarnesses, ['claude']);
 
     const detection = await rtkAdapter.detect(context({ version: 'rtk 0.50.0' }));
     assert.deepEqual(detection.assignableHarnesses, ['claude', 'codex']);
+
+    const current = await rtkAdapter.detect(context({ version: 'rtk 0.51.0' }));
+    assert.deepEqual(current.assignableHarnesses, ['claude', 'codex']);
+    assert.equal(current.state, 'installed');
   });
 
   it('marks Codex configuration broken when installed RTK predates the native hook', async () => {
@@ -375,10 +382,10 @@ describe('per-harness verification', () => {
     );
   });
 
-  it('records a Codex canary from Codex-specific history on RTK 0.50.0', async () => {
+  it('records a Codex canary from Codex-specific history on RTK 0.51.0', async () => {
     const verification = await rtkAdapter.verify(
       context({
-        version: 'rtk 0.50.0',
+        version: 'rtk 0.51.0',
         configs: [attributionProxyConfig('codex')],
         localDatabase: historyDatabase({
           codex: { count: 23, latest: '2026-07-30T11:15:00.000Z' },
@@ -388,6 +395,26 @@ describe('per-harness verification', () => {
     assert.equal(verification.achievedTier, 'canary');
     assert.equal(verification.receipt?.harnessId, 'codex');
     assert.equal(verification.receipt?.operations, 23);
+    assert.equal(
+      verification.checks.find((entry) => entry.id === 'rtk-attribution-codex')?.status,
+      'pass',
+    );
+  });
+
+  it('recognizes a quoted Windows token-harness.cmd hook and its Codex activity', async () => {
+    const command =
+      '"C:\\Program Files\\Token Harness\\token-harness.cmd" __internal-rtk-hook codex';
+    const verification = await rtkAdapter.verify(
+      context({
+        version: 'rtk 0.50.0',
+        configs: [attributionProxyConfig('codex', command)],
+        localDatabase: historyDatabase({
+          codex: { count: 23, latest: '2026-07-30T11:15:00.000Z' },
+        }),
+      }),
+    );
+
+    assert.equal(verification.receipt?.harnessId, 'codex');
     assert.equal(
       verification.checks.find((entry) => entry.id === 'rtk-attribution-codex')?.status,
       'pass',

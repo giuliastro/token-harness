@@ -18,17 +18,17 @@ const GITNEXUS = providerId('gitnexus');
 const HEADROOM = providerId('headroom');
 
 /**
- * Historical package baselines.
+ * Reviewed package targets and historical baselines.
  *
- * These ranges record releases Token Harness has directly exercised. They are evidence, not a
- * ceiling. Normal package updates are latest-forward: a newer semantic version may be installed
- * transactionally and must then pass post-install detection against the executable actually
- * resolved on PATH. Providers with runtime capability probes are rejected after installation when
- * those probes no longer expose the managed surface.
+ * The maximum supplies the current direct-release target and records the latest source-reviewed
+ * RTK package contract. It is not a future ceiling: normal package updates are latest-forward, and
+ * a newer semantic version must pass post-install detection against the executable actually
+ * resolved on PATH. Providers with runtime capability probes are rejected when those probes no
+ * longer expose the managed surface.
  */
 const PACKAGE_UPDATE_BASELINES: ReadonlyMap<ProviderId, { minimum: string; maximum: string }> =
   new Map([
-    [RTK, { minimum: '0.44.0', maximum: '0.50.0' }],
+    [RTK, { minimum: '0.44.0', maximum: '0.51.0' }],
     [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.1' }],
     [
       MCPTOON,
@@ -55,8 +55,8 @@ export type ProviderPackageUpdateAdmission =
   | { state: 'blocked'; reason: string };
 
 /**
- * Newest directly exercised package release. Kept for historical evidence/reporting only; callers
- * must not treat this as a forward-compatibility ceiling.
+ * Current source-reviewed package target for direct-release planning; callers must not treat it as
+ * a forward-compatibility ceiling.
  */
 export function reviewedProviderPackageMaximum(provider: ProviderId): string | null {
   return PACKAGE_UPDATE_BASELINES.get(provider)?.maximum ?? null;

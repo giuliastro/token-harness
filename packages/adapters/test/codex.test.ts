@@ -22,10 +22,16 @@ const FACTS: PlatformFacts = {
   nodeVersion: '22.14.0',
   isWsl: false,
 };
+const WINDOWS_FACTS: PlatformFacts = {
+  ...FACTS,
+  os: 'windows',
+  osDisplayName: 'Windows 11',
+};
 
 function context(
   files: Record<string, string> = {},
   version: string | null = '0.146.0',
+  facts: PlatformFacts = FACTS,
 ): HarnessContext {
   const encoder = new TextEncoder();
   return {
@@ -69,7 +75,7 @@ function context(
         failure: version === null ? { reason: 'executable-not-found', message: 'missing' } : null,
       }),
     } satisfies ProcessRunner,
-    facts: FACTS,
+    facts,
     paths: {
       home: HOME,
       config: `${HOME}/.config/token-harness`,
@@ -105,13 +111,51 @@ describe('Codex adapter', () => {
     assert.deepEqual(inspection.summaries[0]?.hookCommands, [
       {
         eventName: 'PostToolUse',
+        interceptionPoint: 'post-tool-use',
         matcher: '^Bash$',
+        toolFamilies: ['Bash'],
         command: 'rtk hook codex',
         entryPointer: 'hooks.PostToolUse.0',
         commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
       },
     ]);
     assert.equal(inspection.enabled, null);
+  });
+
+  it('uses Codex commandWindows as the effective command on Windows', async () => {
+    const commandWindows = 'token-harness.cmd __internal-rtk-hook codex';
+    const hooks = JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: '^Bash$',
+            hooks: [
+              {
+                type: 'command',
+                command: 'rtk hook codex',
+                commandWindows,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const inspection = await codexAdapter.inspect(
+      context({ [HOOKS]: hooks }, '0.159.0', WINDOWS_FACTS),
+    );
+
+    assert.deepEqual(inspection.summaries[0]?.commands, [commandWindows]);
+    assert.deepEqual(inspection.summaries[0]?.hookCommands, [
+      {
+        eventName: 'PreToolUse',
+        interceptionPoint: 'pre-tool-use',
+        matcher: '^Bash$',
+        toolFamilies: ['Bash'],
+        command: commandWindows,
+        entryPointer: 'hooks.PreToolUse.0',
+        commandPointer: 'hooks.PreToolUse.0.hooks.0.commandWindows',
+      },
+    ]);
   });
 
   it('does not convert a declared hook into an enabled hook', async () => {

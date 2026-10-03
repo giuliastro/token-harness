@@ -403,6 +403,20 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'codex-native-policy-shadowed':
     'A project or profile overrides this Codex setting. That setting belongs to you and will not be replaced.',
   'no-providers-registered': 'No optimization provider was selected for this operation.',
+  'prompt-routing-target-unavailable':
+    'Token Harness could not locate a supported user-level prompt-hook settings file for this agent.',
+  'prompt-routing-version-unverified':
+    'Automatic routing is not available for this agent version until its prompt-hook format has been verified.',
+  'prompt-routing-runtime-unavailable':
+    'The Token Harness hook command could not run from this dashboard environment. Make Token Harness available on PATH, then review routing again.',
+  'prompt-routing-target-not-file':
+    'A non-file occupies the agent hook settings path, so Token Harness left it unchanged.',
+  'prompt-routing-settings-unmergeable':
+    'The current hook settings cannot be merged safely. Repair the JSON or review the hook manually.',
+  'prompt-routing-already-configured':
+    'Automatic routing hooks are already present. Nothing needs to be changed.',
+  'prompt-routing-existing-hook-conflict':
+    'An existing Token Harness routing hook was changed or only partly installed. It was left untouched for review.',
   'already-in-desired-state':
     'The supported integration is already configured. Nothing needs to be changed.',
   'delegated-install-snapshot-too-large':
@@ -426,7 +440,14 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'confirmation-required': 'This change needs your approval first.',
 };
 export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: string): string {
-  const known = diagnostics.find((entry) => ISSUE_COPY[entry.code] !== undefined);
+  const known =
+    diagnostics.find(
+      (entry) => entry.severity === 'error' && ISSUE_COPY[entry.code] !== undefined,
+    ) ??
+    diagnostics.find(
+      (entry) => entry.severity === 'warning' && ISSUE_COPY[entry.code] !== undefined,
+    ) ??
+    diagnostics.find((entry) => entry.severity === 'info' && ISSUE_COPY[entry.code] !== undefined);
   if (known !== undefined) return ISSUE_COPY[known.code] as string;
   const blocked = diagnostics.find((entry) =>
     /compatibility|unsupported|unreviewed|no-row/.test(entry.code),
@@ -2399,15 +2420,22 @@ export class GuideService {
       const messages: string[] = [];
       const results: VerifyReport['results'] = [];
       let ok = true;
+      let healthyAtDeclaredTier = true;
       const inventory = await this.call<DoctorReport>(['doctor']);
       const present = (inventory.data?.harnesses ?? []).filter(
         (item) => item.state !== 'absent' && ['claude', 'codex'].includes(item.harnessId),
       );
+      if (inventory.data === null) {
+        ok = false;
+        healthyAtDeclaredTier = false;
+        messages.push(
+          'The installed-agent inventory could not be read. Refresh and check the local installation.',
+        );
+      }
       if (present.length === 0) {
         ok = false;
-        messages.push(
-          'No supported installed agent could be checked. Refresh after installing or signing in.',
-        );
+        healthyAtDeclaredTier = false;
+        messages.push('No supported installed agent was detected, so no integration was checked.');
       }
       for (const agent of present) {
         const harness = agent.harnessId;
@@ -2417,18 +2445,67 @@ export class GuideService {
         );
         const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
         const healthy = result.data?.healthyAtDeclaredTier === true;
-        if (!healthy) ok = false;
-        if (result.data !== null) results.push(...result.data.results);
-        messages.push(
-          `${name(harness)}: ${
-            healthy
-              ? 'the available integration checks passed. This is not proof that every command was reduced.'
-              : explainGuideIssue(
-                  result.diagnostics,
-                  'execution could not be fully confirmed. The agent may be absent, an integration may not be enabled, or runtime evidence may be unavailable.',
-                )
-          }`,
+        const versionWarnings = result.diagnostics.filter(
+          (entry) =>
+            entry.severity === 'warning' &&
+            (entry.code === 'harness-version-unknown-newer' ||
+              entry.code === 'provider-version-unknown-newer'),
         );
+        const failed =
+          result.data === null ||
+          result.exitCode !== 0 ||
+          result.diagnostics.some(
+            (entry) =>
+              entry.severity === 'error' ||
+              (entry.severity === 'warning' && !versionWarnings.includes(entry)),
+          ) ||
+          result.data.results.some(
+            (entry) => entry.status === 'degraded' || entry.status === 'failed',
+          );
+        if (failed) ok = false;
+        if (!healthy) healthyAtDeclaredTier = false;
+        if (result.data !== null) results.push(...result.data.results);
+        const prefix = `${name(harness)}: `;
+        if (result.data === null) {
+          messages.push(
+            prefix +
+              'the verification report could not be read. Refresh and check the local installation.',
+          );
+        } else if (healthy) {
+          messages.push(
+            prefix +
+              'the available integration checks passed. This is not proof that every command was reduced.',
+          );
+        } else if (failed) {
+          messages.push(
+            prefix +
+              'a known integration check failed. Review the specific check before changing setup.',
+          );
+        } else if (result.data.results.length === 0) {
+          messages.push(
+            prefix +
+              'the agent is detected, but no managed optimizer connection is present to verify. Review setup only if you want to connect one.',
+          );
+        } else {
+          const pendingProviders = [
+            ...new Set(
+              result.data.results
+                .filter((entry) => entry.status === 'not-applicable')
+                .map((entry) => name(entry.providerId)),
+            ),
+          ];
+          const subject =
+            pendingProviders.length > 0 ? pendingProviders.join(' and ') : 'Some integrations';
+          messages.push(
+            `${prefix}${subject} have not produced enough attributable runtime evidence for ${name(harness)} yet. This is an evidence gap, not a finding that the setup is broken. If you do not use this agent on this machine, no action is required.`,
+          );
+        }
+        if (versionWarnings.length > 0) {
+          messages.push(
+            prefix +
+              'the installed version is newer than Token Harness’s recorded compatibility sample; read-only checks can continue, but review the version before changing its integration.',
+          );
+        }
       }
       if (inventory.data !== null) {
         const fingerprint = stackFingerprint(inventory.data);
@@ -2438,7 +2515,7 @@ export class GuideService {
             receiptId: null,
             appliedAt: null,
             results,
-            healthyAtDeclaredTier: ok,
+            healthyAtDeclaredTier: healthyAtDeclaredTier && present.length > 0,
           },
         };
         this.stackBase = {
@@ -2456,7 +2533,17 @@ export class GuideService {
         'Integration checks completed. No settings changed.',
         ok ? 'success' : 'attention',
       );
-      return { ok, title: 'Integration checks', messages, appliedPlans: 0, stack };
+      return {
+        ok,
+        title: ok
+          ? healthyAtDeclaredTier
+            ? 'Integration checks passed'
+            : 'Configuration checks complete; runtime evidence pending'
+          : 'Integration checks need attention',
+        messages,
+        appliedPlans: 0,
+        stack,
+      };
     });
   }
 }

@@ -12,11 +12,23 @@ import {
   nodeExecutableProbe,
   NodeProcessRunner,
   NodeRtkReleaseRuntime,
+  type ReleaseFetch,
   type SystemProbe,
 } from '../src/index.js';
 
 const LIVE_RELEASE_TEST =
   process.platform === 'win32' && process.env['TOKEN_HARNESS_LIVE_RTK_RELEASE'] === '1';
+
+function authenticatedGitHubFetch(token: string): ReleaseFetch {
+  return (url, init) => {
+    // Avoid shared-host unauthenticated API limits; never forward the token to the asset host.
+    const headers =
+      new URL(url).hostname === 'api.github.com'
+        ? { ...init.headers, Authorization: `Bearer ${token}` }
+        : init.headers;
+    return fetch(url, { ...init, headers });
+  };
+}
 
 function liveWindowsProbe(root: string): SystemProbe {
   return {
@@ -67,7 +79,12 @@ test(
       const previous = new TextEncoder().encode('token-harness previous RTK fixture');
       await fs.writeFile(target, previous);
 
-      const runtime = new NodeRtkReleaseRuntime({ fs, runner });
+      const githubToken = process.env['GITHUB_TOKEN'];
+      const runtime = new NodeRtkReleaseRuntime({
+        fs,
+        runner,
+        ...(githubToken === undefined ? {} : { fetchImpl: authenticatedGitHubFetch(githubToken) }),
+      });
       const query = await runtime.query('0.49.0', detection.facts);
       assert.equal(
         query.status,

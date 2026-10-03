@@ -280,7 +280,11 @@ export interface HarnessConfigSummary {
 
 export interface HarnessHookCommandSummary {
   eventName: string;
+  /** Normalized interception-point id, assigned by the harness adapter. */
+  interceptionPoint: string;
   matcher: string | null;
+  /** Tool-family ids this hook's matcher covers, assigned by the harness adapter. */
+  toolFamilies: string[];
   command: string;
   /** Dotted JSON pointer understood by `merge-json`, e.g. `hooks.PreToolUse.0.hooks.0.command`. */
   commandPointer: string;

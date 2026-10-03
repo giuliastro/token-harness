@@ -445,7 +445,7 @@ export function installAction(
     packageName: channel.packageId ?? 'rtk',
     // The managed Codex hook first exists in this RTK release. Pinning makes a fresh setup's
     // promised surface deterministic instead of installing an older prompt-only build.
-    version: '0.50.0',
+    version: '0.51.0',
   };
 }
 

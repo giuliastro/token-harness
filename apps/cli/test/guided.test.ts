@@ -6,6 +6,7 @@ import {
   commandResult,
   toEnvelope,
   aggregateEvents,
+  diagnostic,
   harnessId,
   providerId,
   type CliEnvelope,
@@ -13,6 +14,7 @@ import {
   type MetricsReport,
   type PlanReport,
   type PlannedAction,
+  type VerifyReport,
   type HarnessContextObservation,
 } from '@token-harness/core';
 import {
@@ -138,7 +140,15 @@ function plan(id: string): PlanReport {
     persisted: true,
   };
 }
-function fixture(input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorReport } = {}) {
+function fixture(
+  input: {
+    failSecond?: boolean;
+    ids?: string[];
+    doctor?: DoctorReport;
+    verifyReport?: VerifyReport;
+    verifyDiagnostics?: ReturnType<typeof diagnostic>[];
+  } = {},
+) {
   const calls: string[][] = [];
   let clock = 0,
     sequence = 0,
@@ -157,7 +167,18 @@ function fixture(input: { failSecond?: boolean; ids?: string[]; doctor?: DoctorR
       if (input.failSecond && writes === 2) return envelope(command, null, 5) as CliEnvelope<T>;
       data = { outcome: command === 'rollback' ? 'rolled-back' : 'committed' };
     }
-    if (command === 'verify') data = verification();
+    if (command === 'verify') {
+      data = input.verifyReport ?? verification();
+      return toEnvelope(
+        commandResult({
+          command,
+          exitCode: 0,
+          data: data as T,
+          diagnostics: input.verifyDiagnostics ?? [],
+        }),
+        'test',
+      );
+    }
     return envelope(command, data as T);
   };
   const service = new GuideService(
@@ -221,6 +242,18 @@ describe('guided workflow', () => {
     assert.deepEqual(
       calls.filter((args) => args[0] === 'plan'),
       [['plan', '--harness', 'codex', '--provider', 'harnesstrim']],
+    );
+  });
+
+  it('previews native routing without selecting an optimization provider', async () => {
+    const { service, calls } = fixture({ ids: ['codex'] });
+    const preview = await service.preview({ action: 'routing-enable', harness: 'codex' });
+
+    assert.ok(preview.ticket);
+    assert.equal(preview.changes.length, 1);
+    assert.deepEqual(
+      calls.find((args) => args[0] === 'plan'),
+      ['plan', '--harness', 'codex', '--provider', 'none', '--agent-routing'],
     );
   });
 
@@ -484,6 +517,58 @@ describe('guided workflow', () => {
     assert.equal((await service.verify()).ok, true);
     assert.ok(calls.every((args) => !args.includes('codex')));
   });
+  it('labels missing runtime attribution as pending evidence rather than a broken agent', async () => {
+    const { service } = fixture({
+      ids: ['codex'],
+      verifyReport: {
+        receiptId: null,
+        appliedAt: null,
+        healthyAtDeclaredTier: false,
+        results: [
+          {
+            providerId: providerId('rtk'),
+            harnessId: harnessId('codex'),
+            status: 'not-applicable',
+            declaredTier: 'canary',
+            managedByTokenHarness: true,
+            checks: [
+              {
+                id: 'executable-resolves',
+                status: 'pass',
+                summary: 'rtk 0.50.0',
+                achievedTier: 'presence',
+                evidence: [],
+                remediation: null,
+              },
+              {
+                id: 'rtk-attribution-codex',
+                status: 'not-exercised',
+                summary: 'no RTK operation attributed to Codex yet',
+                achievedTier: null,
+                evidence: [],
+                remediation: 'Run Codex normally, then refresh Results',
+              },
+            ],
+          },
+        ],
+      },
+      verifyDiagnostics: [
+        diagnostic({
+          severity: 'warning',
+          code: 'harness-version-unknown-newer',
+          message: 'Claude Code is newer than the versions in the compatibility sample',
+        }),
+      ],
+    });
+
+    const result = await service.verify();
+
+    assert.equal(result.ok, true);
+    assert.equal(result.title, 'Configuration checks complete; runtime evidence pending');
+    assert.match(result.messages[0] ?? '', /evidence gap, not a finding that the setup is broken/);
+    assert.match(result.messages[0] ?? '', /no action is required/);
+    assert.match(result.messages[1] ?? '', /review the version before changing its integration/);
+  });
   it('empty savings are missing, not zero; raw diagnostic text never enters friendly errors', async () => {
     assert.deepEqual(savingsView(null, 'all').rows, []);
     const { service } = fixture();
@@ -499,6 +584,29 @@ describe('guided workflow', () => {
       remediation: null,
     } as const;
     assert.equal(explainGuideIssue([diagnostic], 'Cannot read'), 'Cannot read');
+  });
+  it('shows a routing blocker before an informational no-provider note', () => {
+    const noProvider = {
+      severity: 'info',
+      code: 'no-providers-registered',
+      message: 'No providers selected',
+      subject: null,
+      path: null,
+      remediation: null,
+    } as const;
+    const runtimeUnavailable = {
+      severity: 'error',
+      code: 'prompt-routing-runtime-unavailable',
+      message: 'Raw runtime details stay inside the CLI report',
+      subject: null,
+      path: null,
+      remediation: null,
+    } as const;
+
+    assert.equal(
+      explainGuideIssue([noProvider, runtimeUnavailable], 'No safe change is available.'),
+      'The Token Harness hook command could not run from this dashboard environment. Make Token Harness available on PATH, then review routing again.',
+    );
   });
   it('keeps negative output, different units and measurement classes separate', () => {
     const report: MetricsReport = {

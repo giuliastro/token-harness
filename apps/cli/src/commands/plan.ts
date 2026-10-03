@@ -32,6 +32,7 @@ import {
   benchmarkPolicySnapshot,
   diagnostic,
   harnessId,
+  providerId,
   isProfileId,
   buildStoredPlan,
   derivePlanId,
@@ -843,6 +844,20 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         'Give each provider a distinct marker pair, or disable one of the providers for this instruction region',
     }),
   );
+  if (
+    providerAdapters.length === 0 &&
+    context.provider !== providerId('none') &&
+    actions.length === 0
+  ) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'no-providers-registered',
+        message: 'No optimization provider is available for this operation',
+        remediation: null,
+      }),
+    );
+  }
   const conflicts = [...resolution.conflicts, ...markerConflicts];
 
   const report: PlanReport = {
@@ -897,17 +912,6 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         severity: 'info',
         code: 'no-harness-detected',
         message: 'No supported harness was detected on this machine',
-        remediation: null,
-      }),
-    );
-  }
-
-  if (providerAdapters.length === 0) {
-    diagnostics.push(
-      diagnostic({
-        severity: 'info',
-        code: 'no-providers-registered',
-        message: 'No provider adapters are registered in this build, so no plan has actions',
         remediation: null,
       }),
     );
