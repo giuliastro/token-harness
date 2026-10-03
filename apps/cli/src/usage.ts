@@ -388,11 +388,18 @@ not-exercised, which is not a failure.`,
 
 Usage
   token-harness plan [--json] [--harness <id>] [--provider <id>] [--project <dir>]
+                     [--agent-routing | --disable-agent-routing]
                      [--native-policy] [--task <class>] [--profile <name>]
                      [--reserve <0-95>] [--tasks-left <n>]
 
 Read-only. Exits 0 when a plan was produced, and 4 when a hard conflict prevents
 apply. Nothing is changed either way.
+
+--agent-routing adds the native per-prompt hook for the selected Claude Code or Codex
+harness. --disable-agent-routing removes only exact hook entries owned by Token Harness.
+Both changes use the normal stored-plan, approval, verification and rollback path. Claude
+loads the change in a new session; Codex requires the user to review and trust the hook in
+/hooks. Configuration is shown separately from runtime callbacks in the guided app.
 
 --native-policy adds reviewed Codex native settings derived from the same optimizer
 policy as token-harness optimize. This build manages reasoning effort and verbosity

@@ -644,4 +644,74 @@ describe('empirical benchmark matrix', () => {
       true,
     );
   });
+
+  it('attributes routing only when the disabled baseline and enabled subagent run are witnessed', () => {
+    const report = buildTaskBenchmarkMatrix([
+      {
+        baseline: receipt('baseline', {
+          nativeRoutingAtStart: {
+            configured: false,
+            promptSubmissions: 0,
+            subagentsStarted: 0,
+            subagentsStopped: 0,
+            reportedModels: [],
+          },
+          nativeRoutingAtFinish: {
+            configured: false,
+            promptSubmissions: 0,
+            subagentsStarted: 0,
+            subagentsStopped: 0,
+            reportedModels: [],
+          },
+        }),
+        optimized: receipt('optimized', {
+          nativeRoutingAtStart: {
+            configured: true,
+            promptSubmissions: 0,
+            subagentsStarted: 0,
+            subagentsStopped: 0,
+            reportedModels: [],
+          },
+          nativeRoutingAtFinish: {
+            configured: true,
+            promptSubmissions: 1,
+            subagentsStarted: 1,
+            subagentsStopped: 1,
+            reportedModels: [],
+          },
+        }),
+      },
+    ]);
+    assert.equal(report.entries[0]?.nativeRouting?.verdict, 'attributed');
+    assert.equal(report.entries[0]?.nativeRouting?.qualityGatesPassed, true);
+    assert.equal(report.entries[0]?.localTokenSavingPercent, 7.9);
+  });
+
+  it('does not attribute a baseline that became enabled during the capture', () => {
+    const observation = {
+      configured: false,
+      promptSubmissions: 0,
+      subagentsStarted: 0,
+      subagentsStopped: 0,
+      reportedModels: [],
+    };
+    const report = buildTaskBenchmarkMatrix([
+      {
+        baseline: receipt('baseline', {
+          nativeRoutingAtStart: observation,
+          nativeRoutingAtFinish: { ...observation, configured: true },
+        }),
+        optimized: receipt('optimized', {
+          nativeRoutingAtStart: { ...observation, configured: true },
+          nativeRoutingAtFinish: {
+            ...observation,
+            configured: true,
+            promptSubmissions: 1,
+            subagentsStarted: 1,
+          },
+        }),
+      },
+    ]);
+    assert.equal(report.entries[0]?.nativeRouting?.verdict, 'not-attributed');
+  });
 });

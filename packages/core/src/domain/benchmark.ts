@@ -68,6 +68,15 @@ export interface TaskBenchmarkOutcome {
   errorCodes: string[];
 }
 
+/** Hook receipts captured only for Token Harness native prompt-routing experiments. */
+export interface TaskBenchmarkNativeRoutingObservation {
+  configured: boolean | null;
+  promptSubmissions: number;
+  subagentsStarted: number;
+  subagentsStopped: number;
+  reportedModels: string[];
+}
+
 export interface TaskBenchmarkReceipt {
   schemaVersion: typeof TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION;
   benchmarkId: string;
@@ -90,6 +99,10 @@ export interface TaskBenchmarkReceipt {
   outcome: TaskBenchmarkOutcome;
   /** Additive schema-1 witness; absent in legacy receipts. Configuration, not live-session proof. */
   policyAtFinish?: BenchmarkPolicySnapshot | null;
+  /** Additive schema-1 hook evidence; absence means routing attribution is unavailable. */
+  nativeRoutingAtStart?: TaskBenchmarkNativeRoutingObservation | null;
+  /** Hook callbacks observed between startedAt and completedAt. */
+  nativeRoutingAtFinish?: TaskBenchmarkNativeRoutingObservation | null;
 }
 
 export interface TaskBenchmarkCapture {
@@ -107,6 +120,8 @@ export interface TaskBenchmarkCapture {
   usageBefore: UsageWindowSnapshot[];
   /** Additive schema-1 context witness captured before the task starts. */
   contextAtStart?: TaskBenchmarkContextSnapshot | null;
+  /** Additive schema-1 hook configuration state captured before the task starts. */
+  nativeRoutingAtStart?: TaskBenchmarkNativeRoutingObservation | null;
   /**
    * Cumulative ccusage session counters at start, or null when local history was unavailable.
    *
@@ -401,6 +416,41 @@ function parseBoundaryPolicy(value: unknown): BenchmarkPolicySnapshot | null | u
   return { model, reasoningEffort, verbosity, verification: 'config-only' };
 }
 
+function parseNativeRoutingObservation(
+  value: unknown,
+): TaskBenchmarkNativeRoutingObservation | null | undefined {
+  if (value === null) return null;
+  const row = record(value);
+  if (row === null) return undefined;
+  const configured = row['configured'];
+  const promptSubmissions = row['promptSubmissions'];
+  const subagentsStarted = row['subagentsStarted'];
+  const subagentsStopped = row['subagentsStopped'];
+  const reportedModels = row['reportedModels'];
+  if (
+    !(configured === null || typeof configured === 'boolean') ||
+    !Number.isSafeInteger(promptSubmissions) ||
+    typeof promptSubmissions !== 'number' ||
+    promptSubmissions < 0 ||
+    !Number.isSafeInteger(subagentsStarted) ||
+    typeof subagentsStarted !== 'number' ||
+    subagentsStarted < 0 ||
+    !Number.isSafeInteger(subagentsStopped) ||
+    typeof subagentsStopped !== 'number' ||
+    subagentsStopped < 0 ||
+    !Array.isArray(reportedModels) ||
+    !reportedModels.every((model) => typeof model === 'string' && model.length <= 80)
+  )
+    return undefined;
+  return {
+    configured,
+    promptSubmissions,
+    subagentsStarted,
+    subagentsStopped,
+    reportedModels: [...new Set(reportedModels as string[])],
+  };
+}
+
 /** Runtime parser for a locally persisted in-progress benchmark capture. */
 export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureParseResult {
   const row = record(value);
@@ -431,6 +481,10 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
   const contextAtStart = hasContextAtStart
     ? parseTaskBenchmarkContextSnapshot(row['contextAtStart'])
     : undefined;
+  const hasNativeRoutingAtStart = Object.hasOwn(row, 'nativeRoutingAtStart');
+  const nativeRoutingAtStart = hasNativeRoutingAtStart
+    ? parseNativeRoutingObservation(row['nativeRoutingAtStart'])
+    : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -449,7 +503,8 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
     !validInstant(startedAt) ||
     usageBefore === null ||
     parsedLocalSessions === undefined ||
-    (hasContextAtStart && contextAtStart === undefined)
+    (hasContextAtStart && contextAtStart === undefined) ||
+    (hasNativeRoutingAtStart && nativeRoutingAtStart === undefined)
   ) {
     return {
       ok: false,
@@ -473,6 +528,7 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
       startedAt,
       usageBefore,
       ...(hasContextAtStart ? { contextAtStart: contextAtStart ?? null } : {}),
+      ...(hasNativeRoutingAtStart ? { nativeRoutingAtStart: nativeRoutingAtStart ?? null } : {}),
       localSessionsBefore,
     },
   };
@@ -515,6 +571,14 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   const contextAtFinish = hasContextAtFinish
     ? parseTaskBenchmarkContextSnapshot(row['contextAtFinish'])
     : undefined;
+  const hasNativeRoutingAtStart = Object.hasOwn(row, 'nativeRoutingAtStart');
+  const nativeRoutingAtStart = hasNativeRoutingAtStart
+    ? parseNativeRoutingObservation(row['nativeRoutingAtStart'])
+    : undefined;
+  const hasNativeRoutingAtFinish = Object.hasOwn(row, 'nativeRoutingAtFinish');
+  const nativeRoutingAtFinish = hasNativeRoutingAtFinish
+    ? parseNativeRoutingObservation(row['nativeRoutingAtFinish'])
+    : undefined;
 
   if (
     typeof benchmarkId !== 'string' ||
@@ -537,7 +601,9 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
     outcome === null ||
     (hasBoundaryPolicy && policyAtFinish === undefined) ||
     (hasContextAtStart && contextAtStart === undefined) ||
-    (hasContextAtFinish && contextAtFinish === undefined)
+    (hasContextAtFinish && contextAtFinish === undefined) ||
+    (hasNativeRoutingAtStart && nativeRoutingAtStart === undefined) ||
+    (hasNativeRoutingAtFinish && nativeRoutingAtFinish === undefined)
   ) {
     return {
       ok: false,
@@ -566,6 +632,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
       ...(hasContextAtStart ? { contextAtStart: contextAtStart ?? null } : {}),
       ...(hasContextAtFinish ? { contextAtFinish: contextAtFinish ?? null } : {}),
       ...(hasBoundaryPolicy ? { policyAtFinish: policyAtFinish ?? null } : {}),
+      ...(hasNativeRoutingAtStart ? { nativeRoutingAtStart: nativeRoutingAtStart ?? null } : {}),
+      ...(hasNativeRoutingAtFinish ? { nativeRoutingAtFinish: nativeRoutingAtFinish ?? null } : {}),
     },
   };
 }
@@ -580,6 +648,7 @@ export interface CompleteTaskBenchmarkCaptureInput {
   localUsage?: TaskLocalUsage | null;
   contextAtFinish?: TaskBenchmarkContextSnapshot | null;
   policyAtFinish?: BenchmarkPolicySnapshot | null;
+  nativeRoutingAtFinish?: TaskBenchmarkNativeRoutingObservation | null;
 }
 
 export function completeTaskBenchmarkCapture(
@@ -601,7 +670,13 @@ export function completeTaskBenchmarkCapture(
     usageAfter: input.usageAfter,
     localUsage: input.localUsage ?? null,
     ...(capture.contextAtStart !== undefined ? { contextAtStart: capture.contextAtStart } : {}),
+    ...(capture.nativeRoutingAtStart !== undefined
+      ? { nativeRoutingAtStart: capture.nativeRoutingAtStart }
+      : {}),
     ...(input.contextAtFinish !== undefined ? { contextAtFinish: input.contextAtFinish } : {}),
+    ...(input.nativeRoutingAtFinish !== undefined
+      ? { nativeRoutingAtFinish: input.nativeRoutingAtFinish }
+      : {}),
     ...(input.policyAtFinish !== undefined ? { policyAtFinish: input.policyAtFinish } : {}),
     outcome: {
       qualityGate: input.qualityGate,
@@ -992,6 +1067,15 @@ export interface TaskBenchmarkMatrixEntry {
   optimizedLocalTokens: number | null;
   localTokenSavingPercent: number | null;
   quota: TaskBenchmarkQuotaComparison | null;
+  nativeRouting?: TaskBenchmarkNativeRoutingComparison;
+}
+
+export interface TaskBenchmarkNativeRoutingComparison {
+  verdict: 'attributed' | 'not-attributed' | 'unknown';
+  baselineSubagents: number | null;
+  optimizedSubagents: number | null;
+  optimizedReportedModels: string[];
+  qualityGatesPassed: boolean;
 }
 
 export interface TaskBenchmarkMatrixSummary {
@@ -1114,6 +1198,7 @@ export function buildTaskBenchmarkMatrix(
             ? null
             : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
         quota: comparison.quota,
+        ...nativeRoutingComparison(baseline, optimized),
       };
     })
     .sort(
@@ -1134,5 +1219,59 @@ export function buildTaskBenchmarkMatrix(
     byTaskClass,
     overall: summarizeMatrixEntries(entries, null),
     selection,
+  };
+}
+
+function nativeRoutingComparison(
+  baseline: TaskBenchmarkReceipt,
+  optimized: TaskBenchmarkReceipt,
+): { nativeRouting?: TaskBenchmarkNativeRoutingComparison } {
+  const bStart = baseline.nativeRoutingAtStart;
+  const bFinish = baseline.nativeRoutingAtFinish;
+  const oStart = optimized.nativeRoutingAtStart;
+  const oFinish = optimized.nativeRoutingAtFinish;
+  if (
+    bStart === undefined &&
+    bFinish === undefined &&
+    oStart === undefined &&
+    oFinish === undefined
+  )
+    return {};
+  const qualityGatesPassed =
+    baseline.outcome.qualityGate === 'passed' && optimized.outcome.qualityGate === 'passed';
+  if (
+    bStart == null ||
+    bFinish == null ||
+    oStart == null ||
+    oFinish == null ||
+    bStart.configured === null ||
+    oStart.configured === null
+  ) {
+    return {
+      nativeRouting: {
+        verdict: 'unknown',
+        baselineSubagents: bFinish?.subagentsStarted ?? null,
+        optimizedSubagents: oFinish?.subagentsStarted ?? null,
+        optimizedReportedModels: oFinish?.reportedModels ?? [],
+        qualityGatesPassed,
+      },
+    };
+  }
+  const attributed =
+    bStart.configured === false &&
+    bFinish.configured === false &&
+    bFinish.subagentsStarted === 0 &&
+    oStart.configured === true &&
+    oFinish.configured === true &&
+    oFinish.promptSubmissions > 0 &&
+    oFinish.subagentsStarted > 0;
+  return {
+    nativeRouting: {
+      verdict: attributed ? 'attributed' : 'not-attributed',
+      baselineSubagents: bFinish.subagentsStarted,
+      optimizedSubagents: oFinish.subagentsStarted,
+      optimizedReportedModels: [...oFinish.reportedModels],
+      qualityGatesPassed,
+    },
   };
 }

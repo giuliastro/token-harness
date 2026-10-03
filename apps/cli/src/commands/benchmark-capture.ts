@@ -30,6 +30,7 @@ import { runBudget } from './budget.js';
 import type { CommandContext } from './context.js';
 import { runContext } from './context-cost.js';
 import { runHistory } from './history.js';
+import { nativeRoutingObservationForBenchmark } from '../prompt-router.js';
 
 const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
@@ -202,6 +203,21 @@ export async function runBenchmarkStart(
     runContext(observedContext),
     runHistory({ ...observedContext, since: '1d', until: null }),
   ]);
+  const nativeRoutingAtStart =
+    context.adapters === null
+      ? null
+      : await nativeRoutingObservationForBenchmark({
+          fs: context.adapters.fs,
+          home: context.home,
+          stateRoot: context.stateRoot,
+          harness,
+          version: null,
+          runner: context.adapters.runner,
+          facts: context.platform,
+          paths: context.adapters.paths,
+          projectRoot: context.projectRoot,
+          projectId,
+        });
   const budget = budgetResult.data?.harnesses.find((item) => item.harnessId === harness);
   const contextObservation = contextResult.data?.harnesses.find(
     (item) => item.harnessId === harness,
@@ -227,6 +243,7 @@ export async function runBenchmarkStart(
     usageBefore: budget?.windows ?? [],
     contextAtStart,
     localSessionsBefore,
+    nativeRoutingAtStart,
   };
 
   if (!(await writeJson(context, paths.capturePath, capture))) {
@@ -440,6 +457,22 @@ export async function runBenchmarkFinish(
     runContext(completedContext),
     runHistory({ ...completedContext, since: '1d', until: null }),
   ]);
+  const nativeRoutingAtFinish =
+    context.adapters === null
+      ? null
+      : await nativeRoutingObservationForBenchmark({
+          fs: context.adapters.fs,
+          home: context.home,
+          stateRoot: context.stateRoot,
+          harness: parsed.capture.harnessId,
+          version: null,
+          runner: context.adapters.runner,
+          facts: context.platform,
+          paths: context.adapters.paths,
+          projectRoot: context.projectRoot,
+          projectId,
+          startedAt: parsed.capture.startedAt,
+        });
   const budget = budgetResult.data?.harnesses.find(
     (item) => item.harnessId === parsed.capture.harnessId,
   );
@@ -465,6 +498,7 @@ export async function runBenchmarkFinish(
     localUsage,
     contextAtFinish: taskBenchmarkContextSnapshot(finishContextObservation),
     policyAtFinish: benchmarkPolicySnapshot(finishContextObservation),
+    nativeRoutingAtFinish,
   });
   if (!completed.ok) {
     return commandResult({

@@ -170,11 +170,18 @@ they receive the completed tool result. These are different interception points 
 same shell-output channel, so the default remains one owner and an unreviewed pair still
 conflicts.
 
-The pair may be admitted as an ordered chain only for provider versions, harness versions,
-platforms, and fixtures named by its compatibility rule. The admitted order is RTK first,
-HarnessTrim second. The harness lifecycle, rather than hook-list ordering, establishes that
-order. HarnessTrim must be installed with its prompt instructions disabled so a model does
-not invoke a second, unobserved reduce path itself.
+The pair may be admitted as an ordered chain only for provider versions, the version of the
+harness being resolved, platforms, and fixtures named by its compatibility rule. When a rule
+covers multiple harnesses, a Codex-only plan checks the Codex version; an absent Claude
+installation does not withdraw that Codex result. The admitted order is RTK first, HarnessTrim
+second. The harness lifecycle, rather than hook-list ordering, establishes that order. HarnessTrim
+must be installed with its prompt instructions disabled so a model does not invoke a second,
+unobserved reduce path itself.
+
+An ordered rule must record tested releases for every provider and every harness it covers, and
+resolution must observe those same releases. A missing rule entry or an unknown, missing, or
+different installed release withdraws the permission and fails closed. This applies both when
+providers claim the same interception scope and when their hooks form a cross-interception chain.
 
 The two providers keep independent measurements. Unless both record comparable boundaries
 for the same operation, neither the planner nor reports derive a combined raw-to-final

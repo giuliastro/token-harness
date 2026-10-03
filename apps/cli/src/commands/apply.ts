@@ -39,6 +39,7 @@ import {
   statusForExitCode,
   digestText,
   executeTransaction,
+  harnessId,
   storedPlanFileName,
   providerId,
   validateStoredPlan,
@@ -49,8 +50,10 @@ import {
   type PlanReport,
   type StoredPlan,
   type ManagedIntegration,
+  type PlannedAction,
 } from '@token-harness/core';
 import { listHarnessAdapters, listProviderAdapters } from '@token-harness/adapters';
+import { observeNativePromptRouting } from '../prompt-router.js';
 
 import type { CommandContext } from './context.js';
 import { runCandidateApply } from './candidate-lifecycle.js';
@@ -159,6 +162,55 @@ async function verifyManagedIntegrationPostconditions(
   return diagnostics;
 }
 
+async function verifyNativePromptRoutingPostconditions(
+  context: CommandContext,
+  actions: readonly PlannedAction[],
+): Promise<Diagnostic[]> {
+  const routing = actions.filter((action) => action.id.startsWith('native-prompt-routing:'));
+  if (routing.length === 0) return [];
+  if (
+    context.adapters === null ||
+    context.stateRoot === null ||
+    (context.harness !== harnessId('claude') && context.harness !== harnessId('codex'))
+  ) {
+    return [
+      diagnostic({
+        severity: 'error',
+        code: 'prompt-routing-postcondition-unavailable',
+        subject: context.harness,
+        message: 'Native prompt-routing configuration could not be read after the change',
+        remediation:
+          'Keep the transaction rollback and review a fresh plan from the local agent environment',
+      }),
+    ];
+  }
+  const observed = await observeNativePromptRouting({
+    fs: context.adapters.fs,
+    home: context.home,
+    stateRoot: context.stateRoot,
+    harness: context.harness,
+    version: null,
+    runner: context.adapters.runner,
+    facts: context.platform,
+    paths: context.adapters.paths,
+    projectRoot: context.projectRoot,
+    projectId: context.adapters.projectIdFor(context.projectRoot),
+  });
+  const shouldBeEnabled = routing.some((action) => action.id.includes(':enable:'));
+  const satisfied = shouldBeEnabled ? observed.configured === true : observed.configured === false;
+  if (satisfied) return [];
+  return [
+    diagnostic({
+      severity: 'error',
+      code: 'prompt-routing-postcondition-unmet',
+      subject: context.harness,
+      path: observed.configPath,
+      message: `Native prompt-routing hooks were not observed in the requested state after the change: ${observed.label}`,
+      remediation: 'Review the hook settings and allow the transaction to restore its backup',
+    }),
+  ];
+}
+
 /**
  * The transaction ID.
  *
@@ -246,6 +298,8 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
 
   let stored: StoredPlan | null = null;
   let storedAgentSkill = false;
+  let storedAgentRouting = false;
+  let storedAgentRoutingRemoval = false;
   let planningContext = context;
   const rejectedReport = (): ApplyReport => ({
     ...emptyReport('rejected'),
@@ -323,11 +377,21 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
         return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
       }
       storedAgentSkill = stored.actions.some((action) => action.id.startsWith('agent-skill:'));
+      storedAgentRouting = stored.actions.some(
+        (action) =>
+          action.id.startsWith('native-prompt-routing:') && action.id.includes(':enable:'),
+      );
+      storedAgentRoutingRemoval = stored.actions.some(
+        (action) =>
+          action.id.startsWith('native-prompt-routing:') && action.id.includes(':disable:'),
+      );
       planningContext = {
         ...context,
         harness: stored.harness,
         provider,
         agentSkill: storedAgentSkill,
+        agentRouting: storedAgentRouting,
+        disableAgentRouting: storedAgentRoutingRemoval,
       };
     } catch {
       diagnostics.push(
@@ -356,6 +420,23 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
         subject: stored.harness,
         message: 'The Agent Skill target changed after the reviewed preview',
         remediation: 'Review a fresh Enable in-session guidance preview; nothing was written',
+      }),
+    );
+    return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
+  }
+
+  if (
+    stored !== null &&
+    (storedAgentRouting || storedAgentRoutingRemoval) &&
+    computed.report.planId !== stored.planId
+  ) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'prompt-routing-plan-drift',
+        subject: stored.harness,
+        message: 'The native prompt-routing target or ownership changed after the reviewed preview',
+        remediation: 'Review a fresh prompt-routing preview; nothing was written',
       }),
     );
     return finish('rejected', EXIT_CODES['precondition-drift'], rejectedReport(), diagnostics);
@@ -517,8 +598,10 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     // RFC 0004 §Process policy: an installer reaches the machine through the runner or not at all.
     runner: context.adapters.runner,
     now: context.now,
-    verifyPostconditions: async () =>
-      verifyManagedIntegrationPostconditions(context, computed.managedIntegrations),
+    verifyPostconditions: async () => [
+      ...(await verifyManagedIntegrationPostconditions(context, computed.managedIntegrations)),
+      ...(await verifyNativePromptRoutingPostconditions(context, actions)),
+    ],
   });
   diagnostics.push(...transaction.diagnostics);
 

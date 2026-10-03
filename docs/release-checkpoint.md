@@ -1,24 +1,33 @@
-# Release checkpoint — 2026-10-01
+# Release checkpoint — 2026-10-03
 
-Token Harness `0.1.23` is a focused corrective release candidate for Codex runtime verification and
-the RTK + HarnessTrim optimization stack.
+Token Harness `0.1.24` is a focused release candidate for automatic native prompt routing across
+Codex and Claude Code, with local runtime receipts and quality-gated savings attribution.
 
 ## Changes in this release
 
-- Separates Codex CLI availability from Codex Desktop hook health. If the optional `codex` command
-  is not on `PATH`, Token Harness reports CLI checks as unobserved instead of marking the configured
-  desktop integration broken.
-- Keeps runtime proof provider-specific: RTK per-agent history and HarnessTrim reduction receipts
-  establish their own Codex canary tier; hook declarations and native trust metadata remain separate
-  checks.
-- Includes the compatibility fixture for the reviewed RTK + HarnessTrim Codex/Linux chain.
+- Adds a first-class Automatic prompt routing control to each supported harness card, with reviewed
+  enable/disable plans, ownership, drift checks, verification, and rollback.
+- Installs native prompt hooks that inject a short subagent model policy automatically on every
+  submitted prompt after the user enables it once. No command prefix or skill invocation is needed.
+- Records prompt and native subagent callbacks locally without saving prompt text, transcripts, or
+  raw session/agent identifiers. Configuration and runtime evidence are shown separately.
+- Reports local token counts separately from authoritative five-hour and weekly allowance deltas;
+  only paired, attributable benchmarks that pass both quality gates receive savings credit.
+- Adds exact hook fixtures for Codex 0.160.0 and Claude Code 2.1.288 while keeping unknown versions
+  fail-closed. Codex still requires manual `/hooks` trust review; Claude requires a new session.
 
-This incremental release does not claim broad-promotion readiness or combine provider savings into
-an unlabeled total.
+The model instruction is advisory and cannot guarantee a native subagent launch. Claude's documented
+hook callback does not expose the child's actual model, so Token Harness reports it as unknown. No
+routed token/quota savings are claimed before paired measurements. This release does not claim
+broad-promotion readiness.
 
 ## Release gates
 
-Do not create `release/v0.1.23` until release-preparation CI is green on Windows, macOS, and Linux.
-The release bridge then creates immutable tag `v0.1.23` and dispatches the exact-tag workflow. That
-workflow must pass its tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing, and
-npm-latest verification before it creates the GitHub Release.
+The normal cross-platform PR CI must pass on Windows, macOS, and Linux before creating
+`release/v0.1.24`. The release bridge then creates immutable tag `v0.1.24` and dispatches the
+exact-tag release workflow. That workflow must pass tests, real-runtime smoke, packaging, provenance,
+npm Trusted Publishing, and npm-latest verification before it creates the GitHub Release.
+
+The user's end-to-end Claude Code Windows callback check remains a post-install runtime test and is
+required before claiming Claude-on-Windows runtime verification. Run it using the steps in
+`docs/releases/0.1.24.md`.

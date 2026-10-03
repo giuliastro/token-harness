@@ -108,6 +108,9 @@ export interface CommandOptions {
   nativePolicy: boolean;
   /** Guided/internal: install the portable Token Harness Agent Skill for the selected harness. */
   agentSkill: boolean;
+  /** Install or remove the always-on native per-prompt routing hook. */
+  agentRouting: boolean;
+  disableAgentRouting: boolean;
   /** Show the full technical human report. JSON is already complete. */
   verbose: boolean;
   /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
@@ -151,7 +154,15 @@ const VALUE_FLAGS = new Set([
  * an envelope when `--json` parsed; it is listed here so the main loop does not reject it as
  * unknown.
  */
-const BOOLEAN_FLAGS = new Set(['--json', '--native-policy', '--agent-skill', '--verbose', '--yes']);
+const BOOLEAN_FLAGS = new Set([
+  '--json',
+  '--native-policy',
+  '--agent-skill',
+  '--agent-routing',
+  '--disable-agent-routing',
+  '--verbose',
+  '--yes',
+]);
 
 export function detectJsonMode(argv: readonly string[]): boolean {
   return argv.some((token) => token === '--json' || token.startsWith('--json='));
@@ -225,6 +236,8 @@ export function parseArgv(
     contextSnapshot: null,
     nativePolicy: false,
     agentSkill: false,
+    agentRouting: false,
+    disableAgentRouting: false,
     verbose: false,
     yes: false,
   };
@@ -269,6 +282,8 @@ export function parseArgv(
       if (name === '--yes') options.yes = true;
       if (name === '--native-policy') options.nativePolicy = true;
       if (name === '--agent-skill') options.agentSkill = true;
+      if (name === '--agent-routing') options.agentRouting = true;
+      if (name === '--disable-agent-routing') options.disableAgentRouting = true;
       if (name === '--verbose') options.verbose = true;
       continue;
     }
@@ -547,6 +562,17 @@ export function parseArgv(
       }),
     );
     return usageError(json, diagnostics);
+  }
+
+  if (options.agentRouting && options.disableAgentRouting) {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'conflicting-prompt-routing-flags',
+        message: '--agent-routing and --disable-agent-routing cannot be used together',
+        remediation: 'Choose one prompt-routing state to plan',
+      }),
+    );
   }
 
   if (!isAvailableCommand(command)) {

@@ -60,6 +60,10 @@ export interface CommandContext {
   env?: Readonly<Record<string, string | undefined>>;
   /** Guided/internal Agent Skill installation, still executed through plan/apply. */
   agentSkill?: boolean;
+  /** Native per-prompt routing hooks, included in the normal plan/apply transaction. */
+  agentRouting?: boolean;
+  /** Ownership-aware removal of native prompt-routing hooks. */
+  disableAgentRouting?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
   /** Guided all-project observation; the legacy metrics CLI remains project-scoped. */
   metricsAllProjects?: boolean;

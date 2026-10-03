@@ -59,6 +59,10 @@ import {
 } from '@token-harness/core';
 
 import { planAgentSkillInstall } from '../agent-skill.js';
+import {
+  planNativePromptRoutingInstall,
+  planNativePromptRoutingRemoval,
+} from '../prompt-router.js';
 import { PLANS_DIRECTORY } from './apply.js';
 import { runContext } from './context-cost.js';
 import { runOptimize } from './optimize.js';
@@ -733,6 +737,49 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
         actions.push(...skillPlan.actions);
         diagnostics.push(...skillPlan.diagnostics);
       }
+    }
+  }
+
+  if (context.agentRouting === true || context.disableAgentRouting === true) {
+    const harness = context.harness;
+    if (harness !== harnessId('claude') && harness !== CODEX) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'prompt-routing-harness-required',
+          subject: harness,
+          message: 'Automatic prompt routing requires an explicit Claude Code or Codex harness',
+          remediation:
+            'Choose the detected agent in the guided app, or pass --harness claude|codex',
+        }),
+      );
+    } else if (context.adapters === null) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'prompt-routing-adapters-unavailable',
+          subject: harness,
+          message: 'The native prompt hook could not be planned without filesystem adapters',
+          remediation: 'Refresh Token Harness from a supported local environment',
+        }),
+      );
+    } else {
+      const input = {
+        fs: context.adapters.fs,
+        home: context.home,
+        harness,
+        version: versions.harnesses[harness] ?? null,
+        runner: context.adapters.runner,
+        facts: context.platform,
+        paths: context.adapters.paths,
+        projectRoot: context.projectRoot,
+        stateRoot: context.stateRoot,
+      };
+      const routingPlan = context.agentRouting
+        ? await planNativePromptRoutingInstall(input)
+        : await planNativePromptRoutingRemoval(input);
+      actions.push(...routingPlan.actions);
+      diagnostics.push(...routingPlan.diagnostics);
     }
   }
 

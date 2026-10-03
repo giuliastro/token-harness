@@ -22,6 +22,10 @@ export { hermesAdapter } from './hermes.js';
 export { opencodeAdapter } from './opencode.js';
 export { piAdapter } from './pi.js';
 export { matcherCoversFamily } from './claude.js';
+export {
+  NATIVE_PROMPT_ROUTING_EVENTS,
+  nativePromptRoutingHookEntries,
+} from './native-prompt-routing.js';
 
 /**
  * Claude Code first, inverting PLAN §15 issue 10, which names Codex. The Phase 2.5 spike

@@ -1,11 +1,15 @@
 ---
 name: token-harness
-description: Optimizes local Claude Code or Codex work against observed subscription allowance, context pressure, quality floors, and project-local benchmark evidence using the Token Harness CLI. Use when the user asks to conserve or maximize coding-agent allowance, choose reasoning/model/verbosity deliberately, check whether a task fits current quota, or explicitly asks to use Token Harness.
+description: Optimizes local Claude Code or Codex work against observed subscription allowance, context pressure, quality floors, and project-local benchmark evidence using the Token Harness CLI. Guides native subagent model routing for substantial bounded coding tasks. Use for substantial coding work where native delegation may apply, or when the user asks about allowance, model/effort/verbosity choices, quota fit, or Token Harness.
 ---
 
 # Token Harness
 
 Use Token Harness as a local deterministic policy engine. Do not reproduce its quota math or invent provider conversions yourself.
+
+## Automatic routing
+
+When enabled in the Token Harness dashboard, a native prompt hook supplies the routing policy on every submitted prompt. This works without invoking this skill or prefixing the prompt with a command. The hook asks the coding agent to delegate only eligible bounded work; it does not change the root model or prove which child model ran. Use this skill when the user asks for explicit quota-aware advice or a benchmark.
 
 ## Default workflow
 
@@ -47,6 +51,18 @@ For multiple independent new tasks whose explicit list can be classified by task
 `token-harness schedule --current <current> --candidate <other> --workload mechanical=N,standard=N,hard=N,critical=N --json`
 
 Omit zero-count classes. This is for queued new work, not an in-progress handoff. Never switch harnesses automatically from this result.
+
+## Native subagent model routing
+
+Use native subagents as the only model-routing surface. This routes delegated work; it never changes the model already selected for the root conversation. Keep Codex as the first supported path.
+
+For Codex, when the task is substantial and contains a complete, bounded implementation unit that can be handed off without duplicating work, delegate that unit to one native subagent with `model: gpt-6-luna` if Luna is present in the current Codex model picker/catalog. Set the model explicitly in the native spawn request: when it is omitted, Codex inherits the root model and reasoning effort, so a generic delegation is not a cost-routed delegation. If a higher-priority instruction forbids specifying the child model, skip cost routing and continue with the root model. Keep the root model responsible for task framing, integration, and acceptance review. Do not run the same implementation in both agents. Use at most one cost-routed worker at a time.
+
+Skip routing for trivial tasks, tightly coupled or shared-write work, architecture/security/release decisions, work that needs the root model's full context or judgment throughout, when the user asks not to delegate, when the root model is Luna or cannot be identified, or when the requested model is not currently available. Do not substitute an unverified model ID or silently fall back to another harness. If no supported route is available, continue with the current root model.
+
+For Claude Code, apply the same bounded-task rules only when Claude Code is already configured and authenticated and native subagents are available. Request the current native `haiku` alias for an eligible worker; do not configure Claude Code or authenticate on the user's behalf.
+
+Treat the selected child model as a routing request until Codex or Claude Code visibly reports the worker's actual model. A skill instruction is not runtime telemetry. Subagents add context and coordination overhead and can consume more total tokens than single-agent work; do not claim token, quota, or cost savings without paired, quality-gated usage evidence for the same harness and task class.
 
 ## Persistent native changes
 
