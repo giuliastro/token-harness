@@ -30,14 +30,16 @@ describe('guided optional managed optimizers', () => {
     assert.match(GUIDE_HTML, /does not confirm runtime activity/);
   });
 
-  it('keeps experimental benchmark evidence separate from managed setup', () => {
-    assert.match(GUIDE_HTML, /<h2>Experimental benchmark results<\/h2>/);
-    assert.match(
-      GUIDE_HTML,
-      /Candidate evidence is evaluation only; it never promotes a tool automatically/,
-    );
+  it('keeps experimental benchmark evidence labeled in the unified results table', () => {
+    assert.match(GUIDE_HTML, /<option value="candidate">Experiments<\/option>/);
+    assert.match(GUIDE_HTML, /<tbody id="result-evidence">/);
+    assert.match(GUIDE_JS, /addEvidenceRow\(body, 'candidate'/);
     assert.match(GUIDE_JS, /benchmark-start/);
     assert.match(GUIDE_JS, /Candidate attribution names the experiment target/);
+    assert.match(
+      GUIDE_JS,
+      /Evaluation evidence only; this does not automatically promote or activate the candidate/,
+    );
   });
 
   it('is a self-contained browser controller with no direct package-install execution', () => {

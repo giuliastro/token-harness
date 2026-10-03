@@ -17,6 +17,8 @@ import {
 import {
   findHarnessAdapter,
   nativePromptRoutingHookEntries,
+  nativePromptRoutingVersionSupported,
+  readCodexHookEnablement,
   resolveConfigPath,
 } from '@token-harness/adapters';
 
@@ -53,6 +55,9 @@ export interface PromptRouterObservation {
   reportedModels: string[];
   lastObservedAt: string | null;
   receiptState: 'available' | 'unavailable' | 'limited';
+  enablement?: 'enabled' | 'disabled' | 'untrusted' | 'unknown';
+  verificationTier?: 'config-only' | 'runtime-observed';
+  needsRepair?: boolean;
 }
 
 export interface PromptRouterPlan {
@@ -78,10 +83,6 @@ interface RoutingConfigTarget {
 
 function isHarness(value: HarnessId): value is HarnessId & ('claude' | 'codex') {
   return value === 'claude' || value === 'codex';
-}
-
-function expectedVersions(harness: 'claude' | 'codex'): readonly string[] {
-  return harness === 'codex' ? ['0.159.0', '0.160.0'] : ['2.1.274', '2.1.288'];
 }
 
 function configTarget(input: {
@@ -118,8 +119,8 @@ function configTarget(input: {
   };
 }
 
-function hookEntries(harness: 'claude' | 'codex') {
-  return nativePromptRoutingHookEntries(harnessId(harness), 'token-harness');
+function hookEntries(harness: 'claude' | 'codex', platform: PlatformFacts['os'] = 'linux') {
+  return nativePromptRoutingHookEntries(harnessId(harness), 'token-harness', platform);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -165,7 +166,8 @@ function containsRouterCommand(value: unknown, harness: 'claude' | 'codex'): boo
       );
     const args = handler['args'];
     return (
-      handler['command'] === 'token-harness' && Array.isArray(args) && args[0] === ROUTE_MARKER
+      (typeof handler['command'] === 'string' && handler['command'].includes(ROUTE_MARKER)) ||
+      (handler['command'] === 'token-harness' && Array.isArray(args) && args[0] === ROUTE_MARKER)
     );
   });
 }
@@ -173,10 +175,11 @@ function containsRouterCommand(value: unknown, harness: 'claude' | 'codex'): boo
 function configHasExactRouter(
   hooks: Record<string, unknown>,
   harness: 'claude' | 'codex',
+  platform: PlatformFacts['os'],
 ): { complete: boolean; partial: boolean; conflict: boolean } {
   let exactCount = 0;
   let routeCount = 0;
-  for (const expected of hookEntries(harness)) {
+  for (const expected of hookEntries(harness, platform)) {
     const live = hooks[expected.eventName];
     const entries = Array.isArray(live) ? live : [];
     const routeEntries = entries.filter((entry) => containsRouterCommand(entry, harness));
@@ -189,8 +192,8 @@ function configHasExactRouter(
       exactCount += 1;
   }
   return {
-    complete: exactCount === hookEntries(harness).length,
-    partial: routeCount > 0 && exactCount !== hookEntries(harness).length,
+    complete: exactCount === hookEntries(harness, platform).length,
+    partial: routeCount > 0 && exactCount !== hookEntries(harness, platform).length,
     conflict: routeCount > exactCount,
   };
 }
@@ -199,8 +202,9 @@ function routerOwnedArtifacts(
   journals: Awaited<ReturnType<FileJournalStore['list']>>,
   path: string,
   harness: 'claude' | 'codex',
+  platform: PlatformFacts['os'],
 ): OwnedArtifact[] {
-  const expected = hookEntries(harness);
+  const expected = hookEntries(harness, platform);
   for (const journal of journals) {
     const disabledHere = journal.entries.some(
       (entry) =>
@@ -255,6 +259,7 @@ export async function planNativePromptRoutingInstall(input: {
   facts: PlatformFacts;
   paths: PlatformPaths;
   projectRoot: string;
+  stateRoot?: string | null;
 }): Promise<PromptRouterPlan> {
   const diagnostics: Diagnostic[] = [];
   const target = configTarget(input);
@@ -270,16 +275,16 @@ export async function planNativePromptRoutingInstall(input: {
     );
     return { target: null, actions: [], diagnostics };
   }
-  if (!expectedVersions(target.harness).includes(target.version ?? '')) {
+  if (!nativePromptRoutingVersionSupported(harnessId(target.harness), target.version)) {
     diagnostics.push(
       diagnostic({
         severity: 'warning',
         code: 'prompt-routing-version-unverified',
         subject: target.harness,
-        message: `Native prompt routing has no hook fixture for ${target.harness} ${target.version ?? 'unknown'}`,
+        message: `Routing is not supported for ${target.harness} ${target.version ?? '(version unknown)'}. Check Token Harness updates in Health and updates, then retry.`,
         path: target.path,
         remediation:
-          'Refresh Token Harness after the installed harness hook schema is fixture-tested',
+          'Check for Token Harness updates; this agent version needs a verified hook fixture',
       }),
     );
     return { target: target.path, actions: [], diagnostics };
@@ -344,7 +349,7 @@ export async function planNativePromptRoutingInstall(input: {
     hooks = parsed.hooks;
   }
 
-  const existing = configHasExactRouter(hooks, target.harness);
+  const existing = configHasExactRouter(hooks, target.harness, input.facts.os);
   if (existing.complete) {
     diagnostics.push(
       diagnostic({
@@ -358,7 +363,21 @@ export async function planNativePromptRoutingInstall(input: {
     );
     return { target: target.path, actions: [], diagnostics };
   }
-  if (existing.partial || existing.conflict) {
+  const legacy =
+    target.harness === 'claude' && input.facts.os === 'windows'
+      ? configHasExactRouter(hooks, target.harness, 'linux')
+      : null;
+  const legacyOwned =
+    legacy?.complete && !legacy.conflict
+      ? routerOwnedArtifacts(
+          await journalsFor({ fs: input.fs, stateRoot: input.stateRoot ?? null }),
+          target.path,
+          target.harness,
+          'linux',
+        )
+      : [];
+  const repair = legacyOwned.length === 3;
+  if ((existing.partial || existing.conflict) && !repair) {
     diagnostics.push(
       diagnostic({
         severity: 'error',
@@ -373,7 +392,7 @@ export async function planNativePromptRoutingInstall(input: {
     return { target: target.path, actions: [], diagnostics };
   }
 
-  const entries = hookEntries(target.harness);
+  const entries = hookEntries(target.harness, input.facts.os);
   const action: PlannedAction = {
     kind: 'merge-json',
     id: actionId(target.harness, 'enable', 'all'),
@@ -403,7 +422,10 @@ export async function planNativePromptRoutingInstall(input: {
     })),
     createIfMissing: true,
   };
-  return { target: target.path, actions: [action], diagnostics };
+  const removals = repair
+    ? await planNativePromptRoutingRemoval({ ...input, stateRoot: input.stateRoot ?? null })
+    : null;
+  return { target: target.path, actions: [...(removals?.actions ?? []), action], diagnostics };
 }
 
 export async function planNativePromptRoutingRemoval(input: {
@@ -431,9 +453,13 @@ export async function planNativePromptRoutingRemoval(input: {
     );
     return { target: target?.path ?? null, actions: [], diagnostics };
   }
-  const expected = hookEntries(target.harness);
+  let expected = hookEntries(target.harness, input.facts.os);
   const journals = await journalsFor({ fs: input.fs, stateRoot: input.stateRoot });
-  const artifacts = routerOwnedArtifacts(journals, target.path, target.harness);
+  let artifacts = routerOwnedArtifacts(journals, target.path, target.harness, input.facts.os);
+  if (artifacts.length === 0 && target.harness === 'claude' && input.facts.os === 'windows') {
+    expected = hookEntries(target.harness, 'linux');
+    artifacts = routerOwnedArtifacts(journals, target.path, target.harness, 'linux');
+  }
   const actions = expected.flatMap((entry): PlannedAction[] => {
     const pointer = `hooks.${entry.eventName}`;
     const targetArtifact = artifacts.find(
@@ -643,6 +669,8 @@ export async function observeNativePromptRouting(input: {
     reportedModels: [],
     lastObservedAt: null,
     receiptState: 'unavailable',
+    enablement: 'unknown',
+    verificationTier: 'config-only',
   };
   const target = configTarget({ ...input, harness: input.harness });
   if (target === null) return base;
@@ -702,7 +730,24 @@ export async function observeNativePromptRouting(input: {
       receiptState: eventResult.state,
     };
   }
-  const match = configHasExactRouter(hooks, harness);
+  const match = configHasExactRouter(hooks, harness, input.facts.os);
+  if (harness === 'claude' && input.facts.os === 'windows' && (match.partial || match.conflict)) {
+    const legacy = configHasExactRouter(hooks, harness, 'linux');
+    const owned = routerOwnedArtifacts(await journalsFor(input), target.path, harness, 'linux');
+    if (legacy.complete && !legacy.conflict && owned.length === 3)
+      return {
+        ...base,
+        ...summary,
+        state: 'managed',
+        label: 'Repair required',
+        configured: false,
+        configPath: target.path,
+        needsRepair: true,
+        receiptState: eventResult.state,
+        detail:
+          'The installed routing hook cannot launch the Windows npm command. Choose Repair routing once; future prompts run automatically.',
+      };
+  }
   if (match.conflict || match.partial) {
     return {
       ...base,
@@ -727,30 +772,82 @@ export async function observeNativePromptRouting(input: {
       receiptState: eventResult.state,
     };
   }
-  const artifacts = routerOwnedArtifacts(await journalsFor(input), target.path, harness);
-  const state = artifacts.length === hookEntries(harness).length ? 'managed' : 'external';
+  const artifacts = routerOwnedArtifacts(
+    await journalsFor(input),
+    target.path,
+    harness,
+    input.facts.os,
+  );
+  const state =
+    artifacts.length === hookEntries(harness, input.facts.os).length ? 'managed' : 'external';
   const hasRuntimeReceipt = summary.promptSubmissions > 0;
-  const label =
-    state === 'external'
-      ? hasRuntimeReceipt
-        ? 'Runtime observed · external'
-        : 'Enabled externally'
-      : hasRuntimeReceipt
-        ? 'Runtime observed'
+  let enablement: NonNullable<PromptRouterObservation['enablement']> = 'unknown';
+  if (harness === 'codex') {
+    const declaration = findHarnessAdapter(harnessId(harness))!.manifest.configFiles.find(
+      (file) => file.parser === 'json' && file.scope === 'user',
+    )!;
+    const check = await readCodexHookEnablement(
+      target.fileContext,
+      {
+        declaration,
+        path: target.path,
+        exists: true,
+        parsed: true,
+        configuredPoints: [],
+        matchers: [],
+        commands: [],
+      },
+      true,
+    );
+    if (check?.status === 'pass') enablement = 'enabled';
+    else if (check?.status === 'fail')
+      enablement = /[1-9]\d* untrusted/.test(check.summary) ? 'untrusted' : 'disabled';
+  } else {
+    // Honor effective project/local hook disablement without mutating user settings.
+    const adapter = findHarnessAdapter(harnessId(harness))!;
+    let disabled = false;
+    let readable = true;
+    for (const declaration of adapter.manifest.configFiles) {
+      const path = resolveConfigPath(declaration, target.fileContext);
+      if ((await input.fs.stat(path))?.kind !== 'file') continue;
+      try {
+        const doc = asRecord(JSON.parse(DECODER.decode(await input.fs.readFile(path))));
+        if (typeof doc?.['disableAllHooks'] === 'boolean') disabled = doc['disableAllHooks'];
+      } catch {
+        readable = false;
+      }
+    }
+    enablement = readable ? (disabled ? 'disabled' : 'enabled') : 'unknown';
+  }
+  const blocked = enablement === 'untrusted' || enablement === 'disabled';
+  const label = blocked
+    ? enablement === 'untrusted'
+      ? 'Authorization required'
+      : 'Hooks disabled'
+    : hasRuntimeReceipt
+      ? 'Runtime observed'
+      : enablement === 'enabled'
+        ? 'Ready · awaiting prompt'
+        : 'Configured · check authorization';
+  const scope = input.projectId === null ? 'across projects' : 'in this project';
+  const detail = blocked
+    ? harness === 'codex'
+      ? 'Open Codex /hooks. Enable and trust the three Token Harness routing hooks once, then send a prompt.'
+      : 'Hooks are disabled in Claude settings. Enable hooks in /hooks, then send a prompt.'
+    : hasRuntimeReceipt
+      ? `${String(summary.promptSubmissions)} prompt callbacks, ${String(summary.subagentsStarted)} agent starts, ${String(summary.subagentsStopped)} stops ${scope} in the last 30 days. Routing runs automatically on each prompt.${eventResult.state === 'limited' ? ' Counts are partial.' : ''}`
+      : enablement === 'enabled'
+        ? 'Ready. Send a prompt in a new session; the first callback will appear here automatically. No skill or command is needed per prompt.'
         : harness === 'codex'
-          ? 'Configured · trust or runtime pending'
-          : 'Configured · runtime pending';
-  const detail =
-    summary.promptSubmissions > 0
-      ? `${String(summary.promptSubmissions)} prompt hook(s), ${String(summary.subagentsStarted)} native agent start(s), ${String(summary.subagentsStopped)} stop(s) observed in this project during the last 30 days.${eventResult.state === 'limited' ? ' Counts are partial because the local receipt scan reached its safety limit.' : eventResult.state === 'unavailable' ? ' Local runtime receipts could not be read.' : ''}`
-      : harness === 'codex'
-        ? 'The hook is configured. Review and trust it in Codex with /hooks, then submit a prompt to produce a runtime receipt.'
-        : 'The hook is configured. Start a new Claude Code session, submit a prompt, and Token Harness will show the runtime receipt.';
+          ? 'Open Codex /hooks and check the three Token Harness routing hooks are enabled and trusted. Do this once, then send a prompt in a new session.'
+          : 'Check the Claude hook settings can be read and hooks are enabled in /hooks, then send a prompt in a new session.';
   return {
     ...base,
     state,
     label,
     detail,
+    enablement,
+    verificationTier: hasRuntimeReceipt && !blocked ? 'runtime-observed' : 'config-only',
     configPath: target.path,
     configured: true,
     ...summary,

@@ -66,6 +66,22 @@ are read again after applying; a browser session activity list records successes
 
 ## Acceptance
 
+### October 3 foreground maintenance and evidence layout
+
+The browser checks update channels once after the first overview load and offers the existing
+exact-version approval flow when an update is available. It does not install on page load.
+After an approved update, health checks run automatically. A verified global npm self-update
+offers **Restart and re-check**: the server revalidates the installed target, launches the same
+canonical entry with the current Node executable, and waits for a new loopback listener over IPC.
+The browser receives only that listener URL; no client-supplied command, path or port is accepted.
+If startup fails the existing dashboard stays open. The new process collects fresh health and
+capability observations. The existing package transaction provides rollback of the update.
+
+Optimizer actions, including ownership-aware removal and prerequisite installation guidance,
+share one setup list. Results use a compact dashboard above one searchable, filterable, sortable
+evidence list with expandable provenance. Unlike classes and units remain separate. Activity is
+retained to 30 events and displayed in a bounded scrolling region.
+
 - No command copying or plan IDs in the primary browser workflow.
 - Setup and optional task settings can be reviewed and applied in the browser.
 - All-project recorded savings visible without manually running metrics.

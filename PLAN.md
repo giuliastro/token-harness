@@ -2851,6 +2851,12 @@ installed manifest and global inventory. Source, `npx`, and other package-manage
 reported as unsupported for automatic self-update rather than guessed. Updating from the browser
 requires restarting the app to load the new package.
 
+The foreground dashboard now checks once on opening, offers exact-version approval, and re-checks
+health automatically after update. Verified npm installations can restart into the new canonical
+entry from the UI, retaining the old listener if the replacement fails to start. The replacement
+performs a fresh capability/health read. MCPToon installation supports an existing pipx or uv on
+Windows, macOS, Linux and WSL; missing prerequisites have visible installation options.
+
 ## 20. Withdrawn — Smart Model Routing through Claude Code Router (2026-09-27)
 
 The managed CCR integration is withdrawn. It required a separate CCR CLI profile to launch Claude

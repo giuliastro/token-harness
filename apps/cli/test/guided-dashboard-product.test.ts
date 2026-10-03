@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
+import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 
 describe('first-run guided overview', () => {
   it('uses only Overview and Results as product destinations', () => {
@@ -20,6 +20,8 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
     assert.match(GUIDE_HTML, /id="connection-overview"/);
     assert.match(GUIDE_HTML, /This matrix shows which optimizer setup/);
+    assert.doesNotMatch(GUIDE_HTML, /Remove Token Harness-managed configuration/);
+    assert.match(GUIDE_JS, /Remove managed setup/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
     assert.doesNotMatch(GUIDE_HTML, /managed-tools|optional-tools|Optional optimizers/);
@@ -65,22 +67,24 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Applying the approved change/);
   });
 
-  it('makes Results a dynamic optimizer and harness dashboard', () => {
+  it('shows concise summary and a complete filterable evidence table', () => {
     assert.match(GUIDE_HTML, /Results dashboard/);
-    assert.match(GUIDE_HTML, /<h2>By optimizer<\/h2>/);
-    assert.match(GUIDE_HTML, /<h2>By coding agent<\/h2>/);
+    assert.match(GUIDE_HTML, /id="result-summary"/);
+    assert.match(GUIDE_HTML, /id="result-evidence"/);
+    assert.match(GUIDE_HTML, /id="evidence-filter"/);
+    assert.match(GUIDE_HTML, /id="evidence-type"/);
+    assert.match(GUIDE_HTML, /id="evidence-sort"/);
+    assert.match(GUIDE_HTML, /<h2>Evidence<\/h2>/);
     assert.match(GUIDE_JS, /optimizerIds\(\)/);
-    assert.match(GUIDE_JS, /row\.providerId === id/);
-    assert.match(GUIDE_JS, /row\.harnesses\?\.includes\(agent\.id\)/);
-    assert.match(GUIDE_JS, /Configured optimizers/);
-    assert.match(GUIDE_JS, /Setups detected/);
-    assert.match(GUIDE_JS, /Optimizers with results/);
-    assert.match(GUIDE_JS, /Results linked to this agent/);
-    assert.match(
-      GUIDE_JS,
-      /RTK has saved command-output data, but its history does not say whether Codex or Claude ran each command/,
-    );
-    assert.match(GUIDE_JS, /A detected setup does not prove the optimizer ran/);
+    assert.match(GUIDE_JS, /addEvidenceRow\(body, 'optimizer'/);
+    assert.match(GUIDE_JS, /addEvidenceRow\(body, 'routing'/);
+    assert.match(GUIDE_JS, /addEvidenceRow\(body, 'harness'/);
+    assert.match(GUIDE_JS, /applyEvidenceFilters/);
+    assert.match(GUIDE_JS, /row\.measurement/);
+    assert.match(GUIDE_JS, /row\.unit/);
+    assert.match(GUIDE_JS, /row\.measurement \+ ' · ' \+ count\(row\.saved\)/);
+    assert.match(GUIDE_JS, /Allowance and local tokens/);
+    assert.match(GUIDE_JS, /const routeStatus = routed\?\.state/);
   });
 
   it('makes Overview a real measured-impact summary', () => {
@@ -98,7 +102,35 @@ describe('first-run guided overview', () => {
       /setInterval\s*\(\s*(?:async\s*)?\(\)\s*=>\s*(?:\{[^}]*\brefresh\s*\(|\brefresh\s*\()/,
     );
     assert.match(GUIDE_JS, /setInterval\([^]*loadActivity\(\)/);
+    assert.match(GUIDE_JS, /setInterval\(pollRouting, 15000\)/);
+    assert.match(GUIDE_JS, /request\('\/api\/routing'\)/);
     assert.match(GUIDE_JS, /\$\('period'\)\.addEventListener\('change', changePeriod\)/);
+  });
+
+  it('bounds recent activity and checks for app updates after the first overview', () => {
+    assert.match(GUIDE_JS, /rows\.slice\(0, 8\)/);
+    assert.match(GUIDE_CSS, /\.activity-scroll\{max-height:/);
+    assert.match(GUIDE_JS, /checkUpdatesOnStartup\(\)/);
+    assert.match(GUIDE_JS, /request\('\/api\/update-check'/);
+    assert.match(GUIDE_HTML, /id="update-notice"/);
+  });
+
+  it('offers mcptoon prerequisite options when the reviewed install is unavailable', () => {
+    assert.match(GUIDE_JS, /Installation options/);
+    assert.match(GUIDE_JS, /pipx\.pypa\.io\/stable\/installation/);
+    assert.match(GUIDE_JS, /docs\.astral\.sh\/uv\/getting-started\/installation/);
+    assert.match(GUIDE_JS, /after pipx or uv is available/);
+  });
+
+  it('keeps routing configuration and observed callbacks as separate states', () => {
+    assert.match(GUIDE_JS, /routing\?\.verificationTier === 'runtime-observed'/);
+    assert.match(GUIDE_JS, /routing\?\.enablement === 'untrusted'/);
+    assert.match(GUIDE_JS, /Open \/hooks in Codex and trust this hook/);
+    assert.match(GUIDE_JS, /Configured; waiting for the first runtime callback/);
+    assert.match(GUIDE_JS, /routing\.promptSubmissions/);
+    assert.match(GUIDE_JS, /routing\.subagentsStarted/);
+    assert.match(GUIDE_JS, /routing\.subagentsStopped/);
+    assert.match(GUIDE_JS, /request\('\/api\/routing'\)/);
   });
 
   it('refreshes status after an approved change without adding background polling', () => {

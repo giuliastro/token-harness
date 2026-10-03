@@ -131,7 +131,23 @@ export async function observeMcptoonManagedRuntime(
 
 const DECODER = new TextDecoder();
 
-function mcptoonInstallAction(): PlannedAction {
+/** Only existing isolated installers are used; bootstrap remains a visible prerequisite. */
+export async function mcptoonInstallChannel(
+  context: ProviderContext,
+): Promise<'pipx' | 'uv' | null> {
+  for (const channel of ['pipx', 'uv'] as const) {
+    const result = await context.runner.run({
+      executable: channel,
+      args: ['--version'],
+      cwd: context.projectRoot,
+      timeoutMs: 20_000,
+    });
+    if (result.failure === null && result.exitCode === 0) return channel;
+  }
+  return null;
+}
+
+function mcptoonInstallAction(channel: 'pipx' | 'uv'): PlannedAction {
   return {
     kind: 'package-manager-install',
     id: `mcptoon:install:${MCPTOON_REVIEWED_INSTALL_VERSION}`,
@@ -139,12 +155,14 @@ function mcptoonInstallAction(): PlannedAction {
     requiresNetwork: true,
     requiresElevation: false,
     affectedPaths: [],
-    affectedProcesses: ['pipx'],
-    preconditions: ['pipx remains runnable and the reviewed mcptoon release remains installable'],
-    postconditions: [`mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} is installed through pipx`],
+    affectedProcesses: [channel],
+    preconditions: [
+      `${channel} remains runnable and the reviewed mcptoon release remains installable`,
+    ],
+    postconditions: [`mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} is installed through ${channel}`],
     rollbackData: 'package-inventory',
-    explanation: `Install reviewed mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} in an isolated pipx environment`,
-    packageManager: 'pipx',
+    explanation: `Install reviewed mcptoon ${MCPTOON_REVIEWED_INSTALL_VERSION} in an isolated ${channel} environment`,
+    packageManager: channel,
     packageName: 'mcptoon',
     version: MCPTOON_REVIEWED_INSTALL_VERSION,
   };
@@ -403,13 +421,8 @@ export async function planMcptoonManagedActivation(
       return activation;
     }
 
-    const pipx = await context.runner.run({
-      executable: 'pipx',
-      args: ['--version'],
-      cwd: context.projectRoot,
-      timeoutMs: 20_000,
-    });
-    if (pipx.failure !== null || pipx.exitCode !== 0) {
+    const channel = await mcptoonInstallChannel(context);
+    if (channel === null) {
       return {
         harness,
         target: activation.target,
@@ -420,23 +433,23 @@ export async function planMcptoonManagedActivation(
             severity: 'warning',
             code: 'mcptoon-pipx-unavailable',
             subject: harness,
-            message: 'mcptoon is absent and the isolated pipx installer is not available',
+            message: 'mcptoon needs an isolated installer: pipx or uv',
             remediation:
-              'Install pipx, then refresh Token Harness; Token Harness will not bootstrap a Python package manager implicitly',
+              'Install pipx or uv, then Refresh to enable Install mcptoon. See Installation options for the platform instructions.',
           }),
         ],
       };
     }
     return {
       ...activation,
-      actions: [mcptoonInstallAction(), ...activation.actions],
+      actions: [mcptoonInstallAction(channel), ...activation.actions],
       diagnostics: [
         ...activation.diagnostics,
         diagnostic({
           severity: 'info',
           code: 'mcptoon-managed-install-planned',
           subject: harness,
-          message: `mcptoon is absent; install reviewed ${MCPTOON_REVIEWED_INSTALL_VERSION} through pipx before enabling agent guidance`,
+          message: `mcptoon is absent; install reviewed ${MCPTOON_REVIEWED_INSTALL_VERSION} through ${channel} before enabling agent guidance`,
           remediation: null,
         }),
       ],

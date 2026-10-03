@@ -123,6 +123,13 @@ it('checks updates on demand and applies only after the returned approval ticket
     calls.push([...args]);
     const command = args[0] ?? '';
     if (command === 'doctor') return envelope(command, doctor() as T);
+    if (command === 'verify')
+      return envelope(command, {
+        receiptId: null,
+        appliedAt: null,
+        results: [],
+        healthyAtDeclaredTier: true,
+      } as T);
     if (command === 'update') {
       const confirmed = args.includes('--yes');
       if (confirmed) {
@@ -139,6 +146,9 @@ it('checks updates on demand and applies only after the returned approval ticket
     call,
     () => 0,
     () => 'update-ticket',
+    null,
+    null,
+    async () => 'http://127.0.0.1:56789/',
   );
   const token = 'a'.repeat(64);
   let authority = '';
@@ -204,11 +214,18 @@ it('checks updates on demand and applies only after the returned approval ticket
       title: string;
       appliedPlans: number;
       messages: string[];
+      restartRequired?: boolean;
     };
     assert.equal(appliedResult.ok, true);
     assert.equal(appliedResult.title, 'Token Harness updated');
     assert.equal(appliedResult.appliedPlans, 2);
-    assert.ok(appliedResult.messages.some((message) => message.includes('Restart this app')));
+    assert.equal(appliedResult.restartRequired, true);
+    assert.ok(
+      calls.some((args) => args[0] === 'verify' && args.includes('claude')),
+      'updates automatically re-check health',
+    );
+    assert.ok(appliedResult.messages.includes('Health re-check completed automatically.'));
+    assert.ok(appliedResult.messages.some((message) => message.includes('Restart and re-check')));
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
       [['update'], ['update'], ['update', '--yes']],
@@ -224,6 +241,20 @@ it('checks updates on demand and applies only after the returned approval ticket
       'not-checked',
       'update evidence must expire after the installed stack changes',
     );
+    const restartRequest = () =>
+      fetch(`${origin}/api/restart`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: origin,
+          'X-Token-Harness-CSRF': token,
+        },
+        body: '{}',
+      });
+    const restart = await restartRequest();
+    assert.equal(restart.status, 200);
+    assert.deepEqual(await restart.json(), { url: 'http://127.0.0.1:56789/' });
+    assert.equal((await restartRequest()).status, 409, 'restart approval is single-use');
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -28,6 +28,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="page-heading"><div><h1 id="view-title">Overview</h1><p id="view-description">Your coding agents, optimization stack, health and measured results in one place.</p></div></div>
 <div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption">Nothing changes without your approval</span></div>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
+<div id="update-notice" class="update-notice" role="status" hidden></div>
 
 <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabindex="0">
 <section id="dashboard-status" class="dashboard-status"><div><span class="eyebrow">CURRENT STATUS</span><h2>Checking your machine…</h2><p>Finding Claude Code, Codex, recommended optimizers and measured results.</p></div><span class="pill">Checking</span></section>
@@ -55,7 +56,6 @@ export const GUIDE_HTML = `<!doctype html>
 <section class="setup-step" id="optimizers">
 <div class="section-title"><div><h2>Optimizer setup</h2><p>This matrix shows which optimizer setup Token Harness detected for each coding app. It does not confirm runtime activity; measured results appear separately when evidence is recorded.</p></div></div>
 <div id="connection-overview" class="connection-overview"><p class="empty">Checking optimizer connections…</p></div>
-<details class="disclosure"><summary>Remove Token Harness-managed configuration</summary><p class="caption">Removal is reviewed first. Token Harness removes only configuration it owns; installed provider software and user-owned configuration may remain.</p><div id="managed-removal-actions" class="maintenance-list"><p class="caption">Checking managed ownership…</p></div></details>
 </section>
 
 <section class="setup-step" id="maintenance">
@@ -65,15 +65,15 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
-<div class="results-header"><div><h2>Results dashboard</h2><p>See which optimizer setups Token Harness found and which results it actually recorded for each coding app.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How results are recorded</button></div></div>
-<div id="result-summary" class="impact-grid" aria-label="Results overview"><article class="metric-card"><span class="metric-label">Optimization stack</span><strong class="metric-value">Checking…</strong></article></div>
-<div class="section-title"><div><h2>By optimizer</h2><p>Detected setup and recorded results for every optimizer in the stack.</p></div></div>
-<div id="result-optimizers" class="tool-grid"><article class="tool-card"><h3>Checking optimizer results…</h3></article></div>
-<div class="section-title"><div><h2>By coding agent</h2><p>Which optimizer setups were detected for each app and which measured results can be linked to it.</p></div></div>
-<div id="result-agents" class="tool-grid"><article class="tool-card"><h3>Checking results by coding app…</h3></article></div>
-<div class="section-title"><div><h2>Measurement evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div><section class="panel"><div id="result-savings" class="evidence-list"><p class="empty">Checking recorded results…</p></div></section>
-<div class="section-title"><div><h2>Experimental benchmark results</h2><p>Candidate evidence is evaluation only; it never promotes a tool automatically.</p></div></div><section class="panel"><div id="candidate-results" class="evidence-list"><p class="empty">Checking candidate evidence…</p></div></section>
-<div class="section-title"><div><h2>Recent activity</h2><p>Checks and changes from this local app session.</p></div></div><section class="panel"><div id="activity"><p class="empty">No activity yet.</p></div></section>
+<div class="results-header"><div><h2>Results dashboard</h2><p>Measured evidence by optimizer, routing and coding app. Different classes and units stay separate.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How results are recorded</button></div></div>
+<div id="result-summary" class="impact-grid" aria-label="Results overview"><article class="metric-card"><span class="metric-label">Measured evidence</span><strong class="metric-value">Checking…</strong></article></div>
+<div class="section-title"><div><h2>Evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div>
+<section class="panel evidence-panel">
+<div class="evidence-controls"><label>Filter <input id="evidence-filter" type="search" placeholder="Optimizer, harness, class…" autocomplete="off"></label><label>Type <select id="evidence-type"><option value="all">All</option><option value="optimizer">Optimizers</option><option value="routing">Routing</option><option value="harness">Coding apps</option><option value="candidate">Experiments</option></select></label><label>Sort <select id="evidence-sort"><option value="name">Name</option><option value="evidence">Evidence count</option><option value="type">Type</option></select></label></div>
+<div class="evidence-table-scroll"><table class="evidence-table"><thead><tr><th scope="col">System</th><th scope="col">Scope</th><th scope="col">Measured evidence</th><th scope="col">Details</th></tr></thead><tbody id="result-evidence"><tr><td colspan="4">Checking recorded results…</td></tr></tbody></table></div>
+<p id="evidence-empty" class="empty" hidden>No evidence matches these filters.</p>
+</section>
+<div class="section-title"><div><h2>Recent activity</h2><p>Latest checks and changes from this app session.</p></div></div><section class="panel"><div id="activity" class="activity-scroll"><p class="empty">No activity yet.</p></div></section>
 </section>
 
 <footer><span>Local data. No account required.</span><span>Full overview refresh runs only when you choose Refresh.</span></footer>

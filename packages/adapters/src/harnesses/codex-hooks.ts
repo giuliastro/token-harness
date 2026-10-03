@@ -12,6 +12,7 @@ function tuple(event: string, matcher: string | null, command: string): string {
 export async function readCodexHookEnablement(
   context: HarnessContext,
   config: ResolvedHarnessConfig,
+  routingOnly = false,
 ): Promise<VerificationCheck | null> {
   // Match exact on-disk event/matcher/command tuples. An unrelated trusted hook proves nothing.
   const expected: string[] = [];
@@ -24,7 +25,16 @@ export async function readCodexHookEnablement(
     for (const [event, native] of [
       ['PreToolUse', 'preToolUse'],
       ['PostToolUse', 'postToolUse'],
+      ...(routingOnly
+        ? ([
+            ['UserPromptSubmit', 'userPromptSubmit'],
+            ['SubagentStart', 'subagentStart'],
+            ['SubagentStop', 'subagentStop'],
+          ] as const)
+        : []),
     ] as const) {
+      if (routingOnly && !['UserPromptSubmit', 'SubagentStart', 'SubagentStop'].includes(event))
+        continue;
       const entries = parsed['hooks'][event];
       if (!Array.isArray(entries)) continue;
       for (const entry of entries) {
@@ -34,7 +44,8 @@ export async function readCodexHookEnablement(
           if (
             record(handler) &&
             handler['type'] === 'command' &&
-            typeof handler['command'] === 'string'
+            typeof handler['command'] === 'string' &&
+            (!routingOnly || handler['command'].includes('__internal-prompt-router'))
           ) {
             expected.push(tuple(native, matcher, handler['command']));
           }

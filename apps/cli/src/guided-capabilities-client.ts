@@ -10,7 +10,6 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     return element;
   };
   const originalFetch = window.fetch.bind(window);
-  const managedProviders = new Set(['rtk', 'harnesstrim']);
   const HELP = {
     'claude-effort': ['Change reasoning in Claude', 'Inside Claude Code, use /effort. Token Harness keeps difficult work above its quality floor.', '/effort'],
     'codex-effort': ['Change reasoning in Codex', 'Inside Codex, use /model to review model and reasoning settings.', '/model'],
@@ -293,44 +292,16 @@ export const GUIDE_CAPABILITIES_JS = String.raw`
     if (!root.children.length) root.append(node('p', 'Agent details appear after a supported coding agent is detected.', 'empty'));
   }
 
-  function renderRemovalControls(data) {
-    const root = $('managed-removal-actions');
-    if (!root) return;
-    root.replaceChildren();
-    const removable = (data.stack?.components || []).filter(component =>
-      managedProviders.has(component.providerId) && (component.managedByTokenHarness || component.configured),
-    );
-    if (!removable.length) {
-      root.append(node('p', 'No managed configuration is currently eligible for removal.', 'caption'));
-      return;
-    }
-    for (const component of removable) {
-      const row = node('div', undefined, 'maintenance-row');
-      const text = node('div');
-      const name = component.displayName || (component.providerId === 'rtk' ? 'RTK' : 'HarnessTrim');
-      text.append(
-        node('strong', name),
-        node('p', component.managedByTokenHarness
-          ? 'Review removal of Token Harness-owned integration changes.'
-          : 'Check whether Token Harness owns any removable changes. The provider installation remains user-owned.', 'caption'),
-      );
-      row.append(
-        text,
-        actionButton('Review removal', () => preview(
-          { action: 'remove', provider: component.providerId },
-          'Review removal for ' + name,
-          'Remove managed integration',
-          'Integration removed',
-        ), 'secondary'),
-      );
-      root.append(row);
-    }
-  }
+  window.tokenHarnessReviewRemoval = (provider, name) => preview(
+    { action: 'remove', provider },
+    'Review removal for ' + name,
+    'Remove managed setup',
+    'Managed setup removed',
+  );
 
   function consumeOverview(data) {
     if (!data || !Array.isArray(data.agents)) return;
     renderAgentCapabilities(data);
-    renderRemovalControls(data);
   }
 
   window.fetch = async (...args) => {

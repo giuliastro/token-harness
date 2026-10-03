@@ -151,6 +151,121 @@ function ownedJournal(path: string, harness: 'claude' | 'codex') {
 }
 
 describe('automatic native prompt routing', () => {
+  it('repairs only journal-owned legacy Windows exec hooks and can remove the legacy entries', async () => {
+    const path = '/home/dev/.claude/settings.json';
+    const entries = nativePromptRoutingHookEntries(harnessId('claude'));
+    const document = JSON.stringify({
+      hooks: Object.fromEntries(entries.map((entry) => [entry.eventName, [entry.value]])),
+    });
+    for (const owned of [true, false]) {
+      const { fs, files } = memoryFs({
+        [path]: document,
+        ...(owned
+          ? {
+              '/state/journals': null,
+              '/state/journals/enable1.json': ownedJournal(path, 'claude'),
+            }
+          : {}),
+      });
+      const input = {
+        ...installInput(fs),
+        facts: { ...PLATFORM, os: 'windows' as const },
+        stateRoot: '/state',
+      };
+      const observed = await observeNativePromptRouting({ ...input, projectId: null });
+      assert.equal(observed.needsRepair === true, owned);
+      const repair = await planNativePromptRoutingInstall(input);
+      assert.equal(repair.actions.length, owned ? 4 : 0);
+      if (owned) {
+        assert.ok(
+          repair.actions.slice(0, 3).every((action) => action.kind === 'remove-owned-change'),
+        );
+        assert.equal(repair.actions[3]?.kind, 'merge-json');
+        const removal = await planNativePromptRoutingRemoval(input);
+        assert.equal(removal.actions.length, 3);
+      }
+      assert.equal(new TextDecoder().decode(files.get(path)), document);
+    }
+  });
+  it('previews supported Windows patch versions while preserving existing user hooks', async () => {
+    for (const [harness, version] of [
+      ['codex', '0.159.1'],
+      ['claude', '2.1.285'],
+    ] as const) {
+      const path =
+        harness === 'codex' ? '/home/dev/.codex/hooks.json' : '/home/dev/.claude/settings.json';
+      const original =
+        '{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"user-hook"}]}]}}';
+      const { fs, files } = memoryFs({ [path]: original });
+      const plan = await planNativePromptRoutingInstall({
+        ...installInput(fs, harness),
+        version,
+        facts: { ...PLATFORM, os: 'windows' },
+      });
+      assert.equal(plan.actions.length, 1);
+      assert.equal(new TextDecoder().decode(files.get(path)), original);
+      assert.equal(plan.actions[0]?.kind, 'merge-json');
+    }
+  });
+  it('distinguishes current Codex trust from historical execution and ignores unrelated trusted hooks', async () => {
+    for (const mode of ['trusted', 'untrusted', 'disabled', 'unrelated'] as const) {
+      const path = '/home/dev/.codex/hooks.json';
+      const entries = nativePromptRoutingHookEntries(harnessId('codex'));
+      const { fs } = memoryFs({
+        [path]: JSON.stringify({
+          hooks: Object.fromEntries(entries.map((e) => [e.eventName, [e.value]])),
+        }),
+      });
+      const eventNames = ['userPromptSubmit', 'subagentStart', 'subagentStop'];
+      const hooks = entries.map((entry, i) => {
+        const group = entry.value as { hooks: Array<{ command: string }> };
+        return {
+          eventName: eventNames[i],
+          handlerType: 'command',
+          sourcePath: path,
+          command: mode === 'unrelated' ? 'another-hook' : group.hooks[0]!.command,
+          enabled: mode !== 'disabled',
+          trustStatus: mode === 'untrusted' ? 'untrusted' : 'trusted',
+          currentHash: 'sha256:' + 'a'.repeat(64),
+        };
+      });
+      await recordNativePromptRoutingHook({
+        fs,
+        stateRoot: '/state',
+        harness: 'codex',
+        event: 'prompt-submit',
+        projectId: 'p_other',
+        now: new Date().toISOString(),
+        hookInput: '{}',
+      });
+      const observed = await observeNativePromptRouting({
+        ...installInput(fs, 'codex'),
+        stateRoot: '/state',
+        projectId: null,
+        runner: {
+          run: async (request) =>
+            processOutcome(
+              request,
+              JSON.stringify({
+                id: 'token-harness-hooks-list',
+                result: { data: [{ cwd: '/work/project', errors: [], hooks }] },
+              }),
+            ),
+        },
+      });
+      assert.equal(
+        observed.enablement,
+        mode === 'trusted' ? 'enabled' : mode === 'unrelated' ? 'unknown' : mode,
+      );
+      assert.equal(observed.promptSubmissions, 1, 'overview can see receipts from another project');
+      assert.equal(
+        observed.verificationTier,
+        mode === 'disabled' || mode === 'untrusted' ? 'config-only' : 'runtime-observed',
+      );
+      if (mode === 'untrusted' || mode === 'disabled') assert.match(observed.detail, /once/);
+      else assert.match(observed.detail, /automatically/);
+    }
+  });
   it('plans a Codex/Claude user hook without changing existing settings during preview', async () => {
     const existing = JSON.stringify({
       theme: 'dark',
@@ -259,7 +374,7 @@ describe('automatic native prompt routing', () => {
     });
     assert.equal(observed.state, 'managed');
     assert.equal(observed.configured, true);
-    assert.equal(observed.label, 'Configured · runtime pending');
+    assert.equal(observed.label, 'Ready · awaiting prompt');
     const observedAt = new Date().toISOString();
     await recordNativePromptRoutingHook({
       fs,

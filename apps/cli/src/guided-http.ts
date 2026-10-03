@@ -261,6 +261,10 @@ export function createGuideHandler(input: {
           send(200, JSON.stringify(input.service.status()));
           return;
         }
+        if (url.pathname === '/api/routing') {
+          send(200, JSON.stringify(await input.service.routing()));
+          return;
+        }
         if (url.pathname === '/api/candidate-campaign') {
           if (input.candidateCampaign === undefined)
             throw new GuideError(404, 'Candidate campaign status is unavailable.');
@@ -320,6 +324,17 @@ export function createGuideHandler(input: {
         const result = await input.service.apply(body);
         overviewCache.clear();
         send(200, JSON.stringify(result));
+        return;
+      }
+      if (url.pathname === '/api/restart') {
+        if (
+          body === null ||
+          typeof body !== 'object' ||
+          Array.isArray(body) ||
+          Object.keys(body).length !== 0
+        )
+          throw new GuideError(400, 'Restart accepts no commands or paths.');
+        send(200, JSON.stringify(await input.service.restart()));
         return;
       }
       if (url.pathname === '/api/update-check') {

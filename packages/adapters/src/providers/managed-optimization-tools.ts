@@ -30,6 +30,7 @@ import {
 import { MCPTOON_REVIEWED_BENCHMARK_VERSION } from './mcptoon-candidate.js';
 import {
   observeMcptoonManagedRuntime,
+  mcptoonInstallChannel,
   planMcptoonManagedActivation,
   verifyMcptoonManagedActivation,
 } from './mcptoon-managed.js';
@@ -77,6 +78,16 @@ const MCPTOON_MANIFEST: ProviderManifest = {
       packageId: 'mcptoon',
       kind: 'pipx',
       priority: 0,
+      platforms: ['windows', 'macos', 'linux'],
+      requiresNetwork: true,
+      requiresElevation: false,
+      digestAvailable: false,
+    },
+    {
+      id: 'uv',
+      packageId: 'mcptoon',
+      kind: 'uv',
+      priority: 1,
       platforms: ['windows', 'macos', 'linux'],
       requiresNetwork: true,
       requiresElevation: false,
@@ -193,16 +204,8 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
       if (verification.state === 'verified') configuredHarnesses.push(harness);
     }
   }
-  const pipx = observation.absent
-    ? await context.runner.run({
-        executable: 'pipx',
-        args: ['--version'],
-        cwd: context.projectRoot,
-        timeoutMs: 20_000,
-      })
-    : null;
-  const canInstall =
-    observation.absent && pipx !== null && pipx.failure === null && pipx.exitCode === 0;
+  const channel = observation.absent ? await mcptoonInstallChannel(context) : null;
+  const canInstall = observation.absent && channel !== null;
   const warnings =
     observation.absent && !canInstall
       ? [
@@ -210,9 +213,9 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
             severity: 'warning',
             code: 'mcptoon-pipx-unavailable',
             subject: 'mcptoon',
-            message: 'mcptoon is not installed and pipx is not available in this terminal',
+            message: 'mcptoon is not installed; pipx or uv is required',
             remediation:
-              'Install pipx or make it available on PATH, then refresh. Token Harness will use it to install the reviewed mcptoon build.',
+              'Install pipx or uv, then Refresh to enable Install mcptoon. Open Installation options for your platform.',
           }),
         ]
       : !observation.absent && !observation.ready
@@ -227,7 +230,7 @@ async function mcptoonDetection(context: ProviderContext): Promise<ProviderDetec
         : 'installed',
     version: observation.version,
     executable: observation.executable,
-    installationChannel: observation.absent ? 'pipx' : null,
+    installationChannel: observation.absent ? channel : null,
     versionVerdict: versionVerdict(observation.version, MCPTOON_REVIEWED_BENCHMARK_VERSION),
     configuredHarnesses,
     unmanagedHarnessesConfigured: [],
