@@ -81,6 +81,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           TOKEN_HARNESS_LIVE_RTK_RELEASE: '1'
+          GITHUB_TOKEN: ${{ github.token }}
         run: node --test --test-reporter=spec packages/platform/dist/test/rtk-windows-release.live.test.js
 
       - name: Build
