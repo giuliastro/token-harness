@@ -126,6 +126,8 @@ function harness(report, id) {
   return report.data?.harnesses?.find((item) => item.harnessId === id) ?? null;
 }
 
+let brownfieldHooks = new Map();
+
 function assert(condition, label, detail = '') {
   if (!condition) fail(label, detail);
   ok(label);
@@ -287,7 +289,7 @@ try {
     writeFileSync(path, text);
   }
 
-  const brownfieldHooks = new Map([
+  brownfieldHooks = new Map([
     [
       'claude',
       {
