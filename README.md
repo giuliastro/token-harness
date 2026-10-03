@@ -25,7 +25,8 @@ npm install --global token-harness@latest
 token-harness
 ```
 
-A local browser dashboard opens. No Token Harness account or API key is required.
+A local browser dashboard opens. The browser app is the primary interface.
+No Token Harness account or API key is required.
 Your coding agent keeps its own authentication. Windows, macOS, Linux and WSL have explicit
 compatibility checks; individual integrations may support a narrower set of versions/platforms.
 
@@ -40,14 +41,14 @@ global npm installation.
 
 ## Your first five minutes
 
-1. **Open Overview.** Token Harness detects your agents, installed optimizers and integration health.
+1. Open **Overview**. Token Harness detects your agents, installed optimizers and integration health.
 2. **Review optimizer setup.** Start with RTK + HarnessTrim where the exact combination is supported.
    Each optimizer has its setup, verification and removal controls together.
 3. **Preview and apply.** Check the proposed changes, then approve. Opening the dashboard alone does
    not change agent configuration.
 4. **Authorize native hooks once.** In Codex, use `/hooks` to enable and trust the installed hooks.
    In Claude Code, ensure hooks are enabled and start a fresh session after changing them.
-5. **Use your agent normally.** Return to Results to inspect observed evidence. “Configured” means
+5. **Use your agent normally.** Return to **Results** to inspect observed evidence. “Configured” means
    setup exists; “runtime observed” means a qualifying callback or operation was actually recorded.
 
 You do not need to keep the dashboard open for installed native hooks to run. Evidence appears after
@@ -128,8 +129,8 @@ See [version policy](docs/provider-version-compatibility.md),
 ## Update, disconnect or undo
 
 The dashboard checks for updates on opening. When an update is available, review its exact version
-and approve installation. It re-checks health automatically afterward. A supported application
-update offers **Restart and re-check** to load the new version; if replacement startup fails, the
+and choose **Install updates** to approve installation. It re-checks health automatically afterward.
+A supported application update offers **Restart and re-check** to load the new version; if replacement startup fails, the
 current dashboard stays available.
 
 To update manually:
@@ -163,8 +164,8 @@ Token Harness does not send your source code, prompts, command contents or crede
 Harness service. Your coding agent and any explicitly enabled provider keep their own network
 behaviour.
 
-Configuration changes require review; plans are checked again before apply. Managed writes retain
-backups, preserve unrelated configuration and support verification and rollback. Unknown hook formats
+A configuration change requires an explicit review and approval; plans are checked again before apply.
+Managed writes retain backups, preserve unrelated configuration and support verification and rollback. Unknown hook formats
 or unsupported configuration rows require evidence instead of guessed writes.
 
 ## Need help?

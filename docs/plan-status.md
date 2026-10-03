@@ -14,7 +14,7 @@ architecture or declare broad-promotion readiness.
 | Managed lifecycle (Phase 9) | Claude/Codex baseline lifecycle, package updates, pipeline status and evidence capture shipped. | Real current Windows combination (#255); historical Hermes/Pi/OMP lifecycle and broader 0.2.0 coverage are unfinished. |
 | Quota/native policy (Phase 10, §18) | Dual-window observations, conservative recommendations, paired outcome learning, scheduling/handoff and portable skill shipped. | Empirical coverage is narrower than all task/model/platform combinations. |
 | Guided skill (§18.13–18.14) | Bundled skill, reversible installation and owned/external/modified state implemented. | No remaining implementation task from the former “next UX work” notes. |
-| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, native authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. | Real Windows/Linux session callbacks (#359) and paired quality-gated benefit (#360). Prompt guidance alone does not prove actual model choice. |
+| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, native authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. | Linux Codex callbacks observed (3 prompts, 2 starts, 2 stops); remaining Windows/session coverage (#359) and paired quality-gated benefit (#360). Prompt guidance alone does not prove actual model choice. |
 | Efficiency Decision (§19.1) | Tested internal read-only `decideEfficiency` contract exists. | Integrate one explainable CLI/controller decision from existing observations (#361). |
 | Context Governor (§19.2) | Bounded metadata snapshot, deterministic advice and CLI input shipped. | Complete the checkpoint contract/integration (#361); no automatic context rewrite is proved. |
 | Adaptive escalation / task budgets (§19.3–19.4) | Native policy/quality/capacity foundations exist; the decision contract carries empirical allowance budgets and optional evidenced attempt limits. | Implement escalation receipts and task-budget enforcement; do not treat an internal suggested budget as a running controller. |
@@ -71,8 +71,10 @@ combined-stack benchmark performance or subscription/API savings.
 ## Next steps, in order
 
 1. **Verify the installed stack and automatic callbacks:** #255 and #359. The root Linux Codex
-   setup was repaired in 0.1.26; its last observation was configured but untrusted with no callback.
-   The user must grant native hook trust once. Native Windows requires genuine machine receipts.
+   setup was repaired in 0.1.26. A subsequent passive dashboard/API read reports it enabled and
+   runtime-observed: 3 prompt callbacks, 2 starts and 2 stops, last receipt 2026-10-03T19:40:32Z.
+   No actual child model is reported. Native Windows and fresh-session coverage still require real
+   receipts; native trust is a one-time prerequisite on each applicable installation.
 2. **Run bounded paired experiments:** #360. Retain negative outcomes, actual activation,
    acceptance/retry evidence and independent five-hour/weekly observations. Never launch a broad
    campaign merely to fill a dashboard.
