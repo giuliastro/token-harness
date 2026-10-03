@@ -103,7 +103,10 @@ function isRecord(value: JsonValue | undefined): value is Record<string, JsonVal
 }
 
 /** Every declared interception point that actually carries entries, with what it carries. */
-function readHooks(document: JsonValue, os: HarnessContext['facts']['os']): {
+function readHooks(
+  document: JsonValue,
+  os: HarnessContext['facts']['os'],
+): {
   points: string[];
   matchers: string[];
   commands: string[];
@@ -145,9 +148,9 @@ function readHooks(document: JsonValue, os: HarnessContext['facts']['os']): {
               toolFamilies:
                 matcher === null
                   ? MANIFEST.toolFamilies.map((family) => family.id)
-                  : MANIFEST.toolFamilies.filter((family) =>
-                      matcherCoversFamily(matcher, family.id),
-                    ).map((family) => family.id),
+                  : MANIFEST.toolFamilies
+                      .filter((family) => matcherCoversFamily(matcher, family.id))
+                      .map((family) => family.id),
               command,
               entryPointer,
               commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.${commandKey}`,

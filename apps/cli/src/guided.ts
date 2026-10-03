@@ -447,9 +447,7 @@ export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: 
     diagnostics.find(
       (entry) => entry.severity === 'warning' && ISSUE_COPY[entry.code] !== undefined,
     ) ??
-    diagnostics.find(
-      (entry) => entry.severity === 'info' && ISSUE_COPY[entry.code] !== undefined,
-    );
+    diagnostics.find((entry) => entry.severity === 'info' && ISSUE_COPY[entry.code] !== undefined);
   if (known !== undefined) return ISSUE_COPY[known.code] as string;
   const blocked = diagnostics.find((entry) =>
     /compatibility|unsupported|unreviewed|no-row/.test(entry.code),
@@ -2430,14 +2428,14 @@ export class GuideService {
       if (inventory.data === null) {
         ok = false;
         healthyAtDeclaredTier = false;
-        messages.push('The installed-agent inventory could not be read. Refresh and check the local installation.');
+        messages.push(
+          'The installed-agent inventory could not be read. Refresh and check the local installation.',
+        );
       }
       if (present.length === 0) {
         ok = false;
         healthyAtDeclaredTier = false;
-        messages.push(
-          'No supported installed agent was detected, so no integration was checked.',
-        );
+        messages.push('No supported installed agent was detected, so no integration was checked.');
       }
       for (const agent of present) {
         const harness = agent.harnessId;
@@ -2469,7 +2467,10 @@ export class GuideService {
         if (result.data !== null) results.push(...result.data.results);
         const prefix = `${name(harness)}: `;
         if (result.data === null) {
-          messages.push(prefix + 'the verification report could not be read. Refresh and check the local installation.');
+          messages.push(
+            prefix +
+              'the verification report could not be read. Refresh and check the local installation.',
+          );
         } else if (healthy) {
           messages.push(
             prefix +
@@ -2493,7 +2494,8 @@ export class GuideService {
                 .map((entry) => name(entry.providerId)),
             ),
           ];
-          const subject = pendingProviders.length > 0 ? pendingProviders.join(' and ') : 'Some integrations';
+          const subject =
+            pendingProviders.length > 0 ? pendingProviders.join(' and ') : 'Some integrations';
           messages.push(
             `${prefix}${subject} have not produced enough attributable runtime evidence for ${name(harness)} yet. This is an evidence gap, not a finding that the setup is broken. If you do not use this agent on this machine, no action is required.`,
           );
@@ -2510,10 +2512,10 @@ export class GuideService {
         this.verification = {
           fingerprint,
           report: {
-          receiptId: null,
-          appliedAt: null,
-          results,
-          healthyAtDeclaredTier: healthyAtDeclaredTier && present.length > 0,
+            receiptId: null,
+            appliedAt: null,
+            results,
+            healthyAtDeclaredTier: healthyAtDeclaredTier && present.length > 0,
           },
         };
         this.stackBase = {

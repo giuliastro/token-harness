@@ -167,9 +167,9 @@ function readHooks(document: JsonValue): Map<string, HookEntry[]> {
                 toolFamilies:
                   typeof matcher !== 'string'
                     ? MANIFEST.toolFamilies.map((family) => family.id)
-                    : MANIFEST.toolFamilies.filter((family) =>
-                        matcherCoversFamily(matcher, family.id),
-                      ).map((family) => family.id),
+                    : MANIFEST.toolFamilies
+                        .filter((family) => matcherCoversFamily(matcher, family.id))
+                        .map((family) => family.id),
                 command: hook['command'],
                 entryPointer,
                 commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.command`,

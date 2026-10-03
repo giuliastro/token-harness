@@ -1154,9 +1154,10 @@ function identifiesCommand(command: string): boolean {
  * spaces and therefore must be quoted as the first command token.
  */
 function tokenHarnessRtkHookHarness(command: string): HarnessId | null {
-  const match = /^\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s+__internal-rtk-hook\s+(claude|codex)(?:\s+--restore-rtk)?\s*$/i.exec(
-    command,
-  );
+  const match =
+    /^\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s+__internal-rtk-hook\s+(claude|codex)(?:\s+--restore-rtk)?\s*$/i.exec(
+      command,
+    );
   if (match === null) return null;
 
   const executable = match[1] ?? match[2] ?? match[3];
