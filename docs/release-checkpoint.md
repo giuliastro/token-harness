@@ -31,8 +31,11 @@ are not Windows runtime verification or broad-promotion readiness.
 
 ## Release gates
 
-Cross-platform PR CI must pass before creating `release/v0.1.26`. The bridge creates immutable tag
-`v0.1.26` and dispatches the exact-tag workflow, which gates publication on tests, real-runtime smoke,
-packaging, provenance, npm Trusted Publishing and npm-latest verification.
+**Passed and published.** [Final PR CI](https://github.com/giuliastro/token-harness/actions/runs/37146711560)
+was green on Windows, macOS and Ubuntu before `release/v0.1.26` / immutable tag `v0.1.26`.
+[Exact-tag publication](https://github.com/giuliastro/token-harness/actions/runs/37147152988) passed
+release checks, provenance/SBOM, npm Trusted Publishing and npm-latest verification. Public npm
+installation and the GitHub release artifact were checked after publication; SHA-256 matched.
 
-Post-install checks for the exact artifact are in `docs/releases/0.1.26.md`.
+Post-install native runtime checks in [release notes](releases/0.1.26.md) remain separate from these
+completed publication gates. See [delivery status](plan-status.md) for receipts and open work.

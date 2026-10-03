@@ -9,7 +9,7 @@ existing users and testing well before it is the version we actively promote.
 
 ## Required before promotion
 
-- [x] Outcome-first **Dashboard / Setup / Results** information architecture.
+- [x] Outcome-first **Overview / optimizer setup / Results** information architecture.
 - [x] No periodic full app reload.
 - [x] Existing readings remain visible during refresh and after approved changes.
 - [x] Preview → approval → apply → verify → undo safety flow.
@@ -38,11 +38,13 @@ existing users and testing well before it is the version we actively promote.
       stack is still reviewed, needs verification, or has a reviewed update available.
 - [ ] Normal steady-state use requires no continuous optimizer toggling or permanent Token Harness
       daemon; admitted deterministic components can remain enabled and work independently.
-- [ ] Full CI green for the release candidate on Windows, macOS and Linux.
-- [ ] Published package/install smoke test green for the exact release candidate artifact.
-- [ ] README onboarding verified against the exact published UI.
+- [x] Full CI green for published 0.1.26 on Windows, macOS and Linux ([run](https://github.com/giuliastro/token-harness/actions/runs/37146711560)).
+- [x] Public package/install, provenance and matching-artifact checks passed for exact 0.1.26
+      ([release evidence](plan-status.md#release-evidence)); future candidates must repeat this gate.
+- [ ] README onboarding verified against the exact published UI. The README is rewritten against
+      0.1.26 behaviour; clean fresh-user runtime validation is still required.
 - [ ] One clean end-to-end fresh-user scenario passes:
-      install → open Dashboard → discover setup → open Setup → review/apply → use agent → inspect
+      install → open Overview → discover optimizer setup → review/apply → use agent → inspect
       Results → verify → check/update state → undo/uninstall.
 
 ## What counts as an integration

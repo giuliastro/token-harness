@@ -12,6 +12,25 @@ The implementation starts from the accepted Phase 0 RFCs. Scope changes that alt
 public contract, safety invariant, or attribution rule require an RFC update before
 code.
 
+### Delivery checkpoint — 2026-10-03, published 0.1.26
+
+The MVP, transactional stack management, quota/native-policy evidence and guided skill lifecycle
+are shipped. Native automatic prompt routing is implemented; actual Windows/Linux callback coverage
+and attributable paired savings remain separate verification tasks. The closed-loop controller is
+partial: §19.1 has a tested internal read-only decision engine; §19.2 has snapshot/CLI advice;
+§19.3–19.4 enforcement and §19.5+ execution are not complete.
+
+Current work: **#255** real Windows stack → **#359** native routing callbacks → **#360** paired
+quality-gated measurements, alongside **#361** unified decision/checkpoint integration. Then finish
+§19.3–19.5 before later analytics/autonomy. The historical 0.2.0 provider/harness expansion list is
+secondary to this sequence. Broad promotion remains gated by combined-stack and third-mechanism
+value plus clean fresh-user validation.
+
+Compatibility contract reconciliation is tracked separately in **#362**; this plan update changes no
+admission guard. See [the reconciled status, issue/PR decisions and release evidence](docs/plan-status.md).
+Historical implementation notes below retain their original evidence dates unless explicitly
+reconciled; they are not a current-release status dashboard.
+
 ## 2. Definition of the first useful release
 
 Version `0.1.0` is useful when a user can:
@@ -99,7 +118,7 @@ Exit criteria:
 | 0007 | Live verification mechanism | Proposed — written from the Phase 2.5 spike |
 | 0008 | Metrics storage driver | Reserved — written only when JSONL is outgrown |
 | 0009 | Managed lifecycle and compatibility matrix | Accepted — Phase 9, §14 |
-| 0010 | Read-only status seam for external consumers | Reserved — Phase 9, §9.4, §15 item 41 |
+| 0010 | Read-only status seam for external consumers | Accepted and implemented |
 | 0011 | Quota-aware Claude Code and Codex orchestration | Proposed — post-0.2 product direction |
 | 0027 | Optimization stack manager | Accepted |
 | 0028 | Smart model routing, shadow-first | Withdrawn 2026-09-27 |
@@ -1446,16 +1465,16 @@ rather than continuing to present it as merely pending.
        and the two must not merge — which is the same rule as before, now with two real classes in
        one stream instead of one.
 
-44. **Refresh the tested version ranges, with fixtures rather than with numbers.** On the development
-    machine today `doctor` prints four notes — Claude Code 2.1.220, OpenCode 1.18.11, RTK 0.44.0 and
-    HarnessTrim 0.1.0 are each newer than any tested version — and the compatibility rule in
-    `planner/rules.ts` still records `rtk 0.42.0` and `harnesstrim 0.0.5`. Four honest notes on a
-    stock machine is the failure RFC 0006 §Exit codes warns about: it teaches the reader to ignore
-    the section.
+44. **Refresh compatibility with evidence rather than numbers. Implementation refreshed; real
+    current-stack coverage remains open — #255/#359.** Published 0.1.26 includes RTK 0.51.0
+    source-contract support, HarnessTrim 0.3.1 capability checks, Codex native prompt-hook fixtures
+    for 0.159.0–0.159.1 / 0.160.0 and Claude Code 2.1.274–2.1.288. These supersede the stale
+    development-machine snapshot from the 0.1.0 period.
 
-    Extending a range means exercising the fixtures at the observed version and recording the row,
-    per §9.1 and RFC 0009 — not editing a constant. Where a version cannot be exercised, the range
-    stays and the note stays, because the note is true.
+    Historical live recordings, latest-forward runtime capability policy, native hook-format
+    fixtures and exact combined-stack review are distinct layers. A current provider package does
+    not itself prove harness interception or admit a new benchmark/promotion tuple. Keep native
+    Windows receipts and current combined-stack measurements open until actually observed.
 
 45. **An update that outdates reviewed data is refused, not performed. Done — #72.** This is the gap between
     "Token Harness can update a provider" — which item 21 built — and "Token Harness can be trusted
@@ -1490,10 +1509,11 @@ rather than continuing to present it as merely pending.
     The remaining managed-HarnessTrim work for 0.2.0 is item 33: Hermes and Pi, whose adapters are
     now present and whose write sets can be reviewed without the OpenCode dependency-tree problem.
 
-### Order after HarnessTrim `0.1.0` — reconciled at `0.1.3`
+### Historical 0.2.0 expansion order — reconciled at `0.1.26`
 
 The shipped baseline has already completed 43a, 43d, the Hermes/Pi adapters, and the reversible
-Claude/Codex part of item 46. The remaining dependency order is therefore:
+Claude/Codex part of item 46. This expansion backlog remains open but is secondary to §19.16,
+not the primary next implementation sequence. Its remaining internal dependency order is:
 
 1. **33** — manage HarnessTrim on Hermes and Pi, using the adapters already shipped in #62/#66.
 2. **32** — re-observe OMP against HarnessTrim's new OMP installer, then admit only the tier and
@@ -2142,10 +2162,8 @@ paying its full instruction cost on every turn. Static integration tests pin its
 controller calls, task taxonomy, explicit-workload rules and mutation/privacy invariants.
 
 This phase does **not** mutate Claude/Codex skill-discovery directories or pretend their installation
-paths are timeless. Next UX work should bundle the tested skill in the publishable artifact and add
-a guided **Enable in-session guidance** flow only after current harness/version/platform discovery
-and ownership semantics are verified with compatibility fixtures. That flow must be reversible and
-must not require the user to learn advanced CLI flags.
+paths are timeless. The subsequent §18.14 milestone completed artifact bundling and reversible guided
+installation, with discovery and ownership checks; this former next-step item is closed.
 
 
 
@@ -2165,10 +2183,10 @@ silently adopted.
 The initial Claude/Codex skeleton cards also share the final `agent` padding, eliminating the
 left-edge text jump while asynchronous observations are loading.
 
-Next UX work should observe managed-skill ownership/status explicitly in Overview so an already
-Token-Harness-owned skill can display **Enabled** without requiring the user to open a preview.
+Managed-skill ownership/status is now observed explicitly in Overview. The completed §18.14 state
+follow-up below closes this former next-step item.
 
-### Phase 18.15 — Automatic native prompt routing and evidence (implemented; Windows Claude runtime pending)
+### Phase 18.15 — Automatic native prompt routing and evidence (implemented; runtime/paired evidence #359/#360 pending)
 
 RFC 0030 adds an opt-in, per-harness **Automatic prompt routing** control to the guided app. A
 reviewed plan/apply transaction installs harness-native prompt and subagent hooks, preserves existing
@@ -2185,12 +2203,12 @@ five-hour and weekly quota deltas remain separate percentages. No observed pair 
 yet**, not zero.
 
 Codex hook trust remains a manual `/hooks` step. Claude requires a fresh session after enabling. The
-exact supported hook tuples are Codex 0.159.0/0.160.0 and Claude Code 2.1.274/2.1.288; newer or
+configuration-fixture versions are Codex 0.159.0–0.159.1/0.160.0 and Claude Code 2.1.274–2.1.288; newer or
 unknown builds fail closed until fixture-tested. Native Claude runtime receipt verification on
 Windows remains a user-machine release test; Claude hook payloads do not establish the actual child
 model, so the dashboard does not infer it.
 
-### Phase 18.13 - Guided Agent Skill state (completed)
+### Phase 18.14 follow-up — Guided Agent Skill state (completed)
 
 - Show live in-session guidance state directly on each Claude Code / Codex card.
 - Distinguish Token Harness-managed ownership from identical external/user-owned skills.
@@ -2275,6 +2293,9 @@ reviewed runtime control surface.
 
 ### 19.1 P0 — Unified Efficiency Decision Engine
 
+**Partial:** the tested internal `decideEfficiency` contract is implemented. The unified read-only
+CLI/controller path remains #361; this layer does not execute attempts or enforce budgets.
+
 The existing `budget`, `context`, `optimize`, `schedule`, workload-capacity and native-policy
 logic should converge on one internal decision contract instead of behaving as adjacent advisory
 features.
@@ -2337,6 +2358,9 @@ Acceptance:
 
 ### 19.2 P0 — Automatic Context Governor
 
+**Partial:** bounded snapshots, deterministic recommendations and `optimize --context-snapshot`
+are implemented. Checkpoint integration remains #361; automatic context execution is not complete.
+
 Context growth is the largest remaining uncontrolled source of allowance waste. The current
 `context` audit, HarnessTrim reducers, compact-handoff guidance, MCP inventory and context-owner
 experiments provide the measurement foundation; this milestone turns them into a coherent policy.
@@ -2386,6 +2410,8 @@ Acceptance:
 
 ### 19.3 P0 — Adaptive cheap-first policy and bounded escalation
 
+**Planned:** existing quality/native-policy evidence is a prerequisite, not a live escalation loop.
+
 Model and reasoning selection should become an **escalation ladder**, not a permanent preference.
 
 The ladder is derived from installed native capabilities and project-local evidence. No permanent
@@ -2429,6 +2455,9 @@ Acceptance:
 - policy records whether escalation improved acceptance versus simply consuming more allowance.
 
 ### 19.4 P0 — Per-task allowance budget
+
+**Partial contract; enforcement planned:** the decision engine can carry empirical p75 allowance
+budgets and externally evidenced attempt limits. A running task-budget controller is not shipped.
 
 RFC 0020 answers whether a known backlog fits remaining allowance. This milestone adds the inverse
 control: **how much of each live allowance window may one task consume before Token Harness stops
@@ -2821,19 +2850,19 @@ Before broad autonomous execution, real empirical fixtures must cover at least m
 and hard task classes on both Claude Code and Codex where the respective live allowance surfaces are
 available. Critical tasks may remain recommendation-only until evidence is sufficient.
 
-### 19.16 Immediate sequencing from current main
+### 19.16 Immediate sequencing from published 0.1.26
 
-The near-term development sequence from the current repository state is:
-
-1. complete the real current-stack validation tracked by issue #255 so RTK + HarnessTrim have a
-   trustworthy present-day baseline;
-2. keep the merged optimizer × harness setup/results model as the management foundation;
-3. stop treating provider-count expansion as the main definition of progress;
-4. implement 19.1–19.4 as the next runtime-policy milestone;
-5. use those contracts to drive 19.5–19.10 and measure whether the controller actually increases
-   accepted work per allowance;
-6. keep provider/model switching outside automation until native interception and per-model
-   quality/allowance evidence can be verified against the current advisory workflow.
+1. Complete #255 current native-Windows stack receipts and #359 real automatic prompt callbacks.
+2. Collect #360 attributable paired baseline/optimized outcomes with quality and independent
+   allowance windows; do not substitute synthetic CI or configuration for runtime evidence.
+3. Complete #361 unified read-only decision/checkpoint integration, reusing the implemented §19.1
+   engine and §19.2 snapshot advice.
+4. Implement §19.3 escalation receipts, §19.4 task-budget enforcement and §19.5 deterministic stops,
+   then use those contracts to advance §19.6–19.10 and measure accepted work per allowance.
+5. Keep the merged setup/results foundation and concurrent UI/UX work independent of these evidence
+   gates; provider-count expansion is secondary, not the primary progress metric.
+6. Keep provider/root-model switching outside automation until native interception and per-model
+   quality/allowance evidence are verified. Broad autonomy remains explicitly opt-in and gated.
 
 The product positioning that this phase should make true is:
 

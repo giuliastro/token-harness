@@ -18,11 +18,11 @@ As reviewed on 2026-10-03:
   `harnesstrim capabilities` contract. The additional `digests` field is additive and does not
   invalidate Token Harness's semantic surface/write-set checks. A real Windows update to 0.3.0 via
   npm has been validated.
-- **mcptoon 0.7.10** is the reviewed managed-candidate lifecycle release. Token Harness now has two
-  exact RFC 0009 admission rows on Linux non-WSL, backed by live Ubuntu recordings: Codex 0.152.1 and
-  Claude Code 2.1.269, both with mcptoon 0.7.10. mcptoon remains a candidate rather than a globally
-  registered provider; this
-  exact compatibility evidence does not satisfy the other promotion-readiness gates by itself.
+- **mcptoon 0.7.10** is the source-reviewed installation/campaign target. It is registered as an
+  optional managed provider, not a promoted production-baseline mechanism. Historical Linux
+  recordings cover Codex 0.152.1/0.153.0 and Claude Code 2.1.269 with mcptoon 0.7.10. Version
+  0.1.26 supports installation through an already-present pipx or uv; these package paths do not
+  imply new live compatibility recordings or successful selection evidence.
 
 ## Detection policy
 
@@ -48,11 +48,16 @@ RTK 0.51.0 is source-reviewed for the Codex hook contract. The adapter recognize
 RTK 0.50.0 and later; the historical Windows mutation fixture and the Linux RTK/HarnessTrim chain
 fixture remain separately scoped evidence.
 
-For **mcptoon**, candidate detection and managed lifecycle are intentionally narrower than provider
-promotion. The reviewed lifecycle recognizes the exact managed surface around 0.7.10, but RFC 0009
-admits managed harness mutation only for the two recorded Linux non-WSL combinations: Codex 0.152.1
-and Claude Code 2.1.269. Adjacent Claude/Codex versions, adjacent mcptoon versions, WSL, Windows and
-macOS remain refused until separately recorded and reviewed. No semver inference widens either row.
+For **mcptoon**, ordinary managed setup checks the installed version floor and required passive
+compact/JSON CLI surfaces, while historical recordings and selection-campaign admission remain
+separately scoped. Capability acceptance is not a new benchmark tuple or promotion decision.
+
+The published implementation uses historical compatibility rows plus live assignable capability,
+ownership, containment, drift and post-apply checks for ordinary managed setup. Some surfaces,
+including RFC 0030 native prompt-hook formats and exact combined-stack/selection evidence, retain
+stricter independent gates. RFC 0009's original exact-row-only language has not caught up with that
+shipped policy; [#362](https://github.com/giuliastro/token-harness/issues/362) tracks its explicit
+contract reconciliation. No evidence recording or promotion is widened by this documentation.
 
 ## Package updates are a separate gate
 
@@ -66,8 +71,11 @@ Instead, package replacement has its own reviewed provider-target policy:
 - RTK package targets from **0.44.0 onward** are admitted, with runtime post-install verification;
 - HarnessTrim package targets from **0.0.5 onward** are admitted, with capability-contract
   post-install verification;
-- a target newer than the reviewed provider-package ceiling is reported as available but remains
-  blocked for unattended update until that provider contract is reviewed.
+- other registered provider package targets use their supported floors and runtime capability
+  postconditions; a current source-reviewed target is historical evidence, not a universal future
+  ceiling;
+- an update remains reviewed/approved and must verify the exact active installation, restoring prior
+  state when the required postcondition fails.
 
 HarnessTrim package updates use **npm**, matching the upstream install contract. The updater queries
 `npm view harnesstrim version`, applies an exact global version with
@@ -80,9 +88,9 @@ release-tag `v` prefix (for example `v0.48.0`), which Token Harness accepts as t
 version as `0.48.0` while preserving the raw channel spelling for an exact WinGet install request.
 The v-prefixed WinGet query/update path has been validated on a real Windows machine.
 
-The public WinGet package repository currently contains RTK through **v0.48.0**, while the reviewed
-upstream release is **0.51.0**. On native Windows, when WinGet is behind the already-reviewed RTK
-package ceiling, Token Harness can use the exact official GitHub release asset
+The historical Windows exercise observed WinGet at **v0.48.0**. The updater queries current channel
+state rather than assuming that catalog observation remains current. On native Windows, when WinGet
+lags the current source-reviewed RTK **0.51.0** target, Token Harness can use the exact official GitHub release asset
 `rtk-x86_64-pc-windows-msvc.zip` instead of pretending the stale package catalog is current.
 
 That direct-release path is intentionally narrower than a generic downloader:
@@ -102,19 +110,15 @@ That direct-release path is intentionally narrower than a generic downloader:
 - if another ordinary provider update fails later in the same `update` command, Token Harness also
   attempts to restore RTK before returning.
 
-This direct path still grants **no harness-write permission**. Exact provider × harness × version ×
-platform compatibility rows remain mandatory when Token Harness wants to mutate an agent
-integration. The release updater changes a provider binary only; it does not widen RFC 0009.
-
-A future HarnessTrim build can be accepted after it is installed when its capability contract still
-matches, but that does not automatically make an unknown future package target safe for unattended
-pre-install update. Bridging that last gap requires an install-time contract postcondition with an
-atomic rollback path, not a blanket semver allowance.
+This direct path grants no harness-write permission by itself. Package updates and agent integration
+writes remain separate plans/checks, with the integration's own capability/schema, ownership,
+containment, transaction and verification requirements. Package postconditions and retained prior
+inventory/bytes support rollback when an installed target fails the required runtime contract.
 
 ## What this policy does not claim
 
 A provider being version-compatible is not evidence that an RTK + HarnessTrim combination has been
-benchmarked together, nor that a passive receipt belongs to a particular harness. Likewise, two
-exact mcptoon compatibility rows are not proof that mcptoon should join the managed provider registry.
+benchmarked together, nor that a passive receipt belongs to a particular harness. Likewise, historical
+mcptoon compatibility rows and optional registry membership are not production-stack promotion.
 Combined-stack review, harness-scoped runtime evidence and the candidate promotion-readiness gates
 remain separate decisions.

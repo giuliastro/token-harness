@@ -82,8 +82,10 @@ Apache-2.0 upstream is active and non-archived, stable releases span 2026-08-12 
 and recent releases document regression fixes plus release/test discipline. The repository is still
 young, so that remains explicit residual risk and future versions do not inherit the review.
 
-These checkpoints do **not** make mcptoon promotion-eligible and do not put it in
-`PROVIDER_ADAPTERS`. A real candidate campaign still has to produce promising selection evidence and
+These checkpoints do **not** make mcptoon promotion-eligible and do not put it in the
+production baseline. It is registered as an optional managed provider; registry membership is not
+promotion. Version 0.1.26 adds installation via existing uv alongside pipx; the historical exact Linux
+recordings above remain evidence for their own tuples only. A real candidate campaign still has to produce promising selection evidence and
 verified activation receipts. Combined-stack validation and the separate compatibility/reversibility
 decision for the intended promoted surface also have to pass independently. No semver inference
 substitutes for those gates.

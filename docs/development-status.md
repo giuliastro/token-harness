@@ -1,5 +1,15 @@
 # Development status
 
+**Current published release: 0.1.26 (2026-10-03).** PR #358 merged and the exact-tag publication
+workflow passed. Cross-platform CI and public artifact install/provenance checks are complete.
+Real Windows stack/callback evidence and attributable paired savings remain open.
+See [current delivery status and next steps](plan-status.md) for reconciled issue/PR decisions.
+
+## Historical development log
+
+Entries below describe their checkpoint date, including former release-candidate states and candidate
+registry decisions. They do not override the current published status above.
+
 - 2026-10-03: **Token Harness 0.1.25 release candidate in progress.** Windows Codex hook
   inspection now reads the native `commandWindows` entry, RTK 0.51 is recognized for Codex, and
   quoted Windows `.cmd` attribution wrappers are detected. Guided integration checks now separate
