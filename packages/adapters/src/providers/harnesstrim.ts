@@ -44,7 +44,11 @@ import type {
   ProviderPlanRequest,
   ProviderVerification,
 } from './contract.js';
-import { appendCommandHookAction, commandHookTarget } from './hook-plan.js';
+import {
+  appendCommandHookAction,
+  commandHookTarget,
+  removeCommandHookAction,
+} from './hook-plan.js';
 
 const HARNESSTRIM = providerId('harnesstrim');
 const CLAUDE = harnessId('claude');
@@ -1720,6 +1724,56 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
         },
       })),
     );
+
+    // Reverse only runtime hooks on scopes this provider owns. The transaction layer will admit
+    // the removal only when its journal contains the exact JSON entry written by the setup action.
+    for (const owned of request.ownership) {
+      if (
+        owned.owner !== HARNESSTRIM ||
+        owned.scope.capability !== 'shell.output.reduce' ||
+        owned.scope.interceptionPoint !== 'post-tool-use' ||
+        (owned.scope.harness !== CLAUDE && owned.scope.harness !== CODEX)
+      ) {
+        continue;
+      }
+      const harness = request.harnesses.find((entry) => entry.id === owned.scope.harness);
+      if (harness === undefined) continue;
+      const target = commandHookTarget(
+        context,
+        harness,
+        owned.scope.interceptionPoint,
+        owned.scope.toolFamily,
+      );
+      if (target === null) continue;
+
+      const existing = context.harnessConfigs
+        .filter(
+          (config) =>
+            config.harnessId === harness.id &&
+            config.configPath === target.configPath &&
+            config.interceptionPoints.includes(target.scopeId),
+        )
+        .flatMap((config) => config.hookCommands ?? [])
+        .find(
+          (entry) =>
+            entry.eventName === target.eventName &&
+            entry.matcher === target.matcher &&
+            isHarnessTrimHookFor(entry.command, harness.id),
+        );
+      if (existing === undefined) continue;
+
+      const actionKey = digestText(target.configPath).slice(7, 15);
+      actions.push(
+        removeCommandHookAction({
+          target,
+          providerId: HARNESSTRIM,
+          actionId: `harnesstrim-${harness.id}-hook-remove-${actionKey}`,
+          installActionId: `harnesstrim-${harness.id}-hook-${actionKey}`,
+          command: existing.command,
+        }),
+      );
+    }
+
     return {
       providerId: HARNESSTRIM,
       desiredState: 'absent',

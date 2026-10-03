@@ -1438,4 +1438,92 @@ describe('planning', () => {
       true,
     );
   });
+
+  it('plans surgical removal of the owned runtime hook and leaves unowned hooks alone', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.1', skill);
+    const cases = [
+      {
+        adapter: claudeAdapter,
+        id: 'claude',
+        matcher: 'Bash',
+        configPath: `${HOME}\\.claude\\settings.json`,
+      },
+      {
+        adapter: codexAdapter,
+        id: 'codex',
+        matcher: '^Bash$',
+        configPath: `${HOME}\\.codex\\hooks.json`,
+      },
+    ] as const;
+
+    for (const item of cases) {
+      const harness = harnessId(item.id);
+      const command = `harnesstrim hook ${item.id} --metrics .harnesstrim/metrics.jsonl`;
+      const existing: HarnessConfigSummary = {
+        harnessId: harness,
+        configPath: item.configPath,
+        scope: 'user',
+        interceptionPoints: ['post-tool-use'],
+        matchers: [item.matcher],
+        commands: [command],
+        hookCommands: [
+          {
+            eventName: 'PostToolUse',
+            matcher: item.matcher,
+            command,
+            entryPointer: 'hooks.PostToolUse.0',
+            commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+          },
+        ],
+      };
+      const ownership: ResolvedCapability = {
+        scope: {
+          harness,
+          toolFamily: 'Bash',
+          interceptionPoint: 'post-tool-use',
+          capability: 'shell.output.reduce',
+        },
+        owner: HARNESSTRIM,
+        mode: 'chainable',
+        order: 1,
+      };
+      const ctx = context({ version: '0.3.1', capabilities, configs: [existing] });
+      const result = await harnesstrimAdapter.plan(ctx, {
+        ownership: [ownership],
+        harnesses: [item.adapter.manifest],
+        desiredState: 'absent',
+      });
+      const removal = result.actions.find(
+        (action) => action.kind === 'remove-owned-change' && action.path === existing.configPath,
+      );
+      assert.ok(removal !== undefined && removal.kind === 'remove-owned-change');
+      assert.equal(
+        removal.reverses,
+        `harnesstrim-${item.id}-hook-${digestText(existing.configPath).slice(7, 15)}`,
+      );
+      assert.deepEqual(removal.target, {
+        kind: 'owned-json-entry',
+        path: existing.configPath,
+        pointer: 'hooks.PostToolUse',
+        placement: 'array-element',
+        valueDigest: jsonValueDigest({
+          matcher: item.matcher,
+          hooks: [{ type: 'command', command }],
+        }),
+      });
+
+      const unownedResult = await harnesstrimAdapter.plan(ctx, {
+        ownership: [],
+        harnesses: [item.adapter.manifest],
+        desiredState: 'absent',
+      });
+      assert.equal(
+        unownedResult.actions.some(
+          (action) => action.kind === 'remove-owned-change' && action.path === existing.configPath,
+        ),
+        false,
+      );
+    }
+  });
 });
