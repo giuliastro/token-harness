@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -20,7 +21,10 @@ it('launches a replacement from a path with spaces and waits for its actual loop
   writeFileSync(
     entryScript,
     `import {createServer} from 'node:http';
-    const server=createServer((req,res)=>res.end(JSON.stringify(process.argv.slice(2))));
+    const server=createServer((req,res)=>{
+      res.on('finish',()=>server.close(()=>process.exit(0)));
+      res.end(JSON.stringify(process.argv.slice(2)));
+    });
     server.listen(0,'127.0.0.1',()=>process.send({type:'token-harness-guide-ready',url:'http://127.0.0.1:'+server.address().port+'/'}));
     setTimeout(()=>server.close(),1000);`,
   );
@@ -35,7 +39,8 @@ it('launches a replacement from a path with spaces and waits for its actual loop
     const response = await fetch(url);
     assert.deepEqual(await response.json(), ['ui', '--no-open']);
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    // Windows holds the child's working directory until its process has exited.
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -70,6 +75,6 @@ it('rejects remote readiness URLs and failed starts without returning a navigati
       /could not start/,
     );
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
