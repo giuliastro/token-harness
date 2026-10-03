@@ -5,8 +5,9 @@ activating or exercising any provider automatically.
 
 The target row is the real machine state, especially:
 
-- RTK `0.49.0`;
-- HarnessTrim `0.3.0`;
+- RTK `0.51.0` (current source-reviewed target);
+- HarnessTrim `0.3.1`;
+- published Token Harness `0.1.26` or newer;
 - the Claude Code and/or Codex versions actually installed;
 - Token Harness `doctor`, `verify` and `stack-review` evidence before and after real qualifying use.
 

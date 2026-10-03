@@ -21,7 +21,7 @@ describe('README onboarding contract', () => {
     assert.match(readme, /npm install --global token-harness@latest/);
     assert.match(readme, /\ntoken-harness\n/);
     assert.match(readme, /browser app is the primary interface/i);
-    assert.match(readme, /Node\.js 22\.13 or newer/);
+    assert.match(readme, /Node\.js 22\.13(?:\+| or newer)/);
     assert.equal(packageJson.engines?.node, '>=22.13.0');
 
     for (const [id, label] of [
@@ -32,8 +32,8 @@ describe('README onboarding contract', () => {
       assert.match(readme, new RegExp(`\\*\\*${label}\\*\\*|### ${label}`));
     }
     assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
-    assert.match(readme, /There is no separate Setup page to learn/i);
-    assert.match(readme, /Optimizer setup/);
+    assert.doesNotMatch(readme, /^#{1,3} Setup$/im);
+    assert.match(readme, /Optimizer setup/i);
     assert.doesNotMatch(readme, /Finish setup/);
     assert.match(readme, /Install updates/);
 
@@ -42,7 +42,9 @@ describe('README onboarding contract', () => {
   });
 
   it('documents candidate campaigns as advanced evidence outside novice managed setup', async () => {
-    const readme = await repositoryFile('README.md');
+    const onboarding = await repositoryFile('README.md');
+    assert.match(onboarding, /\[CLI and evaluation guide\]\(docs\/cli-guide\.md\)/);
+    const readme = await repositoryFile('docs/cli-guide.md');
 
     assert.doesNotMatch(readme, /Run standard evaluation/);
     assert.match(readme, /Evaluation campaigns are an advanced maintainer workflow/i);
