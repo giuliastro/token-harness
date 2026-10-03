@@ -243,9 +243,16 @@ function verifyHarness(agent) {
   const row = result.data?.results?.find(
     (item) => item.providerId === 'harnesstrim' && item.harnessId === agent,
   );
+  const configured = row?.checks?.find((check) => check.id === 'integration-configured');
+  const canary = row?.checks?.find((check) => check.id === 'canary-intercepted');
   assert(
-    result.data?.healthyAtDeclaredTier === true && row !== undefined,
-    `${agent}: HarnessTrim verification is healthy at its declared tier`,
+    row?.declaredTier === 'canary' &&
+      configured?.status === 'pass' &&
+      configured?.achievedTier === 'config-only' &&
+      canary?.status === 'not-exercised' &&
+      canary?.achievedTier === null &&
+      result.data?.healthyAtDeclaredTier === false,
+    `${agent}: setup stays config-only until a runtime canary is observed`,
     JSON.stringify(result),
   );
 }
