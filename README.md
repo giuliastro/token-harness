@@ -63,7 +63,7 @@ agent or optimizer when a version or prerequisite needs attention.
 | **Less noisy tool output** | Connect RTK and HarnessTrim on reviewed integration rows. |
 | **Automatic prompt guidance** | Opt into native hooks that supply a bounded delegation policy on each prompt. |
 | **Allowance-aware advice** | Inspect five-hour/weekly windows and native model/effort recommendations when evidence is available. |
-| **Measured results** | Filter, sort and expand evidence by agent, optimizer or routing mechanism. |
+| **Measured results** | Search and filter sources; expand each result for before/after values and attribution. |
 | **Safe maintenance** | Preview changes, retain backups, verify updates and remove owned configuration. |
 
 Automatic routing needs no skill invocation or prompt prefix after setup and native authorization.
@@ -92,9 +92,8 @@ the optimized task windows. Those differences cannot be attributed to mcptoon. I
 and experimental, rather than a proven third savings mechanism.
 [Evaluation record](docs/development-status.md#historical-development-log).
 
-The current **0.1.26** release passed CI on **Windows, macOS and Linux**, plus exact-artifact
-publication/install checks. Real Windows combined-stack evidence and broader promotion gates remain
-open. [Release evidence and roadmap status](docs/plan-status.md).
+Releases are gated by CI on **Windows, macOS and Linux**, plus exact-artifact publication/install
+checks. Real Windows combined-stack evidence and broader promotion gates remain open. [Release evidence and roadmap status](docs/plan-status.md).
 
 For a terminal summary of locally recorded evidence:
 
