@@ -25,7 +25,7 @@ export const GUIDE_HTML = `<!doctype html>
 <div class="header-tools"><label><span class="sr-only">Appearance</span><select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><button id="refresh" class="secondary" type="button">Refresh</button></div>
 </div></header>
 <main id="main">
-<div class="page-heading"><div><h1 id="view-title">Overview</h1><p id="view-description">Your coding agents, optimization stack, health and measured results in one place.</p></div></div>
+<div class="page-heading"><div><h1 id="view-title">Overview</h1><p id="view-description">Your setup, results and next steps.</p></div></div>
 <div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption">Nothing changes without your approval</span></div>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
 <div id="update-notice" class="update-notice" role="status" hidden></div>
@@ -33,20 +33,18 @@ export const GUIDE_HTML = `<!doctype html>
 <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabindex="0">
 <section id="dashboard-status" class="dashboard-status"><div><span class="eyebrow">CURRENT STATUS</span><h2>Checking your machine…</h2><p>Finding Claude Code, Codex, recommended optimizers and measured results.</p></div><span class="pill">Checking</span></section>
 
-<div class="section-title"><div><h2>Measured impact</h2><p>A summary of what Token Harness can actually prove. Open Results for the detailed evidence.</p></div></div>
+<div class="section-title"><div><h2>Measured impact</h2><p>Recorded output, allowance and quality.</p></div><button id="overview-results" class="secondary" type="button">View results</button></div>
 <div id="dashboard-metrics" class="impact-grid" aria-label="Efficiency summary">
-<article class="metric-card"><span class="metric-label">Measured output</span><strong class="metric-value">Checking…</strong><p class="metric-help">Recorded optimizer output.</p></article>
+<article class="metric-card"><span class="metric-label">Recorded output</span><strong class="metric-value">Checking…</strong><p class="metric-help">Recorded optimizer output.</p></article>
 <article class="metric-card"><span class="metric-label">5h / 7d allowance</span><strong class="metric-value">Checking…</strong><p class="metric-help">Shown only when measured.</p></article>
-<article class="metric-card"><span class="metric-label">API cost</span><strong class="metric-value">Checking…</strong><p class="metric-help">Shown only from billing evidence.</p></article>
 <article class="metric-card"><span class="metric-label">Quality</span><strong class="metric-value">Checking…</strong><p class="metric-help">Measured separately from savings.</p></article>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>Enable automatic per-prompt routing here for each detected coding app. The card distinguishes hook configuration from callbacks actually observed at runtime.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Manage automatic routing for each app.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
-<summary>Agent details and optional reasoning settings</summary>
-<p class="caption">Allowance, tool observations and reasoning preferences are advanced information. They are not required to finish optimizer setup.</p>
+<summary>Agent details &amp; reasoning settings</summary>
 <div id="agent-capabilities" class="tool-grid"><article class="tool-card"><h3>Checking agent details…</h3></article></div>
 <div class="subsection-heading"><h3>Optional reasoning settings</h3><p class="caption">Persistent agent preferences are separate from optimizer setup.</p></div>
 <div id="agent-tuning" class="tool-grid"><article class="tool-card"><h3>Checking reasoning controls…</h3></article></div>
@@ -54,29 +52,34 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section class="setup-step" id="optimizers">
-<div class="section-title"><div><h2>Optimizer setup</h2><p>This matrix shows which optimizer setup Token Harness detected for each coding app. It does not confirm runtime activity; measured results appear separately when evidence is recorded.</p></div></div>
+<div class="section-title"><div><h2>Optimizer setup</h2><p>Connections detected for each app. Setup alone does not prove runtime activity.</p></div></div>
 <div id="connection-overview" class="connection-overview"><p class="empty">Checking optimizer connections…</p></div>
 </section>
 
 <section class="setup-step" id="maintenance">
-<div class="section-title"><div><h2>Health and updates</h2><p>These are maintenance actions, not onboarding steps. Setup already performs its own safety checks.</p></div></div>
+<div class="section-title"><div><h2>Health and updates</h2></div></div>
 <div id="maintenance-actions" class="maintenance-list"><p class="empty">Checking…</p></div>
 </section>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
-<div class="results-header"><div><h2>Results dashboard</h2><p>Measured evidence by optimizer, routing and coding app. Different classes and units stay separate.</p></div><div class="filter-row"><label for="period">Period</label><select id="period"><option value="all">All</option><option value="7d">7 days</option><option value="30d">30 days</option></select><button id="measurement-help" class="secondary" type="button">How results are recorded</button></div></div>
+<div class="results-header"><div><h2>Measured impact</h2><p>Each result keeps its source and measurement type.</p></div><div class="filter-row"><label for="period" class="sr-only">Results period</label><select id="period"><option value="all">All recorded history</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><button id="measurement-help" class="secondary" type="button">How to read results</button></div></div>
 <div id="result-summary" class="impact-grid" aria-label="Results overview"><article class="metric-card"><span class="metric-label">Measured evidence</span><strong class="metric-value">Checking…</strong></article></div>
 <div class="section-title"><div><h2>Evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div>
 <section class="panel evidence-panel">
-<div class="evidence-controls"><label>Filter <input id="evidence-filter" type="search" placeholder="Optimizer, harness, class…" autocomplete="off"></label><label>Type <select id="evidence-type"><option value="all">All</option><option value="optimizer">Optimizers</option><option value="routing">Routing</option><option value="harness">Coding apps</option><option value="candidate">Experiments</option></select></label><label>Sort <select id="evidence-sort"><option value="name">Name</option><option value="evidence">Evidence count</option><option value="type">Type</option></select></label></div>
-<div class="evidence-table-scroll"><table class="evidence-table"><thead><tr><th scope="col">System</th><th scope="col">Scope</th><th scope="col">Measured evidence</th><th scope="col">Details</th></tr></thead><tbody id="result-evidence"><tr><td colspan="4">Checking recorded results…</td></tr></tbody></table></div>
-<p id="evidence-empty" class="empty" hidden>No evidence matches these filters.</p>
+<div class="evidence-controls">
+<div class="evidence-field evidence-search"><label for="evidence-filter">Search evidence</label><input id="evidence-filter" type="search" placeholder="Search sources, apps or measurements" autocomplete="off"></div>
+<div class="evidence-field"><label for="evidence-type">Source type</label><select id="evidence-type"><option value="all">All sources</option><option value="optimizer">Optimizers</option><option value="routing">Routing</option><option value="harness">Coding apps</option><option value="candidate">Experiments</option></select></div>
+<div class="evidence-field"><label for="evidence-sort">Sort by</label><select id="evidence-sort"><option value="evidence">With results first</option><option value="name">Name</option><option value="type">Source type</option></select></div>
+</div>
+<div class="evidence-list-meta"><p id="evidence-count" class="caption" role="status"></p><button id="evidence-reset" class="text-button" type="button" hidden>Clear filters</button></div>
+<ul id="result-evidence" class="result-evidence" aria-label="Evidence by source"><li class="empty">Checking recorded results…</li></ul>
+<div id="evidence-empty" class="evidence-empty" hidden><strong>No matching sources</strong><p>Try a different search or clear the filters.</p></div>
 </section>
 <div class="section-title"><div><h2>Recent activity</h2><p>Latest checks and changes from this app session.</p></div></div><section class="panel"><div id="activity" class="activity-scroll"><p class="empty">No activity yet.</p></div></section>
 </section>
 
-<footer><span>Local data. No account required.</span><span>Full overview refresh runs only when you choose Refresh.</span></footer>
+<footer><span>Local data. No account required.</span></footer>
 </main>
 <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="modal-title">Review</h2></div><div id="modal-content"></div><div id="modal-error" class="error" role="alert" hidden></div><div id="modal-actions" class="dialog-actions"></div></div></dialog>
 <script src="/guide.js" defer></script></body></html>`;

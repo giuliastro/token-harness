@@ -9,17 +9,14 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_HTML, /id="tab-results"[^>]*>Results</);
     assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
     assert.doesNotMatch(GUIDE_HTML, />Setup<\/button>/);
-    assert.match(
-      GUIDE_HTML,
-      /Your coding agents, optimization stack, health and measured results in one place/,
-    );
+    assert.match(GUIDE_HTML, /Your setup, results and next steps/);
   });
 
   it('keeps coding agents and the optimization stack as the two visible setup entities', () => {
     assert.match(GUIDE_HTML, /<h2>Coding agents<\/h2>/);
     assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
     assert.match(GUIDE_HTML, /id="connection-overview"/);
-    assert.match(GUIDE_HTML, /This matrix shows which optimizer setup/);
+    assert.match(GUIDE_HTML, /Setup alone does not prove runtime activity/);
     assert.doesNotMatch(GUIDE_HTML, /Remove Token Harness-managed configuration/);
     assert.match(GUIDE_JS, /Remove managed setup/);
     assert.match(GUIDE_JS, /Recommended baseline/);
@@ -34,7 +31,7 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Setup available/);
     assert.match(GUIDE_JS, /baselineStatusFor/);
     assert.match(GUIDE_JS, /target\.state === 'actionable'/);
-    assert.match(GUIDE_JS, /This card shows detected setup/);
+    assert.match(GUIDE_JS, /Optimizer setup detected/);
     assert.match(GUIDE_JS, /Optimization stack below/);
     assert.doesNotMatch(GUIDE_JS, /Finish setup/);
     assert.doesNotMatch(GUIDE_JS, /Finish setup for /);
@@ -67,8 +64,8 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Applying the approved change/);
   });
 
-  it('shows concise summary and a complete filterable evidence table', () => {
-    assert.match(GUIDE_HTML, /Results dashboard/);
+  it('shows a concise summary and a filterable evidence list', () => {
+    assert.match(GUIDE_HTML, /aria-label="Evidence by source"/);
     assert.match(GUIDE_HTML, /id="result-summary"/);
     assert.match(GUIDE_HTML, /id="result-evidence"/);
     assert.match(GUIDE_HTML, /id="evidence-filter"/);
@@ -82,8 +79,8 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /applyEvidenceFilters/);
     assert.match(GUIDE_JS, /row\.measurement/);
     assert.match(GUIDE_JS, /row\.unit/);
-    assert.match(GUIDE_JS, /row\.measurement \+ ' · ' \+ count\(row\.saved\)/);
-    assert.match(GUIDE_JS, /Allowance and local tokens/);
+    assert.match(GUIDE_JS, /optimizerSignal/);
+    assert.match(GUIDE_JS, /same optimizer records/);
     assert.match(GUIDE_JS, /const routeStatus = routed\?\.state/);
   });
 
@@ -93,7 +90,7 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /Not measured yet/);
     assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
     assert.match(GUIDE_JS, /billed-token evidence/);
-    assert.match(GUIDE_JS, /Quality is never inferred from token savings alone/);
+    assert.match(GUIDE_JS, /output savings alone are not proof/);
   });
 
   it('never schedules a full overview refresh in the background', () => {
