@@ -44,6 +44,8 @@ describe('stack-review CLI', () => {
         contextSnapshot: null,
         nativePolicy: false,
         agentSkill: false,
+        agentRouting: false,
+        disableAgentRouting: false,
         verbose: false,
         yes: false,
       },

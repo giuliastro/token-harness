@@ -233,6 +233,33 @@ describe('compatibility rules', () => {
     );
   });
 
+  it('does not select an ordered rule as an exact tuple when its harness release is unrecorded', () => {
+    const unrecorded: CompatibilityRule = {
+      ...rule,
+      id: 'unrecorded-codex-chain',
+      harnesses: ['codex'] as HarnessId[],
+      outcome: 'ordered',
+      order: ['rtk', 'harnesstrim'] as ProviderId[],
+      testedHarnessVersions: {},
+    };
+    const recorded: CompatibilityRule = {
+      ...unrecorded,
+      id: 'recorded-codex-chain',
+      testedHarnessVersions: { codex: '0.159.0' },
+    };
+
+    assert.equal(
+      findCompatibilityRule([unrecorded, recorded], {
+        providers: ['rtk', 'harnesstrim'] as ProviderId[],
+        harness: 'codex' as HarnessId,
+        capability: 'shell.output.reduce',
+        observedVersions: { rtk: '1.4.2', harnesstrim: '0.0.5' },
+        observedHarnessVersions: { codex: '0.159.0' },
+      }),
+      recorded,
+    );
+  });
+
   it('treats an ordered rule without an order as malformed', () => {
     assert.equal(isWellFormedRule(rule), true);
     assert.equal(isWellFormedRule({ ...rule, outcome: 'ordered' }), false);

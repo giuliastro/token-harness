@@ -103,6 +103,8 @@ Exit criteria:
 | 0011 | Quota-aware Claude Code and Codex orchestration | Proposed — post-0.2 product direction |
 | 0027 | Optimization stack manager | Accepted |
 | 0028 | Smart model routing, shadow-first | Withdrawn 2026-09-27 |
+| 0029 | Prompt-guided native subagent routing | Accepted for skill guidance |
+| 0030 | Automatic native prompt routing and evidence | Implemented; Windows Claude runtime test pending |
 
 ## 6. Phase 1 — Repository and domain skeleton
 
@@ -1998,9 +2000,11 @@ Security: fixed local actions only, exact loopback/Host/Origin, CSRF token, boun
 short-lived single-use preview tickets, operation serialization and existing drift checks.
 Tests cover the real Claude transaction path plus browser boundary and all-project accounting.
 
-Not claimed: automatic model/task routing, guaranteed runtime interception on skills-only
-integrations, automatic installation of arbitrary/unreviewed providers, disk-wide project discovery,
-or causal subscription/euro savings. These need their own lifecycle and empirical evidence.
+At this 2026-09-05 milestone, automatic model/task routing and causal subscription/euro savings
+were not claimed. RFC 0030 now adds opt-in native prompt hooks and evidence-gated routing results;
+it still does not guarantee that a model follows a prompt instruction or infer quota savings without
+paired measurements. Skills-only runtime interception and arbitrary/unreviewed provider installation
+remain unsupported.
 The default product path no longer depends on understanding the diagnostic CLI or on another AI.
 
 
@@ -2163,6 +2167,28 @@ left-edge text jump while asynchronous observations are loading.
 
 Next UX work should observe managed-skill ownership/status explicitly in Overview so an already
 Token-Harness-owned skill can display **Enabled** without requiring the user to open a preview.
+
+### Phase 18.15 — Automatic native prompt routing and evidence (implemented; Windows Claude runtime pending)
+
+RFC 0030 adds an opt-in, per-harness **Automatic prompt routing** control to the guided app. A
+reviewed plan/apply transaction installs harness-native prompt and subagent hooks, preserves existing
+settings and user hooks, and removes only the exact entries Token Harness owns. The short policy is
+injected automatically on each submitted prompt; users do not need to invoke the Token Harness skill
+or prefix prompts with a command. The native harness still decides whether to spawn a subagent, so
+prompt guidance is not treated as proof of model selection.
+
+The dashboard distinguishes configured state from local callback receipts, reports prompt and
+subagent events without saving prompt/transcript content, and exposes enable/disable controls. Results
+credit local token savings only to paired same-harness/task-class benchmarks with disabled baseline,
+observed routed callback, available local token counts, and both quality gates passed. Authoritative
+five-hour and weekly quota deltas remain separate percentages. No observed pair means **Not measured
+yet**, not zero.
+
+Codex hook trust remains a manual `/hooks` step. Claude requires a fresh session after enabling. The
+exact supported hook tuples are Codex 0.159.0/0.160.0 and Claude Code 2.1.274/2.1.288; newer or
+unknown builds fail closed until fixture-tested. Native Claude runtime receipt verification on
+Windows remains a user-machine release test; Claude hook payloads do not establish the actual child
+model, so the dashboard does not infer it.
 
 ### Phase 18.13 - Guided Agent Skill state (completed)
 
@@ -2848,8 +2874,8 @@ frontmatter. Claude Code also has native `opusplan`, which selects Opus during p
 during execution. These are real prompt-guided/native subagent routes, not a way to re-route the
 already-running root request.
 
-This is a viable no-gateway direction for a future opt-in policy, with a strict cost guard: OpenAI
-warns that subagents consume more tokens than comparable single-agent runs. The prompt should
+This is viable as an opt-in skill policy with a strict cost guard: OpenAI warns that subagents
+consume more tokens than comparable single-agent runs. The prompt should
 delegate only independent, bounded work, request a cheaper supported model for those workers, and
 keep synthesis and judgment in the root session; the measured included-allowance and quality result
 must beat the extra context and agent overhead. Codex supports model defaults and custom agent
@@ -2868,11 +2894,19 @@ fixtures and live receipts; neither the installed Claude version nor the newer u
 are declared canary-verified here.
 
 Keep the CCR withdrawal in force; it does not rule out native prompt-guided subagent selection.
-First evaluate an opt-in Token Harness policy that emits harness-native guidance and agent settings,
-with no external gateway. Do not route the root request by prompt. Require observed worker model
-identity, task quality, retries, and comparable included-allowance evidence before recommending or
-automating a route. Resolve model IDs from each harness's current native catalog; API prices do not
-stand in for subscription allowance.
+The first opt-in implementation is prompt guidance in the portable Token Harness Agent Skill
+(RFC 0029). It asks Codex to send one complete, bounded implementation unit to a native Luna
+subagent when Luna is present in the current native catalog, and keeps integration and acceptance
+with the root model. The root request is never rerouted. Claude's native Haiku path is described for
+future use only when Claude Code is already configured and authenticated; it is not exercised on
+this machine. No harness settings are mutated and no gateway is installed.
+
+This prompt chooses a possible route; it does not prove the worker's runtime identity or any net
+savings. Require a visibly reported worker model for route verification and paired, quality-gated
+usage evidence for a savings claim. Subagents add context and coordination overhead and may consume
+more total tokens. Resolve models from each harness's current native catalog; API prices do not
+stand in for subscription allowance. Without that evidence, report routing as requested or
+unverified and savings as unknown.
 
 References: [ChatGPT and Codex models](https://learn.chatgpt.com/docs/models),
 [ChatGPT/Codex changelog](https://learn.chatgpt.com/docs/changelog),

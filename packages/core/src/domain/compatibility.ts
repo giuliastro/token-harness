@@ -96,17 +96,26 @@ export function findCompatibilityRule(
   }
 
   // Multiple narrowly reviewed rules may describe the same pair on different releases. Prefer
-  // an exact tuple; when none matches, select the rule with the most observed dimensions in
-  // common, so stale diagnostics refer to the nearest recorded integration rather than an
-  // unrelated newer tuple.
+  // an exact provider tuple plus the version of the harness currently being resolved; another
+  // harness in the same rule is outside this scope. Ordered rules must record this harness release:
+  // treating an absent record as a match would authorize an untested chain. When none matches,
+  // select the rule with the most relevant observed dimensions so stale diagnostics name the
+  // nearest evidence.
   if (query.observedVersions !== undefined) {
-    const matchesObservedTuple = (rule: CompatibilityRule): boolean =>
-      Object.entries(rule.testedVersions).every(
-        ([provider, version]) => query.observedVersions?.[provider] === version,
-      ) &&
-      Object.entries(rule.testedHarnessVersions ?? {}).every(
-        ([harness, version]) => query.observedHarnessVersions?.[harness] === version,
+    const matchesObservedTuple = (rule: CompatibilityRule): boolean => {
+      if (rule.providers.some((provider) => rule.testedVersions[provider] === undefined)) {
+        return false;
+      }
+      const testedHarnessVersion = rule.testedHarnessVersions?.[query.harness];
+      if (rule.outcome === 'ordered' && testedHarnessVersion === undefined) return false;
+      return (
+        Object.entries(rule.testedVersions).every(
+          ([provider, version]) => query.observedVersions?.[provider] === version,
+        ) &&
+        (testedHarnessVersion === undefined ||
+          query.observedHarnessVersions?.[query.harness] === testedHarnessVersion)
       );
+    };
     const exact = candidates.find(matchesObservedTuple);
     if (exact !== undefined) return exact;
 
@@ -114,9 +123,10 @@ export function findCompatibilityRule(
       Object.entries(rule.testedVersions).filter(
         ([provider, version]) => query.observedVersions?.[provider] === version,
       ).length +
-      Object.entries(rule.testedHarnessVersions ?? {}).filter(
-        ([harness, version]) => query.observedHarnessVersions?.[harness] === version,
-      ).length;
+      (rule.testedHarnessVersions?.[query.harness] !== undefined &&
+      query.observedHarnessVersions?.[query.harness] === rule.testedHarnessVersions[query.harness]
+        ? 1
+        : 0);
     candidates.sort((left, right) => matchingDimensions(right) - matchingDimensions(left));
   }
 
@@ -176,7 +186,8 @@ function coversVersion(recorded: SemanticVersion, observed: SemanticVersion): bo
 /** One provider whose installed version has left what the rule records. */
 export interface StaleRecordedVersion {
   provider: string;
-  recorded: string;
+  /** Null when the rule omitted a provider release from its evidence. */
+  recorded: string | null;
   /** Null when the version could not be established at all, which is also not covered. */
   observed: string | null;
 }
@@ -190,18 +201,18 @@ export interface StaleRecordedVersion {
  * exposed it — HarnessTrim `0.0.6` against a rule declaring `0.0.5`, deciding which provider owns
  * shell reduction, with nothing said.
  *
- * A provider the rule does not name is not consulted, and a provider the caller has no version
- * for is *not* covered: an unknown version cannot be inside a tested range, and treating it as
- * inside is the assumption this function exists to remove.
+ * Every provider named by the rule must have a recorded release, and the caller must establish
+ * its installed version. An unknown or unrecorded version cannot be inside a tested range.
  */
 export function staleRecordedVersions(
   rule: CompatibilityRule,
   observed: Readonly<Record<string, string | null>>,
 ): StaleRecordedVersion[] {
   const stale: StaleRecordedVersion[] = [];
-  for (const [provider, recorded] of Object.entries(rule.testedVersions)) {
+  for (const provider of rule.providers) {
+    const recorded = rule.testedVersions[provider];
     const seen = observed[provider] ?? null;
-    const recordedVersion = parseSemanticVersion(recorded);
+    const recordedVersion = recorded === undefined ? null : parseSemanticVersion(recorded);
     const seenVersion = seen === null ? null : parseSemanticVersion(seen);
     if (
       recordedVersion !== null &&
@@ -210,7 +221,7 @@ export function staleRecordedVersions(
     ) {
       continue;
     }
-    stale.push({ provider, recorded, observed: seen });
+    stale.push({ provider, recorded: recorded ?? null, observed: seen });
   }
   return stale;
 }
@@ -218,19 +229,23 @@ export function staleRecordedVersions(
 /** One harness release outside the exact version exercised by a rule. */
 export interface StaleRecordedHarnessVersion {
   harness: string;
-  recorded: string;
+  /** Null when the rule omitted the harness release from its evidence. */
+  recorded: string | null;
   observed: string | null;
 }
 
 export function staleRecordedHarnessVersions(
   rule: CompatibilityRule,
   observed: Readonly<Record<string, string | null>>,
+  harness: HarnessId,
 ): StaleRecordedHarnessVersion[] {
-  const stale: StaleRecordedHarnessVersion[] = [];
-  for (const [harness, recorded] of Object.entries(rule.testedHarnessVersions ?? {})) {
-    const seen = observed[harness] ?? null;
-    if (seen === recorded) continue;
-    stale.push({ harness, recorded, observed: seen });
-  }
-  return stale;
+  const recorded = rule.testedHarnessVersions?.[harness];
+  // The cross-interception ordered chain is permission to compose two transformations, so it
+  // must name the exact harness release exercised. Other outcomes may be provider-only rules;
+  // when they do record a harness release, still enforce it.
+  if (recorded === undefined && rule.outcome !== 'ordered') return [];
+  const seen = observed[harness] ?? null;
+  return recorded !== undefined && seen === recorded
+    ? []
+    : [{ harness, recorded: recorded ?? null, observed: seen }];
 }

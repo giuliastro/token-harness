@@ -237,6 +237,33 @@ The app can also preview enabling that guidance in supported user-level Agent Sk
 Existing custom skill directories are not silently overwritten or adopted. See
 [RFC 0023](docs/rfcs/0023-guided-agent-skill-install.md).
 
+Automatic prompt routing is a separate, opt-in feature in Overview under each detected coding
+agent. When enabled, a native `UserPromptSubmit` hook supplies a short routing policy on every
+prompt; you do not invoke the skill or prefix prompts with a Token Harness command. The root model
+does not change. The agent may delegate one eligible bounded subtask to a native cheaper model,
+then integrate and review its work. Codex asks for `gpt-6-luna`; Claude Code asks for its current
+Haiku alias when available. Claude takes effect in a new session; Codex requires reviewing and
+trusting the hook in `/hooks`. The dashboard separates configured hooks from callbacks observed at
+runtime, and shows model-routing savings only after a paired quality-gated benchmark. Local token
+counts and 5-hour/weekly allowance percentages remain separate measurements. See
+[RFC 0030](docs/rfcs/0030-automatic-native-prompt-routing.md).
+
+To plan only the Codex skill from the CLI, exclude provider integrations explicitly, review the
+target path and actions, then apply the returned plan id:
+
+```sh
+token-harness plan --harness codex --provider none --agent-skill --json
+token-harness apply --plan <plan-id> --yes
+```
+
+To review the native hook directly, use `--agent-routing` to enable it or
+`--disable-agent-routing` to remove the exact entries Token Harness owns:
+
+```sh
+token-harness plan --harness claude --provider none --agent-routing --json
+token-harness apply --plan <plan-id> --yes
+```
+
 ## Advanced CLI
 
 Most people do not need these commands. They remain available for automation, debugging and the

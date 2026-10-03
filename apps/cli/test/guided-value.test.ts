@@ -103,6 +103,48 @@ describe('guided value evidence', () => {
     assert.equal(value.allowance7d.equivalentMinutes, null);
   });
 
+  it('reports routing token and quota evidence separately for quality-passed pairs', () => {
+    const route = {
+      ...(quotaEntry({ baseline: 8, optimized: 4 }) as Record<string, unknown>),
+      nativeRouting: {
+        verdict: 'attributed',
+        baselineSubagents: 0,
+        optimizedSubagents: 1,
+        optimizedReportedModels: [],
+        qualityGatesPassed: true,
+      },
+      baselineLocalTokens: 1000,
+      optimizedLocalTokens: 800,
+      localTokenSavingPercent: 20,
+    };
+    const value = guidedValueEvidence(matrix([route]));
+    assert.equal(value.routing.state, 'measured');
+    assert.equal(value.routing.savedLocalTokens, 200);
+    assert.equal(value.routing.localTokenSavingPercent, 20);
+    assert.equal(value.routing.allowance5h.savedPercent, 4);
+    assert.equal(value.routing.allowance7d.savedPercent, null);
+  });
+
+  it('blocks route savings when the routed pair fails its quality gate', () => {
+    const route = {
+      ...(quotaEntry({ baseline: 8, optimized: 4 }) as Record<string, unknown>),
+      nativeRouting: {
+        verdict: 'attributed',
+        baselineSubagents: 0,
+        optimizedSubagents: 1,
+        optimizedReportedModels: [],
+        qualityGatesPassed: false,
+      },
+      baselineLocalTokens: 1000,
+      optimizedLocalTokens: 800,
+      localTokenSavingPercent: null,
+    };
+    const value = guidedValueEvidence(matrix([route]));
+    assert.equal(value.routing.state, 'blocked-by-quality');
+    assert.equal(value.routing.savedLocalTokens, null);
+    assert.equal(value.routing.allowance5h.state, 'not-measured');
+  });
+
   it('passes candidate-attributed benchmark summaries through without changing global value math', () => {
     const report = matrix([
       quotaEntry({ baseline: 8, optimized: 4 }),

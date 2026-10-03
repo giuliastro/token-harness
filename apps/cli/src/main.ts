@@ -63,9 +63,11 @@ import {
   type GuidePeriod,
 } from './guided.js';
 import { observeAgentSkill } from './agent-skill.js';
+import { observeNativePromptRouting } from './prompt-router.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
 import { runRtkHookProxy } from './commands/rtk-hook-proxy.js';
+import { recordNativePromptRoutingHook, type PromptRouterEventType } from './prompt-router.js';
 
 /**
  * The internal reader mode.
@@ -95,7 +97,33 @@ async function runAsDatabaseReader(argv: readonly string[]): Promise<boolean> {
 }
 
 const RTK_HOOK_PROXY_FLAG = '__internal-rtk-hook';
+const PROMPT_ROUTER_FLAG = '__internal-prompt-router';
+const PROMPT_ROUTER_CHECK_MARKER = 'token-harness-prompt-router-v1';
 const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
+
+const ROUTING_CONTEXT: Readonly<Record<'claude' | 'codex', string>> = {
+  codex:
+    'For substantial coding work, delegate at most one independent bounded subtask to a native subagent with gpt-6-luna if available and the root is not Luna. Keep trivial, coupled, security, architecture, release, and integration decisions on the root. Specify the model; if unavailable, stay on the root. The root reviews. Claim savings only from paired, quality-gated measurements.',
+  claude:
+    'For substantial coding work, delegate at most one independent bounded subtask to a native subagent with the current Haiku alias if available and cheaper than the root. Keep trivial, coupled, security, architecture, release, and integration decisions on the root. Specify the model; if unavailable, stay on the root. The root reviews. Claim savings only from paired, quality-gated measurements.',
+};
+
+function parsePromptRouterEvent(value: string | undefined): PromptRouterEventType | null {
+  if (value === 'prompt-submit' || value === 'subagent-start' || value === 'subagent-stop')
+    return value;
+  return null;
+}
+
+function emitPromptRouterContext(harness: 'claude' | 'codex'): void {
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: ROUTING_CONTEXT[harness],
+      },
+    }) + '\n',
+  );
+}
 
 async function readStandardInput(): Promise<string | null> {
   const chunks: string[] = [];
@@ -115,6 +143,16 @@ export async function main(argv: readonly string[]): Promise<void> {
   if (argv[0] === RTK_HOOK_PROXY_FLAG && argv[2] === '--check') {
     if (argv[1] === 'claude' || argv[1] === 'codex') {
       process.stdout.write('token-harness-rtk-hook-proxy-v1\n');
+      process.exitCode = EXIT_CODES.ok;
+    } else {
+      process.exitCode = EXIT_CODES['usage-error'];
+    }
+    return;
+  }
+
+  if (argv[0] === PROMPT_ROUTER_FLAG && argv[2] === '--check') {
+    if (argv[1] === 'claude' || argv[1] === 'codex') {
+      process.stdout.write(`${PROMPT_ROUTER_CHECK_MARKER}\n`);
       process.exitCode = EXIT_CODES.ok;
     } else {
       process.exitCode = EXIT_CODES['usage-error'];
@@ -228,6 +266,42 @@ export async function main(argv: readonly string[]): Promise<void> {
     env: process.env,
     stdoutIsTty: process.stdout.isTTY === true,
   };
+
+  if (argv[0] === PROMPT_ROUTER_FLAG) {
+    const selected = argv[1];
+    const event = parsePromptRouterEvent(argv[2]);
+    if ((selected !== 'claude' && selected !== 'codex') || event === null) {
+      process.exitCode = EXIT_CODES.ok;
+      return;
+    }
+    const input = await readStandardInput();
+    if (resolution.ok && fs !== null && input !== null) {
+      try {
+        const projectId =
+          attribution.salt === null
+            ? null
+            : deriveProjectId(
+                process.cwd(),
+                attribution.salt,
+                resolution.environment.facts.os === 'windows',
+              );
+        await recordNativePromptRoutingHook({
+          fs,
+          stateRoot: resolution.environment.paths.state,
+          harness: selected,
+          event,
+          projectId,
+          now: new Date().toISOString(),
+          hookInput: input,
+        });
+      } catch {
+        // Prompt routing must fail open; a local receipt failure never blocks the coding agent.
+      }
+    }
+    if (event === 'prompt-submit') emitPromptRouterContext(selected);
+    process.exitCode = EXIT_CODES.ok;
+    return;
+  }
 
   if (argv[0] === RTK_HOOK_PROXY_FLAG) {
     const selected = argv[1];
@@ -515,6 +589,37 @@ async function runGuidedUi(
         home: base.home,
         stateRoot: base.stateRoot ?? null,
         harness,
+      });
+    },
+    async (harness: GuideHarness) => {
+      if (base.adapters === null || base.adapters === undefined || base.platform === null) {
+        return {
+          harness,
+          state: 'unavailable',
+          label: 'Not verified',
+          detail:
+            'The local filesystem is unavailable, so native prompt routing cannot be checked.',
+          configPath: null,
+          configured: null,
+          promptSubmissions: 0,
+          subagentsStarted: 0,
+          subagentsStopped: 0,
+          reportedModels: [],
+          lastObservedAt: null,
+          receiptState: 'unavailable',
+        };
+      }
+      return observeNativePromptRouting({
+        fs: base.adapters.fs,
+        home: base.home,
+        stateRoot: base.stateRoot ?? null,
+        harness: harnessId(harness),
+        version: null,
+        runner: base.adapters.runner,
+        facts: base.platform,
+        paths: base.adapters.paths,
+        projectRoot: base.cwd,
+        projectId: base.adapters.projectIdFor(base.cwd),
       });
     },
   );

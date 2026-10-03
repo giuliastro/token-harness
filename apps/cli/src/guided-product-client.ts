@@ -523,6 +523,31 @@ export const GUIDE_PRODUCT_JS = String.raw`
           'caption',
         ),
       );
+      const routing = agent.promptRouting;
+      const routingCard = node('div', undefined, 'routing-feature');
+      const routingHead = node('div', undefined, 'tool-head');
+      routingHead.append(
+        node('strong', 'Automatic prompt routing'),
+        pill(routing?.label || 'Not verified', routing?.state === 'managed' ? 'good' : routing?.state === 'absent' ? '' : 'warn'),
+      );
+      routingCard.append(
+        routingHead,
+        node(
+          'p',
+          routing?.detail || 'A native hook can inject the routing policy on every submitted prompt. Setup and runtime activity are tracked separately.',
+          'caption',
+        ),
+      );
+      const routingActions = node('div', undefined, 'inline-actions');
+      if (routing?.state === 'absent') {
+        routingActions.append(actionButton('Enable routing', () => reviewPromptRouting(agent.id, true), 'secondary'));
+      } else if (routing?.state === 'managed') {
+        routingActions.append(actionButton('Disable routing', () => reviewPromptRouting(agent.id, false), 'secondary'));
+      } else if (routing?.state === 'external') {
+        routingActions.append(node('span', 'Managed elsewhere · left untouched', 'caption'));
+      }
+      if (routingActions.children.length) routingCard.append(routingActions);
+      card.append(routingCard);
       if (baseline.unavailable.length) {
         const details = node('details', undefined, 'agent-details');
         details.append(node('summary', 'Connection limitations'));
@@ -608,6 +633,57 @@ export const GUIDE_PRODUCT_JS = String.raw`
         $('modal-error').textContent = error.message;
         $('modal-error').hidden = false;
         $('modal-actions').replaceChildren(modalClose('Close'));
+      })
+      .finally(() => {
+        if (run === modalRun) setBusy(false, false);
+      });
+  }
+
+  function reviewPromptRouting(agentId, enabled) {
+    if (busy) return;
+    const run = modal((enabled ? 'Enable' : 'Disable') + ' automatic routing · ' + agentName(agentId));
+    $('modal-content').append(
+      messageBox(
+        'How this works',
+        enabled
+          ? 'Token Harness adds a native UserPromptSubmit hook that supplies a short routing policy on each prompt. The agent may delegate eligible bounded work to a lower-cost native subagent; the root model stays the same.'
+          : 'Token Harness removes only the exact native routing entries it owns. User-edited or manually installed hooks remain untouched.',
+      ),
+      progress('Preparing a read-only plan', 'No harness settings change until you approve the exact preview.'),
+    );
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    ensureSession()
+      .then(() => request('/api/preview', {
+        action: enabled ? 'routing-enable' : 'routing-disable',
+        harness: agentId,
+      }))
+      .then(data => {
+        if (run !== modalRun || !$('modal').open) return;
+        pendingTicket = data.ticket;
+        $('modal-content').replaceChildren();
+        for (const change of data.changes || []) {
+          const item = node('article', undefined, 'preview-change');
+          item.append(node('h3', change.title), node('p', change.description));
+          $('modal-content').append(item);
+        }
+        if (!(data.changes || []).length)
+          $('modal-content').append(messageBox('No change proposed', (data.notices || []).join(' ') || 'The current routing state or ownership evidence does not support a safe change.'));
+        for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
+        $('modal-content').append(messageBox(
+          agentId === 'codex' ? 'Codex trust step' : 'When it takes effect',
+          agentId === 'codex'
+            ? 'After Apply, review and trust the UserPromptSubmit hook in Codex using /hooks. Until a callback is observed, the dashboard will show it as configured but not runtime verified.'
+            : 'After Apply, start a new Claude Code session. The dashboard will show configured state first and runtime activity after the next prompt callback.',
+          'safe',
+        ));
+        $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
+        if (data.ticket) $('modal-actions').append(actionButton(enabled ? 'Apply routing hook' : 'Remove owned routing hook', () => applyTicket(data.ticket)));
+      })
+      .catch(error => {
+        if (run !== modalRun) return;
+        $('modal-error').textContent = error.message;
+        $('modal-error').hidden = false;
       })
       .finally(() => {
         if (run === modalRun) setBusy(false, false);
@@ -1304,10 +1380,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('strong', component?.configuredHarnesses?.length ? component.configuredHarnesses.map(agentName).join(', ') : 'No detected agent'),
       );
       const measured = rows.filter(row => row.providerId === id);
-      facts.append(
-        node('span', 'Recorded results'),
-        node('strong', measured.length ? measured.length + ' recorded result' + (measured.length === 1 ? '' : 's') : 'None in this period'),
-      );
       card.append(facts);
       if (!measured.length) {
         card.append(
@@ -1411,6 +1483,29 @@ export const GUIDE_PRODUCT_JS = String.raw`
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
+    const routed = current?.value?.routing;
+    const quotaParts = [];
+    if (routed?.allowance5h?.state === 'measured' && routed.allowance5h.savedPercent !== null)
+      quotaParts.push(routed.allowance5h.savedPercent >= 0
+        ? '5h saved ' + count(routed.allowance5h.savedPercent) + '%'
+        : '5h use +' + count(Math.abs(routed.allowance5h.savedPercent)) + '%');
+    if (routed?.allowance7d?.state === 'measured' && routed.allowance7d.savedPercent !== null)
+      quotaParts.push(routed.allowance7d.savedPercent >= 0
+        ? '7d saved ' + count(routed.allowance7d.savedPercent) + '%'
+        : '7d use +' + count(Math.abs(routed.allowance7d.savedPercent)) + '%');
+    const routingValue = routed?.state === 'blocked-by-quality'
+      ? 'Not credited'
+      : routed?.savedLocalTokens !== null && routed?.savedLocalTokens !== undefined
+        ? (routed.savedLocalTokens >= 0
+          ? count(routed.savedLocalTokens) + ' tokens saved' + (routed.localTokenSavingPercent === null ? '' : ' · ' + count(routed.localTokenSavingPercent) + '%')
+          : count(Math.abs(routed.savedLocalTokens)) + ' tokens added' + (routed.localTokenSavingPercent === null ? '' : ' · ' + count(Math.abs(routed.localTokenSavingPercent)) + '%'))
+        : quotaParts.length ? 'Allowance measured' : routed?.state === 'measured' ? 'Usage unavailable' : 'Not measured yet';
+    const routingDetail = routed?.state === 'blocked-by-quality'
+      ? routed.basis
+      : (quotaParts.length ? quotaParts.join(' · ') + '. ' : '') +
+        (routed?.pairs ? count(routed.pairs) + ' quality-passed routed pair(s). ' : '') +
+        'Local tokens and allowance percentages are separate measurements. Actual child model is not exposed by every harness hook.';
+    $('result-summary').append(metricCard('Automatic routing', routingValue, routingDetail, routed?.state === 'measured' ? 'positive' : ''));
     renderResultOptimizers();
     renderResultAgents();
     renderSavings();

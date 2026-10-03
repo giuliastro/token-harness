@@ -139,6 +139,7 @@ const BASE = {
   harnesses: [CLAUDE_MANIFEST],
   rules: [] as CompatibilityRule[],
   observedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' } as Record<string, string | null>,
+  observedHarnessVersions: { claude: '2.1.274' } as Record<string, string | null>,
 };
 
 describe('a single claimant', () => {
@@ -319,6 +320,24 @@ describe('fail-closed on undeclared overlap', () => {
       assert.ok(result.conflicts[0]?.detail.some((line) => line.includes('unknown')));
     });
 
+    it('treats a provider version omitted from the rule as untested', () => {
+      const rule = COMPATIBILITY_RULES.find(
+        (entry) => entry.id === 'rtk-harnesstrim-shell-output-overlap',
+      );
+      assert.ok(rule);
+      const result = resolveOwnership({
+        ...BASE,
+        profile: 'safe',
+        providers: contenders,
+        rules: [{ ...rule, testedVersions: { rtk: '0.44.0' } }],
+        observedVersions: { rtk: '0.44.0', harnesstrim: '0.1.0' },
+      });
+
+      assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
+      assert.match(result.conflicts[0]?.detail.join(' ') ?? '', /harnesstrim not recorded/);
+      assert.deepEqual(result.ownership, []);
+    });
+
     it('still applies a rule whose recorded versions match', () => {
       // The control. Without it the three tests above would also pass if the check rejected
       // everything, and a resolver that never applies a rule is not fail-closed but broken.
@@ -414,7 +433,8 @@ describe('fail-closed on undeclared overlap', () => {
       harnesses: '*',
       capabilities: ['shell.output.reduce'],
       outcome: 'ordered',
-      testedVersions: {},
+      testedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' },
+      testedHarnessVersions: { claude: '2.1.274' },
       rationale: 'test',
       fixtures: [],
     };
@@ -438,6 +458,7 @@ describe('fail-closed on undeclared overlap', () => {
       outcome: 'ordered',
       order: [HARNESSTRIM, RTK],
       testedVersions: { rtk: '0.42.0', harnesstrim: '0.0.5' },
+      testedHarnessVersions: { claude: '2.1.274' },
       rationale: 'fixture',
       fixtures: ['fixture'],
     };
@@ -585,6 +606,18 @@ describe('the reviewed RTK and HarnessTrim hook chain', () => {
       assignableHarnesses: new Set([CLAUDE, CODEX]),
     },
   ];
+  const samePointProviders: ResolverProvider[] = [
+    {
+      id: RTK,
+      capabilities: [claim(CODEX, 'pre-tool-use')],
+      assignableHarnesses: new Set([CODEX]),
+    },
+    {
+      id: HARNESSTRIM,
+      capabilities: [claim(CODEX, 'pre-tool-use')],
+      assignableHarnesses: new Set([CODEX]),
+    },
+  ];
 
   it('orders RTK before HarnessTrim only on the observed Linux version tuple', () => {
     const rule = COMPATIBILITY_RULES.find(
@@ -647,6 +680,168 @@ describe('the reviewed RTK and HarnessTrim hook chain', () => {
     });
     assert.notEqual(wrongPlatform.conflicts.length, 0);
     assert.deepEqual(wrongPlatform.ownership, []);
+  });
+
+  it('checks only the current harness version when a rule covers multiple harnesses', () => {
+    const result = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CODEX_MANIFEST],
+      providers: currentProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: {
+        claude: null,
+        codex: ORDERED_CHAIN_FIXTURE.harnessVersions['codex']!,
+      },
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+      harness: CODEX,
+    });
+
+    assert.deepEqual(result.conflicts, []);
+    assert.deepEqual(
+      result.ownership
+        .filter((entry) => entry.scope.harness === CODEX)
+        .sort((left, right) => left.order - right.order)
+        .map((entry) => entry.owner),
+      ORDERED_CHAIN_FIXTURE.order,
+    );
+
+    const changedCodex = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CODEX_MANIFEST],
+      providers: currentProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: { codex: '0.159.1', claude: null },
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+      harness: CODEX,
+    });
+    assert.equal(changedCodex.conflicts[0]?.code, 'compatibility-rule-stale');
+    assert.deepEqual(changedCodex.ownership, []);
+  });
+
+  it('withdraws cross-hook permission when the Codex release is missing or unrecorded', () => {
+    const orderedRule = COMPATIBILITY_RULES.find(
+      (entry) => entry.id === 'rtk-harnesstrim-post-tool-chain-linux',
+    );
+    assert.ok(orderedRule);
+    const cases: Array<{
+      rule: CompatibilityRule;
+      observedHarnessVersions?: Record<string, string | null>;
+    }> = [
+      { rule: orderedRule },
+      { rule: orderedRule, observedHarnessVersions: { claude: null } },
+      { rule: orderedRule, observedHarnessVersions: { codex: null, claude: null } },
+      {
+        rule: { ...orderedRule, testedHarnessVersions: { claude: '2.1.274' } },
+        observedHarnessVersions: { codex: '0.159.0' },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = resolveOwnership({
+        profile: 'safe',
+        harnesses: [CODEX_MANIFEST],
+        providers: currentProviders,
+        rules: [testCase.rule],
+        observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+        ...(testCase.observedHarnessVersions === undefined
+          ? {}
+          : { observedHarnessVersions: testCase.observedHarnessVersions }),
+        platform: ORDERED_CHAIN_FIXTURE.platform,
+        harness: CODEX,
+      });
+
+      assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
+      assert.deepEqual(result.ownership, []);
+    }
+  });
+
+  it('withdraws cross-hook permission when a provider release is unknown or absent', () => {
+    const cases: Array<Record<string, string | null>> = [
+      {
+        rtk: null,
+        harnesstrim: ORDERED_CHAIN_FIXTURE.providerVersions['harnesstrim']!,
+      },
+      { rtk: ORDERED_CHAIN_FIXTURE.providerVersions['rtk']! },
+    ];
+
+    for (const observedVersions of cases) {
+      const result = resolveOwnership({
+        profile: 'safe',
+        harnesses: [CODEX_MANIFEST],
+        providers: currentProviders,
+        rules: [...COMPATIBILITY_RULES],
+        observedVersions,
+        observedHarnessVersions: { codex: '0.159.0' },
+        platform: ORDERED_CHAIN_FIXTURE.platform,
+        harness: CODEX,
+      });
+
+      assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
+      assert.deepEqual(result.ownership, []);
+    }
+  });
+
+  it('fails closed for an ordered same-scope rule with unknown or unrecorded Codex evidence', () => {
+    const orderedRule = COMPATIBILITY_RULES.find(
+      (entry) => entry.id === 'rtk-harnesstrim-post-tool-chain-linux',
+    );
+    assert.ok(orderedRule);
+
+    for (const observedVersion of ['0.159.1', null]) {
+      const result = resolveOwnership({
+        profile: 'safe',
+        harnesses: [CODEX_MANIFEST],
+        providers: samePointProviders,
+        rules: [orderedRule],
+        observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+        observedHarnessVersions: { codex: observedVersion },
+        platform: ORDERED_CHAIN_FIXTURE.platform,
+        harness: CODEX,
+      });
+
+      assert.equal(result.conflicts[0]?.code, 'compatibility-rule-stale');
+      assert.match(result.conflicts[0]?.detail.join(' ') ?? '', /codex 0\.159\.0/);
+      assert.deepEqual(result.ownership, []);
+    }
+
+    const unrecordedRule: CompatibilityRule = {
+      ...orderedRule,
+      testedHarnessVersions: { claude: '2.1.274' },
+    };
+    const unrecorded = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CODEX_MANIFEST],
+      providers: samePointProviders,
+      rules: [unrecordedRule],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: { codex: '0.159.0' },
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+      harness: CODEX,
+    });
+    assert.equal(unrecorded.conflicts[0]?.code, 'compatibility-rule-stale');
+    assert.match(unrecorded.conflicts[0]?.detail.join(' ') ?? '', /codex not recorded/);
+    assert.deepEqual(unrecorded.ownership, []);
+  });
+
+  it('applies an ordered same-scope rule when its Codex release is explicitly recorded', () => {
+    const result = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CODEX_MANIFEST],
+      providers: samePointProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: { codex: '0.159.0' },
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+      harness: CODEX,
+    });
+
+    assert.deepEqual(result.conflicts, []);
+    assert.deepEqual(
+      result.ownership.sort((left, right) => left.order - right.order).map((entry) => entry.owner),
+      ORDERED_CHAIN_FIXTURE.order,
+    );
   });
 });
 

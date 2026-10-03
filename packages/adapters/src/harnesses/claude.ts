@@ -73,6 +73,9 @@ const MANIFEST: HarnessManifest = {
   interceptionPoints: [
     { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
     { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+    { scopeId: 'user-prompt-submit', eventName: 'UserPromptSubmit' },
+    { scopeId: 'subagent-start', eventName: 'SubagentStart' },
+    { scopeId: 'subagent-stop', eventName: 'SubagentStop' },
   ],
   configFiles: [
     {
@@ -81,7 +84,13 @@ const MANIFEST: HarnessManifest = {
       parser: 'json',
       primary: true,
       interceptionFormat: 'hooks-event-command-list',
-      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+      interceptionPoints: [
+        'pre-tool-use',
+        'post-tool-use',
+        'user-prompt-submit',
+        'subagent-start',
+        'subagent-stop',
+      ],
     },
     { path: '.claude/settings.json', scope: 'project', parser: 'json', primary: false },
     { path: '.claude/settings.local.json', scope: 'project', parser: 'json', primary: false },

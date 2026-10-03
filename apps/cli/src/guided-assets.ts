@@ -41,7 +41,7 @@ export const GUIDE_HTML = `<!doctype html>
 </div>
 
 <section class="setup-step" id="coding-agents">
-<div class="section-title"><div><h2>Coding agents</h2><p>Detected coding apps are shown here as status. Optimizer setup is managed centrally below; a detected setup does not prove that it ran or recorded results.</p></div></div>
+<div class="section-title"><div><h2>Coding agents</h2><p>Enable automatic per-prompt routing here for each detected coding app. The card distinguishes hook configuration from callbacks actually observed at runtime.</p></div></div>
 <div id="setup-agents" class="tool-grid"><article class="tool-card"><h3>Checking agents…</h3></article></div>
 <details class="disclosure advanced-disclosure">
 <summary>Agent details and optional reasoning settings</summary>

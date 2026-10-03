@@ -431,6 +431,8 @@ export async function run(options: RunOptions): Promise<number> {
     nativePolicy: invocation.options.nativePolicy,
     env: options.env ?? {},
     agentSkill: invocation.options.agentSkill,
+    agentRouting: invocation.options.agentRouting,
+    disableAgentRouting: invocation.options.disableAgentRouting,
     since: invocation.options.since,
     until: invocation.options.until,
     planId: invocation.options.plan,

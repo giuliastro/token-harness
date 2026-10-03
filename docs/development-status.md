@@ -1,5 +1,13 @@
 # Development status
 
+- 2026-10-03: **Token Harness 0.1.24 release candidate in progress.** Automatic native prompt
+  routing is available as a guided opt-in for Codex and Claude Code. It injects a short model policy
+  on each prompt, records privacy-bounded prompt/subagent callbacks, and displays local token and
+  authoritative five-hour/weekly quota measurements separately. Local test, lint, formatting, and
+  build gates pass; cross-platform PR CI, exact-package/release workflow gates, and the user's
+  Windows Claude callback test remain pending. The release does not claim unmeasured savings or
+  broad-promotion readiness.
+
 - 2026-10-01: **Token Harness 0.1.23 release candidate in progress.** Codex verification now treats
   a missing shell-visible `codex` CLI as unobservable instead of a broken Desktop integration, and
   keeps RTK command history and HarnessTrim reductions as separate runtime receipts. Local tests,

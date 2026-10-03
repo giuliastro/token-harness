@@ -22,6 +22,7 @@ import {
 } from '@token-harness/core';
 import { run, DEFAULT_COMMANDS, type RunOptions } from './run.js';
 import type { AgentSkillObservation } from './agent-skill.js';
+import type { PromptRouterObservation } from './prompt-router.js';
 import { runMetrics } from './commands/metrics.js';
 import { runUpdateCheck } from './commands/update.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
@@ -41,7 +42,15 @@ export interface GuideSetupTarget {
 }
 export type GuideCall = <T>(args: readonly string[]) => Promise<CliEnvelope<T>>;
 export interface GuideAction {
-  kind: 'setup' | 'effort' | 'skill' | 'verify' | 'help' | 'refresh';
+  kind:
+    | 'setup'
+    | 'effort'
+    | 'skill'
+    | 'routing-enable'
+    | 'routing-disable'
+    | 'verify'
+    | 'help'
+    | 'refresh';
   label: string;
   harness?: GuideHarness;
   topic?:
@@ -99,6 +108,7 @@ export interface GuideAgent {
   effort: string | null;
   reasoning: GuideReasoning;
   guidance?: GuideGuidance;
+  promptRouting?: PromptRouterObservation;
   allowanceAction: GuideAction;
   rules: GuideRule[];
   allowance: Array<{
@@ -650,6 +660,7 @@ function agentRules(
   providers: string[],
   context: ContextReport | null,
   guidance?: GuideGuidance,
+  promptRouting?: PromptRouterObservation,
 ): GuideRule[] {
   const observation = context?.harnesses.find((item) => item.harnessId === id);
   const reasoning = reasoningView(id, observation);
@@ -731,6 +742,51 @@ function agentRules(
               ? 'Review the existing skill manually. Token Harness will not overwrite it.'
               : 'Enable this once, then keep coding normally. Ask the agent to use Token Harness for a task when you want an explicit check.',
       ...(guidance?.action ? { action: guidance.action } : {}),
+    },
+    {
+      id: `${id}-prompt-routing`,
+      title: 'Automatic prompt routing',
+      state: promptRouting?.label ?? 'Not verified',
+      mode:
+        promptRouting?.state === 'absent'
+          ? 'not-enabled'
+          : promptRouting?.state === 'managed' || promptRouting?.state === 'external'
+            ? 'automatic'
+            : 'integration',
+      what:
+        promptRouting?.detail ??
+        'Adds a native prompt hook that supplies the routing policy on every submitted prompt.',
+      why: 'Eligible bounded work may use a cheaper native subagent. The root conversation model stays unchanged, and the model decides whether a native subagent is appropriate.',
+      evidence: promptRouting?.promptSubmissions
+        ? `${String(promptRouting.promptSubmissions)} prompt callback(s) and ${String(promptRouting.subagentsStarted)} subagent start(s) observed in the last 30 days. Actual child model is shown only when the harness reports it.`
+        : promptRouting?.configured
+          ? 'The hook is configured, but no prompt callback has been observed yet. Configuration alone is not runtime proof.'
+          : 'No runtime routing evidence has been recorded yet.',
+      next:
+        promptRouting?.state === 'absent'
+          ? 'Enable routing once, restart or trust the hook if the harness requires it, then keep using prompts normally.'
+          : promptRouting?.state === 'managed'
+            ? 'Routing is enabled. Disable it here if you want to stop injecting the policy on each prompt.'
+            : promptRouting?.state === 'external'
+              ? 'This hook is user-owned. Token Harness can report it but will not remove it.'
+              : (promptRouting?.detail ?? 'Refresh to inspect the native prompt-hook state.'),
+      ...(promptRouting?.state === 'absent'
+        ? {
+            action: {
+              kind: 'routing-enable' as const,
+              label: 'Enable automatic routing',
+              harness: id,
+            },
+          }
+        : promptRouting?.state === 'managed'
+          ? {
+              action: {
+                kind: 'routing-disable' as const,
+                label: 'Disable automatic routing',
+                harness: id,
+              },
+            }
+          : {}),
     },
     {
       id: `${id}-mcp`,
@@ -899,16 +955,21 @@ export class GuideService {
   private readonly observeGuidance:
     | ((harness: GuideHarness) => Promise<AgentSkillObservation>)
     | null;
+  private readonly observeRouting:
+    | ((harness: GuideHarness) => Promise<PromptRouterObservation>)
+    | null;
   constructor(
     call: GuideCall,
     now: () => number,
     random: () => string,
     observeGuidance: ((harness: GuideHarness) => Promise<AgentSkillObservation>) | null = null,
+    observeRouting: ((harness: GuideHarness) => Promise<PromptRouterObservation>) | null = null,
   ) {
     this.call = call;
     this.now = now;
     this.random = random;
     this.observeGuidance = observeGuidance;
+    this.observeRouting = observeRouting;
   }
   status(): {
     busy: boolean;
@@ -991,6 +1052,7 @@ export class GuideService {
       budget = empty<BudgetReport>(),
       context = empty<ContextReport>();
     let guidance: Partial<Record<GuideHarness, GuideGuidance>> | undefined;
+    let promptRouting: Partial<Record<GuideHarness, PromptRouterObservation>> | undefined;
     const observe = async <T>(id: GuideStageId, args: string[]): Promise<GuideRead<T>> => {
       let result: GuideRead<T>;
       try {
@@ -1018,6 +1080,7 @@ export class GuideService {
           allowance: loading.stages.find((item) => item.id === 'allowance')?.state !== 'working',
         },
         guidance,
+        promptRouting,
       );
     };
     const [, , , metrics, status, benchmark] = await Promise.all([
@@ -1048,6 +1111,31 @@ export class GuideService {
             }),
           );
         }
+        if (this.observeRouting !== null) {
+          promptRouting = {};
+          await Promise.all(
+            (['claude', 'codex'] as const).map(async (harness) => {
+              try {
+                promptRouting![harness] = await this.observeRouting!(harness);
+              } catch {
+                promptRouting![harness] = {
+                  harness,
+                  state: 'unavailable',
+                  label: 'Not verified',
+                  detail: 'Native prompt-hook status could not be checked.',
+                  configPath: null,
+                  configured: null,
+                  promptSubmissions: 0,
+                  subagentsStarted: 0,
+                  subagentsStopped: 0,
+                  reportedModels: [],
+                  lastObservedAt: null,
+                  receiptState: 'unavailable',
+                };
+              }
+            }),
+          );
+        }
         updateAgents();
       }),
       observe<MetricsReport>('savings', [
@@ -1067,6 +1155,7 @@ export class GuideService {
       context,
       { rules: true, allowance: true },
       guidance,
+      promptRouting,
     );
     const notices: string[] = [];
     if (doctor.data === null)
@@ -1121,6 +1210,7 @@ export class GuideService {
     context: GuideRead<ContextReport>,
     complete: { rules: boolean; allowance: boolean },
     guidance?: Partial<Record<GuideHarness, GuideGuidance>>,
+    promptRouting?: Partial<Record<GuideHarness, PromptRouterObservation>>,
   ): GuideAgent[] {
     const present = (doctor.data?.harnesses ?? []).filter(
       (item) =>
@@ -1163,12 +1253,16 @@ export class GuideService {
         ...(guidance?.[agent.harnessId as GuideHarness]
           ? { guidance: guidance[agent.harnessId as GuideHarness] }
           : {}),
+        ...(promptRouting?.[agent.harnessId as GuideHarness]
+          ? { promptRouting: promptRouting[agent.harnessId as GuideHarness] }
+          : {}),
         allowanceAction: allowanceAction(usage?.diagnostics ?? []),
         rules: agentRules(
           agent.harnessId as GuideHarness,
           providers,
           context.data,
           guidance?.[agent.harnessId as GuideHarness],
+          promptRouting?.[agent.harnessId as GuideHarness],
         ),
         allowance: (usage?.windows ?? []).map((window) => ({
           label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
@@ -1221,6 +1315,8 @@ export class GuideService {
         'setup',
         'effort',
         'skill',
+        'routing-enable',
+        'routing-disable',
         'undo',
         'remove',
         'candidate-setup',
@@ -1239,6 +1335,8 @@ export class GuideService {
         !['mcptoon', 'gitnexus'].includes(String(data['candidate']))) ||
       (action === 'effort' && (data['harness'] === undefined || data['task'] === undefined)) ||
       (action === 'skill' && data['harness'] === undefined) ||
+      ((action === 'routing-enable' || action === 'routing-disable') &&
+        data['harness'] === undefined) ||
       (action === 'remove' &&
         (data['provider'] === undefined ||
           data['harness'] !== undefined ||
@@ -1501,6 +1599,10 @@ export class GuideService {
           if (setupProvider !== null) args.push('--provider', setupProvider);
           if (data['action'] === 'skill') {
             args.push('--provider', 'none', '--agent-skill');
+          } else if (data['action'] === 'routing-enable') {
+            args.push('--provider', 'none', '--agent-routing');
+          } else if (data['action'] === 'routing-disable') {
+            args.push('--provider', 'none', '--disable-agent-routing');
           } else if (data['action'] === 'effort')
             args.push(
               '--provider',
@@ -1536,7 +1638,9 @@ export class GuideService {
                   ? 'No supported preference change is needed or available. Your current preference is kept.'
                   : data['action'] === 'skill'
                     ? 'In-session guidance is already present, or an existing user-owned skill location was left untouched.'
-                    : 'No safe setup change is available for the current provider, agent version and platform.',
+                    : data['action'] === 'routing-enable' || data['action'] === 'routing-disable'
+                      ? 'No safe native prompt-routing change is available for the current harness, hook state and ownership evidence.'
+                      : 'No safe setup change is available for the current provider, agent version and platform.',
               )}`,
             );
             continue;
@@ -1549,6 +1653,10 @@ export class GuideService {
                 'Installs one reviewed Token Harness Agent Skill in the standard user skill directory. It does not change model, login, billing, hooks, trust, or the current conversation.',
               files: 1,
             });
+          } else if (data['action'] === 'routing-enable' || data['action'] === 'routing-disable') {
+            changes.push(
+              ...report.actions.map((action) => describeChange(action, agent.harnessId)),
+            );
           } else {
             changes.push(
               ...report.actions.map((action) => describeChange(action, agent.harnessId)),
@@ -1575,7 +1683,9 @@ export class GuideService {
               ? 'Task preference'
               : data['action'] === 'skill'
                 ? 'In-session guidance'
-                : 'Integration setup',
+                : data['action'] === 'routing-enable' || data['action'] === 'routing-disable'
+                  ? 'Automatic prompt routing'
+                  : 'Integration setup',
           operation: 'apply',
           network,
         };
@@ -1592,7 +1702,11 @@ export class GuideService {
         notices,
         expiresAt: id === null ? null : new Date(expires).toISOString(),
         network,
-        restart: data['action'] === 'effort' || data['action'] === 'skill',
+        restart:
+          data['action'] === 'effort' ||
+          data['action'] === 'skill' ||
+          data['action'] === 'routing-enable' ||
+          data['action'] === 'routing-disable',
       };
     });
   }

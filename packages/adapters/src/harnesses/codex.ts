@@ -63,6 +63,9 @@ const MANIFEST: HarnessManifest = {
   interceptionPoints: [
     { scopeId: 'pre-tool-use', eventName: 'PreToolUse' },
     { scopeId: 'post-tool-use', eventName: 'PostToolUse' },
+    { scopeId: 'user-prompt-submit', eventName: 'UserPromptSubmit' },
+    { scopeId: 'subagent-start', eventName: 'SubagentStart' },
+    { scopeId: 'subagent-stop', eventName: 'SubagentStop' },
   ],
   configFiles: [
     { path: '.codex/config.toml', scope: 'user', parser: 'toml', primary: true },
@@ -72,7 +75,13 @@ const MANIFEST: HarnessManifest = {
       parser: 'json',
       primary: false,
       interceptionFormat: 'hooks-event-command-list',
-      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+      interceptionPoints: [
+        'pre-tool-use',
+        'post-tool-use',
+        'user-prompt-submit',
+        'subagent-start',
+        'subagent-stop',
+      ],
     },
   ],
   toolFamilies: [

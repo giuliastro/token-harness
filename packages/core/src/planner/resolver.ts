@@ -390,7 +390,7 @@ function narrowChannelOverlaps(context: {
     const staleHarnesses =
       found === null
         ? []
-        : staleRecordedHarnessVersions(found, input.observedHarnessVersions ?? {});
+        : staleRecordedHarnessVersions(found, input.observedHarnessVersions ?? {}, harness);
     const stale = [...staleProviders, ...staleHarnesses];
     const rule = stale.length > 0 ? null : found;
 
@@ -402,8 +402,12 @@ function narrowChannelOverlaps(context: {
         detail: [
           `${owners.join(' and ')} both use ${capability} on ${harness}/${toolFamily} at different interception points`,
           `Rule ${found.id} was tested at ${[
-            ...staleProviders.map((entry) => `${entry.provider} ${entry.recorded}`),
-            ...staleHarnesses.map((entry) => `${entry.harness} ${entry.recorded}`),
+            ...staleProviders.map(
+              (entry) => `${entry.provider} ${entry.recorded ?? 'not recorded'}`,
+            ),
+            ...staleHarnesses.map(
+              (entry) => `${entry.harness} ${entry.recorded ?? 'not recorded'}`,
+            ),
           ].join(', ')}`,
           `Installed now: ${[
             ...staleProviders.map((entry) => `${entry.provider} ${entry.observed ?? 'unknown'}`),
@@ -540,7 +544,12 @@ function resolveContested(context: ContestedInput): void {
    * rule that named it was tested at another version" call for different actions.
    */
   const stale = found === null ? [] : staleRecordedVersions(found, input.observedVersions);
-  const rule = stale.length > 0 ? null : found;
+  const staleHarnesses =
+    found === null
+      ? []
+      : staleRecordedHarnessVersions(found, input.observedHarnessVersions ?? {}, scope.harness);
+  const staleAll = [...stale, ...staleHarnesses];
+  const rule = staleAll.length > 0 ? null : found;
 
   // The fail-closed path, and the one that matters most. RFC 0003: "No rule means
   // conservative conflict for overlapping exclusive capabilities."
@@ -552,11 +561,19 @@ function resolveContested(context: ContestedInput): void {
         claimants,
         detail: [
           `${claimants.join(' and ')} both claim ${capability} on ${formatCapabilityScope(scope)}`,
-          `Rule ${found.id} was tested at ${stale.map((entry) => `${entry.provider} ${entry.recorded}`).join(', ')}`,
-          `Installed now: ${stale.map((entry) => `${entry.provider} ${entry.observed ?? 'unknown'}`).join(', ')}`,
+          `Rule ${found.id} was tested at ${[
+            ...stale.map((entry) => `${entry.provider} ${entry.recorded ?? 'not recorded'}`),
+            ...staleHarnesses.map(
+              (entry) => `${entry.harness} ${entry.recorded ?? 'not recorded'}`,
+            ),
+          ].join(', ')}`,
+          `Installed now: ${[
+            ...stale.map((entry) => `${entry.provider} ${entry.observed ?? 'unknown'}`),
+            ...staleHarnesses.map((entry) => `${entry.harness} ${entry.observed ?? 'unknown'}`),
+          ].join(', ')}`,
           'A compatibility result covers the versions it records, so this one is withdrawn rather than applied outside them',
         ],
-        remediation: `Re-test ${found.id} against the installed versions and update its \`testedVersions\`, or assign the scope explicitly with \`profile: custom\``,
+        remediation: `Re-test ${found.id} against the installed provider and harness versions, record the evidence for ${scope.harness}, or assign the scope explicitly with \`profile: custom\``,
       });
       return;
     }

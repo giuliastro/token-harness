@@ -22,6 +22,18 @@
     {
       "scopeId": "post-tool-use",
       "eventName": "PostToolUse"
+    },
+    {
+      "scopeId": "user-prompt-submit",
+      "eventName": "UserPromptSubmit"
+    },
+    {
+      "scopeId": "subagent-start",
+      "eventName": "SubagentStart"
+    },
+    {
+      "scopeId": "subagent-stop",
+      "eventName": "SubagentStop"
     }
   ],
   "configFiles": [
@@ -33,7 +45,10 @@
       "interceptionFormat": "hooks-event-command-list",
       "interceptionPoints": [
         "pre-tool-use",
-        "post-tool-use"
+        "post-tool-use",
+        "user-prompt-submit",
+        "subagent-start",
+        "subagent-stop"
       ]
     },
     {

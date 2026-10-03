@@ -166,7 +166,7 @@ describe('both interception points', () => {
   it('declares both points in the manifest', () => {
     assert.deepEqual(
       codexAdapter.manifest.interceptionPoints.map((point) => point.scopeId),
-      ['pre-tool-use', 'post-tool-use'],
+      ['pre-tool-use', 'post-tool-use', 'user-prompt-submit', 'subagent-start', 'subagent-stop'],
     );
   });
 
