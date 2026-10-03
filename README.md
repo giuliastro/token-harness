@@ -140,7 +140,7 @@ npm install --global token-harness@latest
 token-harness
 ```
 
-To disconnect an optimizer, use **Remove Token Harness-managed configuration** beside that optimizer.
+To disconnect an optimizer, use **Remove managed setup** beside that optimizer.
 It removes only entries Token Harness owns. The CLI equivalent for owned integrations is:
 
 ```sh
