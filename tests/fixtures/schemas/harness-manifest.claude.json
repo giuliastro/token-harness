@@ -4,8 +4,8 @@
   "displayName": "Claude Code",
   "homepage": "https://claude.com/claude-code",
   "testedVersions": {
-    "minimum": "2.0.0",
-    "maximum": "2.1.212"
+    "minimum": "2.1.274",
+    "maximum": "2.1.274"
   },
   "verificationTier": "canary",
   "versionCommand": {
@@ -52,6 +52,7 @@
   "toolFamilies": [
     {
       "id": "Bash",
+      "matcher": "Bash",
       "platforms": [
         "windows",
         "macos",
@@ -61,6 +62,7 @@
     },
     {
       "id": "PowerShell",
+      "matcher": "PowerShell",
       "platforms": [
         "windows"
       ],

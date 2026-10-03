@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { digestText } from '@token-harness/core';
+import { digestText, harnessId, jsonValueDigest, providerId } from '@token-harness/core';
 import type {
   FileStat,
   HarnessConfigSummary,
@@ -19,11 +19,13 @@ import type {
   PlatformFacts,
   ProcessOutcome,
   ProcessRequest,
+  ResolvedCapability,
   VerificationReceipt,
 } from '@token-harness/core';
 
 import {
   claudeAdapter,
+  codexAdapter,
   compareCapabilities,
   harnesstrimAdapter,
   harnessesWiredToHarnessTrim,
@@ -39,6 +41,7 @@ const METRICS = `${PROJECT}\\.harnesstrim\\metrics.jsonl`;
 const HERMES_METRICS = `${HOME}\\.hermes\\harnesstrim-metrics.jsonl`;
 const CLAUDE_MD = `${PROJECT}\\CLAUDE.md`;
 const AGENTS = `${PROJECT}\\AGENTS.md`;
+const HARNESSTRIM = providerId('harnesstrim');
 
 const FACTS: PlatformFacts = {
   os: 'windows',
@@ -331,7 +334,7 @@ describe('detection', () => {
   });
 
   it('keeps a future HarnessTrim release outside the tested range', async () => {
-    const detection = await harnesstrimAdapter.detect(context({ version: '0.2.2' }));
+    const detection = await harnesstrimAdapter.detect(context({ version: '0.3.2' }));
     assert.equal(detection.versionVerdict, 'unknown-newer');
   });
 
@@ -564,7 +567,7 @@ describe('the machine-readable capability declaration (item 43a)', () => {
     const warning = warnings.find((entry) => /containment boundary/.test(entry.message));
     assert.ok(warning);
     assert.match(warning.message, /\.codex\/skills\//);
-    assert.match(warning.message, /recorded at 0\.0\.7 \(\.claude, CLAUDE\.md\)/);
+    assert.match(warning.message, /recorded at 0\.3\.1 \(\.claude, CLAUDE\.md\)/);
   });
 });
 
@@ -1091,6 +1094,28 @@ describe('verification', () => {
     assert.equal(result.receipt?.operations, 1);
   });
 
+  it('does not promote a pass-through receipt to a reduction canary', async () => {
+    const result = await harnesstrimAdapter.verify(
+      context({
+        configs: [wired('codex')],
+        files: {
+          [METRICS]: `${nativeTrimEvent({
+            harness: 'codex',
+            beforeChars: 1800,
+            afterChars: 1800,
+            changed: false,
+          })}\n`,
+        },
+      }),
+    );
+    const canary = result.checks.find((check) => check.id === 'canary-intercepted');
+    assert.equal(canary?.status, 'info');
+    assert.equal(canary?.achievedTier, null);
+    assert.equal(result.receipt?.operations, 0);
+    assert.equal(result.receipt?.attempts, 1);
+    assert.equal(result.achievedTier, 'config-only');
+  });
+
   it('reports the instruction path when AGENTS.md carries it', async () => {
     const result = await harnesstrimAdapter.verify(
       context({
@@ -1223,6 +1248,143 @@ describe('planning', () => {
     ]);
   });
 
+  it('adds a monitored post-tool hook on the harness-declared file for Claude and Codex', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.1', skill);
+    const cases = [
+      { adapter: claudeAdapter, id: 'claude', matcher: 'Bash', config: '.claude\\settings.json' },
+      { adapter: codexAdapter, id: 'codex', matcher: '^Bash$', config: '.codex\\hooks.json' },
+    ] as const;
+
+    for (const item of cases) {
+      const harness = harnessId(item.id);
+      const ownership: ResolvedCapability = {
+        scope: {
+          harness,
+          toolFamily: 'Bash',
+          interceptionPoint: 'post-tool-use',
+          capability: 'shell.output.reduce',
+        },
+        owner: HARNESSTRIM,
+        mode: 'chainable',
+        order: 1,
+      };
+      const result = await harnesstrimAdapter.plan(context({ version: '0.3.1', capabilities }), {
+        ownership: [ownership],
+        harnesses: [item.adapter.manifest],
+        desiredState: 'configured',
+      });
+      const hook = result.actions.find((action) => action.kind === 'merge-json');
+      assert.ok(hook !== undefined && hook.kind === 'merge-json');
+      assert.ok(hook.path.endsWith(item.config));
+      if (item.id === 'codex') {
+        assert.match(hook.explanation, /must enable and trust this hook in its native UI/i);
+      }
+      assert.deepEqual(hook.operations[0], {
+        kind: 'append',
+        pointer: 'hooks.PostToolUse',
+        value: {
+          matcher: item.matcher,
+          hooks: [
+            {
+              type: 'command',
+              command: `harnesstrim hook ${item.id} --metrics .harnesstrim/metrics.jsonl`,
+            },
+          ],
+        },
+        expectedValueDigest: null,
+      });
+    }
+  });
+
+  it('enables telemetry on an exact pre-existing HarnessTrim hook with a reversible edit', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.1', skill);
+    const currentCommand = 'harnesstrim hook claude';
+    const existing: HarnessConfigSummary = {
+      harnessId: harnessId('claude'),
+      configPath: `${HOME}\\.claude\\settings.json`,
+      scope: 'user',
+      interceptionPoints: ['post-tool-use'],
+      matchers: ['Bash'],
+      commands: [currentCommand],
+      hookCommands: [
+        {
+          eventName: 'PostToolUse',
+          matcher: 'Bash',
+          command: currentCommand,
+          entryPointer: 'hooks.PostToolUse.0',
+          commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+        },
+      ],
+    };
+    const ownership: ResolvedCapability = {
+      scope: {
+        harness: harnessId('claude'),
+        toolFamily: 'Bash',
+        interceptionPoint: 'post-tool-use',
+        capability: 'shell.output.reduce',
+      },
+      owner: HARNESSTRIM,
+      mode: 'chainable',
+      order: 1,
+    };
+    const result = await harnesstrimAdapter.plan(
+      context({ version: '0.3.1', capabilities, configs: [existing] }),
+      { ownership: [ownership], harnesses: [claudeAdapter.manifest], desiredState: 'configured' },
+    );
+    const update = result.actions.find((action) => action.kind === 'merge-json');
+    assert.ok(update !== undefined && update.kind === 'merge-json');
+    const operation = update.operations[0];
+    assert.ok(operation?.kind === 'set');
+    assert.equal(operation.value, 'harnesstrim hook claude --metrics .harnesstrim/metrics.jsonl');
+    assert.equal(operation.expectedValueDigest, jsonValueDigest(currentCommand));
+    assert.deepEqual(update.ownedPointers, ['hooks.PostToolUse.0.hooks.0.command']);
+  });
+
+  it('does not duplicate or rewrite a brownfield hook with a different metrics path', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.1', skill);
+    const command = 'harnesstrim hook claude --metrics /tmp/other.jsonl';
+    const existing: HarnessConfigSummary = {
+      harnessId: harnessId('claude'),
+      configPath: `${HOME}\\.claude\\settings.json`,
+      scope: 'user',
+      interceptionPoints: ['post-tool-use'],
+      matchers: ['Bash'],
+      commands: [command],
+      hookCommands: [
+        {
+          eventName: 'PostToolUse',
+          matcher: 'Bash',
+          command,
+          entryPointer: 'hooks.PostToolUse.0',
+          commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+        },
+      ],
+    };
+    const ownership: ResolvedCapability = {
+      scope: {
+        harness: harnessId('claude'),
+        toolFamily: 'Bash',
+        interceptionPoint: 'post-tool-use',
+        capability: 'shell.output.reduce',
+      },
+      owner: HARNESSTRIM,
+      mode: 'chainable',
+      order: 1,
+    };
+    const result = await harnesstrimAdapter.plan(
+      context({ version: '0.3.1', capabilities, configs: [existing] }),
+      { ownership: [ownership], harnesses: [claudeAdapter.manifest], desiredState: 'configured' },
+    );
+    assert.equal(
+      result.actions.some((action) => action.kind === 'merge-json'),
+      false,
+    );
+    assert.equal(result.diagnostics?.[0]?.code, 'harnesstrim-metrics-path-needs-review');
+  });
+
   it('recognizes skills-only setup without claiming runtime measurement verification', async () => {
     const skill = '# Latest HarnessTrim skill\n';
     const capabilities = dynamicCapabilities('0.3.0', skill);
@@ -1275,5 +1437,93 @@ describe('planning', () => {
       result.actions.every((action) => action.kind === 'remove-owned-change'),
       true,
     );
+  });
+
+  it('plans surgical removal of the owned runtime hook and leaves unowned hooks alone', async () => {
+    const skill = '# Latest HarnessTrim skill\n';
+    const capabilities = dynamicCapabilities('0.3.1', skill);
+    const cases = [
+      {
+        adapter: claudeAdapter,
+        id: 'claude',
+        matcher: 'Bash',
+        configPath: `${HOME}\\.claude\\settings.json`,
+      },
+      {
+        adapter: codexAdapter,
+        id: 'codex',
+        matcher: '^Bash$',
+        configPath: `${HOME}\\.codex\\hooks.json`,
+      },
+    ] as const;
+
+    for (const item of cases) {
+      const harness = harnessId(item.id);
+      const command = `harnesstrim hook ${item.id} --metrics .harnesstrim/metrics.jsonl`;
+      const existing: HarnessConfigSummary = {
+        harnessId: harness,
+        configPath: item.configPath,
+        scope: 'user',
+        interceptionPoints: ['post-tool-use'],
+        matchers: [item.matcher],
+        commands: [command],
+        hookCommands: [
+          {
+            eventName: 'PostToolUse',
+            matcher: item.matcher,
+            command,
+            entryPointer: 'hooks.PostToolUse.0',
+            commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+          },
+        ],
+      };
+      const ownership: ResolvedCapability = {
+        scope: {
+          harness,
+          toolFamily: 'Bash',
+          interceptionPoint: 'post-tool-use',
+          capability: 'shell.output.reduce',
+        },
+        owner: HARNESSTRIM,
+        mode: 'chainable',
+        order: 1,
+      };
+      const ctx = context({ version: '0.3.1', capabilities, configs: [existing] });
+      const result = await harnesstrimAdapter.plan(ctx, {
+        ownership: [ownership],
+        harnesses: [item.adapter.manifest],
+        desiredState: 'absent',
+      });
+      const removal = result.actions.find(
+        (action) => action.kind === 'remove-owned-change' && action.path === existing.configPath,
+      );
+      assert.ok(removal !== undefined && removal.kind === 'remove-owned-change');
+      assert.equal(
+        removal.reverses,
+        `harnesstrim-${item.id}-hook-${digestText(existing.configPath).slice(7, 15)}`,
+      );
+      assert.deepEqual(removal.target, {
+        kind: 'owned-json-entry',
+        path: existing.configPath,
+        pointer: 'hooks.PostToolUse',
+        placement: 'array-element',
+        valueDigest: jsonValueDigest({
+          matcher: item.matcher,
+          hooks: [{ type: 'command', command }],
+        }),
+      });
+
+      const unownedResult = await harnesstrimAdapter.plan(ctx, {
+        ownership: [],
+        harnesses: [item.adapter.manifest],
+        desiredState: 'absent',
+      });
+      assert.equal(
+        unownedResult.actions.some(
+          (action) => action.kind === 'remove-owned-change' && action.path === existing.configPath,
+        ),
+        false,
+      );
+    }
   });
 });

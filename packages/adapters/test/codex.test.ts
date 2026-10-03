@@ -125,6 +125,17 @@ describe('Codex adapter', () => {
     );
   });
 
+  it('treats an unavailable optional Codex CLI as unobservable rather than a broken desktop hook', async () => {
+    const result = await codexAdapter.verify(context({ [HOOKS]: DECLARED }, null));
+    const cli = result.checks.find((check) => check.id === 'executable-resolves');
+    assert.equal(cli?.status, 'not-exercised');
+    assert.match(cli?.summary ?? '', /CLI is unavailable/);
+    assert.equal(cli?.remediation, null);
+    assert.equal(result.checks.find((check) => check.id === 'hook-registered')?.status, 'pass');
+    assert.equal(result.checks.find((check) => check.id === 'hook-enablement')?.status, 'info');
+    assert.equal(result.achievedTier, null);
+  });
+
   it('reports unreadable hooks as broken rather than guessing', async () => {
     const result = await codexAdapter.detect(context({ [HOOKS]: '{ hooks: }' }));
     assert.equal(result.state, 'broken');

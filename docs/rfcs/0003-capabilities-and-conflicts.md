@@ -162,6 +162,31 @@ This is a reduction in machinery, not in safety: fail-closed behavior on undecla
 overlap is present from the first release, which is the property that actually protects
 users.
 
+## 2026-09-30 amendment — ordered pre-tool/post-tool shell reduction
+
+RTK's Claude Code and Codex adapters run at `PreToolUse`: they may rewrite a command to
+an RTK command that filters its own output. HarnessTrim's adapters run at `PostToolUse`:
+they receive the completed tool result. These are different interception points but the
+same shell-output channel, so the default remains one owner and an unreviewed pair still
+conflicts.
+
+The pair may be admitted as an ordered chain only for provider versions, harness versions,
+platforms, and fixtures named by its compatibility rule. The admitted order is RTK first,
+HarnessTrim second. The harness lifecycle, rather than hook-list ordering, establishes that
+order. HarnessTrim must be installed with its prompt instructions disabled so a model does
+not invoke a second, unobserved reduce path itself.
+
+The two providers keep independent measurements. Unless both record comparable boundaries
+for the same operation, neither the planner nor reports derive a combined raw-to-final
+saving; both provider events remain useful as separate local measurements. A missing,
+stale, untrusted, or unexercised hook is reported per provider and per harness. A rule for
+one OS or release does not authorize the same chain on another.
+
+This is a narrow compatibility rule, not a change to the default for `shell.output.reduce`.
+The rule is withdrawn automatically when any recorded provider version is no longer the
+one tested, and a platform-specific rule is considered only when the resolver receives an
+observed OS and WSL state.
+
 ## Continuous conflict detection
 
 Ownership is resolved when a plan is built, but the configuration it writes lives in

@@ -14,23 +14,35 @@
  * > "Chainable" is not permission to compose arbitrary providers. A compatibility rule must
  * > name the provider pair, order, supported versions, and test fixture.
  *
- * At `0.1.0` no provider pair has been demonstrated to compose. RTK and HarnessTrim overlap
- * exactly — RFC 0003 §The table is an intent establishes that on every MVP harness
- * HarnessTrim's reducing surface "either is exactly the one assigned to RTK or strictly
- * contains it, and no configuration narrows it" — so there is nothing to permit. The one
- * rule below records that overlap as an incompatibility rather than leaving it to the
- * fail-closed default, because a named rule can carry the reason and the default cannot.
- *
- * An empty table is therefore the honest state, and it is also the safe one: with no rules,
- * every overlapping exclusive claim is a hard conflict. Adding a rule is how the project
- * takes on a claim, so rules are added when a fixture exists, never to unblock a plan.
+ * The legacy RTK/HarnessTrim overlap is narrowed to RTK ownership. A second, fixture-backed
+ * ordered rule admits the current Linux provider tuple: RTK runs before execution and
+ * HarnessTrim runs after the tool result. It is deliberately limited to the exact provider
+ * tuple, Claude Code/Codex, and native Linux. No new provider pair is admitted by changing
+ * the default.
  */
 
-import { providerId } from '../domain/ids.js';
+import { harnessId, providerId } from '../domain/ids.js';
 import type { CompatibilityRule } from '../domain/compatibility.js';
 
 const RTK = providerId('rtk');
 const HARNESSTRIM = providerId('harnesstrim');
+const CLAUDE = harnessId('claude');
+const CODEX = harnessId('codex');
+
+const RTK_HARNESSTRIM_ORDERED_LINUX: CompatibilityRule = {
+  id: 'rtk-harnesstrim-post-tool-chain-linux',
+  providers: [RTK, HARNESSTRIM],
+  harnesses: [CLAUDE, CODEX],
+  capabilities: ['shell.output.reduce'],
+  outcome: 'ordered',
+  order: [RTK, HARNESSTRIM],
+  platforms: [{ os: 'linux', wsl: false }],
+  testedVersions: { rtk: '0.50.0', harnesstrim: '0.3.1' },
+  testedHarnessVersions: { claude: '2.1.274', codex: '0.159.0' },
+  rationale:
+    'RTK rewrites the Bash command at PreToolUse; HarnessTrim processes the completed Bash result at PostToolUse. The harness lifecycle establishes RTK-before-HarnessTrim. Their telemetry remains separate because the providers do not expose comparable boundaries for one shared operation.',
+  fixtures: ['tests/fixtures/rows/rtk-harnesstrim-chain-linux'],
+};
 
 /**
  * RFC 0003 §The table is an intent, as a rule.
@@ -47,8 +59,8 @@ const HARNESSTRIM = providerId('harnesstrim');
 const RTK_HARNESSTRIM_SHELL_OVERLAP: CompatibilityRule = {
   id: 'rtk-harnesstrim-shell-output-overlap',
   providers: [RTK, HARNESSTRIM],
-  // Every harness: the RFC checked all three MVP adapters and found the same overlap on each,
-  // for different reasons. Listing them individually would imply a fourth harness is exempt.
+  // Legacy providers retain the reviewed RTK-only narrowing. The resolver selects the exact
+  // provider tuple above for the current Linux runtime chain.
   harnesses: '*',
   capabilities: ['shell.output.reduce'],
   outcome: 'narrowed',
@@ -66,4 +78,7 @@ const RTK_HARNESSTRIM_SHELL_OVERLAP: CompatibilityRule = {
  * input rather than reading this module, which is what lets a test drive the fail-closed
  * path with an empty table and the ordered path with a fixture rule.
  */
-export const COMPATIBILITY_RULES: readonly CompatibilityRule[] = [RTK_HARNESSTRIM_SHELL_OVERLAP];
+export const COMPATIBILITY_RULES: readonly CompatibilityRule[] = [
+  RTK_HARNESSTRIM_ORDERED_LINUX,
+  RTK_HARNESSTRIM_SHELL_OVERLAP,
+];

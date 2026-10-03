@@ -224,6 +224,33 @@ describe('unrelated keys and hook order are preserved', () => {
 });
 
 describe('preconditions', () => {
+  it('updates a hook command through nested configuration arrays', () => {
+    const { document } = parsed(
+      '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rtk hook claude"}]}]}}',
+    );
+    const result = mergeJsonEntries(document, [
+      {
+        kind: 'set',
+        pointer: 'hooks.PreToolUse.0.hooks.0.command',
+        value: 'token-harness __internal-rtk-hook claude --restore-rtk',
+        expectedValueDigest: jsonValueDigest('rtk hook claude'),
+      },
+    ]);
+    assert.equal(result.state, 'merged');
+    if (result.state !== 'merged') return;
+    assert.deepEqual(
+      resolveJsonPointer(result.document, ['hooks', 'PreToolUse', '0', 'hooks', '0', 'command']),
+      {
+        found: true,
+        value: 'token-harness __internal-rtk-hook claude --restore-rtk',
+      },
+    );
+    assert.deepEqual(resolveJsonPointer(result.document, ['hooks', 'PreToolUse', '0', 'matcher']), {
+      found: true,
+      value: 'Bash',
+    });
+  });
+
   it('report drift when a `set` target holds something else', () => {
     const { document } = parsed('{ "a": 1 }');
     const result = mergeJsonEntries(document, [

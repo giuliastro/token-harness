@@ -1,23 +1,24 @@
-# Release checkpoint — 2026-09-27
+# Release checkpoint — 2026-10-01
 
-Token Harness `0.1.22` is an incremental corrective release candidate based on PR #353, merged to
-`main` as `4e2772e`. PR #353's cross-platform CI passed on Windows, macOS, and Ubuntu.
+Token Harness `0.1.23` is a focused corrective release candidate for Codex runtime verification and
+the RTK + HarnessTrim optimization stack.
 
 ## Changes in this release
 
-- Removes the managed CCR runtime, Smart Model Routing CLI and guided controls, CCR adapters, and
-  CCR-specific benchmark telemetry. The previous integration required a separate CLI launch
-  profile, and local config checks did not prove that real requests passed through the router.
-- Clarifies that a Codex RTK hook declaration must still be manually enabled and trusted in Codex.
-  Token Harness cannot grant that trust, and a declaration alone is config-only evidence.
-- Leaves existing provider credentials, native endpoints, and user-owned CCR state untouched.
+- Separates Codex CLI availability from Codex Desktop hook health. If the optional `codex` command
+  is not on `PATH`, Token Harness reports CLI checks as unobserved instead of marking the configured
+  desktop integration broken.
+- Keeps runtime proof provider-specific: RTK per-agent history and HarnessTrim reduction receipts
+  establish their own Codex canary tier; hook declarations and native trust metadata remain separate
+  checks.
+- Includes the compatibility fixture for the reviewed RTK + HarnessTrim Codex/Linux chain.
 
-This release does not claim broad-promotion readiness. Issue #255 remains open for real
-before/after receipts from the complete production stack.
+This incremental release does not claim broad-promotion readiness or combine provider savings into
+an unlabeled total.
 
 ## Release gates
 
-Do not create the release branch unless release-preparation CI is green on Windows, macOS, and
-Linux. The `release/v0.1.22` bridge then creates the immutable tag and dispatches the exact-tag
-workflow. That workflow must pass its tests, real-runtime smoke, packaging, provenance, npm Trusted
-Publishing, and npm-latest verification before it creates the GitHub Release.
+Do not create `release/v0.1.23` until release-preparation CI is green on Windows, macOS, and Linux.
+The release bridge then creates immutable tag `v0.1.23` and dispatches the exact-tag workflow. That
+workflow must pass its tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing, and
+npm-latest verification before it creates the GitHub Release.

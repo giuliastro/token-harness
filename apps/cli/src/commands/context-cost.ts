@@ -27,7 +27,6 @@ const CONTEXT_HARNESSES = new Set([CLAUDE, CODEX]);
 function nativeToolDeferral(
   harness: typeof CLAUDE,
   version: string | null,
-  verdict: string | null,
 ): ToolDeferralObservation | null {
   if (harness !== CODEX) return null;
 
@@ -35,7 +34,9 @@ function nativeToolDeferral(
   // deferred whenever tool_search is actually available, which in turn depends on model support
   // plus provider namespace-tools support. app-server model/list does not expose both live gates,
   // so this is capability evidence, not a claim that the current turn is actively deferred.
-  if (version === '0.146.0' && verdict === 'in-range') {
+  // This is a separate feature contract from the broader Codex hook/config manifest. Keep its
+  // exact observed version usable even when another Codex surface has since moved its tested point.
+  if (version === '0.146.0') {
     return {
       harnessId: CODEX,
       mechanism: 'native-tool-search',
@@ -297,11 +298,7 @@ export async function runContext(context: CommandContext): Promise<CommandResult
       continue;
     }
     const observation = await adapter.observeContext(harnessContext, report.observedAt);
-    const deferral = nativeToolDeferral(
-      adapter.manifest.id,
-      detection.version,
-      detection.versionVerdict,
-    );
+    const deferral = nativeToolDeferral(adapter.manifest.id, detection.version);
     if (deferral !== null) observation.toolDeferral = deferral;
     report.harnesses.push(observation);
   }

@@ -9,10 +9,15 @@ import type { PassiveReceipt, ProviderContext, ProviderVerification } from './co
 import { harnessesWiredToHarnessTrim, metricsLocations } from './harnesstrim.js';
 
 const HARNESSTRIM = providerId('harnesstrim');
+const RTK = providerId('rtk');
 
 interface HarnessTrimReceiptEnvelope {
   ts: string;
   harness: string;
+  beforeChars: number;
+  afterChars: number;
+  changed: boolean | null;
+  reductionFailed: boolean;
 }
 
 /**
@@ -51,7 +56,24 @@ function parseHarnessTrimReceiptEnvelope(line: string): HarnessTrimReceiptEnvelo
     return null;
   }
 
-  return { ts: record['ts'], harness: record['harness'] };
+  return {
+    ts: record['ts'],
+    harness: record['harness'],
+    beforeChars: record['beforeChars'],
+    afterChars: record['afterChars'],
+    changed: typeof record['changed'] === 'boolean' ? record['changed'] : null,
+    reductionFailed: record['reductionFailed'] === true,
+  };
+}
+
+function provesHarnessTrimReduction(event: HarnessTrimReceiptEnvelope): boolean {
+  return (
+    !event.reductionFailed &&
+    event.afterChars < event.beforeChars &&
+    // Native receipts explicitly mark pass-throughs. Legacy receipts predate this bit, so a
+    // strictly smaller after-size remains the only available evidence that the hook reduced it.
+    event.changed !== false
+  );
 }
 
 async function harnessTrimReceiptFor(
@@ -71,9 +93,15 @@ async function harnessTrimReceiptFor(
         (event): event is HarnessTrimReceiptEnvelope =>
           event !== null && event.harness === harnessId,
       );
-    const latest = matches.at(-1);
-    if (latest !== undefined) {
-      return { observedAt: latest.ts, operations: matches.length, source: path };
+    const latestAttempt = matches.at(-1);
+    if (latestAttempt !== undefined) {
+      const reductions = matches.filter(provesHarnessTrimReduction);
+      return {
+        observedAt: latestAttempt.ts,
+        operations: reductions.length,
+        attempts: matches.length,
+        source: path,
+      };
     }
   }
   return null;
@@ -139,10 +167,20 @@ function scopeCanaryCheck(
           : 'Skills or instructions alone do not write reduction telemetry; a compatible measurement path is required.',
       };
     }
+    if (input.receipt.operations === 0) {
+      return {
+        ...check,
+        status: 'info',
+        summary: `HarnessTrim observed ${String(input.receipt.attempts ?? 0)} ${input.harnessId} outputs, but none was reduced; latest attempt ${input.receipt.observedAt}`,
+        achievedTier: null,
+        remediation:
+          'Run a canary that produces output the installed HarnessTrim reducer can shorten, then verify again.',
+      };
+    }
     return {
       ...check,
       status: 'pass',
-      summary: `${String(input.receipt.operations)} reductions recorded for ${input.harnessId}, most recently ${input.receipt.observedAt}`,
+      summary: `${String(input.receipt.operations)} reductions recorded for ${input.harnessId} from ${String(input.receipt.attempts ?? input.receipt.operations)} observed outputs, most recently ${input.receipt.observedAt}`,
       achievedTier: 'canary',
     };
   }
@@ -227,12 +265,26 @@ export async function scopeProviderVerificationToHarness(
     ? null
     : harnessTrim
       ? await harnessTrimReceiptFor(context, harnessId)
-      : attributableByExclusion
-        ? verification.receipt
-        : null;
+      : verification.receipt?.harnessId !== undefined
+        ? verification.receipt.harnessId === harnessId
+          ? verification.receipt
+          : null
+        : attributableByExclusion
+          ? verification.receipt
+          : null;
   const providerHasAttributableReceipt = harnessTrim || attributableByExclusion;
 
-  const checks = verification.checks.map((check) =>
+  // RTK emits one attribution/freshness check per harness. Keep only the requested row's
+  // checks; otherwise Codex's activity can make Claude appear exercised (or vice versa).
+  const scopedSourceChecks =
+    verification.providerId === RTK
+      ? verification.checks.filter((check) => {
+          const match = /^(?:rtk-attribution|receipt-freshness)-(claude|codex)$/.exec(check.id);
+          return match === null || match[1] === harnessId;
+        })
+      : verification.checks;
+
+  const checks = scopedSourceChecks.map((check) =>
     scopeCanaryCheck(
       scopeIntegrationCheck(
         scopeHookCheck(check, harnessId, harnessTrim ? runtimeConfigured : configured),

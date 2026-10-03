@@ -8,6 +8,7 @@
 
 import type { CapabilityId } from './capabilities.js';
 import type { HarnessId, ProviderId } from './ids.js';
+import type { OperatingSystem } from './platform.js';
 import { compareVersions, parseSemanticVersion, type SemanticVersion } from './version.js';
 
 export interface CompatibilityRule {
@@ -41,7 +42,11 @@ export interface CompatibilityRule {
    * the providers would be making that decision silently and differently as providers changed.
    */
   retains?: ProviderId;
+  /** Optional OS/WSL restriction. A rule with no list applies on every platform. */
+  platforms?: Array<{ os: OperatingSystem; wsl: boolean }>;
   testedVersions: Record<string, string>;
+  /** Exact harness releases exercised by this composition, keyed by harness id. */
+  testedHarnessVersions?: Record<string, string>;
   rationale: string;
   fixtures: string[];
 }
@@ -64,15 +69,58 @@ function coversProviders(rule: CompatibilityRule, providers: readonly ProviderId
  */
 export function findCompatibilityRule(
   rules: readonly CompatibilityRule[],
-  query: { providers: readonly ProviderId[]; harness: HarnessId; capability: CapabilityId },
+  query: {
+    providers: readonly ProviderId[];
+    harness: HarnessId;
+    capability: CapabilityId;
+    platform?: { os: OperatingSystem; wsl: boolean };
+    observedVersions?: Readonly<Record<string, string | null>>;
+    observedHarnessVersions?: Readonly<Record<string, string | null>>;
+  },
 ): CompatibilityRule | null {
+  const candidates: CompatibilityRule[] = [];
   for (const rule of rules) {
     if (!rule.capabilities.includes(query.capability)) continue;
     if (!coversHarness(rule, query.harness)) continue;
     if (!coversProviders(rule, query.providers)) continue;
-    return rule;
+    if (
+      rule.platforms !== undefined &&
+      (query.platform === undefined ||
+        !rule.platforms.some(
+          (platform) => platform.os === query.platform?.os && platform.wsl === query.platform?.wsl,
+        ))
+    ) {
+      continue;
+    }
+    candidates.push(rule);
   }
-  return null;
+
+  // Multiple narrowly reviewed rules may describe the same pair on different releases. Prefer
+  // an exact tuple; when none matches, select the rule with the most observed dimensions in
+  // common, so stale diagnostics refer to the nearest recorded integration rather than an
+  // unrelated newer tuple.
+  if (query.observedVersions !== undefined) {
+    const matchesObservedTuple = (rule: CompatibilityRule): boolean =>
+      Object.entries(rule.testedVersions).every(
+        ([provider, version]) => query.observedVersions?.[provider] === version,
+      ) &&
+      Object.entries(rule.testedHarnessVersions ?? {}).every(
+        ([harness, version]) => query.observedHarnessVersions?.[harness] === version,
+      );
+    const exact = candidates.find(matchesObservedTuple);
+    if (exact !== undefined) return exact;
+
+    const matchingDimensions = (rule: CompatibilityRule): number =>
+      Object.entries(rule.testedVersions).filter(
+        ([provider, version]) => query.observedVersions?.[provider] === version,
+      ).length +
+      Object.entries(rule.testedHarnessVersions ?? {}).filter(
+        ([harness, version]) => query.observedHarnessVersions?.[harness] === version,
+      ).length;
+    candidates.sort((left, right) => matchingDimensions(right) - matchingDimensions(left));
+  }
+
+  return candidates[0] ?? null;
 }
 
 /**
@@ -81,10 +129,20 @@ export function findCompatibilityRule(
  * decide that someone keeps the channel without saying who.
  */
 export function isWellFormedRule(rule: CompatibilityRule): boolean {
+  if (
+    rule.platforms !== undefined &&
+    (rule.platforms.length === 0 ||
+      rule.platforms.some(
+        (platform) => typeof platform.os !== 'string' || typeof platform.wsl !== 'boolean',
+      ))
+  ) {
+    return false;
+  }
   if (rule.outcome === 'ordered') {
     return (
       Array.isArray(rule.order) &&
       rule.order.length === rule.providers.length &&
+      new Set(rule.order).size === rule.providers.length &&
       rule.retains === undefined
     );
   }
@@ -153,6 +211,26 @@ export function staleRecordedVersions(
       continue;
     }
     stale.push({ provider, recorded, observed: seen });
+  }
+  return stale;
+}
+
+/** One harness release outside the exact version exercised by a rule. */
+export interface StaleRecordedHarnessVersion {
+  harness: string;
+  recorded: string;
+  observed: string | null;
+}
+
+export function staleRecordedHarnessVersions(
+  rule: CompatibilityRule,
+  observed: Readonly<Record<string, string | null>>,
+): StaleRecordedHarnessVersion[] {
+  const stale: StaleRecordedHarnessVersion[] = [];
+  for (const [harness, recorded] of Object.entries(rule.testedHarnessVersions ?? {})) {
+    const seen = observed[harness] ?? null;
+    if (seen === recorded) continue;
+    stale.push({ harness, recorded, observed: seen });
   }
   return stale;
 }

@@ -126,9 +126,33 @@ function harness(report, id) {
   return report.data?.harnesses?.find((item) => item.harnessId === id) ?? null;
 }
 
+let brownfieldHooks = new Map();
+
 function assert(condition, label, detail = '') {
   if (!condition) fail(label, detail);
   ok(label);
+}
+
+function assertHarnessHookState(agent, expectedManaged) {
+  const fixture = brownfieldHooks.get(agent);
+  const config = JSON.parse(readFileSync(fixture.path, 'utf8'));
+  const entries = config.hooks?.PostToolUse ?? [];
+  const userHookPresent = entries.some(
+    (entry) =>
+      entry.matcher === fixture.matcher &&
+      entry.hooks?.some((hook) => hook.command === fixture.command),
+  );
+  assert(userHookPresent, `${agent}: pre-existing user hook is preserved`, JSON.stringify(config));
+
+  const managedCommand = `harnesstrim hook ${agent} --metrics .harnesstrim/metrics.jsonl`;
+  const managedHookPresent = entries.some((entry) =>
+    entry.hooks?.some((hook) => hook.command === managedCommand),
+  );
+  assert(
+    managedHookPresent === expectedManaged,
+    `${agent}: HarnessTrim hook ${expectedManaged ? 'is present' : 'is removed'}`,
+    JSON.stringify(config),
+  );
 }
 
 // Build the same in-process call boundary the browser uses. In particular createGuideCall swaps
@@ -219,9 +243,16 @@ function verifyHarness(agent) {
   const row = result.data?.results?.find(
     (item) => item.providerId === 'harnesstrim' && item.harnessId === agent,
   );
+  const configured = row?.checks?.find((check) => check.id === 'integration-configured');
+  const canary = row?.checks?.find((check) => check.id === 'canary-intercepted');
   assert(
-    result.data?.healthyAtDeclaredTier === true && row !== undefined,
-    `${agent}: HarnessTrim verification is healthy at its declared tier`,
+    row?.declaredTier === 'canary' &&
+      configured?.status === 'pass' &&
+      configured?.achievedTier === 'config-only' &&
+      canary?.status === 'not-exercised' &&
+      canary?.achievedTier === null &&
+      result.data?.healthyAtDeclaredTier === false,
+    `${agent}: setup stays config-only until a runtime canary is observed`,
     JSON.stringify(result),
   );
 }
@@ -258,13 +289,50 @@ try {
 
   const protectedFiles = new Map([
     [join(home, 'CLAUDE.md'), '# user Claude instructions\n'],
-    [join(home, '.claude', 'settings.json'), '{}\n'],
     [join(home, 'AGENTS.md'), '# user Codex instructions\n'],
-    [join(home, '.codex', 'hooks.json'), '{}\n'],
   ]);
   for (const [path, text] of protectedFiles) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text);
+  }
+
+  brownfieldHooks = new Map([
+    [
+      'claude',
+      {
+        path: join(home, '.claude', 'settings.json'),
+        matcher: 'Read',
+        command: 'user-owned-claude-hook',
+      },
+    ],
+    [
+      'codex',
+      {
+        path: join(home, '.codex', 'hooks.json'),
+        matcher: '^Read$',
+        command: 'user-owned-codex-hook',
+      },
+    ],
+  ]);
+  for (const fixture of brownfieldHooks.values()) {
+    mkdirSync(dirname(fixture.path), { recursive: true });
+    writeFileSync(
+      fixture.path,
+      `${JSON.stringify(
+        {
+          hooks: {
+            PostToolUse: [
+              {
+                matcher: fixture.matcher,
+                hooks: [{ type: 'command', command: fixture.command }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
   }
 
   const before = doctor();
@@ -285,6 +353,8 @@ try {
       `setup leaves protected user file unchanged: ${path.slice(home.length + 1)}`,
     );
   }
+  assertHarnessHookState('claude', true);
+  assertHarnessHookState('codex', true);
   assert(
     readFileSync(join(home, '.claude', 'history', 'unrelated.bin')).byteLength === 1_400_000,
     'Claude unrelated >1 MiB state survives setup',
@@ -336,6 +406,8 @@ try {
     'HarnessTrim connections survive the real package update',
     JSON.stringify(ht),
   );
+  assertHarnessHookState('claude', true);
+  assertHarnessHookState('codex', true);
   verifyHarness('claude');
   verifyHarness('codex');
 
@@ -361,8 +433,12 @@ try {
     'removal is scoped to Claude and leaves Codex connected',
     JSON.stringify(afterRemovalHt),
   );
+  assertHarnessHookState('claude', false);
+  assertHarnessHookState('codex', true);
 
   await guidedSetup('claude');
+  assertHarnessHookState('claude', true);
+  assertHarnessHookState('codex', true);
   const finalDoctor = doctor();
   const finalHt = provider(finalDoctor, 'harnesstrim');
   assert(

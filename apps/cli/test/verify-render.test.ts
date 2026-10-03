@@ -32,6 +32,35 @@ function result(overrides: Partial<VerificationResult> = {}): VerificationResult
 }
 
 describe('verify ownership rendering', () => {
+  it('reports a configured canary with no runtime receipt as not proven', () => {
+    const rendered = renderVerifyReport(
+      {
+        receiptId: null,
+        appliedAt: null,
+        healthyAtDeclaredTier: false,
+        results: [
+          result({
+            status: 'not-applicable',
+            checks: [
+              {
+                id: 'canary-intercepted',
+                status: 'not-exercised',
+                summary: 'no Claude receipt yet',
+                achievedTier: null,
+                evidence: [],
+                remediation: 'Run Claude Code after authentication.',
+              },
+            ],
+          }),
+        ],
+      },
+      { toolVersion: 'test', home: null, decorate: false },
+    );
+
+    assert.match(rendered, /1 provider–harness integration not proven yet/);
+    assert.doesNotMatch(rendered, /Healthy at the declared tier/);
+  });
+
   it('separates a user-installed provider executable from a managed integration', () => {
     const rendered = renderVerifyReport(report(result({ providerManagedByTokenHarness: false })), {
       toolVersion: 'test',

@@ -84,10 +84,26 @@ export function renderVerifyReport(report: VerifyReport, _context: RenderContext
   if (report.healthyAtDeclaredTier) {
     lines.push('Healthy at the declared tier for every provider.');
   } else {
-    const failures = report.results
+    const belowTier = report.results.filter(
+      (result) => result.status === 'degraded' || result.status === 'failed',
+    ).length;
+    const notProven = report.results.filter((result) => result.status === 'not-applicable').length;
+    const failedChecks = report.results
       .flatMap((result) => result.checks)
       .filter((check) => check.status === 'fail').length;
-    lines.push(`${String(failures)} ${pluralize(failures, 'check')} below tier. Not proven.`);
+    if (belowTier > 0) {
+      lines.push(
+        `${String(belowTier)} ${pluralize(belowTier, 'provider–harness integration')} below declared tier.`,
+      );
+    }
+    if (failedChecks > 0) {
+      lines.push(`${String(failedChecks)} ${pluralize(failedChecks, 'check')} failed.`);
+    }
+    if (notProven > 0) {
+      lines.push(
+        `${String(notProven)} ${pluralize(notProven, 'provider–harness integration')} not proven yet.`,
+      );
+    }
   }
 
   return document(lines);

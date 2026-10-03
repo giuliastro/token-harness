@@ -95,6 +95,8 @@ export interface PassiveReceipt {
   observedAt: string;
   /** Operations the provider recorded at that point. */
   operations: number;
+  /** Observed attempts, when the provider distinguishes them from successful operations. */
+  attempts?: number;
   /** The coding agent that produced this receipt, when the source is isolated by harness. */
   harnessId?: HarnessId;
   /** Where it was read from, for the evidence trail. */

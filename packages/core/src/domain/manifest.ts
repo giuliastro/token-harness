@@ -202,6 +202,8 @@ export interface HarnessInterceptionPoint {
 export interface HarnessToolFamily {
   /** The matcher value the harness uses for this family. */
   id: string;
+  /** Exact string stored in hook configuration, when it differs from `id`. */
+  matcher?: string;
   /** Platforms on which the harness exposes it. */
   platforms: OperatingSystem[];
   /** True when the harness routes shell commands through it. */

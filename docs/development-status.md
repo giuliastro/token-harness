@@ -1,5 +1,11 @@
 # Development status
 
+- 2026-10-01: **Token Harness 0.1.23 release candidate in progress.** Codex verification now treats
+  a missing shell-visible `codex` CLI as unobservable instead of a broken Desktop integration, and
+  keeps RTK command history and HarnessTrim reductions as separate runtime receipts. Local tests,
+  lint, formatting, bundle smoke, package, and install smoke pass; cross-platform PR CI is still a
+  required gate before creating the release branch.
+
 - 2026-09-27: **Token Harness 0.1.22 release candidate.** PR #353 merged to `main` as `4e2772e`;
   its cross-platform CI passed on Windows, macOS, and Ubuntu. The change removes the unverified CCR
   routing integration and makes Codex RTK hook enablement and trust an explicit manual step.

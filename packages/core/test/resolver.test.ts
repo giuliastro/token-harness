@@ -12,6 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
@@ -39,6 +40,20 @@ const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const RTK = providerId('rtk');
 const HARNESSTRIM = providerId('harnesstrim');
+const ORDERED_CHAIN_FIXTURE = JSON.parse(
+  readFileSync(
+    new URL(
+      '../../../../tests/fixtures/rows/rtk-harnesstrim-chain-linux/chain.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+) as {
+  providerVersions: Record<string, string>;
+  harnessVersions: Record<string, string>;
+  platform: { os: 'linux'; wsl: false };
+  order: string[];
+};
 
 /** Claude's real surfaces, so a scope in a test is a scope that exists. */
 const CLAUDE_MANIFEST: HarnessManifest = {
@@ -553,6 +568,88 @@ describe('at most one owner for every exclusive scope', () => {
   });
 });
 
+describe('the reviewed RTK and HarnessTrim hook chain', () => {
+  const claim = (harness: typeof CLAUDE | typeof CODEX, point: string): CapabilityDeclaration => ({
+    ...declaration({ capability: 'shell.output.reduce', point }),
+    harnesses: [harness],
+  });
+  const currentProviders: ResolverProvider[] = [
+    {
+      id: RTK,
+      capabilities: [claim(CLAUDE, 'pre-tool-use'), claim(CODEX, 'pre-tool-use')],
+      assignableHarnesses: new Set([CLAUDE, CODEX]),
+    },
+    {
+      id: HARNESSTRIM,
+      capabilities: [claim(CLAUDE, 'post-tool-use'), claim(CODEX, 'post-tool-use')],
+      assignableHarnesses: new Set([CLAUDE, CODEX]),
+    },
+  ];
+
+  it('orders RTK before HarnessTrim only on the observed Linux version tuple', () => {
+    const rule = COMPATIBILITY_RULES.find(
+      (entry) => entry.id === 'rtk-harnesstrim-post-tool-chain-linux',
+    );
+    assert.ok(rule);
+    assert.deepEqual(rule.testedVersions, ORDERED_CHAIN_FIXTURE.providerVersions);
+    assert.deepEqual(rule.testedHarnessVersions, ORDERED_CHAIN_FIXTURE.harnessVersions);
+
+    const result = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CLAUDE_MANIFEST, CODEX_MANIFEST],
+      providers: currentProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: ORDERED_CHAIN_FIXTURE.harnessVersions,
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+    });
+
+    assert.deepEqual(result.conflicts, []);
+    for (const harness of [CLAUDE, CODEX]) {
+      const chain = result.ownership
+        .filter((entry) => entry.scope.harness === harness)
+        .sort((left, right) => left.order - right.order);
+      assert.deepEqual(
+        chain.map((entry) => entry.owner),
+        ORDERED_CHAIN_FIXTURE.order,
+      );
+      assert.deepEqual(
+        chain.map((entry) => entry.mode),
+        ['chainable', 'chainable'],
+      );
+    }
+  });
+
+  it('withdraws permission when the harness version or platform differs', () => {
+    const wrongHarnessVersion = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CLAUDE_MANIFEST],
+      providers: currentProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: { claude: '2.1.275' },
+      platform: ORDERED_CHAIN_FIXTURE.platform,
+    });
+    assert.equal(wrongHarnessVersion.conflicts[0]?.code, 'compatibility-rule-stale');
+    assert.match(
+      wrongHarnessVersion.conflicts[0]?.detail.join(' ') ?? '',
+      /claude 2\.1\.274.*2\.1\.275/,
+    );
+
+    const wrongPlatform = resolveOwnership({
+      profile: 'safe',
+      harnesses: [CLAUDE_MANIFEST],
+      providers: currentProviders,
+      rules: [...COMPATIBILITY_RULES],
+      observedVersions: ORDERED_CHAIN_FIXTURE.providerVersions,
+      observedHarnessVersions: { claude: '2.1.274' },
+      platform: { os: 'linux', wsl: true },
+    });
+    assert.notEqual(wrongPlatform.conflicts.length, 0);
+    assert.deepEqual(wrongPlatform.ownership, []);
+  });
+});
+
 describe('every selection and rejection is explained', () => {
   it('gives each exclusion at least one reason', () => {
     const result = resolveOwnership({
@@ -837,9 +934,7 @@ describe('a hook added by hand afterwards', () => {
 
 describe('the shipped rule table', () => {
   it('records the RTK and HarnessTrim overlap with a citation', () => {
-    const rule = COMPATIBILITY_RULES.find((entry) =>
-      entry.capabilities.includes('shell.output.reduce'),
-    );
+    const rule = COMPATIBILITY_RULES.find((entry) => entry.outcome === 'narrowed');
     assert.ok(rule);
     // `narrowed` since PLAN §15 item 46: the rule no longer refuses the pair, it says which
     // provider keeps the channel. RTK keeps shell reduction, and HarnessTrim 0.1.0 is installed in

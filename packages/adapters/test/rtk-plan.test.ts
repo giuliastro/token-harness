@@ -90,7 +90,12 @@ const CODEX_MANIFEST: HarnessManifest = {
     },
   ],
   toolFamilies: [
-    { id: 'Bash', platforms: ['windows', 'macos', 'linux'], executesShellCommands: true },
+    {
+      id: 'Bash',
+      matcher: '^Bash$',
+      platforms: ['windows', 'macos', 'linux'],
+      executesShellCommands: true,
+    },
   ],
   requiresEnablement: true,
   enablementNote: 'Codex persists hook enablement and trust separately from hooks.json',
@@ -213,7 +218,7 @@ function configuredCodexWithRtk(): HarnessConfigSummary {
   const hookCommands = [
     {
       eventName: 'PreToolUse',
-      matcher: 'Bash',
+      matcher: '^Bash$',
       command: 'rtk hook codex',
       entryPointer: 'hooks.PreToolUse.0',
       commandPointer: 'hooks.PreToolUse.0.hooks.0.command',
@@ -509,7 +514,7 @@ describe('Codex hook-list integration', () => {
     assert.equal(action.path, CODEX_HOOKS);
     assert.equal(action.operations[0]?.pointer, 'hooks.PreToolUse');
     assert.deepEqual(action.operations[0]?.value, {
-      matcher: 'Bash',
+      matcher: '^Bash$',
       hooks: [{ type: 'command', command: 'token-harness __internal-rtk-hook codex' }],
     });
     assert.match(action.explanation, /manually enable and trust this hook in Codex/i);

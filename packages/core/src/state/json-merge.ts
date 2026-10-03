@@ -235,11 +235,10 @@ function clone(value: JsonValue): JsonValue {
 }
 
 /**
- * Walks to the parent of the last segment, creating intermediate *objects* only.
+ * Walks through objects and existing array entries to the parent of the last segment.
  *
- * A missing intermediate is created; an intermediate that exists as something other
- * than an object is a refusal rather than a replacement, because overwriting a value
- * the user put there is the thing this whole module is arranged to avoid.
+ * Missing object intermediates are created. Missing array entries and scalar intermediates
+ * are refusals, because replacing or inventing values the user put there is unsafe.
  */
 function ensureParent(
   document: JsonValue,
@@ -248,6 +247,14 @@ function ensureParent(
   let current = document;
   for (let index = 0; index < segments.length - 1; index += 1) {
     const segment = segments[index] as string;
+    if (Array.isArray(current)) {
+      const itemIndex = arrayIndex(segment);
+      if (itemIndex === null || itemIndex >= current.length) {
+        return { ok: false, reason: 'path crosses a missing or invalid array entry' };
+      }
+      current = current[itemIndex] as JsonValue;
+      continue;
+    }
     if (!isJsonObject(current)) {
       return { ok: false, reason: `\`${segments.slice(0, index).join('.')}\` is not an object` };
     }

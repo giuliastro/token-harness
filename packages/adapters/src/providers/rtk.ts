@@ -172,14 +172,13 @@ const MANIFEST: ProviderManifest = {
   harnesses: [
     {
       harness: CLAUDE,
-      testedVersions: { minimum: '2.0.0', maximum: '2.1.251' },
+      testedVersions: { minimum: '2.1.274', maximum: '2.1.274' },
       verificationTier: 'canary',
     },
     {
       harness: CODEX,
-      // RTK added its native Codex PreToolUse rewriter in 0.50.0. Earlier releases only wrote
-      // prompt instructions; a hooks.json entry alone did not activate it.
-      testedVersions: { minimum: '0.146.0', maximum: '0.146.0' },
+      // RTK 0.50.0's native hook was exercised against the installed Codex 0.159.0 schema.
+      testedVersions: { minimum: '0.159.0', maximum: '0.159.0' },
       verificationTier: 'canary',
     },
     {

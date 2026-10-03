@@ -100,9 +100,8 @@ describe('schema fixtures', () => {
     const value = assertRoundTrips('harness-manifest.claude.json') as HarnessManifest;
     assert.equal(value.id, 'claude');
     assert.equal(value.verificationTier, 'canary');
-    // The version whose settings.json the Phase 2.5 spike actually read. A claim about
-    // the configuration schema, not about a test suite having run against it.
-    assert.equal(value.testedVersions.maximum, '2.1.212');
+    // The exact version whose current hook contract was observed; no adjacent patch is inferred.
+    assert.equal(value.testedVersions.maximum, '2.1.274');
     assert.equal(value.receiptFamily, 'provider-telemetry');
     assert.equal(value.requiresEnablement, false);
   });

@@ -266,6 +266,25 @@ function verifyManaged(providerId, harness) {
   );
 }
 
+function verifyConfiguredWithoutCanary(providerId, harness) {
+  const result = thJson(['verify', '--harness', harness, '--provider', providerId]);
+  const row = result.data?.results?.find(
+    (item) => item.providerId === providerId && item.harnessId === harness,
+  );
+  const configured = row?.checks?.find((check) => check.id === 'integration-configured');
+  const canary = row?.checks?.find((check) => check.id === 'canary-intercepted');
+  assert(
+    row?.declaredTier === 'canary' &&
+      configured?.status === 'pass' &&
+      configured?.achievedTier === 'config-only' &&
+      canary?.status === 'not-exercised' &&
+      canary?.achievedTier === null &&
+      result.data?.healthyAtDeclaredTier === false,
+    `${providerId}/${harness}: setup is config-only until a runtime canary is observed`,
+    JSON.stringify(result),
+  );
+}
+
 try {
   activate(baseEnv);
   const installHarnesses = runBatchShim(join(nodeDir, 'npm.cmd'), [
@@ -519,8 +538,8 @@ try {
     'doctor observes HarnessTrim 0.2.1 connected to both real Windows harnesses',
     JSON.stringify(harnessTrim),
   );
-  verifyManaged('harnesstrim', 'claude');
-  verifyManaged('harnesstrim', 'codex');
+  verifyConfiguredWithoutCanary('harnesstrim', 'claude');
+  verifyConfiguredWithoutCanary('harnesstrim', 'codex');
 
   const latestHarnessTrimResult = runBatchShim(join(nodeDir, 'npm.cmd'), [
     'view',
@@ -571,8 +590,8 @@ try {
     'doctor refresh observes the updated HarnessTrim runtime and both connections',
     JSON.stringify(harnessTrim),
   );
-  verifyManaged('harnesstrim', 'claude');
-  verifyManaged('harnesstrim', 'codex');
+  verifyConfiguredWithoutCanary('harnesstrim', 'claude');
+  verifyConfiguredWithoutCanary('harnesstrim', 'codex');
 
   console.log(
     '\nWindows live guided smoke passed for GitNexus, mcptoon, Headroom and HarnessTrim on Claude Code/Codex.',
