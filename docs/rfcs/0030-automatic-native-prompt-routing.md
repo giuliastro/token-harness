@@ -88,6 +88,24 @@ Harness before that platform is called runtime-verified.
 
 ## Consequences
 
+### October 3 compatibility repair
+
+Configuration fixtures admit Codex 0.159.0–0.159.1 and 0.160.0, and Claude 2.1.274–2.1.288.
+These bounds describe the documented hook schema, never cross-platform runtime verification.
+Unknown/prerelease formats remain blocked with the installed version and an update action.
+Windows Claude uses shell form because native exec form cannot start npm `.cmd` shims.
+An earlier exec-form entry is repaired only when its exact digest is owned by a committed journal;
+repair removes those three entries and installs the replacement through the normal transaction.
+External or edited hooks remain untouched. Removal also recognizes these older owned entries.
+Stored-plan apply reuses the reviewed harness selector during postcondition verification;
+omitting `--harness` on `apply --plan` must not undo an otherwise correct hook installation.
+
+The dashboard reads exact Codex routing tuples from `hooks/list`, distinguishes authorization
+required, disabled, ready and runtime observed, and polls bounded receipts while visible.
+Overview callbacks span projects; benchmark callbacks retain project and task-time boundaries.
+No skill invocation is required for individual prompts. Codex still requires one native trust
+review for new or changed definitions; Token Harness neither grants nor bypasses that trust.
+
 The hook runs once per submitted prompt, so its context must stay short and its local work bounded.
 The subagent policy may increase total usage; only paired usage and quality evidence can show whether
 it saves tokens or quota. Claude model identity and token counts may remain unavailable to Token

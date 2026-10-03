@@ -144,7 +144,7 @@ it('does not offer an approval when the provider has no Token Harness-owned chan
   assert.match(preview.notices[0] ?? '', /no Token Harness-owned change/i);
 });
 
-it('rejects arbitrary providers and keeps removal inside the managed-only setup flow', async () => {
+it('rejects arbitrary providers and keeps per-optimizer removal inside the managed-only setup flow', async () => {
   const service = new GuideService(
     async <T>(args: readonly string[]) => envelope(args[0] ?? '', null as T),
     () => 0,
@@ -158,10 +158,15 @@ it('rejects arbitrary providers and keeps removal inside the managed-only setup 
     service.preview({ action: 'undo', transaction: 'attacker-selected-id' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
-  assert.match(GUIDE_HTML, /<summary>Remove Token Harness-managed configuration<\/summary>/);
-  assert.match(GUIDE_JS, /component\.managedByTokenHarness \|\| component\.configured/);
-  assert.match(GUIDE_JS, /provider installation remains user-owned/i);
-  assert.match(GUIDE_JS, /\{ action: 'remove', provider: component\.providerId \}/);
+  assert.doesNotMatch(GUIDE_HTML, /<summary>Remove Token Harness-managed configuration<\/summary>/);
+  assert.match(GUIDE_HTML, /id="connection-overview"/);
+  assert.match(GUIDE_JS, /component\?\.managedByTokenHarness \|\| component\?\.configured/);
+  assert.match(GUIDE_JS, /window\.tokenHarnessReviewRemoval/);
+  assert.match(GUIDE_JS, /action: 'remove', provider/);
+  assert.match(
+    GUIDE_JS,
+    /User-owned provider installations and unrelated configuration are left untouched/,
+  );
   assert.match(GUIDE_JS, /request\('\/api\/preview', body\)/);
   assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
 });

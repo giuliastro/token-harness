@@ -13,7 +13,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
   const VIEWS = {
     dashboard: ['Overview', 'Your coding agents, optimization stack, health and measured results in one place.'],
-    results: ['Results', 'A dashboard of optimizer results, coding-app links, quality information, and recent activity.'],
+    results: ['Results', 'Measured evidence by optimizer, routing and coding app.'],
   };
   const TOOL_INFO = {
     rtk: {
@@ -62,6 +62,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
   let selectedView = 'dashboard';
   let modalRun = 0;
   let pendingTicket = null;
+  let updateCheckStarted = false;
+  let latestUpdateCheck = null;
   const periodCache = new Map();
 
   async function request(path, body) {
@@ -94,7 +96,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function setBusy(value, applying = false) {
     busy = value;
-    document.querySelectorAll('[data-action],#refresh,#period').forEach(element => {
+    document.querySelectorAll('[data-action],#refresh,#period,#evidence-filter,#evidence-type,#evidence-sort').forEach(element => {
       element.disabled = value;
     });
     $('live-status').textContent = value
@@ -230,7 +232,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function optimizerIds() {
     const ids = (current?.stack?.components || []).map(component => component.providerId).filter(Boolean);
-    return ids.length ? [...new Set(ids)] : Object.keys(TOOL_INFO);
+    return [...new Set([...Object.keys(TOOL_INFO), ...ids])];
   }
 
   function configuredProviders() {
@@ -358,6 +360,16 @@ export const GUIDE_PRODUCT_JS = String.raw`
         detail: 'A paired benchmark favored the baseline. Token Harness is not crediting the affected savings.',
         action: 'results',
       };
+    const routingAttention = agents.filter(agent => agent.promptRouting?.needsRepair ||
+      (agent.promptRouting?.configured === true && ['untrusted', 'disabled', 'unknown'].includes(agent.promptRouting.enablement)));
+    if (routingAttention.length)
+      return {
+        label: 'Routing action required',
+        cls: 'warn',
+        title: 'Automatic routing needs attention',
+        detail: routingAttention.map(agent => agent.name + ': ' + agent.promptRouting.detail).join(' '),
+        action: 'routing',
+      };
     if (stack?.state === 'attention')
       return {
         label: 'Needs attention',
@@ -417,6 +429,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const actions = node('div', undefined, 'inline-actions');
     if (assessment.action === 'verify') {
       actions.append(actionButton('Re-check health', () => readOnlyOperation('verify')));
+    } else if (assessment.action === 'routing') {
+      actions.append(actionButton('Review routing', () => $('coding-agents').scrollIntoView({ block: 'start', behavior: 'smooth' })));
     } else if (assessment.action === 'results') {
       actions.append(navigateButton('View detailed results', 'results'));
     }
@@ -524,27 +538,40 @@ export const GUIDE_PRODUCT_JS = String.raw`
         ),
       );
       const routing = agent.promptRouting;
+      const routingConfigured = routing?.configured === true || routing?.enablement === 'enabled' || routing?.enablement === 'untrusted' || (!routing?.enablement && routing?.state === 'managed');
+      const routingObserved = routing?.verificationTier === 'runtime-observed';
+      const routingLabel = routingObserved ? 'Active · callback seen' : routing?.needsRepair ? 'Repair required' : routing?.enablement === 'untrusted' ? 'Trust required' : routing?.enablement === 'disabled' ? 'Hooks disabled' : routing?.configured !== false && routing?.enablement === 'unknown' ? 'Authorization unknown' : routingConfigured ? 'Enabled · awaiting callback' : routing?.state === 'external' ? 'Managed elsewhere' : 'Not enabled';
       const routingCard = node('div', undefined, 'routing-feature');
       const routingHead = node('div', undefined, 'tool-head');
       routingHead.append(
         node('strong', 'Automatic prompt routing'),
-        pill(routing?.label || 'Not verified', routing?.state === 'managed' ? 'good' : routing?.state === 'absent' ? '' : 'warn'),
+        pill(routingLabel, routingObserved ? 'good' : routingConfigured || routing?.needsRepair ? 'warn' : ''),
       );
       routingCard.append(
         routingHead,
         node(
           'p',
-          routing?.detail || 'A native hook can inject the routing policy on every submitted prompt. Setup and runtime activity are tracked separately.',
+          routing?.detail || (routing?.enablement === 'untrusted'
+              ? 'Open /hooks in Codex and trust this hook. Then submit a prompt to verify the callback.'
+            : routing?.needsRepair
+              ? routing.detail || 'Review and repair the Token Harness routing hook.'
+              : routing?.enablement === 'unknown'
+                ? routing.detail || 'Token Harness could not determine whether this hook is authorized.'
+                : routingConfigured
+                  ? routingObserved ? 'Automatic routing is running on submitted prompts.' : 'Configured; submit a prompt and Token Harness will show the callback when it arrives.'
+                  : 'Enable once. The native hook then checks every submitted prompt automatically.'),
           'caption',
         ),
       );
       const routingActions = node('div', undefined, 'inline-actions');
-      if (routing?.state === 'absent') {
-        routingActions.append(actionButton('Enable routing', () => reviewPromptRouting(agent.id, true), 'secondary'));
-      } else if (routing?.state === 'managed') {
-        routingActions.append(actionButton('Disable routing', () => reviewPromptRouting(agent.id, false), 'secondary'));
+      if (routing?.needsRepair) {
+        routingActions.append(actionButton('Repair routing', () => reviewPromptRouting(agent.id, true), 'secondary'));
       } else if (routing?.state === 'external') {
         routingActions.append(node('span', 'Managed elsewhere · left untouched', 'caption'));
+      } else if (!routingConfigured) {
+        routingActions.append(actionButton('Enable routing', () => reviewPromptRouting(agent.id, true), 'secondary'));
+      } else if (routingConfigured) {
+        routingActions.append(actionButton('Disable routing', () => reviewPromptRouting(agent.id, false), 'secondary'));
       }
       if (routingActions.children.length) routingCard.append(routingActions);
       card.append(routingCard);
@@ -670,13 +697,17 @@ export const GUIDE_PRODUCT_JS = String.raw`
         if (!(data.changes || []).length)
           $('modal-content').append(messageBox('No change proposed', (data.notices || []).join(' ') || 'The current routing state or ownership evidence does not support a safe change.'));
         for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
-        if (data.ticket) $('modal-content').append(messageBox(
-          agentId === 'codex' ? 'Codex trust step' : 'When it takes effect',
-          agentId === 'codex'
-            ? 'After Apply, review and trust the UserPromptSubmit hook in Codex using /hooks. Until a callback is observed, the dashboard will show it as configured but not runtime verified.'
-            : 'After Apply, start a new Claude Code session. The dashboard will show configured state first and runtime activity after the next prompt callback.',
-          'safe',
-        ));
+        if (data.ticket) {
+          const observed = activeAgents().find(agent => agent.id === agentId)?.promptRouting;
+          const needsTrust = agentId === 'codex' && observed?.enablement === 'untrusted';
+          $('modal-content').append(messageBox(
+            needsTrust ? 'Trust required' : 'When it takes effect',
+            needsTrust
+              ? 'Open /hooks in Codex and trust this hook. Then send a prompt.'
+              : 'Send a prompt in a new session. Token Harness will show the callback when it arrives.',
+            'safe',
+          ));
+        }
         $('modal-actions').replaceChildren(modalClose(data.ticket ? 'Cancel' : 'Done'));
         if (data.ticket) $('modal-actions').append(actionButton(enabled ? 'Apply routing hook' : 'Remove owned routing hook', () => applyTicket(data.ticket)));
       })
@@ -772,6 +803,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
       await ensureSession();
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return;
+      if (result.restartRequired) {
+        $('modal-title').textContent = result.title || 'Token Harness update installed';
+        $('modal-content').replaceChildren(messageBox('Restart to finish', (result.messages || []).join(' ') || 'Token Harness must restart before it can check the updated installation.', 'safe'));
+        $('modal-actions').replaceChildren(modalClose('Later'), actionButton('Restart and re-check', restartAndRecheck));
+        return;
+      }
       $('modal-title').textContent = result.title || (result.ok ? 'Setup completed' : 'Setup needs attention');
       $('modal-content').replaceChildren(
         messageBox(result.ok ? 'Applied' : 'Needs attention', (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'),
@@ -816,12 +853,50 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
+  async function restartAndRecheck() {
+    if (busy) return;
+    setBusy(true, true);
+    $('modal-content').replaceChildren(progress('Restarting Token Harness', 'The updated app will run its health check when it opens again.'));
+    $('modal-actions').replaceChildren(modalClose('Restarting…', true));
+    try {
+      await ensureSession();
+      const result = await request('/api/restart', {});
+      if (!result.ok) throw new Error((result.messages || []).join(' ') || 'Restart did not complete.');
+      setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+      $('modal-error').textContent = error.message;
+      $('modal-error').hidden = false;
+      $('modal-actions').replaceChildren(modalClose('Close'));
+      setBusy(false, false);
+    }
+  }
+
   function connectionPresentation(target) {
     if (!target) return { label: 'Not targeted', cls: '' };
     if (target.state === 'connected') return { label: 'Setup detected', cls: 'good' };
     if (target.state === 'actionable') return { label: 'Available', cls: 'warn' };
     if (target.state === 'unavailable') return { label: 'Unavailable', cls: '' };
     return { label: 'Not applicable', cls: '' };
+  }
+
+  function mcptoonInstallOptions() {
+    modal('Install mcptoon prerequisites');
+    $('modal-content').append(
+      node('p', 'Token Harness can install mcptoon after pipx or uv is available. Install one, then Refresh and choose Install & connect.'),
+    );
+    const links = node('div', undefined, 'inline-actions');
+    for (const [label, href] of [
+      ['pipx installation', 'https://pipx.pypa.io/stable/installation/'],
+      ['uv installation', 'https://docs.astral.sh/uv/getting-started/installation/'],
+    ]) {
+      const link = node('a', label, 'button secondary');
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noreferrer noopener';
+      links.append(link);
+    }
+    $('modal-content').append(links);
+    $('modal-actions').append(modalClose('Done'));
   }
 
   function renderConnectionOverview() {
@@ -887,8 +962,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
             () => reviewSetup(id),
             'secondary',
           ),
-        );
-      else action.append(node('span', 'No action', 'caption'));
+          );
+      const mcptoonUnavailable = id === 'mcptoon' && agents.some(agent => setupTarget(agent.id, id)?.state === 'unavailable');
+      if (mcptoonUnavailable)
+        action.append(actionButton('Installation options', mcptoonInstallOptions, 'secondary'));
+      if (component?.managedByTokenHarness || component?.configured) {
+        const remove = actionButton('Remove managed setup', () => {
+          window.tokenHarnessReviewRemoval?.(id, info.name);
+        }, 'secondary');
+        remove.disabled = busy || typeof window.tokenHarnessReviewRemoval !== 'function';
+        action.append(remove);
+      }
+      if (!action.children.length) action.append(node('span', 'No action', 'caption'));
       row.append(action);
       table.append(row);
     }
@@ -1011,7 +1096,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       messageBox('Optional candidate lifecycle', 'This is an explicit evaluation setup, not production-stack setup. Token Harness does not silently install or activate candidates.'),
     );
     if (candidate.id === 'mcptoon')
-      $('modal-content').append(messageBox('Prerequisites stay yours', 'An approved setup may install the exact reviewed mcptoon build only through an already-installed pipx. Token Harness does not install Python, pipx or administrator prerequisites.'));
+      $('modal-content').append(messageBox('Prerequisites stay yours', 'An approved setup may install the exact reviewed mcptoon build through an already-installed pipx or uv. Token Harness does not install Python, pipx, uv or administrator prerequisites.'));
     if (candidate.id === 'gitnexus')
       $('modal-content').append(messageBox('Index stays yours', 'GitNexus must already be installed on the exact reviewed row. Token Harness can register only the reviewed Claude MCP entry; it never creates or refreshes the repository index.'));
     const agents = activeAgents().filter(agent => supported.includes(agent.id));
@@ -1291,44 +1376,139 @@ export const GUIDE_PRODUCT_JS = String.raw`
     renderMaintenance();
   }
 
-  function renderSavings() {
-    const root = $('result-savings');
-    root.replaceChildren();
-    const rows = current?.savings?.rows || [];
-    if (!rows.length) {
-      root.append(sectionEmpty('No measured optimizer output has been recorded for this period. Missing data is not zero savings.'));
-      return;
+  function addEvidenceRow(body, type, name, scope, summary, amount, details) {
+    const row = node('tr');
+    row.dataset.type = type;
+    row.dataset.name = name.toLocaleLowerCase();
+    row.dataset.search = [type, name, scope, summary].join(' ').toLocaleLowerCase();
+    row.dataset.amount = String(amount || 0);
+    const systemCell = node('th');
+    systemCell.scope = 'row';
+    systemCell.append(node('strong', name), node('span', type[0].toUpperCase() + type.slice(1), 'caption'));
+    row.append(systemCell, node('td', scope), node('td', summary));
+    const detailCell = node('td');
+    const disclosure = node('details');
+    disclosure.append(node('summary', 'Details'));
+    for (const detail of details) disclosure.append(node('p', detail, 'caption'));
+    detailCell.append(disclosure);
+    row.append(detailCell);
+    body.append(row);
+    return row;
+  }
+
+  function optimizerEvidenceDetail(row) {
+    const unit = row.unit ? ' ' + row.unit : '';
+    const change = row.before !== null && row.before !== undefined && row.after !== null && row.after !== undefined
+      ? count(row.before) + ' → ' + count(row.after) + unit
+      : count(row.saved) + unit;
+    return [
+      row.impact?.detail || 'Recorded optimizer evidence.',
+      'Recorded change: ' + change,
+      count(row.operations) + ' operation(s)' + (row.agents?.length ? ' · ' + row.agents.join(', ') : ' · no harness attribution'),
+    ];
+  }
+
+  function routingDetails(agent) {
+    const routing = agent.promptRouting || {};
+    const lines = [];
+    const tier = routing.verificationTier;
+    if (routing.enablement === 'untrusted') lines.push('Action required: open /hooks in Codex and trust this hook, then submit a prompt.');
+    else if (tier === 'runtime-observed') lines.push('Runtime callback observed. Automatic routing runs on submitted prompts.');
+    else if (routing.configured !== false && routing.enablement === 'unknown') lines.push('Authorization is unknown; check the hook status in the coding app.');
+    else if (routing.enablement === 'disabled') lines.push('Hooks are disabled for this coding app.');
+    else if (routing.enablement === 'enabled' || (!routing.enablement && routing.state === 'managed')) lines.push('Configured; waiting for the first runtime callback after a prompt.');
+    else if (routing.state === 'external') lines.push('Routing is managed elsewhere; Token Harness leaves it unchanged.');
+    else lines.push('Automatic routing is not enabled for this coding app.');
+    if (Number.isFinite(routing.promptSubmissions)) lines.push('Prompt callbacks: ' + count(routing.promptSubmissions));
+    if (Number.isFinite(routing.subagentsStarted)) lines.push('Subagents started: ' + count(routing.subagentsStarted));
+    if (Number.isFinite(routing.subagentsStopped)) lines.push('Subagents stopped: ' + count(routing.subagentsStopped));
+    if (routing.reportedModels?.length) lines.push('Reported models: ' + routing.reportedModels.join(', '));
+    if (routing.lastObservedAt) lines.push('Last callback: ' + date(routing.lastObservedAt));
+    return lines;
+  }
+
+  function renderEvidence() {
+    const body = $('result-evidence');
+    body.replaceChildren();
+    const savings = current?.savings?.rows || [];
+    for (const id of optimizerIds()) {
+      const info = optimizerInfo(id);
+      const component = managedComponent(id);
+      const measured = savings.filter(row => row.providerId === id);
+      const scope = component?.configuredHarnesses?.length
+        ? component.configuredHarnesses.map(agentName).join(', ')
+        : 'No setup detected';
+      const summary = measured.length
+        ? measured.map(row => row.measurement + ' · ' + count(row.saved) + (row.unit ? ' ' + row.unit : '')).join(' · ')
+        : 'No measured evidence';
+      const details = measured.length
+        ? measured.flatMap(optimizerEvidenceDetail)
+        : [component?.configured ? 'Setup is detected, but no result was recorded for this period.' : 'No result was recorded for this optimizer in this period.'];
+      addEvidenceRow(body, 'optimizer', info.name, scope, summary, measured.length, details);
     }
-    for (const row of rows) {
-      const card = node('article', undefined, 'evidence-row');
-      const head = node('div', undefined, 'evidence-head');
-      head.append(node('h3', row.provider), pill(row.measurement));
-      card.append(head, node('strong', row.impact?.headline || count(row.saved) + ' ' + row.unit, 'evidence-value'), node('p', row.impact?.detail || 'Recorded optimization output.'));
-      const facts = node('dl', undefined, 'evidence-facts');
-      const values = [
-        ['Recorded change', row.before !== null && row.after !== null ? count(row.before) + ' → ' + count(row.after) + ' ' + row.unit : count(Math.abs(row.saved)) + ' ' + row.unit],
-        ['Operations', count(row.operations)],
-        ['Coding agent', row.agents?.length ? row.agents.join(', ') : 'Not linked to an agent'],
+
+    const routing = current?.value?.routing;
+    const routingAgents = activeAgents();
+    const routingDetailsList = routingAgents.flatMap(agent => [agent.name + ':', ...routingDetails(agent)]);
+    if (routing?.state === 'measured' || routing?.pairs > 0) {
+      routingDetailsList.push((routing.pairs ? count(routing.pairs) + ' quality-passed routed pair(s).' : ''));
+      if (routing.savedLocalTokens !== null && routing.savedLocalTokens !== undefined)
+        routingDetailsList.push(routing.savedLocalTokens >= 0
+          ? count(routing.savedLocalTokens) + ' local tokens saved · end-to-end local usage'
+          : count(Math.abs(routing.savedLocalTokens)) + ' local tokens added · end-to-end local usage');
+      if (routing.allowance5h?.savedPercent !== null && routing.allowance5h?.savedPercent !== undefined)
+        routingDetailsList.push('5h allowance change: ' + count(routing.allowance5h.savedPercent) + '%');
+      if (routing.allowance7d?.savedPercent !== null && routing.allowance7d?.savedPercent !== undefined)
+        routingDetailsList.push('7d allowance change: ' + count(routing.allowance7d.savedPercent) + '%');
+    }
+    const routingSummary = routing?.state === 'blocked-by-quality'
+      ? 'Not credited · quality gate'
+      : routing?.savedLocalTokens !== null && routing?.savedLocalTokens !== undefined
+        ? count(routing.savedLocalTokens) + ' local tokens · end-to-end paired evidence'
+        : routing?.state === 'measured' ? 'Allowance evidence measured' : 'Not measured yet';
+    addEvidenceRow(body, 'routing', 'Automatic prompt routing', routingAgents.map(agent => agent.name).join(', ') || 'No coding app detected', routingSummary, routing?.pairs || 0, routingDetailsList.length ? routingDetailsList : ['No routing measurement has been recorded.']);
+
+    for (const agent of routingAgents) {
+      const linked = savings.filter(row => row.harnesses?.includes(agent.id));
+      const configured = configuredProviders().filter(component => component.configuredHarnesses?.includes(agent.id)).map(component => optimizerInfo(component.providerId).name);
+      const details = [
+        'Detected optimizer setup: ' + (configured.join(', ') || 'none'),
+        ...routingDetails(agent),
+        ...(linked.length ? linked.flatMap(optimizerEvidenceDetail) : ['No optimizer measurement is directly linked to this coding app.']),
       ];
-      for (const [label, value] of values) {
-        const wrap = node('div');
-        wrap.append(node('dt', label), node('dd', value));
-        facts.append(wrap);
-      }
-      card.append(facts);
-      if (!row.agents?.length) {
-        card.append(
-          node(
-            'p',
-            row.providerId === 'rtk'
-              ? 'RTK records these reductions but does not record whether Codex or Claude ran each command. The result is real, but Token Harness cannot assign it to either agent.'
-              : 'The source did not include a coding-agent identity, so Token Harness keeps this result unassigned.',
-            'caption',
-          ),
-        );
-      }
-      root.append(card);
+      addEvidenceRow(body, 'harness', agent.name, agent.version ? 'v' + agent.version : 'Version unavailable', linked.length ? linked.map(row => row.provider + ': ' + row.measurement + ' · ' + count(row.saved) + (row.unit ? ' ' + row.unit : '')).join(' · ') : 'No linked measured evidence', linked.length, details);
     }
+
+    for (const item of current?.value?.candidates || []) {
+      if (!(item.pairs > 0)) continue;
+      const candidate = (current?.optimizationCandidates || []).find(entry => entry.id === item.candidateId);
+      const name = candidate?.name || item.candidateId;
+      addEvidenceRow(body, 'candidate', name, 'Experimental', count(item.pairs) + ' paired result(s)', item.pairs, [
+        count(item.optimizedBetter || 0) + ' optimized better · ' + count(item.baselineBetter || 0) + ' baseline better.',
+        'Evaluation evidence only; this does not automatically promote or activate the candidate.',
+      ]);
+    }
+    applyEvidenceFilters();
+  }
+
+  function applyEvidenceFilters() {
+    const body = $('result-evidence');
+    if (!body) return;
+    const filter = $('evidence-filter').value.trim().toLocaleLowerCase();
+    const type = $('evidence-type').value;
+    const sort = $('evidence-sort').value;
+    const rows = [...body.querySelectorAll('tr')];
+    rows.sort((a, b) => sort === 'evidence'
+      ? Number(b.dataset.amount) - Number(a.dataset.amount) || a.dataset.name.localeCompare(b.dataset.name)
+      : sort === 'type'
+        ? a.dataset.type.localeCompare(b.dataset.type) || a.dataset.name.localeCompare(b.dataset.name)
+        : a.dataset.name.localeCompare(b.dataset.name));
+    for (const row of rows) {
+      const shown = (type === 'all' || row.dataset.type === type) && (!filter || row.dataset.search.includes(filter));
+      row.hidden = !shown;
+      body.append(row);
+    }
+    $('evidence-empty').hidden = rows.some(row => !row.hidden);
   }
 
   function measurementHelp() {
@@ -1343,173 +1523,23 @@ export const GUIDE_PRODUCT_JS = String.raw`
     $('modal-actions').append(modalClose('Done'));
   }
 
-  function renderCandidateResults() {
-    const root = $('candidate-results');
-    root.replaceChildren();
-    const evidence = current?.value?.candidates || [];
-    if (!evidence.some(item => item.pairs > 0)) {
-      root.append(sectionEmpty('No experimental candidate has completed paired evidence yet. Experimental tools are optional and do not affect managed setup.'));
-      return;
-    }
-    for (const item of evidence.filter(entry => entry.pairs > 0)) {
-      const candidate = EXPERIMENTAL.find(entry => entry.id === item.candidateId);
-      if (!candidate) continue;
-      const card = node('article', undefined, 'evidence-row');
-      card.append(node('h3', candidate.name), node('strong', count(item.pairs) + ' paired result(s)', 'evidence-value'));
-      card.append(node('p', count(item.optimizedBetter || 0) + ' optimized better · ' + count(item.baselineBetter || 0) + ' baseline better. This is evaluation evidence, not automatic promotion.'));
-      root.append(card);
-    }
-  }
-
-  function renderResultOptimizers() {
-    const root = $('result-optimizers');
-    if (!root) return;
-    root.replaceChildren();
-    const rows = current?.savings?.rows || [];
-    for (const id of optimizerIds()) {
-      const component = managedComponent(id);
-      const info = optimizerInfo(id);
-      const state = componentState(id, component);
-      const card = node('article', undefined, 'tool-card result-overview-card');
-      const head = node('div', undefined, 'tool-head');
-      head.append(node('h3', info.name), pill(state.label, state.cls));
-      card.append(head, node('p', info.role));
-      const facts = node('div', undefined, 'tool-facts');
-      facts.append(
-        node('span', 'Setup detected for'),
-        node('strong', component?.configuredHarnesses?.length ? component.configuredHarnesses.map(agentName).join(', ') : 'No detected agent'),
-      );
-      const measured = rows.filter(row => row.providerId === id);
-      card.append(facts);
-      if (!measured.length) {
-        card.append(
-          node(
-            'p',
-            component?.configured
-              ? 'Setup is detected, but no result was recorded in the selected period.'
-              : 'No result was recorded for this optimizer in the selected period.',
-            'caption',
-          ),
-        );
-      } else {
-        for (const row of measured) {
-          const evidence = node('div', undefined, 'result-signal');
-          evidence.append(
-            node('span', row.measurement, 'caption'),
-            node('strong', row.impact?.headline || count(row.saved) + ' ' + row.unit),
-            node('span', count(row.operations) + ' operation' + (row.operations === 1 ? '' : 's'), 'caption'),
-          );
-          card.append(evidence);
-        }
-      }
-      root.append(card);
-    }
-  }
-
-  function renderResultAgents() {
-    const root = $('result-agents');
-    if (!root) return;
-    root.replaceChildren();
-    const rows = current?.savings?.rows || [];
-    if (!activeAgents().length) {
-      root.append(sectionEmpty('No supported coding agent is currently detected.'));
-      return;
-    }
-    for (const agent of activeAgents()) {
-      const setupDetected = configuredProviders().filter(component =>
-        component.configuredHarnesses?.includes(agent.id),
-      );
-      const measured = rows.filter(row => row.harnesses?.includes(agent.id));
-      const rtkUnattributed = rows.some(row =>
-        row.providerId === 'rtk' && !row.agents?.length,
-      );
-      const notes = [];
-      if (
-        setupDetected.some(component => component.providerId === 'rtk') &&
-        !measured.some(row => row.providerId === 'rtk')
-      ) {
-        notes.push(
-          rtkUnattributed
-            ? 'RTK has saved command-output data, but its history does not say whether Codex or Claude ran each command. Token Harness keeps those results under RTK instead of guessing.'
-            : 'RTK setup is detected, but no RTK result can be linked to this agent in the selected period.',
-        );
-      }
-      if (
-        setupDetected.some(component => component.providerId === 'harnesstrim') &&
-        !measured.some(row => row.providerId === 'harnesstrim')
-      ) {
-        notes.push(
-          'HarnessTrim setup is detected, but no HarnessTrim result is linked to this app in the selected period. Setup alone does not mean it was used.',
-        );
-      }
-      if (!setupDetected.length && !measured.length) {
-        notes.push('No optimizer setup or agent-linked result was found for this coding app.');
-      }
-      const card = node('article', undefined, 'tool-card result-overview-card');
-      const head = node('div', undefined, 'tool-head');
-      head.append(node('h3', agent.name), pill(setupDetected.length ? 'Setup detected' : 'No setup', setupDetected.length ? 'good' : ''));
-      card.append(
-        head,
-        node('p', agent.version ? 'v' + agent.version : 'Version unavailable', 'caption'),
-      );
-      const facts = node('div', undefined, 'tool-facts');
-      facts.append(
-        node('span', 'Setup found'),
-        node('strong', setupDetected.length ? setupDetected.map(component => optimizerInfo(component.providerId).name).join(', ') : 'None'),
-        node('span', 'Results linked to this agent'),
-        node('strong', measured.length ? measured.map(row => row.provider).join(', ') : 'None in this period'),
-      );
-      card.append(facts);
-      for (const note of notes) card.append(node('p', note, 'caption'));
-      root.append(card);
-    }
-  }
-
   function renderResults() {
     const allowance = allowanceSummary();
     const quality = qualitySummary();
-    const configured = configuredProviders();
-    const connectionCount = configured.reduce(
-      (total, component) => total + (component.configuredHarnesses?.length || 0),
-      0,
-    );
-    const measuredProviders = new Set(
-      (current?.savings?.rows || []).map(row => row.providerId).filter(Boolean),
-    );
+    const savings = current?.savings?.rows || [];
     $('result-summary').replaceChildren(
-      metricCard('Configured optimizers', count(configured.length), optimizerIds().length + ' optimizer(s) tracked in the stack.', configured.length ? 'positive' : ''),
-      metricCard('Setups detected', count(connectionCount), 'Detected optimizer setup links; this is not proof of measured activity.', connectionCount ? 'positive' : ''),
-      metricCard('Optimizers with results', count(measuredProviders.size), 'Providers with recorded measurements in the selected period.'),
+      metricCard('Measured output', savings.length ? count(savings.length) + ' evidence record(s)' : 'No records yet', 'Exact, estimated and other measurement classes remain separate.'),
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
     const routed = current?.value?.routing;
-    const quotaParts = [];
-    if (routed?.allowance5h?.state === 'measured' && routed.allowance5h.savedPercent !== null)
-      quotaParts.push(routed.allowance5h.savedPercent >= 0
-        ? '5h saved ' + count(routed.allowance5h.savedPercent) + '%'
-        : '5h use +' + count(Math.abs(routed.allowance5h.savedPercent)) + '%');
-    if (routed?.allowance7d?.state === 'measured' && routed.allowance7d.savedPercent !== null)
-      quotaParts.push(routed.allowance7d.savedPercent >= 0
-        ? '7d saved ' + count(routed.allowance7d.savedPercent) + '%'
-        : '7d use +' + count(Math.abs(routed.allowance7d.savedPercent)) + '%');
-    const routingValue = routed?.state === 'blocked-by-quality'
+    const routeStatus = routed?.state === 'blocked-by-quality'
       ? 'Not credited'
       : routed?.savedLocalTokens !== null && routed?.savedLocalTokens !== undefined
-        ? (routed.savedLocalTokens >= 0
-          ? count(routed.savedLocalTokens) + ' tokens saved' + (routed.localTokenSavingPercent === null ? '' : ' · ' + count(routed.localTokenSavingPercent) + '%')
-          : count(Math.abs(routed.savedLocalTokens)) + ' tokens added' + (routed.localTokenSavingPercent === null ? '' : ' · ' + count(Math.abs(routed.localTokenSavingPercent)) + '%'))
-        : quotaParts.length ? 'Allowance measured' : routed?.state === 'measured' ? 'Usage unavailable' : 'Not measured yet';
-    const routingDetail = routed?.state === 'blocked-by-quality'
-      ? routed.basis
-      : (quotaParts.length ? quotaParts.join(' · ') + '. ' : '') +
-        (routed?.pairs ? count(routed.pairs) + ' quality-passed routed pair(s). ' : '') +
-        'Local tokens and allowance percentages are separate measurements. Actual child model is not exposed by every harness hook.';
-    $('result-summary').append(metricCard('Automatic routing', routingValue, routingDetail, routed?.state === 'measured' ? 'positive' : ''));
-    renderResultOptimizers();
-    renderResultAgents();
-    renderSavings();
-    renderCandidateResults();
+        ? count(routed.savedLocalTokens) + ' local tokens'
+        : routed?.state === 'measured' ? 'Allowance measured' : 'Not measured yet';
+    $('result-summary').append(metricCard('Automatic routing', routeStatus, routed?.pairs ? count(routed.pairs) + ' quality-passed pair(s). Allowance and local tokens are separate.' : 'Routing savings need paired, quality-gated evidence.', routed?.state === 'measured' ? 'positive' : ''));
+    renderEvidence();
     $('results-period-note').textContent = current?.savings?.firstRecordedAt
       ? 'Recorded from ' + date(current.savings.firstRecordedAt) + ' through ' + date(current.savings.lastRecordedAt)
       : 'No recorded result dates for this period.';
@@ -1518,16 +1548,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
   function renderActivity() {
     const root = $('activity');
     root.replaceChildren();
-    const rows = activityState?.activity || [];
+    const rows = [...(activityState?.activity || [])].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
     if (!rows.length) {
       root.append(sectionEmpty('No checks or changes have been recorded in this app session.'));
       return;
     }
-    for (const item of rows) {
+    const visible = rows.slice(0, 8);
+    for (const item of visible) {
       const row = node('div', undefined, 'activity-row');
       row.append(pill(item.state === 'success' ? 'Done' : item.state === 'attention' ? 'Attention' : 'Working', item.state === 'success' ? 'good' : item.state === 'attention' ? 'warn' : ''), node('span', item.message), node('time', date(item.at), 'caption'));
       root.append(row);
     }
+    if (rows.length > visible.length) root.prepend(node('p', 'Showing the latest ' + visible.length + ' of ' + rows.length + ' entries.', 'caption'));
   }
 
   async function loadActivity() {
@@ -1543,6 +1575,82 @@ export const GUIDE_PRODUCT_JS = String.raw`
       }
     } catch {
       // Activity is supplementary and must never hide the main dashboard.
+    }
+  }
+
+  function reviewUpdate(result) {
+    if (!result?.ticket || busy) return;
+    modal('Review Token Harness update');
+    $('modal-content').append(
+      messageBox('Update available', (result.messages || []).join(' ') || result.title || 'A reviewed Token Harness update is ready.'),
+      messageBox('Health re-check', 'After installation, Token Harness will re-check optimizer health automatically.'),
+    );
+    $('modal-actions').append(modalClose('Cancel'), actionButton('Install updates', () => applyTicket(result.ticket)));
+  }
+
+  async function checkUpdatesOnStartup() {
+    if (updateCheckStarted) return;
+    if ($('modal').open) {
+      $('modal').addEventListener('close', checkUpdatesOnStartup, { once: true });
+      return;
+    }
+    if (busy || reading) {
+      setTimeout(checkUpdatesOnStartup, 1000);
+      return;
+    }
+    updateCheckStarted = true;
+    try {
+      await ensureSession();
+      const result = await request('/api/update-check', { period: $('period').value });
+      if (busy || reading || $('modal').open) {
+        updateCheckStarted = false;
+        if ($('modal').open) $('modal').addEventListener('close', checkUpdatesOnStartup, { once: true });
+        else setTimeout(checkUpdatesOnStartup, 1000);
+        return;
+      }
+      latestUpdateCheck = result;
+      if (result.stack && current) {
+        current = { ...current, stack: result.stack };
+        renderDashboard();
+        renderSetup();
+        renderResults();
+      }
+      const root = $('update-notice');
+      root.replaceChildren();
+      if (!result.ticket) {
+        root.hidden = true;
+        return;
+      }
+      const copy = node('div');
+      copy.append(node('strong', result.title || 'Token Harness update available'), node('p', (result.messages || []).join(' ') || 'Review and install the available update.', 'caption'));
+      root.append(copy, actionButton('Review update', () => reviewUpdate(latestUpdateCheck), 'secondary'));
+      root.hidden = false;
+    } catch {
+      // The startup version check is supplementary; Refresh and Health and updates remain available.
+    }
+  }
+
+  async function pollRouting() {
+    if (document.hidden || busy || reading || $('modal').open || !current) return;
+    try {
+      const result = await request('/api/routing');
+      if (busy || reading || $('modal').open || document.activeElement?.closest('#setup-agents, #result-evidence')) return;
+      if (!Array.isArray(result.agents)) return;
+      const byId = new Map(result.agents.map(agent => [agent.id, agent.promptRouting]));
+      const previous = new Map((current.agents || []).map(agent => [agent.id, agent.promptRouting]));
+      const changed = [...byId].some(([id, routing]) => JSON.stringify(previous.get(id)) !== JSON.stringify(routing));
+      if (!changed) return;
+      current = {
+        ...current,
+        agents: (current.agents || []).map(agent => byId.has(agent.id)
+          ? { ...agent, promptRouting: byId.get(agent.id) }
+          : agent),
+      };
+      renderDashboard();
+      renderAgentSetup();
+      renderResults();
+    } catch {
+      // Runtime receipts are supplementary; the overview remains usable if this read fails.
     }
   }
 
@@ -1578,6 +1686,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       clearInterval(progressTimer);
       reading = false;
       $('refresh').disabled = false;
+      if (current && !updateCheckStarted) checkUpdatesOnStartup();
     }
   }
 
@@ -1618,6 +1727,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
   });
   $('refresh').addEventListener('click', () => refresh(true));
   $('period').addEventListener('change', changePeriod);
+  $('evidence-filter').addEventListener('input', applyEvidenceFilters);
+  $('evidence-type').addEventListener('change', applyEvidenceFilters);
+  $('evidence-sort').addEventListener('change', applyEvidenceFilters);
   $('measurement-help').addEventListener('click', measurementHelp);
   $('theme').addEventListener('change', () => {
     const value = $('theme').value;
@@ -1633,5 +1745,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   selectView('dashboard');
   refresh(false);
   setInterval(() => { if (!document.hidden) loadActivity(); }, 4000);
+  setInterval(pollRouting, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollRouting(); });
 })();
 `;

@@ -255,6 +255,28 @@ test('Windows first-run exposes mcptoon setup when pipx is already available', a
   assert.deepEqual(detection.assignableHarnesses, [harnessId('claude'), harnessId('codex')]);
 });
 
+test('Windows can install mcptoon through existing uv when pipx is missing', async () => {
+  const fs = new MemoryFs();
+  const base = context(fs);
+  const unavailable = absentMcptoonRunner(false);
+  const windows = {
+    ...base,
+    facts: { ...FACTS, os: 'windows' as const },
+    runner: {
+      run: async (request: ProcessRequest) =>
+        request.executable === 'uv' ? outcome(request, 'uv 0.8.0') : unavailable.run(request),
+    },
+  };
+  const detection = await mcptoonManagedProviderAdapter.detect(windows);
+  assert.equal(detection.installationChannel, 'uv');
+  assert.ok(detection.assignableHarnesses.includes(harnessId('codex')));
+  const plan = await planMcptoonManagedActivation(windows, harnessId('codex'));
+  const install = plan.actions[0];
+  assert.equal(install?.kind, 'package-manager-install');
+  if (install?.kind === 'package-manager-install') assert.equal(install.packageManager, 'uv');
+  assert.equal(fs.files.size, 0, 'preview must not install or write guidance');
+});
+
 test('Windows first-run names pipx when mcptoon cannot be installed automatically', async () => {
   const fs = new MemoryFs();
   const base = context(fs);
@@ -267,7 +289,7 @@ test('Windows first-run names pipx when mcptoon cannot be installed automaticall
   const detection = await mcptoonManagedProviderAdapter.detect(windows);
   assert.deepEqual(detection.assignableHarnesses, []);
   assert.equal(detection.warnings[0]?.code, 'mcptoon-pipx-unavailable');
-  assert.match(detection.warnings[0]?.message ?? '', /pipx is not available/i);
+  assert.match(detection.warnings[0]?.message ?? '', /pipx or uv is required/i);
 });
 
 test('plans reviewed pipx installation before Codex guidance when mcptoon is absent', async () => {

@@ -66,6 +66,65 @@ export interface NodeProcessRunnerOptions {
 
 const DEFAULT_KILL_GRACE_MS = 2_000;
 
+/** Start a reviewed replacement UI, retaining the old UI until the new loopback listener is ready. */
+export function launchGuidedApplication(input: {
+  executable: string;
+  entryScript: string;
+  cwd: string;
+  env: Readonly<Record<string, string | undefined>>;
+  facts: PlatformFacts;
+  timeoutMs?: number;
+}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(input.executable, [input.entryScript, 'ui', '--no-open'], {
+      cwd: input.cwd,
+      env: minimalChildEnvironment({ facts: input.facts, ambient: input.env }),
+      shell: false,
+      windowsHide: true,
+      detached: true,
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+    let settled = false;
+    const finish = (url: string | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (child.connected) child.disconnect();
+      if (url === null) {
+        child.kill();
+        reject(new Error('The updated app could not start. The current dashboard remains open.'));
+      } else {
+        child.unref();
+        resolve(url);
+      }
+    };
+    const timer = setTimeout(() => finish(null), input.timeoutMs ?? 20_000);
+    child.once('error', () => finish(null));
+    child.once('exit', () => finish(null));
+    child.on('message', (message: unknown) => {
+      if (message === null || typeof message !== 'object') return;
+      const value = message as Record<string, unknown>;
+      if (value['type'] !== 'token-harness-guide-ready' || typeof value['url'] !== 'string') return;
+      try {
+        const url = new URL(value['url']);
+        if (
+          url.protocol === 'http:' &&
+          url.hostname === '127.0.0.1' &&
+          url.port !== '' &&
+          url.pathname === '/' &&
+          url.search === '' &&
+          url.hash === '' &&
+          url.username === '' &&
+          url.password === ''
+        )
+          finish(url.href);
+      } catch {
+        /* A malformed child readiness message never navigates the browser. */
+      }
+    });
+  });
+}
+
 interface BoundedCapture {
   append(chunk: Buffer): void;
   text(policy: RedactionPolicy): string;

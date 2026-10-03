@@ -1,40 +1,38 @@
 # Release checkpoint — 2026-10-03
 
-Token Harness `0.1.25` fixes Windows detection and verification for Codex/RTK and clarifies the
-difference between a configured integration and runtime evidence. It also repairs guided checks so
-an absent provider or missing callback is not reported as a generic configuration failure.
+Token Harness `0.1.26` repairs automatic routing installation and clarifies native authorization.
+It consolidates optimizer controls and measured evidence, supports mcptoon installation through an
+existing uv, and refreshes health after approved updates.
 
 ## Changes in this release
 
-- Adds a first-class Automatic prompt routing control to each supported harness card, with reviewed
-  enable/disable plans, ownership, drift checks, verification, and rollback.
-- Installs native prompt hooks that inject a short subagent model policy automatically on every
-  submitted prompt after the user enables it once. No command prefix or skill invocation is needed.
-- Records prompt and native subagent callbacks locally without saving prompt text, transcripts, or
-  raw session/agent identifiers. Configuration and runtime evidence are shown separately.
-- Reports local token counts separately from authoritative five-hour and weekly allowance deltas;
-  only paired, attributable benchmarks that pass both quality gates receive savings credit.
-- Reads Codex's Windows `commandWindows` hook command when inspecting the native settings file,
-  preserving exact interception points and tool families for drift checks.
-- Recognizes RTK's Windows `.cmd` attribution wrapper when its executable path contains spaces and
-  accepts Codex hook support from RTK 0.50.0 onward, including 0.51.0.
-- Keeps provider compatibility fail-closed above the reviewed RTK range and does not claim a
-  Windows runtime test from source or fixture review.
-- Separates missing runtime evidence from known integration failures in guided health checks, and
-  avoids showing a Codex trust instruction when no routing change was proposed.
+- Stored-plan apply verifies routing with the reviewed harness selector. Previously `apply --plan`
+  could install correct hooks and immediately roll them back during verification.
+- Configuration fixtures cover Codex 0.159.0–0.159.1 and 0.160.0, and Claude 2.1.274–2.1.288.
+  Unknown/prerelease formats remain blocked with the actual version and an update instruction.
+- Windows Claude uses shell form for npm `.cmd` shims. Only exact journal-owned legacy entries
+  are repaired; external and edited hooks remain untouched.
+- Exact Codex routing definitions are checked through `hooks/list`. Configured, disabled, untrusted
+  and runtime-observed states are distinct. Trust remains a one-time user action; individual prompts
+  need no manual skill invocation.
+- The visible dashboard polls bounded native receipts across projects. Benchmark attribution
+  remains project/task-scoped; callbacks are not claimed as measured savings.
+- Each optimizer shares one list for setup and owned removal. mcptoon uses an existing pipx or uv,
+  with installation options for missing prerequisites.
+- Results has a summary dashboard and one filterable, sortable, expandable evidence list. Units
+  and measurement classes remain separate. Activity shows the latest eight entries in a scroll area;
+  the server retains at most thirty.
+- Startup checks notify about updates. Approved updates re-check health automatically; a verified
+  application update offers a guarded restart to load and check the new capabilities.
 
-The model instruction is advisory and cannot guarantee a native subagent launch. Claude's documented
-hook callback does not expose the child's actual model, so Token Harness reports it as unknown. No
-routed token/quota savings are claimed before paired measurements. This release does not claim
-broad-promotion readiness.
+Routing instructions remain advisory: callbacks do not prove model choice, subagent launch,
+quality preservation or token/quota savings. Local Linux checks and Windows configuration fixtures
+are not Windows runtime verification or broad-promotion readiness.
 
 ## Release gates
 
-The normal cross-platform PR CI must pass on Windows, macOS, and Linux before creating
-`release/v0.1.25`. The release bridge then creates immutable tag `v0.1.25` and dispatches the
-exact-tag release workflow. That workflow must pass tests, real-runtime smoke, packaging, provenance,
-npm Trusted Publishing, and npm-latest verification before it creates the GitHub Release.
+Cross-platform PR CI must pass before creating `release/v0.1.26`. The bridge creates immutable tag
+`v0.1.26` and dispatches the exact-tag workflow, which gates publication on tests, real-runtime smoke,
+packaging, provenance, npm Trusted Publishing and npm-latest verification.
 
-The user's end-to-end Claude Code and RTK-on-Codex Windows checks remain post-install runtime tests
-and are required before claiming Windows runtime verification. Run them using the steps in
-`docs/releases/0.1.25.md`.
+Post-install checks for the exact artifact are in `docs/releases/0.1.26.md`.

@@ -161,6 +161,6 @@ it('keeps historical candidate lifecycle bounded after the tools move into optio
   assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
   assert.match(GUIDE_JS, /candidate-setup/);
   assert.match(GUIDE_JS, /candidate-remove/);
-  assert.match(GUIDE_JS, /does not install Python, pipx or administrator prerequisites/);
+  assert.match(GUIDE_JS, /does not install Python, pipx, uv or administrator prerequisites/);
   assert.match(GUIDE_JS, /never creates or refreshes the repository index/);
 });

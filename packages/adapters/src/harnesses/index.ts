@@ -25,7 +25,9 @@ export { matcherCoversFamily } from './claude.js';
 export {
   NATIVE_PROMPT_ROUTING_EVENTS,
   nativePromptRoutingHookEntries,
+  nativePromptRoutingVersionSupported,
 } from './native-prompt-routing.js';
+export { readCodexHookEnablement } from './codex-hooks.js';
 
 /**
  * Claude Code first, inverting PLAN §15 issue 10, which names Codex. The Phase 2.5 spike

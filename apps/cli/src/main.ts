@@ -42,6 +42,7 @@ import {
   readLocalDatabase,
   resolveAttributionSalt,
   resolveHostEnvironment,
+  launchGuidedApplication,
 } from '@token-harness/platform';
 
 import { run, type RunOptions } from './run.js';
@@ -571,6 +572,13 @@ async function runGuidedUi(
     }
     return result;
   };
+  const entryScript =
+    base.adapters === null ||
+    base.adapters === undefined ||
+    base.applicationEntryScript === undefined ||
+    base.applicationEntryScript === null
+      ? null
+      : ((await base.adapters.fs.canonicalPath?.(base.applicationEntryScript)) ?? null);
   const service = new GuideService(
     guideCall,
     () => Date.now(),
@@ -619,8 +627,30 @@ async function runGuidedUi(
         facts: base.platform,
         paths: base.adapters.paths,
         projectRoot: base.cwd,
-        projectId: base.adapters.projectIdFor(base.cwd),
+        projectId: null,
       });
+    },
+    async () => {
+      if (
+        entryScript === null ||
+        base.adapters === null ||
+        base.adapters === undefined ||
+        base.platform === null
+      )
+        throw new Error('The installed app entry could not be verified.');
+      const current = await base.adapters.fs.canonicalPath?.(base.applicationEntryScript!);
+      if (current !== entryScript || (await base.adapters.fs.stat(entryScript))?.kind !== 'file')
+        throw new Error('The app entry changed. Check the installation before restarting.');
+      const url = await launchGuidedApplication({
+        executable: process.execPath,
+        entryScript,
+        cwd: base.cwd,
+        facts: base.platform,
+        env: process.env,
+      });
+      // Allow the restart response to reach the original browser before closing its listener.
+      setTimeout(() => server.close(), 1_000);
+      return url;
     },
   );
   const token = randomBytes(32).toString('hex');
@@ -657,6 +687,7 @@ async function runGuidedUi(
   }
   authority = `127.0.0.1:${address.port}`;
   const url = `http://${authority}/`;
+  if (process.send !== undefined) process.send({ type: 'token-harness-guide-ready', url });
   process.stdout.write(
     `Token Harness is ready: ${url}\n\n` +
       'Use the browser to review setup, see recorded savings and read the active rules.\n' +

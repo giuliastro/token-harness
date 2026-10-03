@@ -600,7 +600,7 @@ export async function runApply(context: CommandContext): Promise<CommandResult<A
     now: context.now,
     verifyPostconditions: async () => [
       ...(await verifyManagedIntegrationPostconditions(context, computed.managedIntegrations)),
-      ...(await verifyNativePromptRoutingPostconditions(context, actions)),
+      ...(await verifyNativePromptRoutingPostconditions(planningContext, actions)),
     ],
   });
   diagnostics.push(...transaction.diagnostics);

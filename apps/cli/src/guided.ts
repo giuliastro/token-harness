@@ -168,6 +168,7 @@ export interface GuideResult {
   stack?: OptimizationStackSnapshot;
   /** Present only after a read-only preview found a concrete change the user may approve. */
   ticket?: string | null;
+  restartRequired?: boolean;
 }
 export interface GuideActivity {
   at: string;
@@ -406,7 +407,7 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   'prompt-routing-target-unavailable':
     'Token Harness could not locate a supported user-level prompt-hook settings file for this agent.',
   'prompt-routing-version-unverified':
-    'Automatic routing is not available for this agent version until its prompt-hook format has been verified.',
+    'Update Token Harness in Health and updates, then retry routing. This agent version is not supported by this copy.',
   'prompt-routing-runtime-unavailable':
     'The Token Harness hook command could not run from this dashboard environment. Make Token Harness available on PATH, then review routing again.',
   'prompt-routing-target-not-file':
@@ -448,7 +449,10 @@ export function explainGuideIssue(diagnostics: readonly Diagnostic[], fallback: 
       (entry) => entry.severity === 'warning' && ISSUE_COPY[entry.code] !== undefined,
     ) ??
     diagnostics.find((entry) => entry.severity === 'info' && ISSUE_COPY[entry.code] !== undefined);
-  if (known !== undefined) return ISSUE_COPY[known.code] as string;
+  if (known !== undefined)
+    return known.code === 'prompt-routing-version-unverified'
+      ? known.message
+      : (ISSUE_COPY[known.code] as string);
   const blocked = diagnostics.find((entry) =>
     /compatibility|unsupported|unreviewed|no-row/.test(entry.code),
   );
@@ -963,6 +967,8 @@ export class GuideService {
   private loading: GuideLoading | null = null;
   private readSequence = 0;
   private busy = false;
+  private restartVersion: string | null = null;
+  private readonly restartApplication: (() => Promise<string>) | null;
   private lastApplied: GuideUndoTarget | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
@@ -985,12 +991,14 @@ export class GuideService {
     random: () => string,
     observeGuidance: ((harness: GuideHarness) => Promise<AgentSkillObservation>) | null = null,
     observeRouting: ((harness: GuideHarness) => Promise<PromptRouterObservation>) | null = null,
+    restartApplication: (() => Promise<string>) | null = null,
   ) {
     this.call = call;
     this.now = now;
     this.random = random;
     this.observeGuidance = observeGuidance;
     this.observeRouting = observeRouting;
+    this.restartApplication = restartApplication;
   }
   status(): {
     busy: boolean;
@@ -1950,6 +1958,19 @@ export class GuideService {
 
         this.lastApplied = null;
         this.invalidateObservedState();
+        this.record('Re-checking health after the update.', 'working');
+        let health: GuideResult;
+        try {
+          health = await this.verifyIntegrations();
+        } catch {
+          health = {
+            ok: false,
+            title: 'Health check needs attention',
+            messages: ['Update installed; automatic health check could not finish.'],
+            appliedPlans: 0,
+          };
+        }
+        if (applicationTarget !== undefined) this.restartVersion = applicationTarget.version;
         const versions = approvedUpdates
           .map((target) => `${guideUpdateTargetName(target)} ${target.version}`)
           .join(', ');
@@ -1959,7 +1980,9 @@ export class GuideService {
             : `The approved update${approvedUpdates.length === 1 ? ' was' : 's were'} already at the target version: ${versions}.`,
           ...(applicationTarget === undefined
             ? []
-            : ['Token Harness is updated on disk. Restart this app to load the new version.']),
+            : [
+                'Token Harness is updated. Choose Restart and re-check to load it and discover new capabilities.',
+              ]),
           ...(providerTargets.length === 0
             ? []
             : [
@@ -1967,6 +1990,12 @@ export class GuideService {
                 'Reopen a coding agent if an updated optimizer requires it.',
               ]),
         ];
+        messages.push(
+          health.ok
+            ? 'Health re-check completed automatically.'
+            : 'Update installed; health needs attention.',
+          ...health.messages,
+        );
         this.record(
           appliedCount > 0
             ? 'Approved updates installed and verified.'
@@ -1983,6 +2012,8 @@ export class GuideService {
                 : 'Approved versions already active',
           messages,
           appliedPlans: appliedCount,
+          ...(health.stack === undefined ? {} : { stack: health.stack }),
+          restartRequired: applicationTarget !== undefined,
         };
       }
 
@@ -2213,6 +2244,39 @@ export class GuideService {
       };
     });
   }
+  async routing(): Promise<{
+    agents: Array<{ id: GuideHarness; promptRouting: PromptRouterObservation }>;
+  }> {
+    if (this.observeRouting === null) return { agents: [] };
+    const agents = await Promise.all(
+      (['claude', 'codex'] as const).map(async (id) => ({
+        id,
+        promptRouting: await this.observeRouting!(id),
+      })),
+    );
+    if (this.cached !== null) {
+      for (const agent of this.cached.value.agents) {
+        const live = agents.find((item) => item.id === agent.id);
+        if (live !== undefined) agent.promptRouting = live.promptRouting;
+      }
+    }
+    return { agents };
+  }
+  async restart(): Promise<{ url: string }> {
+    return this.exclusive(async () => {
+      if (this.restartVersion === null || this.restartApplication === null)
+        throw new GuideError(409, 'Restart is available after a verified Token Harness update.');
+      const installed = await this.call<UpdateReport>(['update']);
+      if (!sameGuideVersion(installed.data?.application?.installed ?? null, this.restartVersion))
+        throw new GuideError(
+          409,
+          'The installation changed. Check updates again before restarting.',
+        );
+      const url = await this.restartApplication();
+      this.restartVersion = null;
+      return { url };
+    });
+  }
   async checkUpdates(): Promise<GuideResult> {
     return this.exclusive(async () => {
       this.approval = null;
@@ -2415,135 +2479,133 @@ export class GuideService {
   }
 
   async verify(): Promise<GuideResult> {
-    return this.exclusive(async () => {
-      this.record('Checking the configured integrations without changing them.', 'working');
-      const messages: string[] = [];
-      const results: VerifyReport['results'] = [];
-      let ok = true;
-      let healthyAtDeclaredTier = true;
-      const inventory = await this.call<DoctorReport>(['doctor']);
-      const present = (inventory.data?.harnesses ?? []).filter(
-        (item) => item.state !== 'absent' && ['claude', 'codex'].includes(item.harnessId),
+    return this.exclusive(() => this.verifyIntegrations());
+  }
+  private async verifyIntegrations(): Promise<GuideResult> {
+    this.record('Checking the configured integrations without changing them.', 'working');
+    const messages: string[] = [];
+    const results: VerifyReport['results'] = [];
+    let ok = true;
+    let healthyAtDeclaredTier = true;
+    const inventory = await this.call<DoctorReport>(['doctor']);
+    const present = (inventory.data?.harnesses ?? []).filter(
+      (item) => item.state !== 'absent' && ['claude', 'codex'].includes(item.harnessId),
+    );
+    if (inventory.data === null) {
+      ok = false;
+      healthyAtDeclaredTier = false;
+      messages.push(
+        'The installed-agent inventory could not be read. Refresh and check the local installation.',
       );
-      if (inventory.data === null) {
-        ok = false;
-        healthyAtDeclaredTier = false;
-        messages.push(
-          'The installed-agent inventory could not be read. Refresh and check the local installation.',
-        );
-      }
-      if (present.length === 0) {
-        ok = false;
-        healthyAtDeclaredTier = false;
-        messages.push('No supported installed agent was detected, so no integration was checked.');
-      }
-      for (const agent of present) {
-        const harness = agent.harnessId;
-        this.record(
-          `Checking ${name(harness)} configuration and available execution evidence. No settings changed.`,
-          'working',
-        );
-        const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
-        const healthy = result.data?.healthyAtDeclaredTier === true;
-        const versionWarnings = result.diagnostics.filter(
-          (entry) =>
-            entry.severity === 'warning' &&
-            (entry.code === 'harness-version-unknown-newer' ||
-              entry.code === 'provider-version-unknown-newer'),
-        );
-        const failed =
-          result.data === null ||
-          result.exitCode !== 0 ||
-          result.diagnostics.some(
-            (entry) =>
-              entry.severity === 'error' ||
-              (entry.severity === 'warning' && !versionWarnings.includes(entry)),
-          ) ||
-          result.data.results.some(
-            (entry) => entry.status === 'degraded' || entry.status === 'failed',
-          );
-        if (failed) ok = false;
-        if (!healthy) healthyAtDeclaredTier = false;
-        if (result.data !== null) results.push(...result.data.results);
-        const prefix = `${name(harness)}: `;
-        if (result.data === null) {
-          messages.push(
-            prefix +
-              'the verification report could not be read. Refresh and check the local installation.',
-          );
-        } else if (healthy) {
-          messages.push(
-            prefix +
-              'the available integration checks passed. This is not proof that every command was reduced.',
-          );
-        } else if (failed) {
-          messages.push(
-            prefix +
-              'a known integration check failed. Review the specific check before changing setup.',
-          );
-        } else if (result.data.results.length === 0) {
-          messages.push(
-            prefix +
-              'the agent is detected, but no managed optimizer connection is present to verify. Review setup only if you want to connect one.',
-          );
-        } else {
-          const pendingProviders = [
-            ...new Set(
-              result.data.results
-                .filter((entry) => entry.status === 'not-applicable')
-                .map((entry) => name(entry.providerId)),
-            ),
-          ];
-          const subject =
-            pendingProviders.length > 0 ? pendingProviders.join(' and ') : 'Some integrations';
-          messages.push(
-            `${prefix}${subject} have not produced enough attributable runtime evidence for ${name(harness)} yet. This is an evidence gap, not a finding that the setup is broken. If you do not use this agent on this machine, no action is required.`,
-          );
-        }
-        if (versionWarnings.length > 0) {
-          messages.push(
-            prefix +
-              'the installed version is newer than Token Harness’s recorded compatibility sample; read-only checks can continue, but review the version before changing its integration.',
-          );
-        }
-      }
-      if (inventory.data !== null) {
-        const fingerprint = stackFingerprint(inventory.data);
-        this.verification = {
-          fingerprint,
-          report: {
-            receiptId: null,
-            appliedAt: null,
-            results,
-            healthyAtDeclaredTier: healthyAtDeclaredTier && present.length > 0,
-          },
-        };
-        this.stackBase = {
-          detections: [...inventory.data.providers],
-          metrics: this.stackBase?.metrics ?? null,
-          drift: this.stackBase?.drift ?? [],
-          fingerprint,
-        };
-      } else {
-        this.verification = null;
-      }
-      const stack = this.stackSnapshot();
-      if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
+    }
+    if (present.length === 0) {
+      ok = false;
+      healthyAtDeclaredTier = false;
+      messages.push('No supported installed agent was detected, so no integration was checked.');
+    }
+    for (const agent of present) {
+      const harness = agent.harnessId;
       this.record(
-        'Integration checks completed. No settings changed.',
-        ok ? 'success' : 'attention',
+        `Checking ${name(harness)} configuration and available execution evidence. No settings changed.`,
+        'working',
       );
-      return {
-        ok,
-        title: ok
-          ? healthyAtDeclaredTier
-            ? 'Integration checks passed'
-            : 'Configuration checks complete; runtime evidence pending'
-          : 'Integration checks need attention',
-        messages,
-        appliedPlans: 0,
-        stack,
+      const result = await this.call<VerifyReport>(['verify', '--harness', harness]);
+      const healthy = result.data?.healthyAtDeclaredTier === true;
+      const versionWarnings = result.diagnostics.filter(
+        (entry) =>
+          entry.severity === 'warning' &&
+          (entry.code === 'harness-version-unknown-newer' ||
+            entry.code === 'provider-version-unknown-newer'),
+      );
+      const failed =
+        result.data === null ||
+        result.exitCode !== 0 ||
+        result.diagnostics.some(
+          (entry) =>
+            entry.severity === 'error' ||
+            (entry.severity === 'warning' && !versionWarnings.includes(entry)),
+        ) ||
+        result.data.results.some(
+          (entry) => entry.status === 'degraded' || entry.status === 'failed',
+        );
+      if (failed) ok = false;
+      if (!healthy) healthyAtDeclaredTier = false;
+      if (result.data !== null) results.push(...result.data.results);
+      const prefix = `${name(harness)}: `;
+      if (result.data === null) {
+        messages.push(
+          prefix +
+            'the verification report could not be read. Refresh and check the local installation.',
+        );
+      } else if (healthy) {
+        messages.push(
+          prefix +
+            'the available integration checks passed. This is not proof that every command was reduced.',
+        );
+      } else if (failed) {
+        messages.push(
+          prefix +
+            'a known integration check failed. Review the specific check before changing setup.',
+        );
+      } else if (result.data.results.length === 0) {
+        messages.push(
+          prefix +
+            'the agent is detected, but no managed optimizer connection is present to verify. Review setup only if you want to connect one.',
+        );
+      } else {
+        const pendingProviders = [
+          ...new Set(
+            result.data.results
+              .filter((entry) => entry.status === 'not-applicable')
+              .map((entry) => name(entry.providerId)),
+          ),
+        ];
+        const subject =
+          pendingProviders.length > 0 ? pendingProviders.join(' and ') : 'Some integrations';
+        messages.push(
+          `${prefix}${subject} have not produced enough attributable runtime evidence for ${name(harness)} yet. This is an evidence gap, not a finding that the setup is broken. If you do not use this agent on this machine, no action is required.`,
+        );
+      }
+      if (versionWarnings.length > 0) {
+        messages.push(
+          prefix +
+            'the installed version is newer than Token Harness’s recorded compatibility sample; read-only checks can continue, but review the version before changing its integration.',
+        );
+      }
+    }
+    if (inventory.data !== null) {
+      const fingerprint = stackFingerprint(inventory.data);
+      this.verification = {
+        fingerprint,
+        report: {
+          receiptId: null,
+          appliedAt: null,
+          results,
+          healthyAtDeclaredTier: healthyAtDeclaredTier && present.length > 0,
+        },
       };
-    });
+      this.stackBase = {
+        detections: [...inventory.data.providers],
+        metrics: this.stackBase?.metrics ?? null,
+        drift: this.stackBase?.drift ?? [],
+        fingerprint,
+      };
+    } else {
+      this.verification = null;
+    }
+    const stack = this.stackSnapshot();
+    if (this.cached !== null) this.cached.value = { ...this.cached.value, stack };
+    this.record('Integration checks completed. No settings changed.', ok ? 'success' : 'attention');
+    return {
+      ok,
+      title: ok
+        ? healthyAtDeclaredTier
+          ? 'Integration checks passed'
+          : 'Configuration checks complete; runtime evidence pending'
+        : 'Integration checks need attention',
+      messages,
+      appliedPlans: 0,
+      stack,
+    };
   }
 }
