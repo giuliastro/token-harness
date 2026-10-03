@@ -103,7 +103,7 @@ function isRecord(value: JsonValue | undefined): value is Record<string, JsonVal
 }
 
 /** Every declared interception point that actually carries entries, with what it carries. */
-function readHooks(document: JsonValue): {
+function readHooks(document: JsonValue, os: HarnessContext['facts']['os']): {
   points: string[];
   matchers: string[];
   commands: string[];
@@ -129,15 +129,28 @@ function readHooks(document: JsonValue): {
       if (matcher !== null) matchers.push(matcher);
       if (Array.isArray(entry['hooks'])) {
         for (const [hookIndex, hook] of entry['hooks'].entries()) {
-          if (isRecord(hook) && typeof hook['command'] === 'string') {
-            commands.push(hook['command']);
+          if (!isRecord(hook)) continue;
+          const commandKey =
+            os === 'windows' && typeof hook['commandWindows'] === 'string'
+              ? 'commandWindows'
+              : 'command';
+          const command = hook[commandKey];
+          if (typeof command === 'string') {
+            commands.push(command);
             const entryPointer = `hooks.${point.eventName}.${String(entryIndex)}`;
             hookCommands.push({
               eventName: point.eventName,
+              interceptionPoint: point.scopeId,
               matcher,
-              command: hook['command'],
+              toolFamilies:
+                matcher === null
+                  ? MANIFEST.toolFamilies.map((family) => family.id)
+                  : MANIFEST.toolFamilies.filter((family) =>
+                      matcherCoversFamily(matcher, family.id),
+                    ).map((family) => family.id),
+              command,
               entryPointer,
-              commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.command`,
+              commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.${commandKey}`,
             });
             carries = true;
           }
@@ -188,7 +201,7 @@ async function resolveConfig(
     };
   }
   try {
-    const hooks = readHooks(JSON.parse(text) as JsonValue);
+    const hooks = readHooks(JSON.parse(text) as JsonValue, context.facts.os);
     return {
       declaration,
       path,

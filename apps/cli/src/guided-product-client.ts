@@ -670,7 +670,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         if (!(data.changes || []).length)
           $('modal-content').append(messageBox('No change proposed', (data.notices || []).join(' ') || 'The current routing state or ownership evidence does not support a safe change.'));
         for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
-        $('modal-content').append(messageBox(
+        if (data.ticket) $('modal-content').append(messageBox(
           agentId === 'codex' ? 'Codex trust step' : 'When it takes effect',
           agentId === 'codex'
             ? 'After Apply, review and trust the UserPromptSubmit hook in Codex using /hooks. Until a callback is observed, the dashboard will show it as configured but not runtime verified.'

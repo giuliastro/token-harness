@@ -10,12 +10,14 @@
 
 import {
   classifyVersion,
+  compareVersions,
   diagnostic,
   evidence,
   harnessId,
   MANIFEST_SCHEMA_VERSION,
   numberAt,
   OPTIMIZATION_EVENT_SCHEMA_VERSION,
+  parseSemanticVersion,
   providerId,
   stringAt,
   UNATTRIBUTED_PROJECT_ID,
@@ -49,7 +51,7 @@ const CLAUDE = harnessId('claude');
 const CODEX = harnessId('codex');
 const OPENCODE = harnessId('opencode');
 const TRACKED_HARNESSES = [CLAUDE, CODEX] as const;
-const RTK_CODEX_HOOK_VERSION = '0.50.0';
+const RTK_CODEX_HOOK_MINIMUM_VERSION = '0.50.0';
 
 /**
  * The tested range is observation-backed. RTK 0.44.0 and 0.48.0 were exercised with real
@@ -238,7 +240,7 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReviews: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.50.0' };
+const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.51.0' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */
@@ -353,14 +355,18 @@ async function readHarnessActivity(
   };
 }
 
+function supportsCodexHook(version: string | null): boolean {
+  if (version === null) return false;
+  const parsed = parseSemanticVersion(version);
+  const minimum = parseSemanticVersion(RTK_CODEX_HOOK_MINIMUM_VERSION);
+  return parsed !== null && minimum !== null && compareVersions(parsed, minimum) >= 0;
+}
+
 function hasAttributionHook(context: ProviderContext, harness: HarnessId): boolean {
-  const command = new RegExp(
-    `^token-harness __internal-rtk-hook ${harness}(?: --restore-rtk)?$`,
-    'i',
-  );
   return context.harnessConfigs.some(
     (config) =>
-      config.harnessId === harness && config.commands.some((entry) => command.test(entry.trim())),
+      config.harnessId === harness &&
+      config.commands.some((entry) => tokenHarnessRtkHookHarness(entry) === harness),
   );
 }
 
@@ -395,7 +401,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
     );
   }
 
-  const codexHookSupported = version.version === RTK_CODEX_HOOK_VERSION;
+  const codexHookSupported = supportsCodexHook(version.version);
   const codexConfiguredWithoutHookSupport = configured.includes(CODEX) && !codexHookSupported;
   if (codexConfiguredWithoutHookSupport) {
     warnings.push(
@@ -404,7 +410,7 @@ async function detect(context: ProviderContext): Promise<ProviderDetection> {
         code: 'rtk-codex-hook-unsupported',
         subject: CODEX,
         message: `RTK ${String(version.version)} does not provide the Codex hook; its configuration entry cannot capture commands`,
-        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION}, then refresh and apply the attribution plan`,
+        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_MINIMUM_VERSION}, then refresh and apply the attribution plan`,
       }),
     );
   }
@@ -494,8 +500,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
 
   const configured = harnessesWiredToRtk(context.harnessConfigs);
   const configuredSupported = configured.filter(
-    (harness) =>
-      harness === CLAUDE || (harness === CODEX && version.version === RTK_CODEX_HOOK_VERSION),
+    (harness) => harness === CLAUDE || (harness === CODEX && supportsCodexHook(version.version)),
   );
   checks.push({
     id: 'hook-registered',
@@ -511,7 +516,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     evidence: [],
     remediation:
       configured.length > 0 && configuredSupported.length === 0
-        ? `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION} for Codex hook support`
+        ? `Upgrade RTK to ${RTK_CODEX_HOOK_MINIMUM_VERSION} for Codex hook support`
         : null,
   });
 
@@ -521,7 +526,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   for (const harness of TRACKED_HARNESSES) {
     if (!configured.includes(harness)) continue;
     const label = harness === CLAUDE ? 'Claude Code' : 'Codex';
-    const supported = harness !== CODEX || version.version === RTK_CODEX_HOOK_VERSION;
+    const supported = harness !== CODEX || supportsCodexHook(version.version);
     if (!supported) {
       checks.push({
         id: `rtk-attribution-${harness}`,
@@ -529,7 +534,7 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
         summary: `RTK ${String(version.version)} does not provide an active ${label} hook`,
         achievedTier: null,
         evidence: [],
-        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_VERSION}, then refresh and apply the tracking update`,
+        remediation: `Upgrade RTK to ${RTK_CODEX_HOOK_MINIMUM_VERSION}, then refresh and apply the tracking update`,
       });
       continue;
     }
@@ -1140,8 +1145,28 @@ function identifiesCommand(command: string): boolean {
   return (
     HOOK_COMMAND_PATTERN.test(command) ||
     PLUGIN_MODULE_PATTERN.test(command) ||
-    /(^|[\\/\s"'])token-harness(?:\.cmd|\.exe)?\s+__internal-rtk-hook(?:\s|$)/i.test(command)
+    tokenHarnessRtkHookHarness(command) !== null
   );
+}
+
+/**
+ * Recognises the internal RTK attribution wrapper, including Windows `.cmd` paths that contain
+ * spaces and therefore must be quoted as the first command token.
+ */
+function tokenHarnessRtkHookHarness(command: string): HarnessId | null {
+  const match = /^\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s+__internal-rtk-hook\s+(claude|codex)(?:\s+--restore-rtk)?\s*$/i.exec(
+    command,
+  );
+  if (match === null) return null;
+
+  const executable = match[1] ?? match[2] ?? match[3];
+  if (executable === undefined) return null;
+  const basename = executable.split(/[\\/]/).at(-1);
+  if (basename === undefined || !/^token-harness(?:\.cmd|\.exe)?$/i.test(basename)) {
+    return null;
+  }
+
+  return harnessId((match[4] ?? '').toLowerCase());
 }
 
 /**

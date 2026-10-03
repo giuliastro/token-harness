@@ -162,7 +162,14 @@ function readHooks(document: JsonValue): Map<string, HookEntry[]> {
             return [
               {
                 eventName: point.eventName,
+                interceptionPoint: point.scopeId,
                 matcher: typeof matcher === 'string' ? matcher : null,
+                toolFamilies:
+                  typeof matcher !== 'string'
+                    ? MANIFEST.toolFamilies.map((family) => family.id)
+                    : MANIFEST.toolFamilies.filter((family) =>
+                        matcherCoversFamily(matcher, family.id),
+                      ).map((family) => family.id),
                 command: hook['command'],
                 entryPointer,
                 commandPointer: `${entryPointer}.hooks.${String(hookIndex)}.command`,

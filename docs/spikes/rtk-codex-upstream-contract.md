@@ -1,9 +1,10 @@
 # RTK Codex upstream hook contract
 
-- Reviewed: 2026-09-24
+- Reviewed: 2026-10-03
 - Upstream: `rtk-ai/rtk`
-- Release: `v0.50.0`
-- Source: `hooks/codex/README.md` at the upstream release line
+- Feature floor: `v0.50.0`
+- Current source review: `v0.51.0`
+- Source: `hooks/codex/README.md` at both upstream release lines
 
 This note records a **source-contract review**, not a local end-to-end canary.
 
@@ -11,6 +12,11 @@ RTK 0.50.0 adds a native Codex `PreToolUse` processor invoked as
 `rtk hook codex`. Its global/project installer registers a `Bash` matcher in
 Codex `hooks.json`, and the hook rewrites `tool_input.command` through Codex's
 `updatedInput` response.
+
+The v0.51.0 release source retains the same command, hook configuration, and response contract.
+Token Harness therefore treats 0.50.0 as the Codex feature floor and recognizes newer semantic
+RTK releases with that surface. This source review does not claim a native Windows end-to-end
+runtime test; the Windows fixture below remains a configuration and command-parsing fixture.
 
 RTK 0.49.0 did not contain this processor: its Codex support was prompt-level
 guidance only. A `hooks.json` entry on that release could therefore look installed

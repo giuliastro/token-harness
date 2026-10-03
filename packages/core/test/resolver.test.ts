@@ -1050,6 +1050,67 @@ describe('a hook added by hand afterwards', () => {
     assert.equal(findings[0]?.code, 'unowned-entry-on-exclusive-scope');
   });
 
+  it('keeps commands on their actual hook event instead of cross-pairing the file summary', () => {
+    const configWithOrderedHooks: HarnessConfigSummary = {
+      ...config(['rtk hook claude', 'harnesstrim hook claude']),
+      interceptionPoints: ['pre-tool-use', 'post-tool-use'],
+      hookCommands: [
+        {
+          eventName: 'PreToolUse',
+          interceptionPoint: 'pre-tool-use',
+          matcher: 'Bash',
+          toolFamilies: ['Bash'],
+          command: 'rtk hook claude',
+          entryPointer: 'hooks.PreToolUse.0',
+          commandPointer: 'hooks.PreToolUse.0.hooks.0.command',
+        },
+        {
+          eventName: 'PostToolUse',
+          interceptionPoint: 'post-tool-use',
+          matcher: 'Bash',
+          toolFamilies: ['Bash'],
+          command: 'harnesstrim hook claude',
+          entryPointer: 'hooks.PostToolUse.0',
+          commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+        },
+      ],
+    };
+
+    const findings = detectUnownedEntries({
+      ownership: OWNERSHIP,
+      configs: [configWithOrderedHooks],
+      identify,
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
+  it('still reports a competing command on the owner hook event', () => {
+    const finding = detectUnownedEntries({
+      ownership: OWNERSHIP,
+      configs: [
+        {
+          ...config(['harnesstrim hook claude']),
+          hookCommands: [
+            {
+              eventName: 'PreToolUse',
+              interceptionPoint: 'pre-tool-use',
+              matcher: 'Bash',
+              toolFamilies: ['Bash'],
+              command: 'harnesstrim hook claude',
+              entryPointer: 'hooks.PreToolUse.1',
+              commandPointer: 'hooks.PreToolUse.1.hooks.0.command',
+            },
+          ],
+        },
+      ],
+      identify,
+    });
+
+    assert.equal(finding.length, 1);
+    assert.equal(finding[0]?.command, 'harnesstrim hook claude');
+  });
+
   it('reports the file, the surface, and the competing command', () => {
     const findings = detectUnownedEntries({
       ownership: OWNERSHIP,

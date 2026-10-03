@@ -54,11 +54,11 @@ function capabilitiesEvidence(version: string): ProviderDetection['evidence'][nu
 }
 
 describe('provider version compatibility', () => {
-  it('accepts RTK 0.50.0 when the managed runtime surface is still assignable', () => {
+  it('treats source-reviewed RTK 0.51.0 as in range', () => {
     const result = applyProviderVersionCompatibility(
-      detection('rtk', '0.50.0', {
+      detection('rtk', '0.51.0', {
         assignableHarnesses: [CLAUDE],
-        warnings: [unknownVersionWarning('0.50.0')],
+        versionVerdict: 'in-range',
       }),
     );
 
@@ -69,11 +69,11 @@ describe('provider version compatibility', () => {
     );
   });
 
-  it('keeps a future RTK release usable without another hard-coded version bump', () => {
+  it('keeps a future RTK release usable when the managed runtime surface is still assignable', () => {
     const result = applyProviderVersionCompatibility(
-      detection('rtk', '0.51.0', {
+      detection('rtk', '0.52.0', {
         assignableHarnesses: [CLAUDE],
-        warnings: [unknownVersionWarning('0.51.0')],
+        warnings: [unknownVersionWarning('0.52.0')],
       }),
     );
 
@@ -164,11 +164,11 @@ describe('provider version compatibility', () => {
 
 describe('provider package update admission', () => {
   it('admits the current reviewed RTK package target without a harness compatibility row', () => {
-    assert.deepEqual(admitProviderPackageUpdate(RTK, '0.50.0'), { state: 'admitted' });
+    assert.deepEqual(admitProviderPackageUpdate(RTK, '0.51.0'), { state: 'admitted' });
   });
 
   it('admits future RTK targets and relies on post-install runtime verification', () => {
-    assert.deepEqual(admitProviderPackageUpdate(RTK, '0.51.0'), { state: 'admitted' });
+    assert.deepEqual(admitProviderPackageUpdate(RTK, '0.52.0'), { state: 'admitted' });
   });
 
   it('admits the current reviewed HarnessTrim 0.3.1 package target', () => {

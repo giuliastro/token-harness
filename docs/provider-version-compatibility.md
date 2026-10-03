@@ -6,14 +6,15 @@ layers for provider detection, provider package replacement and managed harness 
 
 ## Current upstream releases
 
-As reviewed on 2026-09-24:
+As reviewed on 2026-10-03:
 
-- **RTK 0.50.0** is the current source-reviewed RTK release. It adds the native Codex command
-  rewrite hook; earlier releases such as 0.49.0 provide only prompt guidance for Codex. The latest
-  live harness-mutation fixture on Windows remains 0.48.0, and the package-only direct GitHub
-  release fallback to 0.49.0 is exercised on native Windows with digest verification, version
-  verification and rollback. That package path does not widen any RFC 0009 harness-mutation row.
-- **HarnessTrim 0.3.0** is the current reviewed release. It continues to expose the machine-readable
+- **RTK 0.51.0** is the current source-reviewed RTK release. RTK 0.50.0 introduced the native
+  Codex command rewrite hook, and the v0.51.0 source retains the same `rtk hook codex` contract.
+  Earlier releases such as 0.49.0 provide only prompt guidance for Codex. The latest live
+  harness-mutation fixture on Windows remains 0.48.0. The direct GitHub release path keeps its
+  digest, version and rollback checks; its previous native Windows exercise used an earlier RTK
+  release. Reviewing 0.51.0 does not widen any RFC 0009 harness-mutation row.
+- **HarnessTrim 0.3.1** is the current reviewed release. It continues to expose the machine-readable
   `harnesstrim capabilities` contract. The additional `digests` field is additive and does not
   invalidate Token Harness's semantic surface/write-set checks. A real Windows update to 0.3.0 via
   npm has been validated.
@@ -43,9 +44,9 @@ containment boundary and covers the reviewed artifacts.
 
 For **RTK**, there is currently no equivalent machine-readable capability contract. Token Harness
 therefore promotes explicitly source-reviewed releases beyond the historical live fixture ceiling.
-RTK 0.50.0 is source-reviewed for Codex hook support. A later RTK release remains detectable and
-usable for observation, but is reported as `unknown-newer` until the specific contract Token
-Harness consumes has been checked.
+RTK 0.51.0 is source-reviewed for the Codex hook contract. The adapter recognizes Codex hooks on
+RTK 0.50.0 and later; the historical Windows mutation fixture and the Linux RTK/HarnessTrim chain
+fixture remain separately scoped evidence.
 
 For **mcptoon**, candidate detection and managed lifecycle are intentionally narrower than provider
 promotion. The reviewed lifecycle recognizes the exact managed surface around 0.7.10, but RFC 0009
@@ -62,8 +63,9 @@ harness-version × OS compatibility row merely to replace the binary/package.
 
 Instead, package replacement has its own reviewed provider-target policy:
 
-- RTK package targets through **0.50.0** are admitted;
-- HarnessTrim package targets through **0.3.0** are admitted;
+- RTK package targets from **0.44.0 onward** are admitted, with runtime post-install verification;
+- HarnessTrim package targets from **0.0.5 onward** are admitted, with capability-contract
+  post-install verification;
 - a target newer than the reviewed provider-package ceiling is reported as available but remains
   blocked for unattended update until that provider contract is reviewed.
 
@@ -79,7 +81,7 @@ version as `0.48.0` while preserving the raw channel spelling for an exact WinGe
 The v-prefixed WinGet query/update path has been validated on a real Windows machine.
 
 The public WinGet package repository currently contains RTK through **v0.48.0**, while the reviewed
-upstream release is **0.50.0**. On native Windows, when WinGet is behind the already-reviewed RTK
+upstream release is **0.51.0**. On native Windows, when WinGet is behind the already-reviewed RTK
 package ceiling, Token Harness can use the exact official GitHub release asset
 `rtk-x86_64-pc-windows-msvc.zip` instead of pretending the stale package catalog is current.
 

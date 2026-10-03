@@ -94,38 +94,45 @@ export function detectUnownedEntries(input: DriftInput): UnownedEntryFinding[] {
   }
 
   for (const config of input.configs) {
-    for (const point of config.interceptionPoints) {
-      for (const matcher of config.matchers) {
-        for (const [key, resolved] of exclusiveOwners) {
-          if (resolved.scope.harness !== config.harnessId) continue;
-          if (resolved.scope.interceptionPoint !== point) continue;
-          // The matcher is the harness's own spelling of the tool family, which is how
-          // `HarnessToolFamily.id` is defined.
-          if (resolved.scope.toolFamily !== matcher) continue;
+    const observedHooks =
+      config.hookCommands === undefined
+        ? config.interceptionPoints.flatMap((interceptionPoint) =>
+            config.matchers.flatMap((toolFamily) =>
+              config.commands.map((command) => ({
+                interceptionPoint,
+                toolFamilies: [toolFamily],
+                command,
+              })),
+            ),
+          )
+        : config.hookCommands;
 
-          for (const command of config.commands) {
-            const belongsTo = input.identify(command);
-            if (belongsTo === resolved.owner) continue;
+    for (const hook of observedHooks) {
+      for (const [key, resolved] of exclusiveOwners) {
+        if (resolved.scope.harness !== config.harnessId) continue;
+        if (resolved.scope.interceptionPoint !== hook.interceptionPoint) continue;
+        if (!hook.toolFamilies.includes(resolved.scope.toolFamily)) continue;
 
-            findings.push({
-              code: 'unowned-entry-on-exclusive-scope',
-              scope: key,
-              expectedOwner: resolved.owner,
-              configPath: config.configPath,
-              matcher,
-              command,
-              detail: [
-                `${key} is an exclusive scope owned by ${resolved.owner}`,
-                belongsTo === null
-                  ? 'An entry here invokes a command Token Harness does not recognise'
-                  : `An entry here invokes ${belongsTo}`,
-                'The harness runs every matching hook rather than only the first, so both would transform the same payload and the saving would be counted twice',
-              ],
-              remediation:
-                'Remove the competing entry, or assign the scope to it explicitly with `profile: custom`. Token Harness will not remove a third party’s entry.',
-            });
-          }
-        }
+        const belongsTo = input.identify(hook.command);
+        if (belongsTo === resolved.owner) continue;
+
+        findings.push({
+          code: 'unowned-entry-on-exclusive-scope',
+          scope: key,
+          expectedOwner: resolved.owner,
+          configPath: config.configPath,
+          matcher: resolved.scope.toolFamily,
+          command: hook.command,
+          detail: [
+            `${key} is an exclusive scope owned by ${resolved.owner}`,
+            belongsTo === null
+              ? 'An entry here invokes a command Token Harness does not recognise'
+              : `An entry here invokes ${belongsTo}`,
+            'The harness runs every matching hook rather than only the first, so both would transform the same payload and the saving would be counted twice',
+          ],
+          remediation:
+            'Remove the competing entry, or assign the scope to it explicitly with `profile: custom`. Token Harness will not remove a third party’s entry.',
+        });
       }
     }
   }

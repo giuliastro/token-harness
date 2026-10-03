@@ -1311,7 +1311,9 @@ describe('planning', () => {
       hookCommands: [
         {
           eventName: 'PostToolUse',
+          interceptionPoint: 'post-tool-use',
           matcher: 'Bash',
+          toolFamilies: ['Bash'],
           command: currentCommand,
           entryPointer: 'hooks.PostToolUse.0',
           commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
@@ -1356,7 +1358,9 @@ describe('planning', () => {
       hookCommands: [
         {
           eventName: 'PostToolUse',
+          interceptionPoint: 'post-tool-use',
           matcher: 'Bash',
+          toolFamilies: ['Bash'],
           command,
           entryPointer: 'hooks.PostToolUse.0',
           commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
@@ -1470,7 +1474,9 @@ describe('planning', () => {
         hookCommands: [
           {
             eventName: 'PostToolUse',
+            interceptionPoint: 'post-tool-use',
             matcher: item.matcher,
+            toolFamilies: ['Bash'],
             command,
             entryPointer: 'hooks.PostToolUse.0',
             commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
