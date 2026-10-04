@@ -223,7 +223,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function routingExplanation(agentId) {
     const details = explanation('routing:' + agentId, 'How routing works', 'routing-explanation');
-    const model = agentId === 'codex' ? 'gpt-6-luna' : 'Haiku';
+    const model = agentId === 'codex' ? 'gpt-6-luna (or gpt-6.1-sol below Astra)' : 'Haiku or Sonnet, below your main model';
     details.append(
       messageBox('One prompt, a focused helper', 'On each submitted prompt, a local hook asks your coding agent to consider one native subagent for a substantial, independent piece of work. For example, the helper can research a module while the main agent implements the change.'),
       messageBox('The main agent stays in charge', 'The policy requests ' + model + ' when available. Your main model reviews and integrates the result. Trivial edits, tightly coupled work, architecture, security and release decisions stay with the main agent.'),

@@ -69,6 +69,7 @@ import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-
 import { createGuideHandler } from './guided-http.js';
 import { runAttributedRtkCommand, runRtkHookProxy } from './commands/rtk-hook-proxy.js';
 import { recordNativePromptRoutingHook, type PromptRouterEventType } from './prompt-router.js';
+import { hookRootModel, routingContext } from './routing-policy.js';
 
 /**
  * The internal reader mode.
@@ -102,25 +103,21 @@ const PROMPT_ROUTER_FLAG = '__internal-prompt-router';
 const PROMPT_ROUTER_CHECK_MARKER = 'token-harness-prompt-router-v1';
 const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
 
-const ROUTING_CONTEXT: Readonly<Record<'claude' | 'codex', string>> = {
-  codex:
-    'For substantial coding work, delegate at most one independent bounded subtask to a native subagent with gpt-6-luna if available and the root is not Luna. Keep trivial, coupled, security, architecture, release, and integration decisions on the root. Specify the model; if unavailable, stay on the root. The root reviews. Claim savings only from paired, quality-gated measurements.',
-  claude:
-    'For substantial coding work, delegate at most one independent bounded subtask to a native subagent with the current Haiku alias if available and cheaper than the root. Keep trivial, coupled, security, architecture, release, and integration decisions on the root. Specify the model; if unavailable, stay on the root. The root reviews. Claim savings only from paired, quality-gated measurements.',
-};
-
 function parsePromptRouterEvent(value: string | undefined): PromptRouterEventType | null {
   if (value === 'prompt-submit' || value === 'subagent-start' || value === 'subagent-stop')
     return value;
   return null;
 }
 
-function emitPromptRouterContext(harness: 'claude' | 'codex'): void {
+function emitPromptRouterContext(harness: 'claude' | 'codex', hookInput: string | null): void {
+  // Codex reports the root model; Claude does not, so its ladder is keyed on self-identity.
+  const context = routingContext(harness, harness === 'codex' ? hookRootModel(hookInput) : null);
+  if (context === null) return;
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: ROUTING_CONTEXT[harness],
+        additionalContext: context,
       },
     }) + '\n',
   );
@@ -299,7 +296,7 @@ export async function main(argv: readonly string[]): Promise<void> {
         // Prompt routing must fail open; a local receipt failure never blocks the coding agent.
       }
     }
-    if (event === 'prompt-submit') emitPromptRouterContext(selected);
+    if (event === 'prompt-submit') emitPromptRouterContext(selected, input);
     process.exitCode = EXIT_CODES.ok;
     return;
   }
