@@ -1,7 +1,9 @@
 # Delivery status — 2026-10-04
 
-**Release: Token Harness 0.1.29.** The management, transaction, measurement and advisory foundations
-are shipped. Automatic native prompt-hook installation now supplies a per-harness model ladder with
+**Release: Token Harness 0.1.30.** The management, transaction, measurement and advisory foundations
+are shipped. App evidence separates explicitly attributed output, runtime callbacks and current quota.
+Paired comparisons retain independent five-hour/weekly readings and explicit quality gates, with
+read-only capture guidance for missing comparisons (#371). Automatic native prompt-hook installation supplies a per-harness model ladder with
 explicit child models and override-capable Codex forks (#368). Both agents have genuine
 Windows callbacks and provider receipts on the earlier locally patched build, plus fresh native
 Linux prompt callbacks with published 0.1.28. Linux hook lifecycle and exact rollback are verified;
@@ -59,10 +61,11 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The current release is [0.1.29](releases/0.1.29.md), including the reviewed routing policy in #368.
-Local validation passed 2,403 tests with nine expected skips, plus typecheck, lint, build and bundle
-smoke. Synthetic hook CLI checks cover Sol/Astra ladders, the Luna no-op, Claude's explicit model
-parameter, malformed input and event isolation; they do not establish actual native child selection.
+The current release is [0.1.30](releases/0.1.30.md), including the reviewed evidence repair in #371.
+Local review validation passed 2,418 tests with nine expected skips, plus typecheck, lint, formatting,
+build and bundle smoke. PR and merged-main CI passed on Windows, macOS and Linux.
+The inherited routing policy in #368 has synthetic coverage for Sol/Astra ladders, the Luna no-op,
+Claude's explicit model parameter, malformed input and event isolation; this does not establish actual native child selection.
 Cross-platform candidate CI and the exact-tag publication workflow remain required release gates.
 The previous release's evidence
 below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
