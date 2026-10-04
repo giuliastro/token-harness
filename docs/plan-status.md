@@ -1,8 +1,9 @@
 # Delivery status — 2026-10-04
 
 **Published: Token Harness 0.1.27.** The management, transaction, measurement and advisory foundations
-are shipped. Automatic native prompt-hook installation is implemented. Real current Windows stack
-verification, attributable paired savings and the closed-loop controller remain incomplete.
+are shipped. Automatic native prompt-hook installation is implemented. Both agents now have genuine
+Windows callbacks and provider receipts on this locally patched branch. Published-artifact upgrade
+coverage, Codex sandbox access, attributable paired quota savings and the closed-loop controller remain incomplete.
 This checkpoint distinguishes the published product from the branch's startup, Codex 0.146.0,
 Windows RTK attribution and read-only decision/checkpoint fixes, pending merge and publication.
 It does not declare broad-promotion readiness.
@@ -15,7 +16,7 @@ It does not declare broad-promotion readiness.
 | Managed lifecycle (Phase 9) | Claude/Codex baseline lifecycle, package updates, pipeline status and evidence capture shipped. | Real current Windows combination (#255); historical Hermes/Pi/OMP lifecycle and broader 0.2.0 coverage are unfinished. |
 | Quota/native policy (Phase 10, §18) | Dual-window observations, conservative recommendations, paired outcome learning, scheduling/handoff and portable skill shipped. | Empirical coverage is narrower than all task/model/platform combinations. |
 | Guided skill (§18.13–18.14) | Bundled skill, reversible installation and owned/external/modified state implemented. | No remaining implementation task from the former “next UX work” notes. |
-| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, native authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. | Linux Codex callbacks observed (3 prompts, 2 starts, 2 stops); remaining Windows/session coverage (#359) and paired quality-gated benefit (#360). Prompt guidance alone does not prove actual model choice. |
+| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. Both agents passed fresh Windows prompt/session probes on this branch. | Historical Linux Codex callbacks remain separate; fresh Linux coverage is deferred by the user (#359). Published-artifact checks and paired benefit (#360) remain open. Prompt guidance alone does not prove actual model choice. |
 | Efficiency Decision (§19.1) | Public read-only `optimize` decision composes existing observations, exact capacity receipts and optional controller scheduler advice. | Advance explicit escalation/budget contracts after reviewed integration (#361). |
 | Context Governor (§19.2) | Bounded metadata advice and checkpoint acceptance/fact fields integrated (#361). | Automatic context execution remains future work; no automatic context rewrite is proved. |
 | Adaptive escalation / task budgets (§19.3–19.4) | Native policy/quality/capacity foundations exist; the decision contract carries empirical allowance budgets and optional evidenced attempt limits. | Implement escalation receipts and task-budget enforcement; do not treat an internal suggested budget as a running controller. |
@@ -58,6 +59,8 @@ The reconciliation changes no guard or evidence registry.
 The latest published baseline is [0.1.27](releases/0.1.27.md). The previous release's evidence
 below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
 records this branch's live results, local build distinction and remaining #255/#359/#360 gates.
+The [six-pair native pilot](evaluation/native-pairs-2026-10-04.md) publishes accepted code, negative
+token/latency outcomes and failed Codex stack activation without attributing shared account quota.
 
 - [PR #358](https://github.com/giuliastro/token-harness/pull/358) merged as
   `5f2630357b5a5a8b4b22f9c0ded58bd446982a65`, tagged `v0.1.26`.
@@ -78,11 +81,13 @@ combined-stack benchmark performance or subscription/API savings.
 1. **Verify the installed stack and automatic callbacks:** #255 and #359. The root Linux Codex
    setup was repaired in 0.1.26. A subsequent passive dashboard/API read reports it enabled and
    runtime-observed: 3 prompt callbacks, 2 starts and 2 stops, last receipt 2026-10-03T19:40:32Z.
-   No actual child model is reported. Native Windows and fresh-session coverage still require real
-   receipts; native trust is a one-time prerequisite on each applicable installation.
+   No actual child model is reported. Both agents now have fresh-session Windows callbacks; a genuine
+   Windows Codex child emitted one start/stop pair without a reported model. Fresh Linux coverage is
+   deferred at the user's request. Published-artifact upgrade and Codex sandbox access remain gates.
 2. **Run bounded paired experiments:** #360. Retain negative outcomes, actual activation,
    acceptance/retry evidence and independent five-hour/weekly observations. Never launch a broad
-   campaign merely to fill a dashboard.
+   campaign merely to fill a dashboard. The October 4 pilot already records six pairs; failed Codex
+   RTK commands veto those optimized comparisons and concurrent parent activity excludes task quota attribution.
 3. **Review the unified advisory path:** #361 is implemented on this branch using the existing
    decision/context contracts, with unknown budgets explicit and source receipt references.
 4. **Implement 19.3–19.5 sequentially:** evidenced escalation, enforced per-task budgets, then
