@@ -55,6 +55,10 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
+The latest published baseline is [0.1.27](releases/0.1.27.md). The previous release's evidence
+below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
+records this branch's live results, local build distinction and remaining #255/#359/#360 gates.
+
 - [PR #358](https://github.com/giuliastro/token-harness/pull/358) merged as
   `5f2630357b5a5a8b4b22f9c0ded58bd446982a65`, tagged `v0.1.26`.
 - [Final PR CI](https://github.com/giuliastro/token-harness/actions/runs/37146711560): Windows,
