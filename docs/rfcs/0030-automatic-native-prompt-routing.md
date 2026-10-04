@@ -91,6 +91,11 @@ Harness before that platform is called runtime-verified.
 ### October 3 compatibility repair
 
 Configuration fixtures admit Codex 0.159.0–0.159.1 and 0.160.0, and Claude 2.1.274–2.1.288.
+The October 4 repair also admits exactly Codex 0.146.0: its tagged
+`codex-rs/config/src/hook_config.rs` declares all three routing events, `commandWindows`,
+`timeout` and `additionalContextLimit`. A separate stored-plan apply/rollback fixture preserves
+brownfield hooks at that version. This source/configuration evidence does not prove live callbacks
+or admit adjacent releases. See `docs/spikes/codex-0.146-routing-contract.md`.
 These bounds describe the documented hook schema, never cross-platform runtime verification.
 Unknown/prerelease formats remain blocked with the installed version and an update action.
 Windows Claude uses shell form because native exec form cannot start npm `.cmd` shims.

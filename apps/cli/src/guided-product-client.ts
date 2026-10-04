@@ -63,7 +63,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
   let modalRun = 0;
   let pendingTicket = null;
   let updateCheckStarted = false;
-  let latestUpdateCheck = null;
   const periodCache = new Map();
 
   async function request(path, body) {
@@ -1646,16 +1645,6 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
   }
 
-  function reviewUpdate(result) {
-    if (!result?.ticket || busy) return;
-    modal('Review Token Harness update');
-    $('modal-content').append(
-      messageBox('Update available', (result.messages || []).join(' ') || result.title || 'A reviewed Token Harness update is ready.'),
-      messageBox('Health re-check', 'After installation, Token Harness will re-check optimizer health automatically.'),
-    );
-    $('modal-actions').append(modalClose('Cancel'), actionButton('Install updates', () => applyTicket(result.ticket)));
-  }
-
   async function checkUpdatesOnStartup() {
     if (updateCheckStarted) return;
     if ($('modal').open) {
@@ -1669,14 +1658,13 @@ export const GUIDE_PRODUCT_JS = String.raw`
     updateCheckStarted = true;
     try {
       await ensureSession();
-      const result = await request('/api/update-check', { period: $('period').value });
+      const result = await request('/api/update-check', { period: $('period').value, background: true });
       if (busy || reading || $('modal').open) {
         updateCheckStarted = false;
         if ($('modal').open) $('modal').addEventListener('close', checkUpdatesOnStartup, { once: true });
         else setTimeout(checkUpdatesOnStartup, 1000);
         return;
       }
-      latestUpdateCheck = result;
       if (result.stack && current) {
         current = { ...current, stack: result.stack };
         renderDashboard();
@@ -1685,13 +1673,13 @@ export const GUIDE_PRODUCT_JS = String.raw`
       }
       const root = $('update-notice');
       root.replaceChildren();
-      if (!result.ticket) {
+      if (!result.updatesAvailable) {
         root.hidden = true;
         return;
       }
       const copy = node('div');
       copy.append(node('strong', result.title || 'Token Harness update available'), node('p', (result.messages || []).join(' ') || 'Review and install the available update.', 'caption'));
-      root.append(copy, actionButton('Review update', () => reviewUpdate(latestUpdateCheck), 'secondary'));
+      root.append(copy, actionButton('Review update', () => readOnlyOperation('update-check'), 'secondary'));
       root.hidden = false;
     } catch {
       // The startup version check is supplementary; Refresh and Health and updates remain available.

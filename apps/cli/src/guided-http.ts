@@ -342,11 +342,12 @@ export function createGuideHandler(input: {
           throw new GuideError(400, 'Only an optional reporting period is accepted.');
         const data = body as Record<string, unknown>;
         if (
-          Object.keys(data).some((key) => key !== 'period') ||
+          Object.keys(data).some((key) => key !== 'period' && key !== 'background') ||
+          (data['background'] !== undefined && typeof data['background'] !== 'boolean') ||
           (data['period'] !== undefined && !['all', '7d', '30d'].includes(String(data['period'])))
         )
           throw new GuideError(400, 'Only an optional reporting period is accepted.');
-        const result = await input.service.checkUpdates();
+        const result = await input.service.checkUpdates(data['background'] === true);
         const requested = data['period'] as GuidePeriod | undefined;
         let responseResult = result;
         if (result.stack !== undefined && requested !== undefined) {

@@ -34,6 +34,10 @@ plans. The browser submits the ticket, never a plan's contents. Apply executes t
 plans through the existing validation, backup, ownership, rollback and verification pipeline.
 Concurrent operations are serialized; duplicate and expired approvals are rejected. A new
 preview invalidates an old ticket. No write happens on page load, refresh, or a GET request.
+The automatic startup update check is a passive read outside the managed-operation lock.
+It coalesces concurrent startup checks, creates no approval, and never replaces an existing ticket.
+If a managed operation starts during the read, its evidence is discarded. Choosing Review update
+performs a fresh serialized interactive check before an installation ticket can be created.
 Multiple harness plans are separate transactions: partial success is reported explicitly,
 not called an atomic group. Unsupported combinations remain blocked and explained.
 
