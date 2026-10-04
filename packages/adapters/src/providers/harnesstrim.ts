@@ -1211,11 +1211,11 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
     for (const config of context.harnessConfigs) {
       for (const hook of config.hookCommands ?? []) {
         const binary = windowsHookExecutable(hook.command);
-        if (binary === null || (await context.fs.stat(binary)) !== null) continue;
+        if (binary === null || (await context.fs.stat(binary))?.kind === 'file') continue;
         checks.push({
           id: `hook-executable-${config.harnessId}-${digestText(hook.commandPointer).slice(7, 15)}`,
           status: 'fail',
-          summary: `${config.harnessId} HarnessTrim hook points to a missing executable`,
+          summary: `${config.harnessId} HarnessTrim hook executable is missing or not a file`,
           achievedTier: null,
           evidence: [
             evidence({
@@ -1921,7 +1921,7 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     if (context.facts.os === 'windows' && !context.facts.isWsl) {
       for (const entry of existing) {
         const binary = windowsHookExecutable(entry.command);
-        if (binary !== null && (await context.fs.stat(binary)) === null)
+        if (binary !== null && (await context.fs.stat(binary))?.kind !== 'file')
           missingExecutables.push(entry);
       }
     }

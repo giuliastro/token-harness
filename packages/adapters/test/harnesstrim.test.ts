@@ -1394,6 +1394,7 @@ describe('planning', () => {
     for (const item of [
       { live: false, extra: '', os: 'windows', isWsl: false, repair: true },
       { live: true, extra: '', os: 'windows', isWsl: false, repair: false },
+      { live: false, directory: true, extra: '', os: 'windows', isWsl: false, repair: true },
       { live: false, extra: ' --custom', os: 'windows', isWsl: false, repair: false },
       { live: false, extra: '', os: 'linux', isWsl: true, repair: false },
     ] as const) {
@@ -1424,6 +1425,16 @@ describe('planning', () => {
         files: item.live ? { [binary]: '@echo off' } : {},
       });
       const ctx = { ...base, facts: { ...base.facts, os: item.os, isWsl: item.isWsl } };
+      if ('directory' in item && item.directory) {
+        const originalStat = base.fs.stat;
+        ctx.fs = {
+          ...base.fs,
+          stat: async (candidate) =>
+            candidate === binary
+              ? { kind: 'directory', byteLength: 0, mode: null }
+              : originalStat(candidate),
+        };
+      }
       const result = await harnesstrimAdapter.plan(ctx, {
         ownership: [
           {

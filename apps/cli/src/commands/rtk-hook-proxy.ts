@@ -27,6 +27,19 @@ function powershellQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+function windowsLauncher(entryScript: string, rtkExecutable: string): string {
+  // Codex's sandbox PATH includes Node but can omit global npm shims and RTK. Encode only
+  // the two observed paths, so quotes, $, backticks and non-ASCII names never become shell code.
+  // The original RTK argument tail remains native shell input, exactly as emitted by RTK.
+  const paths = Buffer.from(JSON.stringify({ entryScript, rtkExecutable })).toString('base64');
+  return (
+    `node.exe --eval "const p=JSON.parse(Buffer.from('${paths}','base64').toString());` +
+    "process.argv.splice(1,0,p.entryScript,'__internal-rtk-run','codex','--rtk-executable',p.rtkExecutable);" +
+    "import(require('node:url').pathToFileURL(p.entryScript).href)" +
+    '" --'
+  );
+}
+
 function toolNameFromInput(input: string, harness: HarnessId): string | null {
   try {
     const parsed: unknown = JSON.parse(input);
@@ -71,6 +84,7 @@ export function attributeRtkHookResponse(
   databasePath: string,
   harness: HarnessId,
   os?: OperatingSystem,
+  launcher?: { entryScript: string; rtkExecutable: string },
 ): string {
   let response: unknown;
   try {
@@ -87,12 +101,15 @@ export function attributeRtkHookResponse(
 
   // Codex calls every shell tool "Bash" and omits its selected shell from hook stdin (0.146.0).
   // On native Windows, pass the unchanged argument tail through a launcher that sets the child
-  // environment directly. The rewritten command then works in PowerShell, cmd and Git Bash.
+  // environment directly. Pin the observed program paths rather than relying on npm's shim PATH.
   const command = updatedInput['command'];
   const attributed =
     harness === 'codex' && os === 'windows'
-      ? /^\s*rtk(?:\.exe)?(?:\s|$)/i.test(command)
-        ? command.replace(/^\s*rtk(?:\.exe)?/i, 'token-harness __internal-rtk-run codex')
+      ? launcher !== undefined && /^\s*rtk(?:\.exe)?(?:\s|$)/i.test(command)
+        ? command.replace(
+            /^\s*rtk(?:\.exe)?/i,
+            windowsLauncher(launcher.entryScript, launcher.rtkExecutable),
+          )
         : null
       : withDatabaseEnvironment(
           updatedInput['command'],
@@ -121,6 +138,7 @@ export async function runRtkHookProxy(input: {
   databasePath: string;
   stdin: string;
   os?: OperatingSystem;
+  entryScript?: string;
 }): Promise<RtkHookProxyResult> {
   const outcome = await input.runner.run({
     executable: 'rtk',
@@ -148,6 +166,9 @@ export async function runRtkHookProxy(input: {
       input.databasePath,
       input.harness,
       input.os,
+      input.entryScript !== undefined && outcome.executablePath !== null
+        ? { entryScript: input.entryScript, rtkExecutable: outcome.executablePath }
+        : undefined,
     ),
     stderr: outcome.stderr,
   };
@@ -159,9 +180,10 @@ export function runAttributedRtkCommand(input: {
   cwd: string;
   databasePath: string;
   args: readonly string[];
+  executable?: string;
 }): Promise<ProcessOutcome> {
   return input.runner.run({
-    executable: 'rtk',
+    executable: input.executable ?? 'rtk',
     args: [...input.args],
     cwd: input.cwd,
     env: { RTK_DB_PATH: input.databasePath },

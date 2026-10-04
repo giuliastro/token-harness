@@ -327,6 +327,9 @@ export async function main(argv: readonly string[]): Promise<void> {
       databasePath: fs.join(resolution.environment.paths.state, `rtk-${selected}.db`),
       stdin: input,
       os: resolution.environment.facts.os,
+      ...(process.argv[1] !== undefined && (await fs.stat(process.argv[1]))?.kind === 'file'
+        ? { entryScript: process.argv[1] }
+        : {}),
     });
     if (result.stdout.length > 0) process.stdout.write(result.stdout);
     if (result.stderr.length > 0) process.stderr.write(result.stderr);
@@ -336,12 +339,15 @@ export async function main(argv: readonly string[]): Promise<void> {
   }
 
   if (argv[0] === '__internal-rtk-run') {
+    const pinnedExecutable = argv[2] === '--rtk-executable' ? (argv[3] ?? null) : null;
+    const commandArgs = argv.slice(pinnedExecutable === null ? 2 : 4);
     if (
       argv[1] !== 'codex' ||
-      argv.length < 3 ||
+      commandArgs.length === 0 ||
       !resolution.ok ||
       fs === null ||
-      attribution.salt === null
+      attribution.salt === null ||
+      (pinnedExecutable !== null && (await fs.stat(pinnedExecutable))?.kind !== 'file')
     ) {
       process.stderr.write('[Token Harness] Cannot prepare attributed RTK execution.\n');
       process.exitCode = 1;
@@ -351,7 +357,8 @@ export async function main(argv: readonly string[]): Promise<void> {
       runner: resolution.environment.runner,
       cwd: process.cwd(),
       databasePath: fs.join(resolution.environment.paths.state, 'rtk-codex.db'),
-      args: argv.slice(2),
+      args: commandArgs,
+      ...(pinnedExecutable === null ? {} : { executable: pinnedExecutable }),
     });
     process.stdout.write(result.stdout);
     process.stderr.write(result.stderr);
