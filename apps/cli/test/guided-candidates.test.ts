@@ -27,19 +27,16 @@ describe('guided optional managed optimizers', () => {
     assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
     assert.match(GUIDE_JS, /Recommended baseline/);
     assert.match(GUIDE_JS, /Optional optimizer/);
-    assert.match(GUIDE_HTML, /does not confirm runtime activity/);
+    assert.match(GUIDE_HTML, /Setup alone does not prove runtime activity/);
   });
 
-  it('keeps experimental benchmark evidence labeled in the unified results table', () => {
+  it('keeps experimental benchmark evidence labeled in the unified results list', () => {
     assert.match(GUIDE_HTML, /<option value="candidate">Experiments<\/option>/);
-    assert.match(GUIDE_HTML, /<tbody id="result-evidence">/);
+    assert.match(GUIDE_HTML, /<ul id="result-evidence"[^>]*aria-label="Evidence by source"/);
     assert.match(GUIDE_JS, /addEvidenceRow\(body, 'candidate'/);
     assert.match(GUIDE_JS, /benchmark-start/);
     assert.match(GUIDE_JS, /Candidate attribution names the experiment target/);
-    assert.match(
-      GUIDE_JS,
-      /Evaluation evidence only; this does not automatically promote or activate the candidate/,
-    );
+    assert.match(GUIDE_JS, /Evaluation does not automatically promote or activate this optimizer/);
   });
 
   it('is a self-contained browser controller with no direct package-install execution', () => {

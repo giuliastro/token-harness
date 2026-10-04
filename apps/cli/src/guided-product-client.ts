@@ -12,8 +12,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
   const count = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
   const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
   const VIEWS = {
-    dashboard: ['Overview', 'Your coding agents, optimization stack, health and measured results in one place.'],
-    results: ['Results', 'Measured evidence by optimizer, routing and coding app.'],
+    dashboard: ['Overview', 'Your setup, results and next steps.'],
+    results: ['Results', 'See what changed and the evidence behind it.'],
   };
   const TOOL_INFO = {
     rtk: {
@@ -116,7 +116,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
     $('view-title').textContent = VIEWS[view][0];
     $('view-description').textContent = VIEWS[view][1];
     if (view === 'results') loadActivity();
-    if (focus) $('tab-' + view).focus();
+    if (focus) {
+      $('tab-' + view).focus();
+      $('main').scrollIntoView({ block: 'start' });
+    }
   }
 
   function navigateButton(label, view, cls = 'secondary') {
@@ -319,7 +322,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const quality = current?.value?.quality;
     if (quality?.state === 'regressed') return { value: 'Regression detected', detail: 'Savings claims are blocked until quality is recovered.', cls: 'warn' };
     if (quality?.state === 'preserved') return { value: 'Preserved', detail: count(quality.pairs) + ' paired benchmark(s) support this result.', cls: 'good' };
-    return { value: 'Not measured yet', detail: 'Quality is never inferred from token savings alone.', cls: '' };
+    return { value: 'Not measured yet', detail: 'Quality needs paired benchmarks; output savings alone are not proof.', cls: '' };
   }
 
   function allowanceSummary() {
@@ -331,7 +334,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (five?.state === 'measured' && five.savedPercent !== null) parts.push('5h ' + count(five.savedPercent) + '%');
     if (weekly?.state === 'measured' && weekly.savedPercent !== null) parts.push('7d ' + count(weekly.savedPercent) + '%');
     if (parts.length) return { value: parts.join(' · '), detail: 'Based only on authoritative paired allowance evidence.', cls: 'good' };
-    return { value: 'Not measured yet', detail: 'Plan savings appear only when before/after allowance evidence exists.', cls: '' };
+    return { value: 'Not measured yet', detail: 'Needs paired before/after allowance readings.', cls: '' };
   }
 
   function metricCard(title, value, detail, cls = '') {
@@ -357,7 +360,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Needs attention',
         cls: 'warn',
         title: 'Measured quality needs attention',
-        detail: 'A paired benchmark favored the baseline. Token Harness is not crediting the affected savings.',
+        detail: 'A paired benchmark favored the baseline. Affected savings are not credited.',
         action: 'results',
       };
     const routingAttention = agents.filter(agent => agent.promptRouting?.needsRepair ||
@@ -367,7 +370,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Routing action required',
         cls: 'warn',
         title: 'Automatic routing needs attention',
-        detail: routingAttention.map(agent => agent.name + ': ' + agent.promptRouting.detail).join(' '),
+        detail: routingAttention.map(agent => agent.name + ': ' + (agent.promptRouting.detail ||
+          (agent.promptRouting.enablement === 'untrusted' ? 'Trust the hook in /hooks, then submit a prompt.' : 'Review the hook status in the coding app.'))).join(' '),
         action: 'routing',
       };
     if (stack?.state === 'attention')
@@ -382,8 +386,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       return {
         label: 'Setup available',
         cls: 'warn',
-        title: 'Your optimization stack has available setup options',
-        detail: 'Choose an optimizer and the coding apps to set it up for. Token Harness shows measured results separately from detected setup.',
+        title: 'Connect your optimization stack',
+        detail: 'Review the recommended optimizers for your coding apps.',
         action: 'configure',
       };
     const unavailable = baselineUnavailableAgents();
@@ -392,7 +396,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Setup unavailable',
         cls: '',
         title: 'No automatic optimizer setup is currently available',
-        detail: 'The installed providers do not currently expose a compatible managed connection for these coding agents. This is a capability limitation, not unfinished setup.',
+        detail: 'The installed optimizers do not offer a compatible managed connection for these apps.',
         action: 'none',
       };
     if (!(current?.savings?.rows || []).length)
@@ -400,14 +404,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
         label: 'Setup detected',
         cls: 'good',
         title: 'Recommended setup is complete',
-        detail: 'Setup has been detected. This does not prove an optimizer ran or recorded a result; check the Results page for evidence linked to each agent.',
+        detail: 'Use your coding apps normally. Results will show recorded activity; setup alone is not runtime proof.',
         action: 'results',
       };
     return {
       label: 'Ready',
       cls: 'good',
       title: 'Your setup has been checked',
-      detail: 'No setup action is required. The summary below shows which results Token Harness has actually recorded.',
+      detail: 'No setup action required. Open Results to inspect recorded changes.',
       action: 'results',
     };
   }
@@ -430,9 +434,12 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (assessment.action === 'verify') {
       actions.append(actionButton('Re-check health', () => readOnlyOperation('verify')));
     } else if (assessment.action === 'routing') {
-      actions.append(actionButton('Review routing', () => $('coding-agents').scrollIntoView({ block: 'start', behavior: 'smooth' })));
+      actions.append(actionButton('Review routing', () => $('coding-agents').scrollIntoView({ block: 'start' })));
     } else if (assessment.action === 'results') {
-      actions.append(navigateButton('View detailed results', 'results'));
+      if (current?.value?.quality?.state === 'regressed')
+        actions.append(navigateButton('Review quality evidence', 'results', ''));
+    } else if (assessment.action === 'configure') {
+      actions.append(actionButton('Review recommended setup', () => reviewSetup()));
     }
     if (actions.children.length) main.append(actions);
     $('dashboard-status').append(main, pill(assessment.label, assessment.cls));
@@ -442,10 +449,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const quality = qualitySummary();
     $('dashboard-metrics').replaceChildren(
       reduction
-        ? metricCard('Measured output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement, 'positive')
-        : metricCard('Measured output', 'No result yet', 'Missing measurements are not reported as zero savings.'),
+        ? metricCard('Recorded output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement + ' · changed outputs only', 'positive')
+        : metricCard('Recorded output', 'No result yet', 'Use a connected app to start recording results.'),
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
-      metricCard('API cost', 'Not measured yet', 'Requires billed-token evidence and a verified price basis.'),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
   }
@@ -526,7 +532,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
             ' can be set up from the Optimization stack below.'
           : baseline.state === 'unavailable'
             ? 'No managed baseline connection is currently available for this agent.'
-            : 'This card shows detected setup. It does not confirm that an optimizer ran or recorded results.';
+            : 'Optimizer setup detected. Recorded activity appears in Results.';
       card.append(head, node('p', detail));
       card.append(
         node(
@@ -914,7 +920,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const summaryText = node('div');
     summaryText.append(
       node('strong', ids.length + ' optimizer' + (ids.length === 1 ? '' : 's') + ' · ' + agents.length + ' coding agent' + (agents.length === 1 ? '' : 's')),
-      node('p', 'This matrix shows where setup was detected, not proof that an optimizer ran. Measured results are shown separately on the Results page.', 'caption'),
+      node('p', 'RTK + HarnessTrim are the recommended baseline. Other optimizers are optional.', 'caption'),
     );
     summary.append(summaryText);
     const baselineActionable = ['rtk', 'harnesstrim'].some(id =>
@@ -950,7 +956,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         const target = setupTarget(agent.id, id);
         const state = connectionPresentation(target);
         const cell = node('div', undefined, 'connection-cell');
-        cell.append(pill(state.label, state.cls));
+        cell.append(node('span', agent.name, 'connection-app-label'), pill(state.label, state.cls));
         row.append(cell);
         actionable ||= target?.state === 'actionable';
       }
@@ -969,7 +975,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       if (component?.managedByTokenHarness || component?.configured) {
         const remove = actionButton('Remove managed setup', () => {
           window.tokenHarnessReviewRemoval?.(id, info.name);
-        }, 'secondary');
+        }, 'text-button');
         remove.disabled = busy || typeof window.tokenHarnessReviewRemoval !== 'function';
         action.append(remove);
       }
@@ -1322,7 +1328,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           'p',
           current?.stack?.state === 'attention'
             ? 'Something changed or could not be verified. Re-check the configured integrations for details.'
-            : 'Setup is already complete. Re-check only when troubleshooting or after external changes.',
+            : 'Re-check integrations after external changes or when troubleshooting.',
           'caption',
         ),
       );
@@ -1346,7 +1352,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         'p',
         available.length
           ? available.map(component => (TOOL_INFO[component.providerId]?.name || component.providerId) + ' has an update ready.').join(' ')
-          : 'Checks Token Harness and installed optimizer versions. If an update is available, install it from the same dialog; restart this app after updating Token Harness.',
+          : 'Check available versions and review updates before installing.',
         'caption',
       ),
     );
@@ -1376,36 +1382,76 @@ export const GUIDE_PRODUCT_JS = String.raw`
     renderMaintenance();
   }
 
-  function addEvidenceRow(body, type, name, scope, summary, amount, details) {
-    const row = node('tr');
+  function addEvidenceRow(body, type, name, scope, signals, amount, sections) {
+    const row = node('li', undefined, 'evidence-item');
     row.dataset.type = type;
     row.dataset.name = name.toLocaleLowerCase();
-    row.dataset.search = [type, name, scope, summary].join(' ').toLocaleLowerCase();
     row.dataset.amount = String(amount || 0);
-    const systemCell = node('th');
-    systemCell.scope = 'row';
-    systemCell.append(node('strong', name), node('span', type[0].toUpperCase() + type.slice(1), 'caption'));
-    row.append(systemCell, node('td', scope), node('td', summary));
-    const detailCell = node('td');
-    const disclosure = node('details');
-    disclosure.append(node('summary', 'Details'));
-    for (const detail of details) disclosure.append(node('p', detail, 'caption'));
-    detailCell.append(disclosure);
-    row.append(detailCell);
+    const disclosure = node('details', undefined, 'evidence-disclosure');
+    disclosure.dataset.key = type + ':' + name;
+    const summary = node('summary', undefined, 'evidence-summary');
+    const identity = node('span', undefined, 'evidence-identity');
+    const types = { optimizer: 'Optimizer', routing: 'Routing', harness: 'Coding app', candidate: 'Experiment' };
+    identity.append(node('span', types[type], 'evidence-kind'), node('strong', name), node('span', scope, 'caption'));
+    const results = node('span', undefined, 'evidence-signals');
+    for (const signal of signals) {
+      const result = node('span', undefined, 'evidence-signal ' + (signal.tone || ''));
+      result.append(node('strong', signal.value), node('span', signal.label, 'caption'));
+      results.append(result);
+    }
+    const cue = node('span', 'Details', 'evidence-cue');
+    const chevron = node('span', '›', 'evidence-chevron');
+    chevron.setAttribute('aria-hidden', 'true');
+    cue.append(chevron);
+    summary.append(identity, results, cue);
+    const detailBody = node('div', undefined, 'evidence-detail-body');
+    detailBody.append(...sections);
+    disclosure.append(summary, detailBody);
+    row.append(disclosure);
+    // Search includes provenance, so a class/unit or linked app can be found while collapsed.
+    row.dataset.search = [type, types[type], name, scope, row.textContent].join(' ').toLocaleLowerCase();
     body.append(row);
     return row;
   }
 
-  function optimizerEvidenceDetail(row) {
-    const unit = row.unit ? ' ' + row.unit : '';
-    const change = row.before !== null && row.before !== undefined && row.after !== null && row.after !== undefined
-      ? count(row.before) + ' → ' + count(row.after) + unit
-      : count(row.saved) + unit;
-    return [
-      row.impact?.detail || 'Recorded optimizer evidence.',
-      'Recorded change: ' + change,
-      count(row.operations) + ' operation(s)' + (row.agents?.length ? ' · ' + row.agents.join(', ') : ' · no harness attribution'),
-    ];
+  function evidenceSection(title, facts = [], note = '') {
+    const section = node('section', undefined, 'evidence-section');
+    section.append(node('h3', title));
+    if (facts.length) {
+      const list = node('dl', undefined, 'evidence-fact-grid');
+      for (const [label, value] of facts) {
+        const fact = node('div');
+        fact.append(node('dt', label), node('dd', value));
+        list.append(fact);
+      }
+      section.append(list);
+    }
+    if (note) section.append(node('p', note, 'caption'));
+    return section;
+  }
+
+  function optimizerSignal(row, includeProvider = false) {
+    const impact = row.impact;
+    const value = impact && impact.kind !== 'unavailable'
+      ? impact.headline
+      : count(Math.abs(row.saved)) + ' ' + row.unit + (row.saved < 0 ? ' added' : row.saved > 0 ? ' saved' : ' net change');
+    return {
+      value,
+      label: (includeProvider ? row.provider + ' · ' : '') + row.measurement + ' · ' + row.unit,
+      tone: impact?.kind === 'growth' ? 'warn' : impact?.kind === 'reduction' ? 'good' : '',
+    };
+  }
+
+  function optimizerEvidenceDetail(row, includeProvider = false) {
+    const volume = value => value === null || value === undefined ? 'Not recorded' : count(value) + ' ' + row.unit;
+    return evidenceSection((includeProvider ? row.provider + ' · ' : '') + row.measurement + ' · ' + row.unit, [
+      ['Before', volume(row.before)],
+      ['After', volume(row.after)],
+      [row.saved < 0 ? 'Added' : 'Saved', volume(Math.abs(row.saved))],
+      ['Changed outputs', count(row.operations)],
+      ['Recorded app', row.agents?.length ? row.agents.join(', ') : 'Not attributed'],
+    ], (row.impact?.detail || 'A comparable before/after pair is needed to report a percentage.') +
+      (!row.agents?.length ? ' These records do not identify which coding app ran the command.' : ''));
   }
 
   function routingDetails(agent) {
@@ -1419,16 +1465,18 @@ export const GUIDE_PRODUCT_JS = String.raw`
     else if (routing.enablement === 'enabled' || (!routing.enablement && routing.state === 'managed')) lines.push('Configured; waiting for the first runtime callback after a prompt.');
     else if (routing.state === 'external') lines.push('Routing is managed elsewhere; Token Harness leaves it unchanged.');
     else lines.push('Automatic routing is not enabled for this coding app.');
-    if (Number.isFinite(routing.promptSubmissions)) lines.push('Prompt callbacks: ' + count(routing.promptSubmissions));
-    if (Number.isFinite(routing.subagentsStarted)) lines.push('Subagents started: ' + count(routing.subagentsStarted));
-    if (Number.isFinite(routing.subagentsStopped)) lines.push('Subagents stopped: ' + count(routing.subagentsStopped));
-    if (routing.reportedModels?.length) lines.push('Reported models: ' + routing.reportedModels.join(', '));
-    if (routing.lastObservedAt) lines.push('Last callback: ' + date(routing.lastObservedAt));
-    return lines;
+    const facts = [['Verification', tier === 'runtime-observed' ? 'Runtime callback observed' : tier === 'config-only' ? 'Configuration only' : 'Not verified']];
+    if (Number.isFinite(routing.promptSubmissions)) facts.push(['Prompt callbacks', count(routing.promptSubmissions)]);
+    if (Number.isFinite(routing.subagentsStarted)) facts.push(['Subagents started', count(routing.subagentsStarted)]);
+    if (Number.isFinite(routing.subagentsStopped)) facts.push(['Subagents stopped', count(routing.subagentsStopped)]);
+    if (routing.reportedModels?.length) facts.push(['Reported models', routing.reportedModels.join(', ')]);
+    if (routing.lastObservedAt) facts.push(['Last callback', date(routing.lastObservedAt)]);
+    return evidenceSection(agent.name + ' · routing activity', facts, lines[0]);
   }
 
   function renderEvidence() {
     const body = $('result-evidence');
+    const openKeys = new Set([...body.querySelectorAll('details[open]')].map(item => item.dataset.key));
     body.replaceChildren();
     const savings = current?.savings?.rows || [];
     for (const id of optimizerIds()) {
@@ -1436,58 +1484,69 @@ export const GUIDE_PRODUCT_JS = String.raw`
       const component = managedComponent(id);
       const measured = savings.filter(row => row.providerId === id);
       const scope = component?.configuredHarnesses?.length
-        ? component.configuredHarnesses.map(agentName).join(', ')
+        ? 'Setup: ' + component.configuredHarnesses.map(agentName).join(', ')
         : 'No setup detected';
-      const summary = measured.length
-        ? measured.map(row => row.measurement + ' · ' + count(row.saved) + (row.unit ? ' ' + row.unit : '')).join(' · ')
-        : 'No measured evidence';
-      const details = measured.length
-        ? measured.flatMap(optimizerEvidenceDetail)
-        : [component?.configured ? 'Setup is detected, but no result was recorded for this period.' : 'No result was recorded for this optimizer in this period.'];
-      addEvidenceRow(body, 'optimizer', info.name, scope, summary, measured.length, details);
+      const signals = measured.length
+        ? measured.map(row => optimizerSignal(row))
+        : [{ value: 'No results yet', label: 'No output recorded for this period' }];
+      const sections = measured.map(row => optimizerEvidenceDetail(row));
+      if (!measured.length) {
+        const nextStep = evidenceSection('Start recording results', [], component?.configured
+          ? 'Use a connected coding app normally, then Refresh. Detected setup alone does not prove that the optimizer ran.'
+          : 'Review this optimizer in Overview to see available connections.');
+        nextStep.append(navigateButton('Open Overview', 'dashboard'));
+        sections.push(nextStep);
+      }
+      addEvidenceRow(body, 'optimizer', info.name, scope, signals, measured.length, sections);
     }
 
     const routing = current?.value?.routing;
     const routingAgents = activeAgents();
-    const routingDetailsList = routingAgents.flatMap(agent => [agent.name + ':', ...routingDetails(agent)]);
-    if (routing?.state === 'measured' || routing?.pairs > 0) {
-      routingDetailsList.push((routing.pairs ? count(routing.pairs) + ' quality-passed routed pair(s).' : ''));
-      if (routing.savedLocalTokens !== null && routing.savedLocalTokens !== undefined)
-        routingDetailsList.push(routing.savedLocalTokens >= 0
-          ? count(routing.savedLocalTokens) + ' local tokens saved · end-to-end local usage'
-          : count(Math.abs(routing.savedLocalTokens)) + ' local tokens added · end-to-end local usage');
-      if (routing.allowance5h?.savedPercent !== null && routing.allowance5h?.savedPercent !== undefined)
-        routingDetailsList.push('5h allowance change: ' + count(routing.allowance5h.savedPercent) + '%');
-      if (routing.allowance7d?.savedPercent !== null && routing.allowance7d?.savedPercent !== undefined)
-        routingDetailsList.push('7d allowance change: ' + count(routing.allowance7d.savedPercent) + '%');
+    const blocked = routing?.state === 'blocked-by-quality';
+    const routeSignals = [];
+    if (blocked) routeSignals.push({ value: 'Not credited', label: 'Quality gate did not pass', tone: 'warn' });
+    else {
+      if (routing?.savedLocalTokens !== null && routing?.savedLocalTokens !== undefined)
+        routeSignals.push({
+          value: count(Math.abs(routing.savedLocalTokens)) + (routing.savedLocalTokens < 0 ? ' tokens added' : ' tokens saved'),
+          label: 'Paired end-to-end local usage',
+          tone: routing.savedLocalTokens < 0 ? 'warn' : routing.savedLocalTokens > 0 ? 'good' : '',
+        });
+      for (const [key, label] of [['allowance5h', '5h allowance'], ['allowance7d', '7d allowance']]) {
+        const evidence = routing?.[key];
+        if (evidence?.state === 'measured' && evidence.savedPercent !== null && evidence.savedPercent !== undefined)
+          routeSignals.push({ value: count(evidence.savedPercent) + '%', label: label + ' saved · paired evidence', tone: evidence.savedPercent < 0 ? 'warn' : 'good' });
+      }
+      if (!routeSignals.length) routeSignals.push({ value: 'Not measured yet', label: 'Needs paired, quality-passed runs' });
     }
-    const routingSummary = routing?.state === 'blocked-by-quality'
-      ? 'Not credited · quality gate'
-      : routing?.savedLocalTokens !== null && routing?.savedLocalTokens !== undefined
-        ? count(routing.savedLocalTokens) + ' local tokens · end-to-end paired evidence'
-        : routing?.state === 'measured' ? 'Allowance evidence measured' : 'Not measured yet';
-    addEvidenceRow(body, 'routing', 'Automatic prompt routing', routingAgents.map(agent => agent.name).join(', ') || 'No coding app detected', routingSummary, routing?.pairs || 0, routingDetailsList.length ? routingDetailsList : ['No routing measurement has been recorded.']);
+    const routingSections = [evidenceSection('Savings verification', [['Quality-passed pairs', count(routing?.pairs || 0)]],
+      blocked ? 'A quality regression blocks the savings claim.' : 'Callback activity proves the hook ran. Savings require paired runs with a passing quality gate.')];
+    for (const agent of routingAgents)
+      routingSections.push(routingDetails(agent));
+    addEvidenceRow(body, 'routing', 'Automatic prompt routing', routingAgents.map(agent => agent.name).join(', ') || 'No coding app detected', routeSignals, routing?.pairs || 0, routingSections);
 
     for (const agent of routingAgents) {
       const linked = savings.filter(row => row.harnesses?.includes(agent.id));
       const configured = configuredProviders().filter(component => component.configuredHarnesses?.includes(agent.id)).map(component => optimizerInfo(component.providerId).name);
-      const details = [
-        'Detected optimizer setup: ' + (configured.join(', ') || 'none'),
-        ...routingDetails(agent),
-        ...(linked.length ? linked.flatMap(optimizerEvidenceDetail) : ['No optimizer measurement is directly linked to this coding app.']),
-      ];
-      addEvidenceRow(body, 'harness', agent.name, agent.version ? 'v' + agent.version : 'Version unavailable', linked.length ? linked.map(row => row.provider + ': ' + row.measurement + ' · ' + count(row.saved) + (row.unit ? ' ' + row.unit : '')).join(' · ') : 'No linked measured evidence', linked.length, details);
+      const sections = [evidenceSection('App attribution', [['Detected setup', configured.join(', ') || 'None']],
+        linked.length ? 'These are the same optimizer records shown above, linked to this app. They are not additional savings.' : 'No optimizer record identifies this app for the selected period. Unattributed records stay under their optimizer.')];
+      sections.push(...linked.map(row => optimizerEvidenceDetail(row, true)));
+      addEvidenceRow(body, 'harness', agent.name, agent.version ? 'v' + agent.version : 'Version unavailable',
+        linked.length ? linked.map(row => optimizerSignal(row, true)) : [{ value: 'No linked results', label: 'No output attributed to this app' }], linked.length, sections);
     }
 
     for (const item of current?.value?.candidates || []) {
       if (!(item.pairs > 0)) continue;
       const candidate = (current?.optimizationCandidates || []).find(entry => entry.id === item.candidateId);
       const name = candidate?.name || item.candidateId;
-      addEvidenceRow(body, 'candidate', name, 'Experimental', count(item.pairs) + ' paired result(s)', item.pairs, [
-        count(item.optimizedBetter || 0) + ' optimized better · ' + count(item.baselineBetter || 0) + ' baseline better.',
-        'Evaluation evidence only; this does not automatically promote or activate the candidate.',
+      addEvidenceRow(body, 'candidate', name, 'Experimental', [{ value: count(item.pairs) + ' paired results', label: 'Evaluation evidence' }], item.pairs, [
+        evidenceSection('Paired evaluation', [
+          ['Optimized better', count(item.optimizedBetter || 0)],
+          ['Baseline better', count(item.baselineBetter || 0)],
+        ], 'Evaluation does not automatically promote or activate this optimizer.'),
       ]);
     }
+    for (const details of body.querySelectorAll('details')) details.open = openKeys.has(details.dataset.key);
     applyEvidenceFilters();
   }
 
@@ -1497,18 +1556,23 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const filter = $('evidence-filter').value.trim().toLocaleLowerCase();
     const type = $('evidence-type').value;
     const sort = $('evidence-sort').value;
-    const rows = [...body.querySelectorAll('tr')];
+    const rows = [...body.children].filter(row => row.dataset.type);
+    const sourceOrder = { optimizer: 0, routing: 1, harness: 2, candidate: 3 };
     rows.sort((a, b) => sort === 'evidence'
-      ? Number(b.dataset.amount) - Number(a.dataset.amount) || a.dataset.name.localeCompare(b.dataset.name)
+      ? Number(Number(b.dataset.amount) > 0) - Number(Number(a.dataset.amount) > 0)
+        || sourceOrder[a.dataset.type] - sourceOrder[b.dataset.type]
+        || Number(b.dataset.amount) - Number(a.dataset.amount) || a.dataset.name.localeCompare(b.dataset.name)
       : sort === 'type'
         ? a.dataset.type.localeCompare(b.dataset.type) || a.dataset.name.localeCompare(b.dataset.name)
         : a.dataset.name.localeCompare(b.dataset.name));
     for (const row of rows) {
-      const shown = (type === 'all' || row.dataset.type === type) && (!filter || row.dataset.search.includes(filter));
-      row.hidden = !shown;
+      row.hidden = !((type === 'all' || row.dataset.type === type) && (!filter || row.dataset.search.includes(filter)));
       body.append(row);
     }
-    $('evidence-empty').hidden = rows.some(row => !row.hidden);
+    const visible = rows.filter(row => !row.hidden).length;
+    $('evidence-count').textContent = visible + ' of ' + rows.length + ' sources';
+    $('evidence-empty').hidden = visible > 0;
+    $('evidence-reset').hidden = !filter && type === 'all';
   }
 
   function measurementHelp() {
@@ -1527,8 +1591,11 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const allowance = allowanceSummary();
     const quality = qualitySummary();
     const savings = current?.savings?.rows || [];
+    const reduction = bestReduction();
     $('result-summary').replaceChildren(
-      metricCard('Measured output', savings.length ? count(savings.length) + ' evidence record(s)' : 'No records yet', 'Exact, estimated and other measurement classes remain separate.'),
+      reduction
+        ? metricCard('Recorded output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement + ' · changed outputs only', 'positive')
+        : metricCard('Recorded output', savings.length ? count(savings.length) + ' measurement groups' : 'No records yet', savings.length ? 'Open Evidence for each source and unit.' : 'Use a connected app, then Refresh.'),
       metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
@@ -1536,13 +1603,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const routeStatus = routed?.state === 'blocked-by-quality'
       ? 'Not credited'
       : routed?.savedLocalTokens !== null && routed?.savedLocalTokens !== undefined
-        ? count(routed.savedLocalTokens) + ' local tokens'
+        ? count(Math.abs(routed.savedLocalTokens)) + (routed.savedLocalTokens < 0 ? ' tokens added' : ' tokens saved')
         : routed?.state === 'measured' ? 'Allowance measured' : 'Not measured yet';
-    $('result-summary').append(metricCard('Automatic routing', routeStatus, routed?.pairs ? count(routed.pairs) + ' quality-passed pair(s). Allowance and local tokens are separate.' : 'Routing savings need paired, quality-gated evidence.', routed?.state === 'measured' ? 'positive' : ''));
+    $('result-summary').append(metricCard('Automatic routing', routeStatus, routed?.pairs ? count(routed.pairs) + ' quality-passed pairs · local usage' : 'Needs paired runs with a passing quality gate.', routed?.state === 'blocked-by-quality' || routed?.savedLocalTokens < 0 ? 'warn' : routed?.state === 'measured' ? 'positive' : ''));
     renderEvidence();
     $('results-period-note').textContent = current?.savings?.firstRecordedAt
-      ? 'Recorded from ' + date(current.savings.firstRecordedAt) + ' through ' + date(current.savings.lastRecordedAt)
-      : 'No recorded result dates for this period.';
+      ? 'All locally recorded projects · ' + new Date(current.savings.firstRecordedAt).toLocaleDateString() + ' – ' + new Date(current.savings.lastRecordedAt).toLocaleDateString()
+      : 'All locally recorded projects · no results for this period.';
+    if (current?.savings?.errors) $('results-period-note').textContent += ' · ' + count(current.savings.errors) + ' records could not be read';
   }
 
   function renderActivity() {
@@ -1678,7 +1746,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       $('stale-state').textContent = '';
       render();
       await loadActivity();
-      setStatus('Checked at ' + new Date(current.generatedAt).toLocaleTimeString() + '. Full checks run again only when you choose Refresh.', false);
+      setStatus('Updated at ' + new Date(current.generatedAt).toLocaleTimeString(), false);
     } catch (error) {
       setError(error.name === 'TimeoutError' ? 'The check took too long. Existing results were kept; choose Refresh to try again.' : error.message);
       setStatus('Check needs attention.', false);
@@ -1725,11 +1793,28 @@ export const GUIDE_PRODUCT_JS = String.raw`
   document.querySelectorAll('[data-view]').forEach(button => {
     button.addEventListener('click', () => selectView(button.dataset.view, true));
   });
+  document.querySelector('.view-tabs').addEventListener('keydown', event => {
+    const views = Object.keys(VIEWS);
+    const index = views.indexOf(selectedView);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? views.length - 1
+      : event.key === 'ArrowRight' ? (index + 1) % views.length
+      : event.key === 'ArrowLeft' ? (index + views.length - 1) % views.length : null;
+    if (next === null) return;
+    event.preventDefault();
+    selectView(views[next], true);
+  });
+  $('overview-results').addEventListener('click', () => selectView('results', true));
   $('refresh').addEventListener('click', () => refresh(true));
   $('period').addEventListener('change', changePeriod);
   $('evidence-filter').addEventListener('input', applyEvidenceFilters);
   $('evidence-type').addEventListener('change', applyEvidenceFilters);
   $('evidence-sort').addEventListener('change', applyEvidenceFilters);
+  $('evidence-reset').addEventListener('click', () => {
+    $('evidence-filter').value = '';
+    $('evidence-type').value = 'all';
+    applyEvidenceFilters();
+    $('evidence-filter').focus();
+  });
   $('measurement-help').addEventListener('click', measurementHelp);
   $('theme').addEventListener('change', () => {
     const value = $('theme').value;
