@@ -23,8 +23,9 @@ paired, quality-gated benchmark evidence.
 
 - On each prompt, ask the native agent to consider a single bounded subagent only when work is
   substantial, independent, and does not require the root model's judgment throughout.
-- Codex requests `gpt-6-luna` when that model is currently available and the root is not already
-  running it. Claude Code requests its current native `haiku` alias when the Agent tool is available.
+- Route down a per-harness model ladder by task difficulty (see the October 4 policy revision).
+  Codex requests `gpt-6-luna`, or `gpt-6.1-sol` below a frontier root, when currently available.
+  Claude Code requests the `haiku`, `sonnet` or `opus` alias below its own root model.
 - Keep trivial work, architecture, security, release decisions, tightly coupled edits, user-directed
   no-delegation work, and unavailable models on the root model.
 - The root agent integrates and verifies the result. A prompt instruction is a request; it does not
@@ -87,6 +88,30 @@ actual Claude Code hook on the user's configured machine and confirm its hook re
 Harness before that platform is called runtime-verified.
 
 ## Consequences
+
+### October 4 policy revision
+
+The single "one Haiku/Luna worker" sentence left three gaps found against the native harnesses:
+
+- Codex multi-agent v2 `spawn_agent` defaults to a full-history fork, which inherits the root model
+  and rejects `model`/`reasoning_effort` overrides. A route must request `fork_turns: "none"` (or a
+  positive count) with a self-contained brief. Codex also tells the model not to spawn subagents
+  unless the user, `AGENTS.md` or a skill explicitly asks, so the context now states that the user
+  enabled this delegation.
+- Claude Code's built-in Explore agent runs on the `opus` alias for subscription accounts. An
+  omitted Agent `model` parameter is therefore not a cost route; the policy always sets it.
+- Both harnesses now expose more than two tiers (Codex Astra › Sol › Luna; Claude Fable › Opus ›
+  Sonnet › Haiku). Bounded implementation fits the tier below a frontier root better than the
+  cheapest model.
+
+The policy is now a ladder: route down by task difficulty, never to the root's own tier, and finish
+on the root when the child fails its check instead of retrying cheaper (a verified cascade). Codex
+reports the root model slug in its `UserPromptSubmit` payload; the hook classifies it by family name
+and emits no context at all for a Luna root. Claude's payload has no model field, so its ladder is
+keyed on the model's own identity. The eligibility list names concrete delegable work (read-only
+exploration, log/test triage, mechanical edits, spec-driven tests or docs, a checked independent
+unit) and keeps the existing root-only boundaries. The hook still reads no prompt text and stays
+well under Codex's 500-token `additionalContextLimit`.
 
 ### October 3 compatibility repair
 
