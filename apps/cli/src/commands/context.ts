@@ -9,6 +9,7 @@
 import type {
   BudgetProfile,
   CompatibilityRow,
+  CrossHarnessSchedulerDecision,
   FileSystemPort,
   HarnessId,
   LocalDatabasePort,
@@ -55,6 +56,8 @@ export interface CommandContext {
   tasksRemaining?: number | null;
   /** Optional bounded active-session metadata file; only optimize reads it. */
   contextSnapshotPath?: string | null;
+  /** A controller-supplied advisory scheduler receipt; never synthesized from model names. */
+  efficiencyScheduler?: CrossHarnessSchedulerDecision | null;
   /** Phase 18.4: plan reversible native harness policy changes from optimizer advice. */
   nativePolicy?: boolean;
   env?: Readonly<Record<string, string | undefined>>;

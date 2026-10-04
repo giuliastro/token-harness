@@ -8,6 +8,8 @@
 
 export interface CompactHandoffInput {
   objective: string;
+  acceptanceCriteria?: readonly string[];
+  costlyFacts?: readonly string[];
   decisions?: readonly string[];
   changedFiles?: readonly string[];
   validation?: readonly string[];
@@ -23,6 +25,8 @@ export interface CompactHandoffResult {
   maxBytes: number;
   truncated: boolean;
   omitted: {
+    acceptanceCriteria: number;
+    costlyFacts: number;
     decisions: number;
     changedFiles: number;
     validation: number;
@@ -69,10 +73,19 @@ function truncateUtf8(value: string, maxBytes: number): string {
     if (byteLength(candidate) + suffixBytes <= maxBytes) low = middle;
     else high = middle - 1;
   }
+  // Never split a UTF-16 surrogate pair while enforcing the UTF-8 ceiling.
+  if (
+    low > 0 &&
+    /[\uD800-\uDBFF]/.test(value[low - 1]!) &&
+    /[\uDC00-\uDFFF]/.test(value[low] ?? '')
+  )
+    low--;
   return `${value.slice(0, low).trimEnd()}${suffix}`;
 }
 
 interface MutableLists {
+  acceptanceCriteria: string[];
+  costlyFacts: string[];
   decisions: string[];
   changedFiles: string[];
   validation: string[];
@@ -80,6 +93,8 @@ interface MutableLists {
 }
 
 interface OmittedCounts {
+  acceptanceCriteria: number;
+  costlyFacts: number;
   decisions: number;
   changedFiles: number;
   validation: number;
@@ -102,6 +117,8 @@ function render(
 ): string {
   const sections: string[][] = [
     ['# Compact handoff', '', '## Objective', objective],
+    renderList('Acceptance criteria', lists.acceptanceCriteria, omitted.acceptanceCriteria),
+    renderList('Costly facts', lists.costlyFacts, omitted.costlyFacts),
     renderList('Decisions', lists.decisions, omitted.decisions),
     renderList('Changed files', lists.changedFiles, omitted.changedFiles),
     renderList('Validation', lists.validation, omitted.validation),
@@ -131,12 +148,16 @@ export function buildCompactHandoff(input: CompactHandoffInput): CompactHandoffR
   if (!nextAction) throw new Error('nextAction must not be empty');
 
   const lists: MutableLists = {
+    acceptanceCriteria: uniqueClean(input.acceptanceCriteria),
+    costlyFacts: uniqueClean(input.costlyFacts),
     decisions: uniqueClean(input.decisions),
     changedFiles: uniqueClean(input.changedFiles),
     validation: uniqueClean(input.validation),
     unresolved: uniqueClean(input.unresolved),
   };
   const omitted: OmittedCounts = {
+    acceptanceCriteria: 0,
+    costlyFacts: 0,
     decisions: 0,
     changedFiles: 0,
     validation: 0,

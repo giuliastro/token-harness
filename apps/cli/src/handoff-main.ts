@@ -20,6 +20,8 @@ Usage
   token-harness handoff --objective <text> --next-action <text> [flags]
 
 Flags
+  --acceptance <text>     Repeatable acceptance criterion to preserve
+  --fact <text>           Repeatable costly path/symbol/config fact to preserve
   --decision <text>       Repeatable decision to preserve
   --changed-file <path>   Repeatable changed file to preserve
   --validation <text>     Repeatable validation result to preserve
@@ -39,6 +41,8 @@ export interface HandoffStreams {
 }
 
 interface ParsedHandoffArgs {
+  acceptanceCriteria: string[];
+  costlyFacts: string[];
   objective: string | null;
   decisions: string[];
   changedFiles: string[];
@@ -71,6 +75,8 @@ function parseArgs(argv: readonly string[]): {
   diagnostics: Diagnostic[];
 } {
   const args: ParsedHandoffArgs = {
+    acceptanceCriteria: [],
+    costlyFacts: [],
     objective: null,
     decisions: [],
     changedFiles: [],
@@ -114,6 +120,8 @@ function parseArgs(argv: readonly string[]): {
     }
 
     const valueFlags = new Set([
+      '--acceptance',
+      '--fact',
       '--objective',
       '--decision',
       '--changed-file',
@@ -149,6 +157,12 @@ function parseArgs(argv: readonly string[]): {
     index += parsed.consumed;
 
     switch (name) {
+      case '--acceptance':
+        args.acceptanceCriteria.push(parsed.value);
+        break;
+      case '--fact':
+        args.costlyFacts.push(parsed.value);
+        break;
       case '--objective':
         args.objective = parsed.value;
         break;
@@ -296,6 +310,8 @@ export async function handoffMain(
   }
 
   const handoff = buildCompactHandoff({
+    acceptanceCriteria: parsed.args.acceptanceCriteria,
+    costlyFacts: parsed.args.costlyFacts,
     objective: parsed.args.objective as string,
     decisions: parsed.args.decisions,
     changedFiles: parsed.args.changedFiles,

@@ -283,6 +283,13 @@ describe('optimize command', () => {
     assert.equal(advice.contextPressure, 'high');
     assert.equal(advice.contextGovernor?.action, 'mask');
     assert.equal(advice.contextGovernor?.actionableBytes, 512);
+    const decision = result.data.efficiencyDecisions?.[0];
+    assert.ok(decision);
+    assert.equal(decision.contextAction, 'mask');
+    assert.equal(decision.maxAttempts, null);
+    assert.equal(decision.premiumEscalationBudget, null);
+    assert.deepEqual(decision.allowanceBudget, { fiveHourPercent: null, weeklyPercent: null });
+    assert.ok(decision.evidence.some((item) => item.source === 'context'));
     const fullHuman = renderOptimizeReport(result.data, {
       toolVersion: 'test',
       home: null,
@@ -292,6 +299,8 @@ describe('optimize command', () => {
     assert.match(fullHuman, /CONTEXT GOVERNOR/);
     assert.match(fullHuman, /local byte counts only/);
     assert.match(simpleHuman, /Context governor: mask/);
+    assert.match(fullHuman, /EFFICIENCY DECISION \(advisory\)/);
+    assert.match(simpleHuman, /Attempts=unknown; premium escalations=unknown/);
     assert.ok(fullHuman.split('\n').every((line) => line.length <= 78));
     assert.equal(advice.pace[0]?.state, 'over-pace');
     assert.equal(advice.currentEffort, 'high');
@@ -327,6 +336,41 @@ describe('optimize command', () => {
     const legacyResult = await runOptimize({ ...context, contextSnapshotPath: null });
     assert.equal(legacyResult.exitCode, 0);
     assert.equal(legacyResult.data?.harnesses[0]?.contextGovernor, undefined);
+    for (const taskClass of ['mechanical', 'standard', 'hard', 'critical'] as const) {
+      for (const harness of ['codex', 'claude'] as const) {
+        const classified = await runOptimize({
+          ...context,
+          taskClass,
+          harness: harnessId(harness),
+          contextSnapshotPath: null,
+        });
+        assert.equal(classified.exitCode, 0);
+        const decision = classified.data?.efficiencyDecisions?.[0];
+        assert.ok(decision, `${harness}/${taskClass} must expose an advisory decision`);
+        assert.equal(decision.harness, harness);
+        assert.equal(decision.taskClass, taskClass);
+        assert.equal(decision.maxAttempts, null);
+        assert.ok(decision.reasons.some((item) => item.code === 'efficiency-harness-kept'));
+      }
+    }
+    const scheduled = await runOptimize({
+      ...context,
+      efficiencyScheduler: {
+        decision: 'stay',
+        tasksRemaining: null,
+        currentHarness: harnessId('codex'),
+        candidateHarness: harnessId('claude'),
+        taskClass: 'hard',
+        reasons: [
+          { code: 'candidate-unavailable', summary: 'The observed candidate is unavailable' },
+        ],
+      },
+    });
+    assert.ok(
+      scheduled.data?.efficiencyDecisions?.[0]?.evidence.some(
+        (item) => item.source === 'scheduler' && item.code === 'candidate-unavailable',
+      ),
+    );
     assert.match(
       legacyResult.data?.harnesses[0]?.recommendations[0]?.action ?? '',
       /static context/i,

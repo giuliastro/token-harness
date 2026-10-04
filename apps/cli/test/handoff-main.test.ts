@@ -28,6 +28,10 @@ describe('handoff CLI', () => {
       [
         '--objective',
         'Finish the optimizer safely',
+        '--acceptance',
+        'Quality gates pass',
+        '--fact',
+        'config/batchWrite requires the observed version',
         '--decision',
         'Keep quota sources separate',
         '--changed-file',
@@ -46,6 +50,8 @@ describe('handoff CLI', () => {
     assert.equal(output.stderr(), '');
     assert.match(output.stdout(), /^# Compact handoff\n/);
     assert.match(output.stdout(), /Keep quota sources separate/);
+    assert.match(output.stdout(), /## Acceptance criteria\n- Quality gates pass/);
+    assert.match(output.stdout(), /## Costly facts\n- config\/batchWrite requires/);
     assert.match(output.stdout(), /## Next action/);
     assert.doesNotMatch(output.stdout(), /bytes:/i);
   });

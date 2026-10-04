@@ -12,21 +12,21 @@ The implementation starts from the accepted Phase 0 RFCs. Scope changes that alt
 public contract, safety invariant, or attribution rule require an RFC update before
 code.
 
-### Delivery checkpoint — 2026-10-03, published 0.1.26
+### Delivery checkpoint — 2026-10-04, based on published 0.1.27
 
 The MVP, transactional stack management, quota/native-policy evidence and guided skill lifecycle
 are shipped. Native automatic prompt routing is implemented; actual Windows/Linux callback coverage
 and attributable paired savings remain separate verification tasks. The closed-loop controller is
-partial: §19.1 has a tested internal read-only decision engine; §19.2 has snapshot/CLI advice;
+partial: this branch completes the public read-only §19.1 decision and §19.2 checkpoint contracts;
 §19.3–19.4 enforcement and §19.5+ execution are not complete.
 
 Current work: **#255** real Windows stack → **#359** native routing callbacks → **#360** paired
-quality-gated measurements, alongside **#361** unified decision/checkpoint integration. Then finish
+quality-gated measurements. Review the completed **#361** unified decision/checkpoint integration. Then finish
 §19.3–19.5 before later analytics/autonomy. The historical 0.2.0 provider/harness expansion list is
 secondary to this sequence. Broad promotion remains gated by combined-stack and third-mechanism
 value plus clean fresh-user validation.
 
-Compatibility contract reconciliation is tracked separately in **#362**; this plan update changes no
+Compatibility contract reconciliation for **#362** is documented in RFC 0009; this amendment changes no
 admission guard. See [the reconciled status, issue/PR decisions and release evidence](docs/plan-status.md).
 Historical implementation notes below retain their original evidence dates unless explicitly
 reconciled; they are not a current-release status dashboard.
@@ -2293,8 +2293,9 @@ reviewed runtime control surface.
 
 ### 19.1 P0 — Unified Efficiency Decision Engine
 
-**Partial:** the tested internal `decideEfficiency` contract is implemented. The unified read-only
-CLI/controller path remains #361; this layer does not execute attempts or enforce budgets.
+**Read-only path complete:** `optimize` exposes the existing deterministic decision for each observed
+Claude/Codex harness, with source-tagged evidence, exact-policy capacity receipts and optional
+controller-supplied scheduler advice. This layer does not execute attempts or enforce budgets.
 
 The existing `budget`, `context`, `optimize`, `schedule`, workload-capacity and native-policy
 logic should converge on one internal decision contract instead of behaving as adjacent advisory
@@ -2358,8 +2359,9 @@ Acceptance:
 
 ### 19.2 P0 — Automatic Context Governor
 
-**Partial:** bounded snapshots, deterministic recommendations and `optimize --context-snapshot`
-are implemented. Checkpoint integration remains #361; automatic context execution is not complete.
+**Read-only path complete:** bounded snapshots, deterministic recommendations, public efficiency
+decisions and `handoff --acceptance/--fact` checkpoint fields are implemented. Automatic context
+execution remains a separate future milestone; no transcript is read or rewritten.
 
 Context growth is the largest remaining uncontrolled source of allowance waste. The current
 `context` audit, HarnessTrim reducers, compact-handoff guidance, MCP inventory and context-owner
@@ -2850,13 +2852,13 @@ Before broad autonomous execution, real empirical fixtures must cover at least m
 and hard task classes on both Claude Code and Codex where the respective live allowance surfaces are
 available. Critical tasks may remain recommendation-only until evidence is sufficient.
 
-### 19.16 Immediate sequencing from published 0.1.26
+### 19.16 Immediate sequencing from published 0.1.27
 
 1. Complete #255 current native-Windows stack receipts and #359 real automatic prompt callbacks.
 2. Collect #360 attributable paired baseline/optimized outcomes with quality and independent
    allowance windows; do not substitute synthetic CI or configuration for runtime evidence.
-3. Complete #361 unified read-only decision/checkpoint integration, reusing the implemented §19.1
-   engine and §19.2 snapshot advice.
+3. Review and merge #361 unified read-only decision/checkpoint integration, which reuses the
+   implemented §19.1 engine and §19.2 snapshot advice.
 4. Implement §19.3 escalation receipts, §19.4 task-budget enforcement and §19.5 deterministic stops,
    then use those contracts to advance §19.6–19.10 and measure accepted work per allowance.
 5. Keep the merged setup/results foundation and concurrent UI/UX work independent of these evidence

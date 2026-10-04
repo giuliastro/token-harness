@@ -27,6 +27,7 @@ import {
   truncatePath,
   type RenderContext,
 } from './layout.js';
+import { efficiencyDecisionLines } from './efficiency.js';
 
 function title(state: string): string[] {
   return [`TOKEN HARNESS - ${state.toUpperCase()}`, ''];
@@ -367,6 +368,11 @@ export function renderSimpleOptimize(report: OptimizeReport): string {
           MAX_WIDTH,
         ),
       );
+  }
+  if (report.efficiencyDecisions?.length) {
+    lines.push('', 'EFFICIENCY DECISION (advisory)');
+    for (const decision of report.efficiencyDecisions)
+      lines.push(...efficiencyDecisionLines(decision));
   }
   lines.push(...changeLine(false));
   const candidate = advice.find(

@@ -17,6 +17,7 @@ import {
   toEnvelope,
   type CommandResult,
   type CompatibilityRow,
+  type CrossHarnessSchedulerDecision,
   type Diagnostic,
   type ExitCode,
   type MetricsStore,
@@ -91,6 +92,8 @@ export const DEFAULT_COMMANDS: CommandTable = {
 };
 
 export interface RunOptions {
+  /** Optional existing scheduler decision to compose with the same optimize observations. */
+  efficiencyScheduler?: CrossHarnessSchedulerDecision | null;
   argv: readonly string[];
   streams: Streams;
   /**
@@ -428,6 +431,7 @@ export async function run(options: RunOptions): Promise<number> {
     reservePercent: invocation.options.reservePercent,
     tasksRemaining: invocation.options.tasksLeft,
     contextSnapshotPath: invocation.options.contextSnapshot,
+    efficiencyScheduler: options.efficiencyScheduler ?? null,
     nativePolicy: invocation.options.nativePolicy,
     env: options.env ?? {},
     agentSkill: invocation.options.agentSkill,

@@ -84,6 +84,31 @@ percentages. If the required benchmark/allowance evidence is incomplete, capacit
 See [RFC 0020](rfcs/0020-workload-aware-allowance.md) and
 [RFC 0021](rfcs/0021-mixed-workload-allocation.md).
 
+### Read-only efficiency decisions and checkpoints
+
+`optimize --harness codex --task hard --json` includes `efficiencyDecisions`: one deterministic
+advisory policy per observed Claude/Codex harness. Both human renderers show model, effort,
+verbosity, context action and the separate five-hour/weekly task budgets. `--verbose` includes
+source-tagged reasons and exact benchmark/variant receipt references. Missing model, attempt,
+escalation, quota or scheduler evidence remains unknown; no agent or policy is changed.
+
+The controller can supply an existing scheduler receipt through `RunOptions.efficiencyScheduler`.
+The ordinary CLI keeps the current harness when no such receipt exists; it never invents transfer
+cost or a child model. Active context metadata still uses `--context-snapshot`.
+
+Use the existing `handoff` output to preserve durable state within a byte ceiling:
+
+```sh
+token-harness handoff --objective 'Finish the repair' --acceptance 'Tests pass' \
+  --fact 'The user hook must be preserved' --decision 'Keep the existing model' \
+  --changed-file 'apps/cli/src/guided.ts' --validation 'Typecheck passes' \
+  --unresolved 'Native hook trust needs review' --next-action 'Verify the runtime' \
+  --max-bytes 2048 --json
+```
+
+Repeat acceptance/fact fields as needed. Omission counts and truncation are explicit. Local bytes
+are never relabeled as saved tokens or subscription allowance.
+
 ### Applying native recommendations from the CLI
 
 `optimize` remains read-only. The explicit CLI path is review then apply:

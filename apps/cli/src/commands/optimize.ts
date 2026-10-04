@@ -16,7 +16,9 @@ import {
   constrainBudgetForWorkload,
   diagnostic,
   decideContextGovernor,
+  decideEfficiency,
   effectiveMcpExposure,
+  harnessId,
   estimateAcceptedTaskCapacityForPolicy,
   refineEffortForAllowance,
   refineEffortWithOutcomes,
@@ -34,6 +36,7 @@ import {
   type ContextGovernorDecision,
   type ContextGovernorSnapshot,
   type Diagnostic,
+  type EfficiencyDecisionInput,
   type HarnessContextObservation,
   type HarnessOptimizationAdvice,
   type LocalBurnTrend,
@@ -959,6 +962,7 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
     reservePercent,
     tasksRemaining: context.tasksRemaining ?? null,
     harnesses: [],
+    efficiencyDecisions: [],
   };
 
   if (contextReport === null || budgetReport === null) {
@@ -1026,6 +1030,45 @@ export async function runOptimize(context: CommandContext): Promise<CommandResul
         profile,
         ...(contextGovernor === undefined ? {} : { contextGovernor }),
       }),
+    );
+  }
+
+  for (const advice of report.harnesses) {
+    if (advice.harnessId !== 'claude' && advice.harnessId !== 'codex') continue;
+    const snapshotObservation = contextReport.harnesses.find(
+      (item) => item.harnessId === contextSnapshot?.harnessId,
+    );
+    const input: EfficiencyDecisionInput = {
+      currentHarness: advice.harnessId === 'claude' ? 'claude' : 'codex',
+      taskClass,
+      optimization: report.harnesses,
+      scheduler: context.efficiencyScheduler ?? null,
+      contextGovernor:
+        contextSnapshot === null || snapshotObservation === undefined
+          ? null
+          : {
+              ...contextSnapshot,
+              pressure: contextEvidence(contextReport, snapshotObservation).pressure,
+            },
+    };
+    const selected = decideEfficiency(input);
+    const capacity =
+      outcomeHistory.receipts === null
+        ? null
+        : estimateAcceptedTaskCapacityForPolicy({
+            report: budgetReport,
+            receipts: outcomeHistory.receipts,
+            harnessId: harnessId(selected.harness),
+            taskClass,
+            reservePercent,
+            policy: {
+              model: selected.model,
+              reasoningEffort: selected.reasoningEffort,
+              verbosity: selected.verbosity,
+            },
+          });
+    report.efficiencyDecisions!.push(
+      decideEfficiency({ ...input, capacities: capacity === null ? [] : [capacity] }),
     );
   }
 

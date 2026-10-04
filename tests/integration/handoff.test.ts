@@ -4,6 +4,8 @@ import { buildCompactHandoff } from '@token-harness/core';
 
 const base = {
   objective: 'Finish the quota-aware optimizer without regressing Codex configuration safety.',
+  acceptanceCriteria: ['Both public output contracts pass.'],
+  costlyFacts: ['Selected Codex profiles are not writable at the user configuration layer.'],
   decisions: [
     'Keep subscription quota distinct from local token measurements.',
     'Do not mutate selected Codex profiles.',
@@ -20,6 +22,8 @@ test('buildCompactHandoff renders all supplied state when it fits', () => {
   assert.equal(result.truncated, false);
   assert.equal(result.omitted.decisions, 0);
   assert.match(result.markdown, /## Objective/);
+  assert.match(result.markdown, /## Acceptance criteria\n- Both public output contracts pass/);
+  assert.match(result.markdown, /## Costly facts\n- Selected Codex profiles/);
   assert.match(result.markdown, /Do not mutate selected Codex profiles\./);
   assert.match(result.markdown, /packages\/core\/src\/domain\/optimizer\.ts/);
   assert.match(result.markdown, /## Next action/);
@@ -77,6 +81,27 @@ test('buildCompactHandoff is deterministic', () => {
   const first = buildCompactHandoff({ ...base, maxBytes: 700 });
   const second = buildCompactHandoff({ ...base, maxBytes: 700 });
   assert.deepEqual(first, second);
+});
+
+test('checkpoint truncation reports omissions and preserves valid Unicode under tight budgets', () => {
+  for (const maxBytes of [256, 257, 320, 512, 1024]) {
+    const result = buildCompactHandoff({
+      ...base,
+      objective: '🚀'.repeat(300),
+      nextAction: '🚀'.repeat(300),
+      acceptanceCriteria: ['acceptance '.repeat(300)],
+      costlyFacts: ['costly fact '.repeat(300)],
+      maxBytes,
+    });
+    assert.ok(result.bytes <= maxBytes);
+    assert.equal(result.truncated, true);
+    assert.equal(result.omitted.acceptanceCriteria, 1);
+    assert.equal(result.omitted.costlyFacts, 1);
+    assert.equal(
+      new TextDecoder().decode(new TextEncoder().encode(result.markdown)),
+      result.markdown,
+    );
+  }
 });
 
 test('buildCompactHandoff rejects unsafe budgets and empty mandatory fields', () => {
