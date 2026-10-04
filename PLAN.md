@@ -12,10 +12,12 @@ The implementation starts from the accepted Phase 0 RFCs. Scope changes that alt
 public contract, safety invariant, or attribution rule require an RFC update before
 code.
 
-### Delivery checkpoint — 2026-10-04, release 0.1.29
+### Delivery checkpoint — 2026-10-04, release 0.1.30
 
 The MVP, transactional stack management, quota/native-policy evidence and guided skill lifecycle
-are shipped. Native automatic prompt routing uses a per-harness model ladder. Fresh native Linux callbacks and lifecycle
+are shipped. App evidence now separates attributed output, callbacks and current quota; paired
+comparisons retain independent five-hour/weekly windows and explicit quality gates (#371).
+Native automatic prompt routing uses a per-harness model ladder. Fresh native Linux callbacks and lifecycle
 are verified with published 0.1.28 on both agents; Claude model authentication is blocked. Windows
 published-artifact verification and attributable paired savings remain separate tasks. The closed-loop controller is
 partial: the public read-only §19.1 decision and §19.2 checkpoint contracts are complete;

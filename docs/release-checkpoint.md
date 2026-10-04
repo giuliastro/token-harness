@@ -1,31 +1,32 @@
 # Release checkpoint — 2026-10-04
 
-Token Harness `0.1.29` includes the reviewed native routing policy from #368, merged as
-`aec108d63c9ba6c2781dffe4926d6ecc21ae61dd`. It also carries the published 0.1.28 Linux callback
-and lifecycle evidence documented in #369; that evidence retains its original version and scope.
+Token Harness `0.1.30` includes the reviewed app-evidence and paired-comparison repair from #371,
+merged as `560492ae45b865d3b62dbc91e29909bc8e59da02`. It retains the 0.1.29 native model ladder and
+the earlier published 0.1.28 Linux callback/lifecycle evidence, with their original scope.
 
 ## Changes in this release
 
-- Routing chooses a cheaper native child from the current harness's model ladder according to the
-  bounded task. Codex light-tier roots receive no routing context.
-- Codex guidance sets the child model and reasoning effort with an override-capable fresh fork.
-  Claude guidance explicitly sets the Agent model parameter.
-- Eligibility names concrete independent work, keeps integration and final review on the root,
-  allows one routed worker at a time and returns failed checks to the root.
-- The portable skill, embedded skill, dashboard explanation and RFC 0030 describe the same policy.
-  The hook stays deterministic and does not inspect prompt text.
+- Coding-app rows show independently aggregated, explicitly attributed output instead of reusing
+  overall optimizer totals. Shared history remains unattributed.
+- Observed routing callbacks and current quota balances have separate provenance and never imply
+  demonstrated savings.
+- Benchmark rows preserve both five-hour and weekly comparisons, negative deltas and actual quality
+  gates. Unknown or failed gates cannot support positive allowance claims through another pair.
+- Read-only comparison guidance explains the existing baseline/optimized capture workflow and the
+  distinction between output-history periods, current-project comparisons and live observations.
 
 ## Release gates
 
-Local PR validation passed 2,403 tests with nine expected skips, typecheck, lint, build and bundle
-smoke. Synthetic CLI probes verified the hook output contract and routing variants. Cross-platform
-release-candidate CI must pass before creating `release/v0.1.29`. The bridge creates immutable tag
-`v0.1.29` and dispatches the exact-tag workflow, which gates publication on tests, real-runtime smoke,
-packaging, provenance, npm Trusted Publishing and npm-latest verification.
+PR #371 and merged-main CI passed on Windows, macOS and Linux. Local review validation passed 2,418
+tests with nine expected skips, typecheck, lint, formatting, build and bundle smoke. Release preparation
+passed five version/packaging tests, formatting, lint, build, bundle smoke, staging, temporary package
+installation and exact tag validation. Release-candidate cross-platform CI must pass before creating
+`release/v0.1.30`. The bridge creates immutable tag `v0.1.30` and dispatches the exact-tag workflow,
+which gates publication on tests, real-runtime smoke, packaging, provenance, npm Trusted Publishing
+and npm-latest verification.
 
-Published 0.1.28 callback/lifecycle observations do not prove that this revised policy chooses the
-requested child model in a native session. Windows published-artifact verification, Claude Linux
-model authentication, paired marginal-value evidence and broad promotion remain separate gates.
-No new subscription, token or API savings claim is made.
+Earlier native observations do not establish this release's live behavior or actual child-model
+selection. Windows published-artifact verification, paired marginal-value evidence and broad
+promotion remain separate gates. No new subscription, token or API savings claim is made.
 
-Release notes and verification scope are in [docs/releases/0.1.29.md](releases/0.1.29.md).
+Release notes and verification scope are in [docs/releases/0.1.30.md](releases/0.1.30.md).
