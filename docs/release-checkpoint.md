@@ -1,30 +1,31 @@
 # Release checkpoint — 2026-10-04
 
-Token Harness `0.1.28` includes the reviewed startup/routing fixes in #365, the optimizer guidance
-in #366 and the checkpoint byte-budget correction found during review.
+Token Harness `0.1.29` includes the reviewed native routing policy from #368, merged as
+`aec108d63c9ba6c2781dffe4926d6ecc21ae61dd`. It also carries the published 0.1.28 Linux callback
+and lifecycle evidence documented in #369; that evidence retains its original version and scope.
 
 ## Changes in this release
 
-- Passive startup update checks preserve approval tickets and stop reserving the mutation lock.
-  Concurrent changes invalidate stale background observations.
-- Reviewed Codex 0.146.0 routing, reversible standard Windows HarnessTrim hook repair and pinned
-  RTK launcher paths preserve native trust, custom commands and agent-specific measurement.
-- Public advisory efficiency decisions expose existing evidence and exact-policy receipt references;
-  missing budgets remain unknown. Checkpoints retain acceptance criteria and costly facts, with
-  objective and next action preserved even at the minimum UTF-8 byte budget.
-- Optimizer explanations link source projects and benchmark methodology, preserve workload scope
-  and distinguish upstream claims from local measurements. Routing explains delegation and trust.
-- RFC 0009 reconciles historical evidence with existing live assignability. No runtime admission or
-  savings-evidence guard is widened.
+- Routing chooses a cheaper native child from the current harness's model ladder according to the
+  bounded task. Codex light-tier roots receive no routing context.
+- Codex guidance sets the child model and reasoning effort with an override-capable fresh fork.
+  Claude guidance explicitly sets the Agent model parameter.
+- Eligibility names concrete independent work, keeps integration and final review on the root,
+  allows one routed worker at a time and returns failed checks to the root.
+- The portable skill, embedded skill, dashboard explanation and RFC 0030 describe the same policy.
+  The hook stays deterministic and does not inspect prompt text.
 
 ## Release gates
 
-Cross-platform release-candidate CI must pass before creating `release/v0.1.28`. The bridge creates
-immutable tag `v0.1.28` and dispatches the exact-tag workflow, which gates publication on tests,
-real-runtime smoke, packaging, provenance, npm Trusted Publishing and npm-latest verification.
+Local PR validation passed 2,403 tests with nine expected skips, typecheck, lint, build and bundle
+smoke. Synthetic CLI probes verified the hook output contract and routing variants. Cross-platform
+release-candidate CI must pass before creating `release/v0.1.29`. The bridge creates immutable tag
+`v0.1.29` and dispatches the exact-tag workflow, which gates publication on tests, real-runtime smoke,
+packaging, provenance, npm Trusted Publishing and npm-latest verification.
 
-The Windows repair audit and native pilot remain scoped to their recorded pre-release builds and
-conditions. They do not close the published-artifact, sandbox, paired marginal-value or broad
-promotion gates. No new subscription or API savings claim is made.
+Published 0.1.28 callback/lifecycle observations do not prove that this revised policy chooses the
+requested child model in a native session. Windows published-artifact verification, Claude Linux
+model authentication, paired marginal-value evidence and broad promotion remain separate gates.
+No new subscription, token or API savings claim is made.
 
-Release notes and verification scope are in [docs/releases/0.1.28.md](releases/0.1.28.md).
+Release notes and verification scope are in [docs/releases/0.1.29.md](releases/0.1.29.md).
