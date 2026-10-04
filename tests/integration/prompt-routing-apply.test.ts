@@ -42,8 +42,12 @@ function outcome(request: ProcessRequest, stdout: string): ProcessOutcome {
   };
 }
 
-for (const harness of ['codex', 'claude'] as const) {
-  it(`applies a stored ${harness} routing plan without repeating selectors and rolls it back`, async () => {
+for (const [harness, version] of [
+  ['codex', '0.146.0'],
+  ['codex', '0.159.1'],
+  ['claude', '2.1.285'],
+] as const) {
+  it(`applies a stored ${harness} ${version} routing plan without repeating selectors and rolls it back`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'th-routing-apply-'));
     const home = join(root, 'home');
     const state = join(root, 'state');
@@ -67,8 +71,8 @@ for (const harness of ['codex', 'claude'] as const) {
             ? 'token-harness-prompt-router-v1'
             : request.args[0] === '--version'
               ? harness === 'codex'
-                ? 'codex-cli 0.159.1'
-                : '2.1.285 (Claude Code)'
+                ? `codex-cli ${version}`
+                : `${version} (Claude Code)`
               : '',
         ),
     };

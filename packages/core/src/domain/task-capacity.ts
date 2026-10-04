@@ -26,6 +26,8 @@ export interface AcceptedTaskCapacityPolicy {
 export interface AcceptedTaskCapacityWindow {
   scope: CapacityScope;
   sampleCount: number;
+  /** Exact project-local benchmark/variant identities used for this window's positive samples. */
+  receiptIds?: string[];
   /** Conservative nearest-rank p75 backend cost of one quality-passed task. */
   p75UsedPercentPerAcceptedTask: number | null;
   /** Remaining observed allowance after the same reserve used by cross-harness pacing. */
@@ -144,6 +146,13 @@ function estimateScope(input: {
   });
   return {
     scope: input.scope,
+    receiptIds: [
+      ...new Set(
+        input.receipts
+          .filter((receipt) => quotaCosts([receipt], input.scope).length === 1)
+          .map((receipt) => `${receipt.benchmarkId}/${receipt.variant}`),
+      ),
+    ].sort(),
     sampleCount: costs.length,
     p75UsedPercentPerAcceptedTask: cost,
     spendableRemainingPercent: spendable,

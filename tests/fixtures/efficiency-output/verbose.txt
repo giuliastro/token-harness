@@ -1,0 +1,49 @@
+OPTIMIZE
+  task=critical profile=balanced reserve=20%
+
+HARNESS   - STATE     - MODEL              - EFFORT       - CTX
+claude    - unavailable - -                  - -            - unknown
+codex     - unavailable - -                  - -            - unknown
+
+EFFICIENCY DECISION (advisory)
+  claude/critical: context unknown
+    model=unknown effort=unknown verbosity=unknown
+    Task allowance: five-hour unknown; weekly unknown
+    Attempts=unknown; premium escalations=unknown
+    [efficiency-attempt-budget-unknown] No reviewed evidence-backed attempt
+    and premium-escalation budget is available
+    [efficiency-context-unknown] Context evidence is incomplete; do not invent
+    a cleanup action
+    [efficiency-harness-kept] No compatible scheduler decision was supplied;
+    keep the current harness
+    [efficiency-optimizer-evidence-unavailable] One optimizer snapshot is
+    required for the selected harness; policy remains unknown and context uses
+    only its separate evidence
+  codex/critical: context unknown
+    model=unknown effort=unknown verbosity=unknown
+    Task allowance: five-hour unknown; weekly unknown
+    Attempts=unknown; premium escalations=unknown
+    [efficiency-attempt-budget-unknown] No reviewed evidence-backed attempt
+    and premium-escalation budget is available
+    [efficiency-context-unknown] Context evidence is incomplete; do not invent
+    a cleanup action
+    [efficiency-harness-kept] No compatible scheduler decision was supplied;
+    keep the current harness
+    [efficiency-optimizer-evidence-unavailable] One optimizer snapshot is
+    required for the selected harness; policy remains unknown and context uses
+    only its separate evidence
+
+PACE
+  no paceable live quota window
+
+LOCAL HISTORY
+  claude: unavailable (local tokens only; not quota)
+  codex: unavailable (local tokens only; not quota)
+
+SESSION SIGNAL
+  claude: unavailable
+  codex: unavailable
+  most recently observed local session; it may not be the active session
+
+ADVICE
+  no recommendation can be made from the observed evidence

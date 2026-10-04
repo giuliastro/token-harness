@@ -1,6 +1,7 @@
 import type { OptimizeReport } from '@token-harness/core';
 
 import { document, formatCount, row, truncate, wrap, type RenderContext } from './layout.js';
+import { efficiencyDecisionLines } from './efficiency.js';
 
 const HARNESS_WIDTH = 9;
 const STATE_WIDTH = 9;
@@ -59,6 +60,11 @@ export function renderOptimizeReport(report: OptimizeReport, _context: RenderCon
     );
   }
 
+  if (report.efficiencyDecisions?.length) {
+    lines.push('', 'EFFICIENCY DECISION (advisory)');
+    for (const decision of report.efficiencyDecisions)
+      lines.push(...efficiencyDecisionLines(decision, true));
+  }
   lines.push('', 'PACE');
   let paceRows = 0;
   for (const harness of report.harnesses) {

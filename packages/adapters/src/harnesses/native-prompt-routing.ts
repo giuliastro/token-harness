@@ -10,7 +10,8 @@ export function nativePromptRoutingVersionSupported(
   if (parsed === null || parsed.prerelease !== null) return false;
   return harness === 'codex'
     ? parsed.major === 0 &&
-        ((parsed.minor === 159 && parsed.patch <= 1) ||
+        ((parsed.minor === 146 && parsed.patch === 0) ||
+          (parsed.minor === 159 && parsed.patch <= 1) ||
           (parsed.minor === 160 && parsed.patch === 0))
     : harness === 'claude' &&
         parsed.major === 2 &&

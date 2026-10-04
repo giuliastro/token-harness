@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "command": "optimize",
+  "toolVersion": "test",
+  "status": "ok",
+  "exitCode": 0,
+  "data": {
+    "platform": {
+      "os": "windows",
+      "osDisplayName": "test",
+      "arch": "x64",
+      "nodeVersion": "22.13.0",
+      "isWsl": false
+    },
+    "projectRoot": "/fixture/project",
+    "observedAt": "2026-10-04T12:00:00.000Z",
+    "taskClass": "critical",
+    "profile": "balanced",
+    "reservePercent": 20,
+    "harnesses": [
+      {
+        "harnessId": "claude",
+        "state": "unavailable",
+        "currentModel": null,
+        "recommendedModel": null,
+        "currentEffort": null,
+        "recommendedEffort": null,
+        "currentVerbosity": null,
+        "recommendedVerbosity": null,
+        "contextPressure": "unknown",
+        "localBurnTrend": null,
+        "recentSession": null,
+        "pace": [],
+        "recommendations": [],
+        "diagnostics": []
+      },
+      {
+        "harnessId": "codex",
+        "state": "unavailable",
+        "currentModel": null,
+        "recommendedModel": null,
+        "currentEffort": null,
+        "recommendedEffort": null,
+        "currentVerbosity": null,
+        "recommendedVerbosity": null,
+        "contextPressure": "unknown",
+        "localBurnTrend": null,
+        "recentSession": null,
+        "pace": [],
+        "recommendations": [],
+        "diagnostics": []
+      }
+    ],
+    "efficiencyDecisions": [
+      {
+        "harness": "claude",
+        "taskClass": "critical",
+        "model": null,
+        "reasoningEffort": null,
+        "verbosity": null,
+        "contextAction": "unknown",
+        "contextGovernor": null,
+        "allowanceBudget": {
+          "fiveHourPercent": null,
+          "weeklyPercent": null
+        },
+        "maxAttempts": null,
+        "premiumEscalationBudget": null,
+        "evidence": [],
+        "reasons": [
+          {
+            "code": "efficiency-attempt-budget-unknown",
+            "summary": "No reviewed evidence-backed attempt and premium-escalation budget is available"
+          },
+          {
+            "code": "efficiency-context-unknown",
+            "summary": "Context evidence is incomplete; do not invent a cleanup action"
+          },
+          {
+            "code": "efficiency-harness-kept",
+            "summary": "No compatible scheduler decision was supplied; keep the current harness"
+          },
+          {
+            "code": "efficiency-optimizer-evidence-unavailable",
+            "summary": "One optimizer snapshot is required for the selected harness; policy remains unknown and context uses only its separate evidence"
+          }
+        ]
+      },
+      {
+        "harness": "codex",
+        "taskClass": "critical",
+        "model": null,
+        "reasoningEffort": null,
+        "verbosity": null,
+        "contextAction": "unknown",
+        "contextGovernor": null,
+        "allowanceBudget": {
+          "fiveHourPercent": null,
+          "weeklyPercent": null
+        },
+        "maxAttempts": null,
+        "premiumEscalationBudget": null,
+        "evidence": [],
+        "reasons": [
+          {
+            "code": "efficiency-attempt-budget-unknown",
+            "summary": "No reviewed evidence-backed attempt and premium-escalation budget is available"
+          },
+          {
+            "code": "efficiency-context-unknown",
+            "summary": "Context evidence is incomplete; do not invent a cleanup action"
+          },
+          {
+            "code": "efficiency-harness-kept",
+            "summary": "No compatible scheduler decision was supplied; keep the current harness"
+          },
+          {
+            "code": "efficiency-optimizer-evidence-unavailable",
+            "summary": "One optimizer snapshot is required for the selected harness; policy remains unknown and context uses only its separate evidence"
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostics": []
+}

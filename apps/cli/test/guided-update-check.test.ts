@@ -170,6 +170,33 @@ it('checks updates on demand and applies only after the returned approval ticket
       'opening the UI must not poll update channels',
     );
 
+    const background = await fetch(`${origin}/api/update-check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+        'X-Token-Harness-CSRF': token,
+      },
+      body: JSON.stringify({ period: 'all', background: true }),
+    });
+    assert.equal(background.status, 200);
+    const passive = (await background.json()) as {
+      ticket: string | null;
+      updatesAvailable: boolean;
+    };
+    assert.equal(passive.ticket, null);
+    assert.equal(passive.updatesAvailable, true);
+    const invalidBackground = await fetch(`${origin}/api/update-check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+        'X-Token-Harness-CSRF': token,
+      },
+      body: JSON.stringify({ background: 'true' }),
+    });
+    assert.equal(invalidBackground.status, 400);
+
     const checked = await fetch(`${origin}/api/update-check`, {
       method: 'POST',
       headers: {
@@ -195,7 +222,7 @@ it('checks updates on demand and applies only after the returned approval ticket
     );
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
-      [['update']],
+      [['update'], ['update']],
       'the channel check itself must remain read-only',
     );
 
@@ -228,7 +255,7 @@ it('checks updates on demand and applies only after the returned approval ticket
     assert.ok(appliedResult.messages.some((message) => message.includes('Restart and re-check')));
     assert.deepEqual(
       calls.filter((args) => args[0] === 'update'),
-      [['update'], ['update'], ['update', '--yes']],
+      [['update'], ['update'], ['update'], ['update', '--yes']],
       'apply must re-check the exact approved targets before mutating',
     );
 

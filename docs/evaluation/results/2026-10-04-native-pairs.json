@@ -1,0 +1,1757 @@
+{
+  "schemaVersion": 1,
+  "capturedOn": "2026-10-04",
+  "platform": "native Windows x64",
+  "fingerprint": {
+    "platform": "native Windows x64",
+    "node": "24.13.1",
+    "claude": "2.1.285",
+    "codex": "0.146.0",
+    "rtk": "0.51.0",
+    "harnesstrim": "0.3.1",
+    "tokenHarness": {
+      "version": "0.1.27",
+      "kind": "local patched build",
+      "tarballSha256": "ecda33279fe7b8fd4ee3e0306c0e3e8de5e3c29237426c2a6bcc46dfcbe74dcc"
+    },
+    "codexSandbox": "workspace-write",
+    "codexModelRequest": "gpt-5.6-sol",
+    "codexModelSource": "native-rpc default catalog entry; CLI invocation, not child-model telemetry",
+    "claudeRootModelReported": "claude-opus-5-5",
+    "attributionBoundary": "The parent Codex chat was active on the same subscription account. Account windows cannot establish per-task consumption."
+  },
+  "limitations": [
+    "One trial per profile/class; no confidence interval or universal benefit claim.",
+    "Joint RTK + HarnessTrim + routing profile; marginal routing value was not isolated.",
+    "Codex workspace-write trials passed code acceptance but their RTK commands failed twice each.",
+    "Quota snapshots are account observations only, excluded from task receipts due to concurrent parent activity.",
+    "Claude list price estimates are not billed API cost. Local tokens, characters and quota remain separate.",
+    "No subagents were requested in these fixtures. Prompt callbacks alone do not prove a child model.",
+    "These recordings predate the pinned Windows RTK launcher repair; later canaries are a separate evidence class."
+  ],
+  "pairs": [
+    {
+      "id": "native-win-claude-mechanical",
+      "harness": "claude",
+      "taskClass": "mechanical",
+      "order": ["baseline", "optimized"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-mechanical",
+            "variant": "baseline",
+            "taskClass": "mechanical",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "low",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:09:03.608Z",
+            "completedAt": "2026-10-04T08:09:17.144Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 6,
+              "cacheCreationTokens": 8845,
+              "cacheReadTokens": 20163,
+              "outputTokens": 716,
+              "totalTokens": 29730
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 10,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 10,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 24,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 13534,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.0891366,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.087Z",
+                "observedAt": "2026-10-04T08:08:59.760Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.087Z",
+                "observedAt": "2026-10-04T08:08:59.760Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:09:59.928Z",
+                "observedAt": "2026-10-04T08:09:17.298Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T11:59:59.928Z",
+                "observedAt": "2026-10-04T08:09:17.298Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "b1802af8e74b82711fe6bc81a0e298932701d4996f3a42a8f8582ca86548368e",
+            "acceptance": "6b78fb69dfc8c7a20070ca042434ebeb86749a8fb951be8cd7c1af316768077a",
+            "final": "fd92a310535287c7a9d0e2dfc72ddeab0c2cbc1f5339bffc6d86a2f1c7204413",
+            "nativeStream": "744bffc406c9d0787317c6b7d2c839c520cc896cc28680438429518ee9468f10",
+            "independentValidation": "70a6d9c21bb5d1fc9ca6d97d5fc6bcad975e05f13435550701bfce2139852076",
+            "originalReceipt": "f3131309c4aaa16712203231a1187be559e6bf72f69731fa83bded29aa12513b",
+            "originalProtocol": "221daecd24453865bf07f3bc7dbeff2a92a366114328178ee2e838c107f776c7"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-mechanical",
+            "variant": "optimized",
+            "taskClass": "mechanical",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "low",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:09:21.698Z",
+            "completedAt": "2026-10-04T08:09:37.305Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 8,
+              "cacheCreationTokens": 7643,
+              "cacheReadTokens": 31082,
+              "outputTokens": 684,
+              "totalTokens": 39417
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 10,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 11,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 24,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 15607,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.08107239999999999,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.183Z",
+                "observedAt": "2026-10-04T08:09:20.387Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.183Z",
+                "observedAt": "2026-10-04T08:09:20.387Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.056Z",
+                "observedAt": "2026-10-04T08:09:37.447Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.056Z",
+                "observedAt": "2026-10-04T08:09:37.447Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "71e5557d-fb30-426e-bf52-31d5e4dcfe08",
+              "observedAt": "2026-10-04T08:09:32.907Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 3050,
+              "afterChars": 441,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "b1802af8e74b82711fe6bc81a0e298932701d4996f3a42a8f8582ca86548368e",
+            "acceptance": "6b78fb69dfc8c7a20070ca042434ebeb86749a8fb951be8cd7c1af316768077a",
+            "final": "fd92a310535287c7a9d0e2dfc72ddeab0c2cbc1f5339bffc6d86a2f1c7204413",
+            "nativeStream": "73add443d787e0825153927456a6d5424ab70ef8419ffb28f88228a6928326c8",
+            "independentValidation": "b365d2d81cdf7b3319ff7f8f8c059b563564ca291df74e4ad7f0729ec517b2f0",
+            "originalReceipt": "8664ef938029133c7606ec214cec6f856826bf4235d375302a3c92791bb3b9b0",
+            "originalProtocol": "9393f06af8609df855b98b1ae8ad270ae8882774f5825d24c912109f1cbf8be7"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-win-claude-standard",
+      "harness": "claude",
+      "taskClass": "standard",
+      "order": ["optimized", "baseline"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-standard",
+            "variant": "baseline",
+            "taskClass": "standard",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "medium",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:12:50.517Z",
+            "completedAt": "2026-10-04T08:13:10.685Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 8,
+              "cacheCreationTokens": 10613,
+              "cacheReadTokens": 32795,
+              "outputTokens": 1446,
+              "totalTokens": 44862
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 29,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 20168,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.120415,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:09:59.972Z",
+                "observedAt": "2026-10-04T08:12:49.250Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T11:59:59.972Z",
+                "observedAt": "2026-10-04T08:12:49.250Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.498Z",
+                "observedAt": "2026-10-04T08:13:10.834Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.498Z",
+                "observedAt": "2026-10-04T08:13:10.834Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "1bb791de9a0929151b1348c768a09ba1cc70fa883efe552ca2bbed9eef6801d1",
+            "acceptance": "32d4d217739e27e87633c0bbcd01d88e3acd89552325eaf0b1a91afb5414284d",
+            "final": "ecb6385b33984a37514675ae99c6fd495b243c70373b80792ffb3efd9d6cd3c0",
+            "nativeStream": "d521b18c5e7eb63cd5ac19acc3e10c89ed9728e20bbc80bcf747b4189dcbfde3",
+            "independentValidation": "e59ac950ef5e75611669c644f02f68e64fe9dab4ec7d5877f72fd16efa6c0b0f",
+            "originalReceipt": "c069fd538b70236e72e226eb1bf3b3e95252e53703cb940a9f175fc74d85e950",
+            "originalProtocol": "f2071be3bcde7ba0f9ff7a55160441294b9f1d72b9ef0cc9c00508cbf131a57e"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-standard",
+            "variant": "optimized",
+            "taskClass": "standard",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "medium",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:12:20.692Z",
+            "completedAt": "2026-10-04T08:12:46.025Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 8,
+              "cacheCreationTokens": 9108,
+              "cacheReadTokens": 33229,
+              "outputTokens": 1603,
+              "totalTokens": 43948
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 11,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 29,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 25333,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.1116018,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.158Z",
+                "observedAt": "2026-10-04T08:12:19.327Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.158Z",
+                "observedAt": "2026-10-04T08:12:19.327Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:09:59.796Z",
+                "observedAt": "2026-10-04T08:12:46.177Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T11:59:59.796Z",
+                "observedAt": "2026-10-04T08:12:46.177Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "9e5f2957-b8be-4db3-990e-8b60cecae955",
+              "observedAt": "2026-10-04T08:12:27.402Z",
+              "reducer": null,
+              "beforeChars": 1431,
+              "afterChars": 1431,
+              "changed": false,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            },
+            {
+              "eventId": "bbb67537-366c-402c-aad5-7b1cb830fafd",
+              "observedAt": "2026-10-04T08:12:38.815Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 3329,
+              "afterChars": 293,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "1bb791de9a0929151b1348c768a09ba1cc70fa883efe552ca2bbed9eef6801d1",
+            "acceptance": "32d4d217739e27e87633c0bbcd01d88e3acd89552325eaf0b1a91afb5414284d",
+            "final": "1c684abc6769f0fa94321202d8550d828adc26e264674a34a604baf8ca805c73",
+            "nativeStream": "82bb2a4ad7fc9605c1632d5d0f35553f982b429093712c4541fa230659a7d9cf",
+            "independentValidation": "d9db477a87e9d3790b902de6fdc2e1c46f22fa1e3fd85089837f504ad8d2a4a1",
+            "originalReceipt": "9ae5ea1b0f57e280ba5e8503e857ee088f0e18b9ac13e3c6cf8e3f3603437aad",
+            "originalProtocol": "efeb2d3d513e10ed422e3a9515f4083ece9fa9f668bf088565256f583634c89d"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-win-claude-hard",
+      "harness": "claude",
+      "taskClass": "hard",
+      "order": ["baseline", "optimized"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-hard",
+            "variant": "baseline",
+            "taskClass": "hard",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "high",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:14:31.944Z",
+            "completedAt": "2026-10-04T08:15:07.708Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 8,
+              "cacheCreationTokens": 12791,
+              "cacheReadTokens": 35595,
+              "outputTokens": 2970,
+              "totalTokens": 51364
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 31,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 35763,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.168879,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.412Z",
+                "observedAt": "2026-10-04T08:14:30.557Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.412Z",
+                "observedAt": "2026-10-04T08:14:30.557Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.425Z",
+                "observedAt": "2026-10-04T08:15:07.856Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.425Z",
+                "observedAt": "2026-10-04T08:15:07.856Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "a422fed9bbd02f192ccff97e6dad354f4fc1a8888a14ec300d9d7a7091f7850b",
+            "acceptance": "8cb25f7dee4bc2d5eacbbc50bbb687a272d3a3067628322a694ec525f8f337e6",
+            "final": "dd106b0c91a3cb0c81057984a81144d8ad72ce8931130a7739da197e57d2b58a",
+            "nativeStream": "0049495b3405a6515a1e4ebfacd995f7f2db15cac3ed9bef37b2e0a866a44a36",
+            "independentValidation": "ccd971f055fa73c7ed8ad6ea5f3a301063a2dd8575e6dc051c5b85b2bfca329c",
+            "originalReceipt": "042d2f0b534419e59b208f9b3ae8b09e8f0907e400ece39252116785dd436e89",
+            "originalProtocol": "ae6b6b6c50a515dc2dde33164e90900a11a4852a0870f775cbf1a0177f6e323f"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-claude-hard",
+            "variant": "optimized",
+            "taskClass": "hard",
+            "harnessId": "claude",
+            "model": "claude-opus-5-5",
+            "reasoningEffort": "high",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:15:11.920Z",
+            "completedAt": "2026-10-04T08:15:50.990Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 8,
+              "cacheCreationTokens": 10857,
+              "cacheReadTokens": 35654,
+              "outputTokens": 2864,
+              "totalTokens": 49383
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 12,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 13,
+              "subagentsStarted": 0,
+              "subagentsStopped": 0,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 31,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 39069,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": 0.1512988,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:10:00.387Z",
+                "observedAt": "2026-10-04T08:15:10.729Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T12:00:00.387Z",
+                "observedAt": "2026-10-04T08:15:10.729Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 6,
+                "remainingPercent": 94,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:09:59.725Z",
+                "observedAt": "2026-10-04T08:15:51.134Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              },
+              {
+                "harnessId": "claude",
+                "bucketId": "claude-subscription",
+                "bucketName": "Claude subscription",
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 1,
+                "remainingPercent": 99,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-08T11:59:59.725Z",
+                "observedAt": "2026-10-04T08:15:51.134Z",
+                "source": "companion-cli",
+                "confidence": "reported"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Native authoritative allowance windows were unavailable."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "dd1bcb7d-c0a6-4c16-b282-9f73f940dd65",
+              "observedAt": "2026-10-04T08:15:19.192Z",
+              "reducer": null,
+              "beforeChars": 2885,
+              "afterChars": 2885,
+              "changed": false,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            },
+            {
+              "eventId": "46dc7483-71cd-4741-ad17-ec80fc23149f",
+              "observedAt": "2026-10-04T08:15:42.524Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 3808,
+              "afterChars": 293,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "a422fed9bbd02f192ccff97e6dad354f4fc1a8888a14ec300d9d7a7091f7850b",
+            "acceptance": "8cb25f7dee4bc2d5eacbbc50bbb687a272d3a3067628322a694ec525f8f337e6",
+            "final": "7c992a69a578d34524a455433a7e3d97fe8f6153512b69bc931b39c46a24cc5e",
+            "nativeStream": "6e3291c3f5c50e2776ecbb33bd4c22b75ccf32c4dbaa08891bb2651efd14d3db",
+            "independentValidation": "1c656c5ba8157d80f05978b12ae7c247cc4c54e2ccbd368a332166284d75cafe",
+            "originalReceipt": "0ed95a8b91208e3c7a80bf52fd4389f3a2821d517a57ae75343ff3c475ff3e9b",
+            "originalProtocol": "8fccd9f1b0fd8f261a56e8a667d912c393abd28748c7be26ec66f1cc27d67fb4"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-win-codex-mechanical",
+      "harness": "codex",
+      "taskClass": "mechanical",
+      "order": ["baseline", "optimized"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-mechanical",
+            "variant": "baseline",
+            "taskClass": "mechanical",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "low",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:06:46.539Z",
+            "completedAt": "2026-10-04T08:07:24.493Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 19640,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 69760,
+              "outputTokens": 594,
+              "totalTokens": 89994
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 7,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 7,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 24,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 37953,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 21,
+                "remainingPercent": 79,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:06:45.290Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:06:45.290Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 22,
+                "remainingPercent": 78,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:07:24.640Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:07:24.640Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "b1802af8e74b82711fe6bc81a0e298932701d4996f3a42a8f8582ca86548368e",
+            "acceptance": "6b78fb69dfc8c7a20070ca042434ebeb86749a8fb951be8cd7c1af316768077a",
+            "final": "b834d7c31f189dedeef4bdefd0855c46904f53f95c739ae422ffeea71c127fc8",
+            "nativeStream": "9925c3bee85cc7053cef3d634249ffa0de1f8cce64a301e081cac0fb6dcf62be",
+            "independentValidation": "1c8a1083251ac5e95105574d2ef6435007089e19866e60672dfb06c06e0599ea",
+            "originalReceipt": "1f901e53f3c48d9191b6ca19738da7e2269e475f9e99e4e1bbad6142a881fbe1",
+            "originalProtocol": "0ac8eebc4fa723733240c62c528a4693bcf142b3ce3c05a50fbc454d2475510f"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-mechanical",
+            "variant": "optimized",
+            "taskClass": "mechanical",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "low",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:07:30.798Z",
+            "completedAt": "2026-10-04T08:08:34.975Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 37485,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 67840,
+              "outputTokens": 1025,
+              "totalTokens": 106350
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 7,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 8,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "failed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": ["native-tool-execution-failed"]
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 24,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 2,
+          "failedProviderCommands": 2,
+          "wallClockMs": 64176,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 22,
+                "remainingPercent": 78,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:07:29.387Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 3,
+                "remainingPercent": 97,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:07:29.387Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 24,
+                "remainingPercent": 76,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:08:35.131Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:08:35.131Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "ab363a20-af42-486b-b71c-c22f7a45e385",
+              "observedAt": "2026-10-04T08:07:51.406Z",
+              "reducer": null,
+              "beforeChars": 1188,
+              "afterChars": 1188,
+              "changed": false,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            },
+            {
+              "eventId": "1fdd4ac9-4cc0-4e44-8880-e2e86afb8134",
+              "observedAt": "2026-10-04T08:08:09.483Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 2659,
+              "afterChars": 197,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "b1802af8e74b82711fe6bc81a0e298932701d4996f3a42a8f8582ca86548368e",
+            "acceptance": "6b78fb69dfc8c7a20070ca042434ebeb86749a8fb951be8cd7c1af316768077a",
+            "final": "1f167a19b0fb0f2d25baf3f7efa3caed50280994dda4cc58cd5ba5355e36bd6f",
+            "nativeStream": "39e3bf3bfb032ad556ceee2cbffd3e42bd443c6fe97660f6bf3b473d9e1bb26c",
+            "independentValidation": "f649e5d8c462e76720f9361882dc013bf704179230baab02832d9a61927c18db",
+            "originalReceipt": "38768dffaaf42d8785a26c8fddd9dc8226d3cf7ac02dc523ed82f1b64f8f52aa",
+            "originalProtocol": "a5fbc8ac8bb3928a56ea482c96a4ce042a23de2e5e4e3b39c133ec72089b87c5"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-win-codex-standard",
+      "harness": "codex",
+      "taskClass": "standard",
+      "order": ["optimized", "baseline"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-standard",
+            "variant": "baseline",
+            "taskClass": "standard",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "medium",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:11:25.012Z",
+            "completedAt": "2026-10-04T08:12:16.406Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 9494,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 83328,
+              "outputTokens": 1425,
+              "totalTokens": 94247
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 29,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 51394,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 28,
+                "remainingPercent": 72,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:11:23.703Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:11:23.703Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 28,
+                "remainingPercent": 72,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:12:16.558Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:12:16.558Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "1bb791de9a0929151b1348c768a09ba1cc70fa883efe552ca2bbed9eef6801d1",
+            "acceptance": "32d4d217739e27e87633c0bbcd01d88e3acd89552325eaf0b1a91afb5414284d",
+            "final": "0d7a1822761ce13e50be2116a4cf26dad5943ebfe5c115436ce84cfffb426d77",
+            "nativeStream": "b687b259a5ef752a0a89010d419143867ce90b93831804b009345d191ac81f3f",
+            "independentValidation": "e7f9eee73a6a046e9d8f15acbcd2bd93b3812c85c7fdd55e5e5f59146ddbdc93",
+            "originalReceipt": "1071f35a168c3bf9bf2797080fa42a2bc0123a5b8e6671fd2b9efd475a92969f",
+            "originalProtocol": "b39ec3a3c694db5289eb7605d80de38b7839305cab5fda725c623037ce7ad48f"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-standard",
+            "variant": "optimized",
+            "taskClass": "standard",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "medium",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:10:05.632Z",
+            "completedAt": "2026-10-04T08:11:20.630Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 28980,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 81408,
+              "outputTokens": 1941,
+              "totalTokens": 112329
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 8,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "failed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": ["native-tool-execution-failed"]
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 29,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 2,
+          "failedProviderCommands": 2,
+          "wallClockMs": 74997,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 27,
+                "remainingPercent": 73,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:10:04.511Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:10:04.511Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 28,
+                "remainingPercent": 72,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:11:20.789Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 4,
+                "remainingPercent": 96,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:11:20.789Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "85a54e57-e46a-4fe9-85f7-0a54f1a4f131",
+              "observedAt": "2026-10-04T08:10:21.493Z",
+              "reducer": null,
+              "beforeChars": 2156,
+              "afterChars": 2156,
+              "changed": false,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            },
+            {
+              "eventId": "ab052b8b-9836-45f9-8718-1b1d616ddc4f",
+              "observedAt": "2026-10-04T08:10:51.007Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 3020,
+              "afterChars": 198,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "1bb791de9a0929151b1348c768a09ba1cc70fa883efe552ca2bbed9eef6801d1",
+            "acceptance": "32d4d217739e27e87633c0bbcd01d88e3acd89552325eaf0b1a91afb5414284d",
+            "final": "d6729d453d4f0d47463c991a6c53bb1255e88de773aeaa0f0ce77a189576ec07",
+            "nativeStream": "2bec43006b98e42abec8548af3fa5a7be2d76eb816341ad73f726501b93c500c",
+            "independentValidation": "2c8e401aa3c06ce84d73e6932e5853a339249a0359c3ff1ad3cb8f8e66b02ba8",
+            "originalReceipt": "485fa002de6355f5a9e54bdd48cd8bca32365f8db07c2ff7948e5292382afff5",
+            "originalProtocol": "b4951c381459d7317890170910d9df5460d21641951238eadcd3dc4e3aac2519"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-win-codex-hard",
+      "harness": "codex",
+      "taskClass": "hard",
+      "order": ["baseline", "optimized"],
+      "variants": [
+        {
+          "variant": "baseline",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-hard",
+            "variant": "baseline",
+            "taskClass": "hard",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "high",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:14:20.825Z",
+            "completedAt": "2026-10-04T08:16:33.843Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 23307,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 76544,
+              "outputTokens": 4523,
+              "totalTokens": 104374
+            },
+            "nativeRoutingAtStart": {
+              "configured": false,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": false,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "passed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": []
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 31,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 0,
+          "failedProviderCommands": 0,
+          "wallClockMs": 133017,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 32,
+                "remainingPercent": 68,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:14:19.812Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:14:19.812Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 34,
+                "remainingPercent": 66,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:16:33.988Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:16:33.988Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 0,
+          "harnesstrim": [],
+          "sourceHashes": {
+            "initial": "a422fed9bbd02f192ccff97e6dad354f4fc1a8888a14ec300d9d7a7091f7850b",
+            "acceptance": "8cb25f7dee4bc2d5eacbbc50bbb687a272d3a3067628322a694ec525f8f337e6",
+            "final": "b51a0ef24449b6197118f0c430d6befe4eab2037554bd568018373de20284e21",
+            "nativeStream": "84eab5b0cd29a473b881e04f3b7fa5c9aa29e24035288d4831e819cd4491d1fc",
+            "independentValidation": "1e619b91516ebc0634c893e1c4f798ed7ed94d25dbff1209be6e374b123e77ea",
+            "originalReceipt": "d90d4afc3f38c04bfa21254a496ec8e079459641c4d94a578dfc468c17492576",
+            "originalProtocol": "c05308380b5fbb036eeae704d255c283be989a1ef0e7495037cd8135035e407c"
+          }
+        },
+        {
+          "variant": "optimized",
+          "receipt": {
+            "schemaVersion": 1,
+            "benchmarkId": "native-win-codex-hard",
+            "variant": "optimized",
+            "taskClass": "hard",
+            "harnessId": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoningEffort": "high",
+            "verbosity": null,
+            "startedAt": "2026-10-04T08:16:38.129Z",
+            "completedAt": "2026-10-04T08:18:40.793Z",
+            "usageBefore": [],
+            "usageAfter": [],
+            "localUsage": {
+              "inputTokens": 22897,
+              "cacheCreationTokens": 0,
+              "cacheReadTokens": 97792,
+              "outputTokens": 3985,
+              "totalTokens": 124674
+            },
+            "nativeRoutingAtStart": {
+              "configured": true,
+              "promptSubmissions": 9,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "nativeRoutingAtFinish": {
+              "configured": true,
+              "promptSubmissions": 10,
+              "subagentsStarted": 1,
+              "subagentsStopped": 1,
+              "reportedModels": []
+            },
+            "outcome": {
+              "qualityGate": "failed",
+              "attempts": 1,
+              "failedAttempts": 0,
+              "errorCodes": ["native-tool-execution-failed"]
+            }
+          },
+          "acceptedCode": true,
+          "testsFrozen": true,
+          "acceptanceTests": 31,
+          "nativeValidationCalls": 1,
+          "failedValidationCalls": 0,
+          "nativeToolFailures": 2,
+          "failedProviderCommands": 2,
+          "wallClockMs": 122664,
+          "billedApiCost": null,
+          "listPriceEstimateUsd": null,
+          "accountObservations": {
+            "before": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 34,
+                "remainingPercent": 66,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:16:37.093Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 5,
+                "remainingPercent": 95,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:16:37.093Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "after": [
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "primary",
+                "scope": "five-hour",
+                "usedPercent": 38,
+                "remainingPercent": 62,
+                "windowDurationMinutes": 300,
+                "resetsAt": "2026-10-04T12:54:06.000Z",
+                "observedAt": "2026-10-04T08:18:40.931Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              },
+              {
+                "harnessId": "codex",
+                "bucketId": "codex",
+                "bucketName": null,
+                "window": "secondary",
+                "scope": "weekly",
+                "usedPercent": 6,
+                "remainingPercent": 94,
+                "windowDurationMinutes": 10080,
+                "resetsAt": "2026-10-11T07:54:06.000Z",
+                "observedAt": "2026-10-04T08:18:40.931Z",
+                "source": "native-rpc",
+                "confidence": "authoritative"
+              }
+            ],
+            "taskAttribution": "unavailable",
+            "reason": "Excluded from task comparison: the parent Codex chat was active on the same account."
+          },
+          "promptCallbackDelta": 1,
+          "harnesstrim": [
+            {
+              "eventId": "bdcb42fe-ecba-4d65-b41d-8408406bc31c",
+              "observedAt": "2026-10-04T08:16:53.264Z",
+              "reducer": null,
+              "beforeChars": 3525,
+              "afterChars": 3525,
+              "changed": false,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            },
+            {
+              "eventId": "7cafeba7-63a9-4c74-85f4-cc627fe725f2",
+              "observedAt": "2026-10-04T08:17:47.908Z",
+              "reducer": "tap-output-slim",
+              "beforeChars": 3531,
+              "afterChars": 198,
+              "changed": true,
+              "reductionFailed": false,
+              "beforeTokens": null,
+              "afterTokens": null
+            }
+          ],
+          "sourceHashes": {
+            "initial": "a422fed9bbd02f192ccff97e6dad354f4fc1a8888a14ec300d9d7a7091f7850b",
+            "acceptance": "8cb25f7dee4bc2d5eacbbc50bbb687a272d3a3067628322a694ec525f8f337e6",
+            "final": "899fa608a7d1554208060ddb3ace45f2c96d7f3cf17344aed65ccfcaa8672ed6",
+            "nativeStream": "ecf70494895ec4c06315c3367ed4559d76995dd42f527f70ce05596f70a3ebfe",
+            "independentValidation": "1ee8830a7a2c98b535f36246803c77ad8369eb53b747192c64a81e7e88e0d4cf",
+            "originalReceipt": "e88c2080c0d4c9e93f7d65d31e548495ae2dff022e933be0a7245fc4a10b3305",
+            "originalProtocol": "015c8637378fcbae4cedf52c9a1cb9a6f1d3118ba7880fe277725dff280bf14d"
+          }
+        }
+      ]
+    }
+  ]
+}

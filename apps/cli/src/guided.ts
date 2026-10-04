@@ -168,6 +168,8 @@ export interface GuideResult {
   stack?: OptimizationStackSnapshot;
   /** Present only after a read-only preview found a concrete change the user may approve. */
   ticket?: string | null;
+  /** Background checks report availability without creating or replacing an approval. */
+  updatesAvailable?: boolean;
   restartRequired?: boolean;
 }
 export interface GuideActivity {
@@ -967,6 +969,8 @@ export class GuideService {
   private loading: GuideLoading | null = null;
   private readSequence = 0;
   private busy = false;
+  private operationSequence = 0;
+  private backgroundUpdates: Promise<GuideResult> | null = null;
   private restartVersion: string | null = null;
   private readonly restartApplication: (() => Promise<string>) | null;
   private lastApplied: GuideUndoTarget | null = null;
@@ -1314,6 +1318,7 @@ export class GuideService {
       throw new GuideError(409, 'Another operation is running. No second change was started.');
     // Reserve before awaiting reads, so simultaneous previews cannot both acquire the slot.
     this.busy = true;
+    this.operationSequence++;
     try {
       if (this.reading !== null) await this.reading;
       return await operation();
@@ -2277,15 +2282,36 @@ export class GuideService {
       return { url };
     });
   }
-  async checkUpdates(): Promise<GuideResult> {
-    return this.exclusive(async () => {
-      this.approval = null;
+  async checkUpdates(background = false): Promise<GuideResult> {
+    if (background && this.backgroundUpdates !== null) return this.backgroundUpdates;
+    const sequence = this.operationSequence;
+    const startedDuringOperation = this.busy;
+    const operation = async (): Promise<GuideResult> => {
+      if (!background) this.approval = null;
       this.record(
         'Checking Token Harness and optimizer update channels without changing software.',
         'working',
       );
       const updateResult = await this.call<UpdateReport>(['update']);
       const inventory = await this.call<DoctorReport>(['doctor']);
+
+      // A passive network read must never reserve the mutation slot, replace a reviewed ticket,
+      // or publish evidence collected across a concurrent operation.
+      if (background && (startedDuringOperation || sequence !== this.operationSequence)) {
+        this.record(
+          'Background update evidence discarded after another operation started.',
+          'attention',
+        );
+        return {
+          ok: false,
+          title: 'Update check needs refreshing',
+          messages: [
+            'Another action started during the update check. Check updates again for current versions.',
+          ],
+          appliedPlans: 0,
+          ticket: null,
+        };
+      }
 
       if (inventory.data === null) {
         this.updates = null;
@@ -2424,7 +2450,7 @@ export class GuideService {
         messages.push(
           'An update channel reported an update without a concrete target version. No install approval was created.',
         );
-      } else if (updateTargets.length > 0) {
+      } else if (updateTargets.length > 0 && !background) {
         ticket = this.random();
         const expires = this.now() + 10 * 60_000;
         this.approval = {
@@ -2474,8 +2500,17 @@ export class GuideService {
         appliedPlans: 0,
         stack,
         ticket,
+        ...(background ? { updatesAvailable: updateTargets.length > 0 } : {}),
       };
-    });
+    };
+    if (!background) return this.exclusive(operation);
+    // Coalesce startup reads without coupling them to preview/apply serialization.
+    this.backgroundUpdates = operation();
+    try {
+      return await this.backgroundUpdates;
+    } finally {
+      this.backgroundUpdates = null;
+    }
   }
 
   async verify(): Promise<GuideResult> {

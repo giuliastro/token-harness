@@ -1,0 +1,18 @@
+{
+  "platform": "native Windows x64",
+  "node": "24.13.1",
+  "claude": "2.1.285",
+  "codex": "0.146.0",
+  "rtk": "0.51.0",
+  "harnesstrim": "0.3.1",
+  "tokenHarness": {
+    "version": "0.1.27",
+    "kind": "local patched build",
+    "tarballSha256": "ecda33279fe7b8fd4ee3e0306c0e3e8de5e3c29237426c2a6bcc46dfcbe74dcc"
+  },
+  "codexSandbox": "workspace-write",
+  "codexModelRequest": "gpt-5.6-sol",
+  "codexModelSource": "native-rpc default catalog entry; CLI invocation, not child-model telemetry",
+  "claudeRootModelReported": "claude-opus-5-5",
+  "attributionBoundary": "The parent Codex chat was active on the same subscription account. Account windows cannot establish per-task consumption."
+}

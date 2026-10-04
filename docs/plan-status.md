@@ -1,10 +1,12 @@
-# Delivery status — 2026-10-03
+# Delivery status — 2026-10-04
 
-**Published: Token Harness 0.1.26.** The management, transaction, measurement and advisory foundations
-are shipped. Automatic native prompt-hook installation is implemented. Real current Windows stack
-verification, attributable paired savings and the closed-loop controller remain incomplete.
-This checkpoint reconciles the historical PLAN with the published product; it does not change
-architecture or declare broad-promotion readiness.
+**Published: Token Harness 0.1.27.** The management, transaction, measurement and advisory foundations
+are shipped. Automatic native prompt-hook installation is implemented. Both agents now have genuine
+Windows callbacks and provider receipts on this locally patched branch. Published-artifact upgrade
+coverage, Codex sandbox access, attributable paired quota savings and the closed-loop controller remain incomplete.
+This checkpoint distinguishes the published product from the branch's startup, Codex 0.146.0,
+Windows RTK attribution and read-only decision/checkpoint fixes, pending merge and publication.
+It does not declare broad-promotion readiness.
 
 ## What is complete, partial or still planned
 
@@ -14,9 +16,9 @@ architecture or declare broad-promotion readiness.
 | Managed lifecycle (Phase 9) | Claude/Codex baseline lifecycle, package updates, pipeline status and evidence capture shipped. | Real current Windows combination (#255); historical Hermes/Pi/OMP lifecycle and broader 0.2.0 coverage are unfinished. |
 | Quota/native policy (Phase 10, §18) | Dual-window observations, conservative recommendations, paired outcome learning, scheduling/handoff and portable skill shipped. | Empirical coverage is narrower than all task/model/platform combinations. |
 | Guided skill (§18.13–18.14) | Bundled skill, reversible installation and owned/external/modified state implemented. | No remaining implementation task from the former “next UX work” notes. |
-| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, native authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. | Linux Codex callbacks observed (3 prompts, 2 starts, 2 stops); remaining Windows/session coverage (#359) and paired quality-gated benefit (#360). Prompt guidance alone does not prove actual model choice. |
-| Efficiency Decision (§19.1) | Tested internal read-only `decideEfficiency` contract exists. | Integrate one explainable CLI/controller decision from existing observations (#361). |
-| Context Governor (§19.2) | Bounded metadata snapshot, deterministic advice and CLI input shipped. | Complete the checkpoint contract/integration (#361); no automatic context rewrite is proved. |
+| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. Both agents passed fresh Windows prompt/session probes on this branch. | Historical Linux Codex callbacks remain separate; fresh Linux coverage is deferred by the user (#359). Published-artifact checks and paired benefit (#360) remain open. Prompt guidance alone does not prove actual model choice. |
+| Efficiency Decision (§19.1) | Public read-only `optimize` decision composes existing observations, exact capacity receipts and optional controller scheduler advice. | Advance explicit escalation/budget contracts after reviewed integration (#361). |
+| Context Governor (§19.2) | Bounded metadata advice and checkpoint acceptance/fact fields integrated (#361). | Automatic context execution remains future work; no automatic context rewrite is proved. |
 | Adaptive escalation / task budgets (§19.3–19.4) | Native policy/quality/capacity foundations exist; the decision contract carries empirical allowance budgets and optional evidenced attempt limits. | Implement escalation receipts and task-budget enforcement; do not treat an internal suggested budget as a running controller. |
 | Bounded loop and later controller (§19.5–19.13) | Roadmap; existing evidence/analytics are prerequisites. | Deterministic stops, failure fingerprints, repository context/cache, selective verification and accepted-work analytics before opt-in autonomy. |
 | Self-update (§19.17) | Reviewed global-npm updates, startup notification, automatic health checks and guarded UI restart shipped. | Verify new channels/platforms when added; npx/source installs retain their original update path. |
@@ -40,19 +42,25 @@ its evidence or promotion follow-up remains separate.
 | [#255 Windows stack](https://github.com/giuliastro/token-harness/issues/255) | Kept open; title/body refreshed. | RTK 0.51.0 + HarnessTrim 0.3.1, published Token Harness 0.1.26+, exact installed harness versions and genuine before/after receipts. Collector CI is not real stack evidence. |
 | [#359 native routing runtime](https://github.com/giuliastro/token-harness/issues/359) | New bounded verification task. | Ordinary prompts in fresh sessions/projects on native Windows and Linux, with native authorization and real callbacks. |
 | [#360 paired evidence](https://github.com/giuliastro/token-harness/issues/360) | New measurement task. | Routing and combined-stack baseline/optimized runs, attributable units, quality, retries and authoritative allowance. |
-| [#362 compatibility contract](https://github.com/giuliastro/token-harness/issues/362) | New contract reconciliation task. | Review RFC 0009's historical exact-row-only language against shipped live-capability admission, without relaxing guards or empirical gates. |
-| [#361 decision/checkpoint integration](https://github.com/giuliastro/token-harness/issues/361) | New next implementation task. | Complete the read-only 19.1–19.2 path before escalation, enforced budgets or loops. |
+| [#362 compatibility contract](https://github.com/giuliastro/token-harness/issues/362) | RFC 0009 amendment reviewed against the shipped admission paths. | Merge the explicit contract reconciliation; no runtime guard or empirical gate is relaxed. |
+| [#361 decision/checkpoint integration](https://github.com/giuliastro/token-harness/issues/361) | Read-only public decisions and bounded checkpoint fields implemented and tested. | Merge this advisory milestone before escalation, enforced budgets or loops. |
 
 The other 20 issues were already closed: substantive lifecycle, attribution, campaign and update work
 stays closed; three accidental/temporary records and duplicate campaign issue #227 add no roadmap
 work. The PR history is implementation evidence, not proof that every runtime/promotion gate passed.
-The concurrent UI/UX session is independent; this reconciliation changes documentation only.
+The concurrent UI/UX session is independent; the RFC reconciliation changes documentation only.
 
-RFC 0009 still contains historical exact-row-only admission wording while the shipped implementation
-also checks live assignable runtime surfaces. #362 tracks the explicit contract amendment; the
-provider guide describes current behaviour without changing any guard or evidence registry.
+RFC 0009's October 4 amendment documents the shipped live-assignability admission paths alongside
+exact historical recordings and independent native-hook/combined-stack/measurement gates (#362).
+The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
+
+The latest published baseline is [0.1.27](releases/0.1.27.md). The previous release's evidence
+below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
+records this branch's live results, local build distinction and remaining #255/#359/#360 gates.
+The [six-pair native pilot](evaluation/native-pairs-2026-10-04.md) publishes accepted code, negative
+token/latency outcomes and failed Codex stack activation without attributing shared account quota.
 
 - [PR #358](https://github.com/giuliastro/token-harness/pull/358) merged as
   `5f2630357b5a5a8b4b22f9c0ded58bd446982a65`, tagged `v0.1.26`.
@@ -73,13 +81,15 @@ combined-stack benchmark performance or subscription/API savings.
 1. **Verify the installed stack and automatic callbacks:** #255 and #359. The root Linux Codex
    setup was repaired in 0.1.26. A subsequent passive dashboard/API read reports it enabled and
    runtime-observed: 3 prompt callbacks, 2 starts and 2 stops, last receipt 2026-10-03T19:40:32Z.
-   No actual child model is reported. Native Windows and fresh-session coverage still require real
-   receipts; native trust is a one-time prerequisite on each applicable installation.
+   No actual child model is reported. Both agents now have fresh-session Windows callbacks; a genuine
+   Windows Codex child emitted one start/stop pair without a reported model. Fresh Linux coverage is
+   deferred at the user's request. Published-artifact upgrade and Codex sandbox access remain gates.
 2. **Run bounded paired experiments:** #360. Retain negative outcomes, actual activation,
    acceptance/retry evidence and independent five-hour/weekly observations. Never launch a broad
-   campaign merely to fill a dashboard.
-3. **Finish the unified advisory path:** #361. Reuse existing decision/context contracts instead of
-   rebuilding quota math or inferring missing budgets.
+   campaign merely to fill a dashboard. The October 4 pilot already records six pairs; failed Codex
+   RTK commands veto those optimized comparisons and concurrent parent activity excludes task quota attribution.
+3. **Review the unified advisory path:** #361 is implemented on this branch using the existing
+   decision/context contracts, with unknown budgets explicit and source receipt references.
 4. **Implement 19.3–19.5 sequentially:** evidenced escalation, enforced per-task budgets, then
    bounded verify/retry/stop. Keep architecture/security/critical work at its quality floor.
 5. **Earn promotion:** measure marginal value of a third mechanism over the actual native/current

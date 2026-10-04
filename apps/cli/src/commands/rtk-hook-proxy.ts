@@ -1,4 +1,9 @@
-import type { HarnessId, ProcessRunner } from '@token-harness/core';
+import type {
+  HarnessId,
+  OperatingSystem,
+  ProcessOutcome,
+  ProcessRunner,
+} from '@token-harness/core';
 
 const MAX_HOOK_OUTPUT_BYTES = 1024 * 1024;
 const HOOK_TIMEOUT_MS = 5_000;
@@ -20,6 +25,19 @@ function shellQuote(value: string): string {
 
 function powershellQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
+}
+
+function windowsLauncher(entryScript: string, rtkExecutable: string): string {
+  // Codex's sandbox PATH includes Node but can omit global npm shims and RTK. Encode only
+  // the two observed paths, so quotes, $, backticks and non-ASCII names never become shell code.
+  // The original RTK argument tail remains native shell input, exactly as emitted by RTK.
+  const paths = Buffer.from(JSON.stringify({ entryScript, rtkExecutable })).toString('base64');
+  return (
+    `node.exe --eval "const p=JSON.parse(Buffer.from('${paths}','base64').toString());` +
+    "process.argv.splice(1,0,p.entryScript,'__internal-rtk-run','codex','--rtk-executable',p.rtkExecutable);" +
+    "import(require('node:url').pathToFileURL(p.entryScript).href)" +
+    '" --'
+  );
 }
 
 function toolNameFromInput(input: string, harness: HarnessId): string | null {
@@ -65,6 +83,8 @@ export function attributeRtkHookResponse(
   input: string,
   databasePath: string,
   harness: HarnessId,
+  os?: OperatingSystem,
+  launcher?: { entryScript: string; rtkExecutable: string },
 ): string {
   let response: unknown;
   try {
@@ -79,11 +99,23 @@ export function attributeRtkHookResponse(
   const updatedInput = hookOutput['updatedInput'];
   if (!isRecord(updatedInput) || typeof updatedInput['command'] !== 'string') return stdout;
 
-  const attributed = withDatabaseEnvironment(
-    updatedInput['command'],
-    databasePath,
-    toolNameFromInput(input, harness),
-  );
+  // Codex calls every shell tool "Bash" and omits its selected shell from hook stdin (0.146.0).
+  // On native Windows, pass the unchanged argument tail through a launcher that sets the child
+  // environment directly. Pin the observed program paths rather than relying on npm's shim PATH.
+  const command = updatedInput['command'];
+  const attributed =
+    harness === 'codex' && os === 'windows'
+      ? launcher !== undefined && /^\s*rtk(?:\.exe)?(?:\s|$)/i.test(command)
+        ? command.replace(
+            /^\s*rtk(?:\.exe)?/i,
+            windowsLauncher(launcher.entryScript, launcher.rtkExecutable),
+          )
+        : null
+      : withDatabaseEnvironment(
+          updatedInput['command'],
+          databasePath,
+          toolNameFromInput(input, harness),
+        );
   if (attributed === null) return stdout;
 
   return `${JSON.stringify({
@@ -105,6 +137,8 @@ export async function runRtkHookProxy(input: {
   harness: HarnessId;
   databasePath: string;
   stdin: string;
+  os?: OperatingSystem;
+  entryScript?: string;
 }): Promise<RtkHookProxyResult> {
   const outcome = await input.runner.run({
     executable: 'rtk',
@@ -131,7 +165,29 @@ export async function runRtkHookProxy(input: {
       input.stdin,
       input.databasePath,
       input.harness,
+      input.os,
+      input.entryScript !== undefined && outcome.executablePath !== null
+        ? { entryScript: input.entryScript, rtkExecutable: outcome.executablePath }
+        : undefined,
     ),
     stderr: outcome.stderr,
   };
+}
+
+/** Shell-independent Windows child attribution; the native agent retains its operation timeout. */
+export function runAttributedRtkCommand(input: {
+  runner: ProcessRunner;
+  cwd: string;
+  databasePath: string;
+  args: readonly string[];
+  executable?: string;
+}): Promise<ProcessOutcome> {
+  return input.runner.run({
+    executable: input.executable ?? 'rtk',
+    args: [...input.args],
+    cwd: input.cwd,
+    env: { RTK_DB_PATH: input.databasePath },
+    timeoutMs: 0,
+    maxOutputBytes: 32 * 1024 * 1024,
+  });
 }

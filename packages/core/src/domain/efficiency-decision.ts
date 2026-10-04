@@ -458,6 +458,14 @@ function exactCapacityBudget(
       `Accepted-task p75 cost is ${String(fiveHour)}% five-hour and ` +
       `${String(weekly)}% weekly at the selected model/effort/verbosity policy`,
   });
+  for (const window of [capacity.fiveHour, capacity.weekly]) {
+    for (const receiptId of window.receiptIds ?? [])
+      evidence.push({
+        source: 'capacity',
+        code: `capacity-receipt-${window.scope}`,
+        summary: receiptId,
+      });
+  }
   reasons.push(
     reason(
       'efficiency-task-budget-evidenced',

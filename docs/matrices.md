@@ -165,9 +165,11 @@ is exactly the drift generating the tables above exists to prevent.
   Codex `0.146.0` (`config-only`). Two more Windows recordings cover RTK `0.44.0` and `0.48.0`
   with Claude Code `2.1.251`. The sixth is the real Linux/non-WSL recording:
   HarnessTrim `0.2.1` × Codex `0.152.1` (`config-only`). The optional mcptoon, GitNexus and
-  Headroom rows are admitted only on their exact reviewed config-only contracts and dedicated
+  Headroom rows record only their exact reviewed config-only contracts and dedicated
   compatibility evidence; they do not rewrite the older baseline recordings. The Linux HarnessTrim
-  row remains exact: nearby Codex/HarnessTrim versions and WSL remain refused. HarnessTrim's
+  row remains exact: nearby Codex/HarnessTrim versions and WSL have no recording from that row.
+  Ordinary setup may independently pass the live assignability and safety gates in RFC 0009;
+  that never creates an exact recording or promotes a combined stack. HarnessTrim's
   OpenCode combination remains adoption-only.
 - **`invalidating-update` is still intentionally missing from the Linux recording.** It needs a
   second real provider or harness version on the same machine; a synthesised state would assert

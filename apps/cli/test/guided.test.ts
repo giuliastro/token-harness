@@ -16,6 +16,7 @@ import {
   type PlannedAction,
   type VerifyReport,
   type HarnessContextObservation,
+  type UpdateReport,
 } from '@token-harness/core';
 import {
   GuideService,
@@ -675,6 +676,97 @@ describe('guided workflow', () => {
     await assert.rejects(service.preview({ action: 'setup' }), /Another operation/);
     release();
     await running;
+  });
+  it('keeps startup update reads outside the mutation lock and preserves a newer preview', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let updateCalls = 0;
+    const service = new GuideService(
+      async <T>(args: readonly string[]) => {
+        const command = args[0]!;
+        if (command === 'update') {
+          updateCalls++;
+          await gate;
+          return envelope(command, { providers: [], network: [] } as T);
+        }
+        if (command === 'plan') return envelope(command, plan('reviewed-plan') as T);
+        if (command === 'apply') return envelope(command, { outcome: 'committed' } as T);
+        if (command === 'verify') return envelope(command, verification() as T);
+        return envelope(command, inventory() as T);
+      },
+      () => 0,
+      () => 'reviewed-ticket',
+    );
+    const startup = service.checkUpdates(true);
+    const duplicate = service.checkUpdates(true);
+    assert.equal(service.status().busy, false);
+    const preview = await service.preview({
+      action: 'effort',
+      harness: 'claude',
+      task: 'mechanical',
+    });
+    assert.equal(preview.ticket, 'reviewed-ticket');
+    release();
+    const result = await startup;
+    assert.equal(await duplicate, result);
+    assert.equal(updateCalls, 1);
+    assert.equal(result.ticket, null);
+    assert.equal(result.stack, undefined, 'discard observations crossing a managed operation');
+    assert.equal((await service.apply({ ticket: preview.ticket })).ok, true);
+  });
+  it('reports background update availability without consuming an existing approval', async () => {
+    const update: UpdateReport = {
+      providers: [],
+      network: ['npm'],
+      execution: null,
+      application: {
+        applicationId: 'token-harness',
+        installed: '0.1.27',
+        available: '0.1.28',
+        channel: 'npm',
+        verdict: 'upgradable',
+      },
+    };
+    const service = new GuideService(
+      async <T>(args: readonly string[]) => {
+        const command = args[0]!;
+        if (command === 'update') return envelope(command, update as T);
+        if (command === 'plan') return envelope(command, plan('reviewed-plan') as T);
+        if (command === 'apply') return envelope(command, { outcome: 'committed' } as T);
+        if (command === 'verify') return envelope(command, verification() as T);
+        return envelope(command, inventory() as T);
+      },
+      () => 0,
+      () => 'reviewed-ticket',
+    );
+    const preview = await service.preview({
+      action: 'effort',
+      harness: 'claude',
+      task: 'mechanical',
+    });
+    const result = await service.checkUpdates(true);
+    assert.equal(result.updatesAvailable, true);
+    assert.equal(result.ticket, null);
+    assert.equal((await service.apply({ ticket: preview.ticket })).ok, true);
+  });
+  it('releases a failed background check and permits a retry', async () => {
+    let checks = 0;
+    const service = new GuideService(
+      async <T>(args: readonly string[]) => {
+        if (args[0] === 'update' && checks++ === 0) throw new Error('network unavailable');
+        return envelope(
+          args[0]!,
+          (args[0] === 'doctor' ? inventory() : { providers: [], network: [] }) as T,
+        );
+      },
+      () => 0,
+      () => 'unused',
+    );
+    await assert.rejects(service.checkUpdates(true), /network unavailable/);
+    assert.equal(service.status().busy, false);
+    assert.equal((await service.checkUpdates(true)).ok, true);
   });
 });
 

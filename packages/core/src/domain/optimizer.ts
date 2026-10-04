@@ -15,6 +15,7 @@ import type { Diagnostic } from './diagnostics.js';
 import type { LocalBurnTrend, SessionBoundarySignal } from './history.js';
 import type { HarnessId } from './ids.js';
 import type { ContextGovernorDecision } from './context-governor.js';
+import type { EfficiencyDecision } from './efficiency-decision.js';
 import type { PlatformFacts } from './platform.js';
 import type { WorkloadCoverageDecision } from './workload-coverage.js';
 
@@ -121,6 +122,8 @@ export interface OptimizeReport {
   /** Explicit user workload target for this optimization horizon; absent in legacy reports. */
   tasksRemaining?: number | null;
   harnesses: HarnessOptimizationAdvice[];
+  /** One advisory snapshot per Claude/Codex harness; absent in legacy saved reports. */
+  efficiencyDecisions?: EfficiencyDecision[];
 }
 
 const EFFORT_ORDER = [

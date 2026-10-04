@@ -67,7 +67,7 @@ import { observeAgentSkill } from './agent-skill.js';
 import { observeNativePromptRouting } from './prompt-router.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
-import { runRtkHookProxy } from './commands/rtk-hook-proxy.js';
+import { runAttributedRtkCommand, runRtkHookProxy } from './commands/rtk-hook-proxy.js';
 import { recordNativePromptRoutingHook, type PromptRouterEventType } from './prompt-router.js';
 
 /**
@@ -326,11 +326,48 @@ export async function main(argv: readonly string[]): Promise<void> {
       harness: harnessId(selected),
       databasePath: fs.join(resolution.environment.paths.state, `rtk-${selected}.db`),
       stdin: input,
+      os: resolution.environment.facts.os,
+      ...(process.argv[1] !== undefined && (await fs.stat(process.argv[1]))?.kind === 'file'
+        ? { entryScript: process.argv[1] }
+        : {}),
     });
     if (result.stdout.length > 0) process.stdout.write(result.stdout);
     if (result.stderr.length > 0) process.stderr.write(result.stderr);
     // RTK's hook contract is fail-open; a proxy error must not prevent the user's command.
     process.exitCode = 0;
+    return;
+  }
+
+  if (argv[0] === '__internal-rtk-run') {
+    const pinnedExecutable = argv[2] === '--rtk-executable' ? (argv[3] ?? null) : null;
+    const commandArgs = argv.slice(pinnedExecutable === null ? 2 : 4);
+    if (
+      argv[1] !== 'codex' ||
+      commandArgs.length === 0 ||
+      !resolution.ok ||
+      fs === null ||
+      attribution.salt === null ||
+      (pinnedExecutable !== null && (await fs.stat(pinnedExecutable))?.kind !== 'file')
+    ) {
+      process.stderr.write('[Token Harness] Cannot prepare attributed RTK execution.\n');
+      process.exitCode = 1;
+      return;
+    }
+    const result = await runAttributedRtkCommand({
+      runner: resolution.environment.runner,
+      cwd: process.cwd(),
+      databasePath: fs.join(resolution.environment.paths.state, 'rtk-codex.db'),
+      args: commandArgs,
+      ...(pinnedExecutable === null ? {} : { executable: pinnedExecutable }),
+    });
+    process.stdout.write(result.stdout);
+    process.stderr.write(result.stderr);
+    if (result.stdoutTruncated || result.stderrTruncated)
+      process.stderr.write('[Token Harness] RTK output exceeded the 32 MiB capture limit.\n');
+    process.exitCode =
+      result.failure !== null || result.stdoutTruncated || result.stderrTruncated
+        ? 1
+        : (result.exitCode ?? 1);
     return;
   }
 

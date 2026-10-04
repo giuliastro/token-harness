@@ -366,6 +366,14 @@ describe('workload-aware optimize', () => {
     assert.equal(advice.budgetDecision?.state, 'conserve');
     assert.equal(advice.budgetDecision?.allowEffortIncrease, false);
     assert.equal(advice.recommendedEffort, 'medium');
+    const decision = envelope.data?.efficiencyDecisions?.[0];
+    assert.ok(decision);
+    assert.equal(decision.contextAction, 'checkpoint');
+    assert.equal(decision.reasoningEffort, 'medium');
+    assert.equal(decision.maxAttempts, null);
+    assert.equal(decision.allowanceBudget.fiveHourPercent, 25);
+    assert.equal(decision.allowanceBudget.weeklyPercent, 20);
+    assert.ok(decision.evidence.some((item) => item.code === 'capacity-receipt-five-hour'));
     const workloadAdvice = advice.recommendations.find(
       (item) =>
         item.area === 'quota' &&

@@ -69,6 +69,24 @@ Policy constraints:
 - checkpoint and compaction advice requires a valid artifact byte ceiling. Artifact construction
   continues through the existing `buildCompactHandoff` contract.
 
+## October 4 read-only decision and checkpoint integration
+
+`OptimizeReport.efficiencyDecisions` contains one deterministic decision per observed Claude/Codex
+harness. Each composes the existing optimizer/budget, exact-policy accepted-task capacity and optional
+bounded Context Governor snapshot. A controller may supply an already-reviewed scheduler result via
+`RunOptions.efficiencyScheduler`; the ordinary CLI leaves scheduler evidence unknown instead of
+inventing a transfer budget or switching an agent. Duplicate/conflicting advice stays unknown.
+Absent model, attempt and allowance budgets remain null. Both human renderers expose the decision;
+verbose output carries its source-tagged evidence and reasons. These are advisory values only and
+do not alter native-policy plan/apply behavior.
+
+The existing read-only `handoff` command also accepts repeatable `--acceptance` and `--fact` fields.
+`buildCompactHandoff` preserves acceptance criteria and costly discovered facts alongside objective,
+decisions, changed files, validation, unresolved state and next action. Its configured UTF-8 byte
+ceiling, deterministic truncation and per-section omission counts remain explicit. The checkpoint
+contains only caller-supplied durable state; the metadata snapshot never accepts content or paths.
+Neither output bytes nor an advised cleanup action become tokens or predicted quota savings.
+
 ## Privacy and evidence boundary
 
 Snapshot producers are responsible for reporting only facts they directly observed. Token Harness

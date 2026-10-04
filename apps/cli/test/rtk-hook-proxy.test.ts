@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import process from 'node:process';
 import { describe, it } from 'node:test';
 
 import {
@@ -7,8 +11,13 @@ import {
   type ProcessRequest,
   type ProcessRunner,
 } from '@token-harness/core';
+import { NodeProcessRunner } from '@token-harness/platform';
 
-import { attributeRtkHookResponse, runRtkHookProxy } from '../src/commands/rtk-hook-proxy.js';
+import {
+  attributeRtkHookResponse,
+  runAttributedRtkCommand,
+  runRtkHookProxy,
+} from '../src/commands/rtk-hook-proxy.js';
 
 const codex = harnessId('codex');
 
@@ -40,6 +49,138 @@ function codexResponse(command: string): string {
 }
 
 describe('RTK hook attribution', () => {
+  it('starts the pinned program with a PATH containing Node alone, preserving shell-sensitive paths', async () => {
+    const sandbox = await mkdtemp(join(resolve(tmpdir()), 'th-rtk-bootstrap-'));
+    try {
+      const entryScript = join(sandbox, "O'Connor $` à.mjs");
+      const rtkExecutable = join(sandbox, "O'Connor $` à rtk.exe");
+      await writeFile(entryScript, 'console.log(JSON.stringify(process.argv.slice(1)));');
+      const command = JSON.parse(
+        attributeRtkHookResponse(
+          codexResponse('rtk git status --short'),
+          '{}',
+          'db',
+          codex,
+          'windows',
+          {
+            entryScript,
+            rtkExecutable,
+          },
+        ),
+      ).hookSpecificOutput.updatedInput.command as string;
+      const script = /^node\.exe --eval "([^"]+)" -- git status --short$/.exec(command)?.[1];
+      assert.ok(script);
+      const windows = process.platform === 'win32';
+      const shell = join(
+        process.env['SystemRoot'] ?? 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe',
+      );
+      const runner = new NodeProcessRunner({
+        facts: {
+          os: windows ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
+          osDisplayName: 'test',
+          arch: 'x64',
+          nodeVersion: process.versions.node,
+          isWsl: false,
+        },
+        env: {
+          PATH: dirname(process.execPath),
+          PATHEXT: '.EXE',
+          SystemRoot: process.env['SystemRoot'],
+        },
+        resolve: (name) => ({
+          requested: name,
+          path: windows ? shell : process.execPath,
+          kind: 'native',
+        }),
+      });
+      const result = await runner.run({
+        executable: windows ? 'powershell' : 'node',
+        args: windows
+          ? ['-NoProfile', '-NonInteractive', '-Command', command]
+          : ['--eval', script, '--', 'git', 'status', '--short'],
+        cwd: sandbox,
+      });
+      assert.equal(result.failure, null);
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.ok(result.stdout.trim(), JSON.stringify(result));
+      assert.deepEqual(JSON.parse(result.stdout), [
+        entryScript,
+        '__internal-rtk-run',
+        'codex',
+        '--rtk-executable',
+        rtkExecutable,
+        'git',
+        'status',
+        '--short',
+      ]);
+    } finally {
+      assert.equal(
+        dirname(sandbox),
+        resolve(tmpdir()),
+        'cleanup stays in the allocated temp directory',
+      );
+      await rm(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+  it('uses a shell-independent Windows launcher when Codex labels PowerShell as Bash', async () => {
+    const result = attributeRtkHookResponse(
+      codexResponse('rtk git status --short'),
+      JSON.stringify({ tool_name: 'Bash' }),
+      "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db",
+      codex,
+      'windows',
+      {
+        entryScript: "C:\\Users\\O'Connor $`\\Token Harness\\token-harness.mjs",
+        rtkExecutable: "C:\\Users\\O'Connor $`\\RTK\\rtk.exe",
+      },
+    );
+    const command = JSON.parse(result).hookSpecificOutput.updatedInput.command as string;
+    assert.match(command, /^node\.exe --eval "[^"$`]+" -- git status --short$/);
+    const encoded = /Buffer.from\('([^']+)'/.exec(command)?.[1];
+    assert.ok(encoded);
+    assert.deepEqual(JSON.parse(Buffer.from(encoded, 'base64').toString()), {
+      entryScript: "C:\\Users\\O'Connor $`\\Token Harness\\token-harness.mjs",
+      rtkExecutable: "C:\\Users\\O'Connor $`\\RTK\\rtk.exe",
+    });
+    let seen!: ProcessRequest;
+    await runAttributedRtkCommand({
+      runner: {
+        run: async (request) => {
+          seen = request;
+          return outcome('actual output');
+        },
+      },
+      cwd: 'C:\\work',
+      databasePath: "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db",
+      args: ['git', 'status', '--short'],
+      executable: 'C:\\RTK\\rtk.exe',
+    });
+    assert.equal(seen.executable, 'C:\\RTK\\rtk.exe');
+    assert.deepEqual(seen.args, ['git', 'status', '--short']);
+    assert.equal(seen.env?.['RTK_DB_PATH'], "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db");
+    assert.equal(seen.timeoutMs, 0, 'the wrapper must not shorten the native tool timeout');
+  });
+  it('retains POSIX/WSL assignments and leaves unknown Windows rewrites unchanged', () => {
+    assert.match(
+      attributeRtkHookResponse(
+        codexResponse('rtk git status'),
+        '{}',
+        '/data/rtk.db',
+        codex,
+        'linux',
+      ),
+      /RTK_DB_PATH=/,
+    );
+    const unrelated = codexResponse('other-tool git status');
+    assert.equal(
+      attributeRtkHookResponse(unrelated, '{}', 'C:\\data\\rtk.db', codex, 'windows'),
+      unrelated,
+    );
+  });
   it('adds the harness-specific database path to a Bash rewrite', () => {
     const result = attributeRtkHookResponse(
       codexResponse('rtk git status'),
