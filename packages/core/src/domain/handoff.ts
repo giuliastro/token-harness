@@ -114,15 +114,20 @@ function render(
   nextAction: string,
   lists: MutableLists,
   omitted: OmittedCounts,
+  compactOmissions = false,
 ): string {
+  const section = (title: string, key: keyof MutableLists): string[] =>
+    renderList(title, lists[key], compactOmissions ? 0 : omitted[key]);
+  const omittedTotal = Object.values(omitted).reduce((sum, count) => sum + count, 0);
   const sections: string[][] = [
     ['# Compact handoff', '', '## Objective', objective],
-    renderList('Acceptance criteria', lists.acceptanceCriteria, omitted.acceptanceCriteria),
-    renderList('Costly facts', lists.costlyFacts, omitted.costlyFacts),
-    renderList('Decisions', lists.decisions, omitted.decisions),
-    renderList('Changed files', lists.changedFiles, omitted.changedFiles),
-    renderList('Validation', lists.validation, omitted.validation),
-    renderList('Unresolved', lists.unresolved, omitted.unresolved),
+    section('Acceptance criteria', 'acceptanceCriteria'),
+    section('Costly facts', 'costlyFacts'),
+    section('Decisions', 'decisions'),
+    section('Changed files', 'changedFiles'),
+    section('Validation', 'validation'),
+    section('Unresolved', 'unresolved'),
+    compactOmissions && omittedTotal > 0 ? [`… ${omittedTotal} optional items omitted`] : [],
     ['## Next action', nextAction],
   ].filter((section) => section.length > 0);
 
@@ -178,17 +183,22 @@ export function buildCompactHandoff(input: CompactHandoffInput): CompactHandoffR
     markdown = render(objective, nextAction, lists, omitted);
   }
 
+  // Empty section headers and omission markers must not crowd out the mandatory state. Keep
+  // per-section counts in the result, using one Markdown marker when the skeleton needs room.
+  const compactOmissions = byteLength(render('', '', lists, omitted)) + 32 > input.maxBytes;
+  if (compactOmissions) markdown = render(objective, nextAction, lists, omitted, true);
+
   // If the mandatory objective/next-action pair itself is too large, split the remaining payload
   // budget between them. Keep the structure rather than silently exceeding the configured ceiling.
   if (byteLength(markdown) > input.maxBytes) {
-    const skeleton = render('', '', lists, omitted);
+    const skeleton = render('', '', lists, omitted, compactOmissions);
     const available = Math.max(32, input.maxBytes - byteLength(skeleton));
     const objectiveBudget = Math.floor(available * 0.6);
     const nextBudget = available - objectiveBudget;
     objective = truncateUtf8(objective, objectiveBudget);
     nextAction = truncateUtf8(nextAction, nextBudget);
     truncated = true;
-    markdown = render(objective, nextAction, lists, omitted);
+    markdown = render(objective, nextAction, lists, omitted, compactOmissions);
   }
 
   // Defensive final clamp for unusual Unicode/header combinations. At the supported minimum budget

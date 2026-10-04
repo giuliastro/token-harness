@@ -97,11 +97,40 @@ test('checkpoint truncation reports omissions and preserves valid Unicode under 
     assert.equal(result.truncated, true);
     assert.equal(result.omitted.acceptanceCriteria, 1);
     assert.equal(result.omitted.costlyFacts, 1);
+    assert.match(result.markdown, /## Objective\n🚀/);
+    assert.match(result.markdown, /## Next action\n🚀/);
     assert.equal(
       new TextDecoder().decode(new TextEncoder().encode(result.markdown)),
       result.markdown,
     );
   }
+});
+
+test('minimum checkpoint budget preserves short mandatory state after every optional section is omitted', () => {
+  const detail = ['optional detail '.repeat(80)];
+  const result = buildCompactHandoff({
+    objective: 'Fix routing',
+    nextAction: 'Run the regression test',
+    acceptanceCriteria: detail,
+    costlyFacts: detail,
+    decisions: detail,
+    changedFiles: detail,
+    validation: detail,
+    unresolved: detail,
+    maxBytes: 256,
+  });
+  assert.ok(result.bytes <= 256);
+  assert.match(result.markdown, /## Objective\nFix routing/);
+  assert.match(result.markdown, /## Next action\nRun the regression test/);
+  assert.match(result.markdown, /6 optional items omitted/);
+  assert.deepEqual(result.omitted, {
+    acceptanceCriteria: 1,
+    costlyFacts: 1,
+    decisions: 1,
+    changedFiles: 1,
+    validation: 1,
+    unresolved: 1,
+  });
 });
 
 test('buildCompactHandoff rejects unsafe budgets and empty mandatory fields', () => {
