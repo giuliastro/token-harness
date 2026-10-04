@@ -1,34 +1,30 @@
-# Release checkpoint — 2026-10-03
+# Release checkpoint — 2026-10-04
 
-Token Harness `0.1.27` simplifies Overview and Results, unifies form controls and replaces the
-crowded evidence table with a responsive list of expandable results.
+Token Harness `0.1.28` includes the reviewed startup/routing fixes in #365, the optimizer guidance
+in #366 and the checkpoint byte-budget correction found during review.
 
 ## Changes in this release
 
-- Overview keeps setup status, a direct next action and three compact impact cards. Repeated
-  explanations and the permanently unmeasured API-cost card are removed.
-- Search, period, source and sort controls share sizing, theme colors and keyboard focus. Evidence
-  search includes collapsed provenance; combined filters show a source count and a clear reset.
-- Results prioritizes sources with recorded results. Every measurement keeps its class and unit;
-  expanded sections show before/after volumes, saved or added output, operation counts and app
-  attribution. App-linked views explicitly identify reused optimizer records.
-- Routing details separate verification tiers and callback counts from paired savings evidence.
-  Quality-blocked claims remain uncredited, and increased usage stays visible.
-- Expanded result details survive refresh. Overview/Results tabs support arrow keys, Home and End;
-  navigation returns to the page heading.
-- On narrow screens, optimizer connections become cards and the appearance selector stays visible.
-  Both themes retain readable text, controls and keyboard focus.
-- README onboarding and delivery documentation from the previous documentation reconciliation are
-  included in this release.
+- Passive startup update checks preserve approval tickets and stop reserving the mutation lock.
+  Concurrent changes invalidate stale background observations.
+- Reviewed Codex 0.146.0 routing, reversible standard Windows HarnessTrim hook repair and pinned
+  RTK launcher paths preserve native trust, custom commands and agent-specific measurement.
+- Public advisory efficiency decisions expose existing evidence and exact-policy receipt references;
+  missing budgets remain unknown. Checkpoints retain acceptance criteria and costly facts, with
+  objective and next action preserved even at the minimum UTF-8 byte budget.
+- Optimizer explanations link source projects and benchmark methodology, preserve workload scope
+  and distinguish upstream claims from local measurements. Routing explains delegation and trust.
+- RFC 0009 reconciles historical evidence with existing live assignability. No runtime admission or
+  savings-evidence guard is widened.
 
 ## Release gates
 
-Cross-platform PR CI must pass before creating `release/v0.1.27`. The bridge creates immutable tag
-`v0.1.27` and dispatches the exact-tag workflow, which gates publication on tests, real-runtime smoke,
-packaging, provenance, npm Trusted Publishing and npm-latest verification.
+Cross-platform release-candidate CI must pass before creating `release/v0.1.28`. The bridge creates
+immutable tag `v0.1.28` and dispatches the exact-tag workflow, which gates publication on tests,
+real-runtime smoke, packaging, provenance, npm Trusted Publishing and npm-latest verification.
 
-Visual checks use synthetic observations, separate from actual account or provider measurements.
-This UI release adds no new provider compatibility or empirical savings claim. Existing native
-Windows runtime and broad-promotion evidence gates remain open.
+The Windows repair audit and native pilot remain scoped to their recorded pre-release builds and
+conditions. They do not close the published-artifact, sandbox, paired marginal-value or broad
+promotion gates. No new subscription or API savings claim is made.
 
-Release notes and verification scope are in [docs/releases/0.1.27.md](releases/0.1.27.md).
+Release notes and verification scope are in [docs/releases/0.1.28.md](releases/0.1.28.md).
