@@ -1,4 +1,6 @@
 /** Single-owner browser controller for the novice-facing local product UI. */
+import { GUIDE_OPTIMIZER_INFO } from './guided-optimizer-info.js';
+
 export const GUIDE_PRODUCT_JS = String.raw`
 'use strict';
 (() => {
@@ -15,36 +17,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     dashboard: ['Overview', 'Your setup, results and next steps.'],
     results: ['Results', 'See what changed and the evidence behind it.'],
   };
-  const TOOL_INFO = {
-    rtk: {
-      name: 'RTK',
-      role: 'Reduces noisy command output before it reaches the model.',
-      managed: true,
-    },
-    harnesstrim: {
-      name: 'HarnessTrim',
-      role: 'Adds version-aware instructions that help coding agents keep tool output and context lean.',
-      managed: true,
-    },
-    mcptoon: {
-      name: 'mcptoon',
-      role: 'Provides compact MCP discovery integration and verifies the resulting setup.',
-      managed: true,
-      optional: true,
-    },
-    gitnexus: {
-      name: 'GitNexus',
-      role: 'Registers GitNexus as a narrow MCP integration for Claude Code and Codex and verifies the result.',
-      managed: true,
-      optional: true,
-    },
-    headroom: {
-      name: 'Headroom',
-      role: 'Provides local MCP compression and retrieval through the installed Headroom server.',
-      managed: true,
-      optional: true,
-    },
-  };
+  const TOOL_INFO = ${JSON.stringify(GUIDE_OPTIMIZER_INFO)};
   const EXPERIMENTAL = [];
   const CATEGORY = {
     'command-output-reduction': 'Command output',
@@ -65,6 +38,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   let updateCheckStarted = false;
   let latestUpdateCheck = null;
   const periodCache = new Map();
+  const openExplanations = new Set();
 
   async function request(path, body) {
     const options = { cache: 'no-store', signal: AbortSignal.timeout(120000) };
@@ -206,6 +180,58 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const box = node('div', undefined, 'explain-box ' + cls);
     box.append(node('strong', title), node('p', text));
     return box;
+  }
+
+  function projectLink(label, url, accessibleLabel) {
+    const link = node('a', label, 'project-link');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', accessibleLabel + ' (opens in a new tab)');
+    const icon = node('span', '↗', 'external-link-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    link.append(icon);
+    return link;
+  }
+
+  function explanation(key, label, cls = '') {
+    const details = node('details', undefined, 'feature-explanation ' + cls);
+    details.dataset.key = key;
+    details.open = openExplanations.has(key);
+    details.append(node('summary', label));
+    details.addEventListener('toggle', () => {
+      if (details.open) openExplanations.add(key);
+      else openExplanations.delete(key);
+    });
+    return details;
+  }
+
+  function optimizerExplanation(id, info) {
+    const details = explanation('optimizer:' + id, 'When is ' + info.name + ' useful?', 'optimizer-explanation');
+    const body = node('div', undefined, 'explanation-grid');
+    body.append(
+      messageBox('When to consider it', info.useful || info.role),
+      messageBox('How it works', info.mechanism || 'Review the project documentation for this optimizer’s mechanism.'),
+      messageBox('Before you install', info.limitation || 'Check compatibility and measure the benefit on your own workload.'),
+    );
+    const claim = messageBox('What the project reports', info.claim?.context || 'No published benchmark is included for this optimizer.');
+    if (info.claim?.source)
+      claim.append(projectLink('Benchmark & methodology', info.claim.source, info.name + ' benchmark and methodology'));
+    body.append(claim);
+    details.append(body);
+    return details;
+  }
+
+  function routingExplanation(agentId) {
+    const details = explanation('routing:' + agentId, 'How routing works', 'routing-explanation');
+    const model = agentId === 'codex' ? 'gpt-6-luna' : 'Haiku';
+    details.append(
+      messageBox('One prompt, a focused helper', 'On each submitted prompt, a local hook asks your coding agent to consider one native subagent for a substantial, independent piece of work. For example, the helper can research a module while the main agent implements the change.'),
+      messageBox('The main agent stays in charge', 'The policy requests ' + model + ' when available. Your main model reviews and integrates the result. Trivial edits, tightly coupled work, architecture, security and release decisions stay with the main agent.'),
+      messageBox('When it helps', 'Useful when a bounded task can run independently. Delegation can also add overhead and increase total usage; a cheaper helper alone does not prove token or subscription savings.'),
+      messageBox('How to verify it', (agentId === 'codex' ? 'After enabling, review and trust the hook in Codex /hooks. ' : 'After enabling, start a new session so the hook is loaded. ') + 'A callback proves the hook ran; it does not prove delegation or savings. Results credit savings only from paired runs that pass the quality gate.'),
+    );
+    return details;
   }
 
   function activeAgents() {
@@ -555,6 +581,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       );
       routingCard.append(
         routingHead,
+        node('p', 'Lets your agent delegate suitable work to a smaller native helper while your main model stays in charge.', 'caption'),
         node(
           'p',
           routing?.detail || (routing?.enablement === 'untrusted'
@@ -569,6 +596,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
           'caption',
         ),
       );
+      routingCard.append(routingExplanation(agent.id));
       const routingActions = node('div', undefined, 'inline-actions');
       if (routing?.needsRepair) {
         routingActions.append(actionButton('Repair routing', () => reviewPromptRouting(agent.id, true), 'secondary'));
@@ -912,8 +940,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const agents = activeAgents();
     const ids = optimizerIds();
     if (!agents.length) {
-      root.append(sectionEmpty('Optimizer setup will appear when a supported coding app is detected.'));
-      return;
+      root.append(sectionEmpty('Explore the optimizers below. Connections become available when a supported coding app is detected.'));
     }
 
     const summary = node('div', undefined, 'connection-summary');
@@ -929,12 +956,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (baselineActionable)
       summary.append(actionButton('Set up recommended stack', () => reviewSetup(), ''));
     root.append(summary);
+    root.append(node('p', 'Project-reported figures describe different workloads, not expected savings on your machine. Your measured results stay in Results.', 'caption optimizer-claims-note'));
 
     const scroll = node('div', undefined, 'connection-scroll');
     const table = node('div', undefined, 'connection-table');
-    table.style.setProperty('--connection-columns', String(agents.length));
+    table.style.setProperty('--connection-template', 'minmax(240px,1.5fr) minmax(165px,1fr) ' + agents.map(() => 'minmax(110px,.7fr)').join(' ') + ' minmax(150px,.9fr)');
     const header = node('div', undefined, 'connection-row connection-head');
     header.append(node('strong', 'Optimizer', 'connection-name'));
+    header.append(node('strong', 'Project-reported impact', 'optimizer-claim'));
     for (const agent of agents) header.append(node('strong', agent.name, 'connection-cell'));
     header.append(node('strong', 'Action', 'connection-action'));
     table.append(header);
@@ -942,15 +971,28 @@ export const GUIDE_PRODUCT_JS = String.raw`
     for (const id of ids) {
       const info = optimizerInfo(id);
       const component = managedComponent(id);
+      const item = node('article', undefined, 'connection-item');
+      item.dataset.optimizer = id;
+      item.setAttribute('aria-label', info.name);
       const row = node('div', undefined, 'connection-row');
       const nameCell = node('div', undefined, 'connection-name');
+      const identity = node('div', undefined, 'optimizer-identity');
+      identity.append(node('strong', info.name));
+      if (info.project) identity.append(projectLink('Source project', info.project, info.name + ' source project'));
       nameCell.append(
-        node('strong', info.name),
+        identity,
         node('span', info.optional ? 'Optional optimizer' : 'Recommended baseline', 'caption'),
         node('span', info.role, 'caption connection-role'),
         node('span', component?.version ? 'v' + component.version : 'Not installed', 'caption'),
       );
       row.append(nameCell);
+      const claimCell = node('div', undefined, 'optimizer-claim');
+      claimCell.append(
+        node('span', 'Project-reported impact', 'connection-app-label'),
+        node('strong', info.claim?.headline || 'No published KPI'),
+        node('span', info.claim?.scope || 'No comparable benchmark available', 'caption'),
+      );
+      row.append(claimCell);
       let actionable = false;
       for (const agent of agents) {
         const target = setupTarget(agent.id, id);
@@ -981,7 +1023,8 @@ export const GUIDE_PRODUCT_JS = String.raw`
       }
       if (!action.children.length) action.append(node('span', 'No action', 'caption'));
       row.append(action);
-      table.append(row);
+      item.append(row, optimizerExplanation(id, info));
+      table.append(item);
     }
     scroll.append(table);
     root.append(scroll);
