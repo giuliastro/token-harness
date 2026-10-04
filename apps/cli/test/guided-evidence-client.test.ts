@@ -175,7 +175,13 @@ async function browser(data = observation()) {
     window: {},
     fetch,
     AbortSignal,
-    Intl,
+    Intl: {
+      NumberFormat: class extends Intl.NumberFormat {
+        constructor(locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) {
+          super(locales ?? 'en-US', options);
+        }
+      },
+    },
     localStorage: { getItem: () => 'light' },
     setInterval: () => 0,
     clearInterval() {},

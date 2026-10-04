@@ -12,7 +12,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', 'dist/**', 'node_modules/**', 'tests/fixtures/**'],
+    ignores: ['**/dist/**', 'dist/**', 'node_modules/**', 'tests/fixtures/**', 'artifacts/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

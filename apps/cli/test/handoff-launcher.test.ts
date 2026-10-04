@@ -1,16 +1,41 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, sep } from 'node:path';
+import { after, describe, it } from 'node:test';
 
 import { TOOL_VERSION } from '../src/version.js';
 
 const launcher = join(process.cwd(), 'apps', 'cli', 'bin', 'token-harness.mjs');
+const sandbox = mkdtempSync(join(tmpdir(), 'th-launcher-'));
+const home = join(sandbox, 'home');
+const project = join(sandbox, 'project');
+mkdirSync(home);
+mkdirSync(project);
+after(() => {
+  assert.ok(resolve(sandbox).startsWith(resolve(tmpdir()) + sep));
+  rmSync(sandbox, { recursive: true, force: true });
+});
 
 function run(args: readonly string[]) {
   return spawnSync(process.execPath, [launcher, ...args], {
-    cwd: process.cwd(),
+    cwd: project,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      APPDATA: home,
+      LOCALAPPDATA: home,
+      XDG_CONFIG_HOME: home,
+      XDG_DATA_HOME: home,
+      CODEX_HOME: join(home, '.codex'),
+      CLAUDE_CONFIG_DIR: join(home, '.claude'),
+      PATH: join(sandbox, 'no-provider-executables'),
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+    },
   });
 }
 
