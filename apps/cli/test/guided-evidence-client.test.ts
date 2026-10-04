@@ -59,6 +59,12 @@ class Element {
     this.attributes['focused'] = 'true';
   }
   scrollIntoView() {}
+  showModal() {
+    this.open = true;
+  }
+  close() {
+    this.open = false;
+  }
   querySelectorAll(selector: string): Element[] {
     const descendants = this.children.flatMap((child) => [child, ...child.querySelectorAll('*')]);
     return descendants.filter(
@@ -71,7 +77,7 @@ class Element {
 }
 
 function observation() {
-  return {
+  const data = {
     generatedAt: '2026-10-03T12:00:00Z',
     notices: [],
     agents: [
@@ -129,6 +135,13 @@ function observation() {
     value: {
       routing: { state: 'not-measured', savedLocalTokens: null as number | null, pairs: 0 },
       candidates: [],
+    },
+  };
+  return {
+    ...data,
+    savings: {
+      ...data.savings,
+      byHarness: [{ harnessId: 'codex', rows: [data.savings.rows[1]!] }],
     },
   };
 }
@@ -303,14 +316,14 @@ describe('guided evidence interactions', () => {
     );
     get('evidence-type').value = 'optimizer';
     get('evidence-type').fire('change');
-    assert.equal(get('evidence-count').textContent, '1 of 7 sources');
+    assert.equal(get('evidence-count').textContent, '1 of 9 sources');
     get('evidence-filter').value = 'no-such-source';
     get('evidence-filter').fire('input');
     assert.equal(get('evidence-empty').hidden, false);
     get('evidence-reset').fire('click');
     assert.equal(get('evidence-type').value, 'all');
     assert.equal(get('evidence-filter').value, '');
-    assert.equal(get('evidence-count').textContent, '7 of 7 sources');
+    assert.equal(get('evidence-count').textContent, '9 of 9 sources');
     assert.equal(get('evidence-empty').hidden, true);
     assert.equal(get('evidence-filter').attributes['focused'], 'true');
   });
@@ -322,7 +335,7 @@ describe('guided evidence interactions', () => {
     rtk.open = true;
     get('evidence-sort').value = 'name';
     get('evidence-sort').fire('change');
-    assert.equal(get('result-evidence').children[0]!.dataset['name'], 'automatic prompt routing');
+    assert.equal(get('result-evidence').children[0]!.dataset['name'], '5h / 7d allowance');
     get('refresh').fire('click');
     await settle();
     assert.equal(
@@ -342,7 +355,10 @@ describe('guided evidence interactions', () => {
     assert.doesNotMatch(routing.textContent, /999.*saved/);
     data.value.routing = { state: 'measured', savedLocalTokens: -250, pairs: 1 };
     const growth = await browser(data);
-    assert.match(growth.get('result-summary').textContent, /250 tokens added/);
+    assert.doesNotMatch(
+      growth.get('result-summary').textContent,
+      /Automatic routing|250 tokens added/,
+    );
     const growthRouting = growth
       .get('result-evidence')
       .children.find((row) => row.dataset['type'] === 'routing')!;
@@ -366,5 +382,94 @@ describe('guided evidence interactions', () => {
     assert.equal(get('view-dashboard').hidden, false);
     assert.equal(get('tab-dashboard').attributes['focused'], 'true');
     assert.equal(reads.filter((path) => path.startsWith('/api/overview')).length, 1);
+  });
+
+  it('links observed Codex routing and current quota without attributing shared RTK output', async () => {
+    const data = observation();
+    data.savings.rows = [data.savings.rows[0]!];
+    data.savings.byHarness = [];
+    Object.assign(data.agents[0]!, {
+      version: '0.146.0',
+      promptRouting: {
+        configured: true,
+        enablement: 'enabled',
+        verificationTier: 'runtime-observed',
+        promptSubmissions: 3,
+        subagentsStarted: 1,
+        subagentsStopped: 1,
+        reportedModels: ['gpt-6-luna'],
+        lastObservedAt: '2026-10-04T12:00:00Z',
+      },
+      allowance: [
+        {
+          label: '5-hour allowance',
+          remaining: 75,
+          source: 'native-rpc · authoritative',
+          resetsAt: '2026-10-04T16:00:00Z',
+        },
+        {
+          label: 'weekly allowance',
+          remaining: 45,
+          source: 'native-rpc · authoritative',
+          resetsAt: '2026-10-10T16:00:00Z',
+        },
+      ],
+    });
+    const { get } = await browser(data);
+    const app = get('result-evidence').children.find((row) => row.dataset['name'] === 'codex')!;
+    assert.match(app.textContent, /v0\.146\.0/);
+    assert.match(app.textContent, /3 prompt callbacks.*1 subagents started/);
+    assert.match(app.textContent, /75% remaining.*45% remaining/);
+    assert.match(app.textContent, /gpt-6-luna/);
+    assert.doesNotMatch(app.textContent, /No linked results|800 tokens|80% less/);
+    const routing = get('result-evidence').children.find(
+      (row) => row.dataset['type'] === 'routing',
+    )!;
+    assert.match(routing.textContent, /3 prompt callbacks/);
+    assert.match(routing.textContent, /Savings comparison needed/);
+    assert.ok(Number(routing.dataset['amount']) > 0);
+    assert.match(get('result-summary').textContent, /Current quota is being read/);
+    assert.doesNotMatch(get('result-summary').textContent, /Automatic routing|75.*saved|45.*saved/);
+  });
+
+  it('keeps configuration-only routing and unreadable quota out of observed activity', async () => {
+    const data = observation();
+    data.savings.rows = [];
+    data.savings.byHarness = [];
+    Object.assign(data.agents[0]!, {
+      promptRouting: { configured: true, enablement: 'untrusted', verificationTier: 'config-only' },
+      allowance: [],
+      allowanceNote: 'Native quota reader is unavailable; sign in again.',
+    });
+    const { get } = await browser(data);
+    const app = get('result-evidence').children.find((row) => row.dataset['type'] === 'harness')!;
+    assert.match(app.textContent, /No activity recorded/);
+    assert.match(app.textContent, /trust this hook/);
+    assert.match(app.textContent, /Configuration only/);
+    assert.match(app.textContent, /Native quota reader is unavailable/);
+    assert.doesNotMatch(app.textContent, /prompt callbacks|0% remaining|tokens saved/);
+  });
+
+  it('filters allowance and quality as measurements and opens a real paired capture guide', async () => {
+    const { get, reads } = await browser();
+    get('evidence-type').value = 'measurement';
+    get('evidence-type').fire('change');
+    assert.deepEqual(
+      get('result-evidence')
+        .children.filter((row) => !row.hidden)
+        .map((row) => row.dataset['name']),
+      ['5h / 7d allowance', 'task quality'],
+    );
+    const before = reads.length;
+    get('record-comparison').fire('click');
+    assert.equal(get('modal').open, true);
+    const guide = get('modal-content');
+    assert.match(guide.textContent, /benchmark-start.*--variant baseline.*--harness codex/);
+    assert.match(guide.textContent, /benchmark-start.*--variant optimized.*--harness codex/);
+    assert.match(guide.textContent, /benchmark-finish.*--quality <passed\|failed>/);
+    assert.match(guide.textContent, /disable routing.*baseline/);
+    assert.match(guide.textContent, /must actually start a native subagent/);
+    assert.match(guide.textContent, /same project where this dashboard was opened/);
+    assert.equal(reads.length, before, 'Opening guidance must not execute captures or tasks');
   });
 });

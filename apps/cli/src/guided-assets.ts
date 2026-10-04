@@ -63,13 +63,13 @@ export const GUIDE_HTML = `<!doctype html>
 </section>
 
 <section id="view-results" role="tabpanel" aria-labelledby="tab-results" tabindex="0" hidden>
-<div class="results-header"><div><h2>Measured impact</h2><p>Each result keeps its source and measurement type.</p></div><div class="filter-row"><label for="period" class="sr-only">Results period</label><select id="period"><option value="all">All recorded history</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><button id="measurement-help" class="secondary" type="button">How to read results</button></div></div>
+<div class="results-header"><div><h2>Measured impact</h2><p>Each result keeps its source and measurement type.</p></div><div class="filter-row"><label for="period" class="sr-only">Output history period</label><select id="period"><option value="all">All recorded history</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><button id="record-comparison" class="secondary" type="button">Record a comparison</button><button id="measurement-help" class="secondary" type="button">How to read results</button></div></div>
 <div id="result-summary" class="impact-grid" aria-label="Results overview"><article class="metric-card"><span class="metric-label">Measured evidence</span><strong class="metric-value">Checking…</strong></article></div>
 <div class="section-title"><div><h2>Evidence</h2><p id="results-period-note">Checking recorded dates…</p></div></div>
 <section class="panel evidence-panel">
 <div class="evidence-controls">
 <div class="evidence-field evidence-search"><label for="evidence-filter">Search evidence</label><input id="evidence-filter" type="search" placeholder="Search sources, apps or measurements" autocomplete="off"></div>
-<div class="evidence-field"><label for="evidence-type">Source type</label><select id="evidence-type"><option value="all">All sources</option><option value="optimizer">Optimizers</option><option value="routing">Routing</option><option value="harness">Coding apps</option><option value="candidate">Experiments</option></select></div>
+<div class="evidence-field"><label for="evidence-type">Source type</label><select id="evidence-type"><option value="all">All sources</option><option value="optimizer">Optimizers</option><option value="routing">Routing</option><option value="harness">Coding apps</option><option value="measurement">Measurements</option><option value="candidate">Experiments</option></select></div>
 <div class="evidence-field"><label for="evidence-sort">Sort by</label><select id="evidence-sort"><option value="evidence">With results first</option><option value="name">Name</option><option value="type">Source type</option></select></div>
 </div>
 <div class="evidence-list-meta"><p id="evidence-count" class="caption" role="status"></p><button id="evidence-reset" class="text-button" type="button" hidden>Clear filters</button></div>

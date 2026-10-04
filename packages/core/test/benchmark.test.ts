@@ -645,6 +645,137 @@ describe('empirical benchmark matrix', () => {
     );
   });
 
+  it('retains every matched quota window and quality gates on a comparable pair', () => {
+    const fiveHour = window({ bucketId: 'five-hour', scope: 'five-hour' });
+    const weekly = window({
+      bucketId: 'weekly',
+      bucketName: 'Weekly',
+      scope: 'weekly',
+    });
+    const report = buildTaskBenchmarkMatrix([
+      {
+        baseline: receipt('baseline', {
+          usageBefore: [fiveHour, weekly],
+          usageAfter: [
+            {
+              ...fiveHour,
+              usedPercent: 28,
+              remainingPercent: 72,
+              observedAt: '2026-09-02T12:20:00.000Z',
+            },
+            {
+              ...weekly,
+              usedPercent: 23,
+              remainingPercent: 77,
+              observedAt: '2026-09-02T12:20:00.000Z',
+            },
+          ],
+        }),
+        optimized: receipt('optimized', {
+          usageBefore: [fiveHour, weekly],
+          usageAfter: [
+            {
+              ...fiveHour,
+              usedPercent: 24,
+              remainingPercent: 76,
+              observedAt: '2026-09-02T12:20:00.000Z',
+            },
+            {
+              ...weekly,
+              usedPercent: 26,
+              remainingPercent: 74,
+              observedAt: '2026-09-02T12:20:00.000Z',
+            },
+          ],
+        }),
+      },
+    ]);
+
+    const entry = report.entries[0];
+    assert.ok(entry);
+    assert.deepEqual(
+      entry.quotaComparisons?.map(
+        ({ scope, baselineDeltaUsedPercent, optimizedDeltaUsedPercent }) => ({
+          scope,
+          baselineDeltaUsedPercent,
+          optimizedDeltaUsedPercent,
+        }),
+      ),
+      [
+        { scope: 'five-hour', baselineDeltaUsedPercent: 8, optimizedDeltaUsedPercent: 4 },
+        { scope: 'weekly', baselineDeltaUsedPercent: 3, optimizedDeltaUsedPercent: 6 },
+      ],
+    );
+    assert.equal(entry.quota?.scope, 'five-hour');
+    assert.deepEqual(entry.quality, { baseline: 'passed', optimized: 'passed' });
+  });
+
+  it('keeps reset-crossing and cached windows out of matrix quota comparisons', () => {
+    const resetBefore = window({ bucketId: 'reset-crossing' });
+    const cachedBefore = window({
+      bucketId: 'cached',
+      confidence: 'cached',
+      source: 'companion-cli',
+    });
+    const after = (
+      before: UsageWindowSnapshot,
+      usedPercent: number,
+      extra: Partial<UsageWindowSnapshot> = {},
+    ) => ({
+      ...before,
+      usedPercent,
+      remainingPercent: 100 - usedPercent,
+      observedAt: '2026-09-02T12:20:00.000Z',
+      ...extra,
+    });
+    const report = buildTaskBenchmarkMatrix([
+      {
+        baseline: receipt('baseline', {
+          usageBefore: [resetBefore, cachedBefore],
+          usageAfter: [
+            after(resetBefore, 30, { resetsAt: '2026-09-02T12:15:00.000Z' }),
+            after(cachedBefore, 30),
+          ],
+        }),
+        optimized: receipt('optimized', {
+          usageBefore: [resetBefore, cachedBefore],
+          usageAfter: [
+            after(resetBefore, 26, { resetsAt: '2026-09-02T12:15:00.000Z' }),
+            after(cachedBefore, 26),
+          ],
+        }),
+      },
+    ]);
+
+    assert.deepEqual(report.entries[0]?.quotaComparisons, []);
+    assert.equal(report.entries[0]?.quota, null);
+  });
+
+  it('does not compare quota windows across mismatched identity, class or harness', () => {
+    const pairs = [
+      {
+        baseline: receipt('baseline'),
+        optimized: receipt('optimized', { benchmarkId: 'other-task' }),
+      },
+      {
+        baseline: receipt('baseline'),
+        optimized: receipt('optimized', { taskClass: 'hard' }),
+      },
+      {
+        baseline: receipt('baseline'),
+        optimized: receipt('optimized', { harnessId: harnessId('claude') }),
+      },
+    ];
+    const report = buildTaskBenchmarkMatrix(pairs);
+
+    assert.equal(report.entries.length, 3);
+    for (const entry of report.entries) {
+      assert.equal(entry.verdict, 'incomparable');
+      assert.equal(entry.quota, null);
+      assert.deepEqual(entry.quotaComparisons, []);
+    }
+  });
+
   it('attributes routing only when the disabled baseline and enabled subagent run are witnessed', () => {
     const report = buildTaskBenchmarkMatrix([
       {

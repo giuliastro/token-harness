@@ -853,30 +853,38 @@ export function comparableQuotaDeltas(receipt: TaskBenchmarkReceipt): Comparable
   );
 }
 
-function pairedQuota(
+function pairedQuotas(
   baseline: TaskBenchmarkReceipt,
   optimized: TaskBenchmarkReceipt,
-): TaskBenchmarkQuotaComparison | null {
+): TaskBenchmarkQuotaComparison[] {
   const baselineDeltas = comparableQuotaDeltas(baseline);
   const optimizedByKey = new Map(
     comparableQuotaDeltas(optimized).map((delta) => [delta.key, delta]),
   );
 
-  for (const base of baselineDeltas) {
+  return baselineDeltas.flatMap((base): TaskBenchmarkQuotaComparison[] => {
     const optimizedDelta = optimizedByKey.get(base.key);
-    if (optimizedDelta === undefined) continue;
-    return {
-      key: base.key,
-      scope: base.scope,
-      baselineDeltaUsedPercent: base.usedPercentDelta,
-      optimizedDeltaUsedPercent: optimizedDelta.usedPercentDelta,
-      confidence:
-        base.confidence === 'authoritative' && optimizedDelta.confidence === 'authoritative'
-          ? 'authoritative'
-          : 'reported',
-    };
-  }
-  return null;
+    if (optimizedDelta === undefined) return [];
+    return [
+      {
+        key: base.key,
+        scope: base.scope,
+        baselineDeltaUsedPercent: base.usedPercentDelta,
+        optimizedDeltaUsedPercent: optimizedDelta.usedPercentDelta,
+        confidence:
+          base.confidence === 'authoritative' && optimizedDelta.confidence === 'authoritative'
+            ? 'authoritative'
+            : 'reported',
+      },
+    ];
+  });
+}
+
+function pairedQuota(
+  baseline: TaskBenchmarkReceipt,
+  optimized: TaskBenchmarkReceipt,
+): TaskBenchmarkQuotaComparison | null {
+  return pairedQuotas(baseline, optimized)[0] ?? null;
 }
 
 function result(
@@ -1067,6 +1075,8 @@ export interface TaskBenchmarkMatrixEntry {
   optimizedLocalTokens: number | null;
   localTokenSavingPercent: number | null;
   quota: TaskBenchmarkQuotaComparison | null;
+  quotaComparisons?: TaskBenchmarkQuotaComparison[];
+  quality?: { baseline: TaskQualityGate; optimized: TaskQualityGate };
   nativeRouting?: TaskBenchmarkNativeRoutingComparison;
 }
 
@@ -1198,6 +1208,12 @@ export function buildTaskBenchmarkMatrix(
             ? null
             : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
         quota: comparison.quota,
+        quotaComparisons:
+          comparison.verdict === 'incomparable' ? [] : pairedQuotas(baseline, optimized),
+        quality: {
+          baseline: baseline.outcome.qualityGate,
+          optimized: optimized.outcome.qualityGate,
+        },
         ...nativeRoutingComparison(baseline, optimized),
       };
     })
