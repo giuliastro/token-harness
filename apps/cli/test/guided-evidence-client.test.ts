@@ -198,6 +198,79 @@ async function browser(data = observation()) {
 }
 
 describe('guided evidence interactions', () => {
+  it('keeps project claims scoped to setup and links the live source projects', async () => {
+    const { get, reads } = await browser();
+    const setup = get('connection-overview');
+    const items = setup.querySelectorAll('article');
+    assert.equal(items.length, 5);
+    const expected = [
+      ['rtk', 'https://github.com/rtk-ai/rtk', 'Supported shell-command output'],
+      ['harnesstrim', 'https://github.com/giuliastro/HarnessTrim', '10 fixed fixtures'],
+      ['mcptoon', 'https://github.com/activeing123/mcptoon', '255 tools'],
+      ['gitnexus', 'https://github.com/abhigyanpatwari/GitNexus', 'No published %'],
+      ['headroom', 'https://github.com/headroomlabs-ai/headroom', '4 offline scenarios'],
+    ];
+    for (const [id, url, scope] of expected) {
+      const item = items.find((item) => item.dataset['optimizer'] === id)!;
+      assert.ok(item);
+      assert.ok(item.textContent.includes(scope!));
+      const source = item.querySelectorAll('a')[0]! as Element & {
+        href: string;
+        target: string;
+        rel: string;
+      };
+      assert.equal(source.href, url);
+      assert.equal(source.target, '_blank');
+      assert.equal(source.rel, 'noopener noreferrer');
+      assert.match(source.attributes['aria-label']!, /source project \(opens in a new tab\)/);
+      assert.equal(item.querySelectorAll('details')[0]!.open, false);
+    }
+    assert.match(setup.textContent, /not expected savings on your machine/);
+    assert.match(items[2]!.textContent, /name index, not full schemas or tool results/);
+    assert.match(items[4]!.textContent, /does not enable the project’s broader proxy features/);
+    assert.doesNotMatch(get('result-evidence').textContent, /99\.2%|75\.8%|21–57%/);
+    assert.doesNotMatch(get('dashboard-metrics').textContent, /99\.2%|75\.8%|21–57%/);
+    const before = reads.length;
+    const details = items[0]!.querySelectorAll('details')[0]!;
+    details.open = true;
+    details.fire('toggle');
+    assert.equal(reads.length, before);
+  });
+
+  it('retains optimizer and routing explanations across read-only refreshes', async () => {
+    const { get, settle } = await browser();
+    const optimizer = get('connection-overview').querySelectorAll('details')[0]!;
+    const routing = get('setup-agents').querySelectorAll('details')[0]!;
+    assert.match(routing.textContent, /gpt-6-luna/);
+    assert.match(routing.textContent, /main model reviews and integrates/);
+    assert.match(routing.textContent, /does not prove delegation or savings/);
+    assert.match(routing.textContent, /trust the hook in Codex \/hooks/);
+    for (const details of [optimizer, routing]) {
+      details.open = true;
+      details.fire('toggle');
+    }
+    get('refresh').fire('click');
+    await settle();
+    assert.equal(get('connection-overview').querySelectorAll('details')[0]!.open, true);
+    assert.equal(get('setup-agents').querySelectorAll('details')[0]!.open, true);
+    const restored = get('connection-overview').querySelectorAll('details')[0]!;
+    restored.open = false;
+    restored.fire('toggle');
+    get('refresh').fire('click');
+    await settle();
+    assert.equal(get('connection-overview').querySelectorAll('details')[0]!.open, false);
+  });
+
+  it('lets users explore projects before a coding app is detected', async () => {
+    const data = observation();
+    data.agents = [];
+    const { get } = await browser(data);
+    assert.equal(get('connection-overview').querySelectorAll('article').length, 5);
+    assert.match(get('connection-overview').textContent, /Connections become available/);
+    assert.equal(get('connection-overview').querySelectorAll('button').length, 1);
+    assert.doesNotMatch(get('connection-overview').textContent, /Install & connect/);
+  });
+
   it('keeps classes and units separate and does not infer app attribution from setup', async () => {
     const { get } = await browser();
     const rows = get('result-evidence').children;
