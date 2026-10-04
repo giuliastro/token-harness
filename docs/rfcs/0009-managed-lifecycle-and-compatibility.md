@@ -15,9 +15,11 @@ reviewable lifecycle: detect, plan, install or update when compatible, verify, a
 This RFC extends the provider contract without weakening RFC 0002, RFC 0003, RFC 0004, RFC
 0005, or RFC 0006.
 
-The product detects every version it can identify. It manages only a harness/provider/version
-combination represented by a reviewed compatibility fixture. Detection is broad; mutation is
-intentionally narrower.
+The product detects every version it can identify. Managed setup requires either an exact historical
+compatibility fixture or the installed provider adapter's live assignability evidence for the target
+harness, plus the same ownership, containment, drift, transaction and postcondition checks in both
+cases. Detection alone never authorizes a mutation. The October 4, 2026 amendment below reconciles
+the shipped admission paths from PR #327 with this contract.
 
 ## Compatibility matrix
 
@@ -45,13 +47,48 @@ A row is evidence, not a semver guess. Its fixture covers, at minimum:
 - user drift after apply; and
 - rollback and uninstall with user-owned entries preserved.
 
-A version outside every row is still reported by `doctor`. It is classified as
-`unknown-newer`, `unknown-older`, or `below-range` and prevents a managed apply. The diagnostic
-names the missing harness schema or provider fixture. Token Harness must not treat compatible
-major versions, lockfile presence, or a successful executable probe as proof that a row applies.
+A version outside every row is still reported by `doctor`. Historical lookup classifies it as
+`unknown-newer`, `unknown-older`, `below-range`, or `no-row`; these verdicts describe absent recording
+evidence, not a universal mutation veto. An ordinary managed setup may proceed when live detection
+explicitly marks that target harness assignable. Otherwise planning refuses it and names the missing
+schema or capability. Compatible major versions, lockfile presence, or a successful executable probe
+never prove that a historical row applies.
 
 Adding a compatible version requires a fixture and an explicit matrix row. Removing support leaves
 existing receipts readable and makes their drift visible.
+
+### Admission gates (amended October 4, 2026)
+
+| Gate | Evidence and effect |
+| --- | --- |
+| Historical recording | `admitManagedMutation` checks exact provider/harness/platform tuples. A match records the fixture's declared tier; an absent row remains absent even if ordinary setup proceeds. |
+| Ordinary managed setup | `runPlan` accepts a matching row or explicit `assignableHarnesses` from the installed provider's reviewed adapter. Resolution assigns only the actual target scopes. Adapter planning still checks the native surface, preconditions, artifacts and containment. Apply re-observes versions/configuration, snapshots, executes and verifies before committing. |
+| Package replacement | The reviewed provider-target policy resolves an exact version, verifies the active executable/capability contract after install, and retains prior inventory or bytes for rollback. Package replacement does not independently authorize harness edits. |
+| Native prompt hook format | RFC 0030 admits only explicitly reviewed native schemas/versions and platform launch forms. Provider assignability cannot bypass this separate gate or grant Codex hook trust. |
+| Combined stack and benchmarks | RFC 0003 compatibility rules govern contested exclusive capabilities. Exact combined-stack recordings, candidate selection and quality-gated paired measurements remain independent. Neither assignability nor an individual historical row promotes a stack or proves savings. |
+
+The audit covered PR [#327](https://github.com/giuliastro/token-harness/pull/327),
+`commands/plan.ts`, `domain/compatibility-rows.ts`, provider version compatibility and update
+postconditions. HarnessTrim's installed-version capability document must match its reviewed semantic
+surfaces and write set. RTK uses its reviewed adapter and runnable integration surface; mcptoon,
+GitNexus and Headroom use their reviewed passive CLI probes. These are provider-specific contracts,
+not interchangeable capability evidence.
+
+Negative cases remain fail-closed:
+
+- A missing or lost capability cannot grant live assignability. A row never bypasses adapter
+  planning or postconditions for a broken runtime.
+- An ambiguous or stale executable resolution is refused by the applicable installer/probe; a
+  version reported by a different PATH executable is not a successful package update.
+- User-owned conflicting entries, edited owned artifacts, changed versions or configuration fail
+  the ownership/precondition checks. No automatic overwrite or repair follows.
+- An unsupported hook schema remains blocked by the native adapter, regardless of provider evidence.
+- Failed postconditions trigger verified rollback through the recorded snapshots/inventory. Partial
+  restoration remains an explicit dirty failure, never a committed successful installation.
+
+No row, measured tuple, verification tier or promotion is widened by this amendment. Regression
+fixtures in `gate-rfc0009.test.ts`, provider version tests, update tests and routing apply tests
+separate live admission from exact historical evidence and exercise capability loss and rollback.
 
 ### This is not RFC 0003's compatibility rule
 
@@ -121,7 +158,8 @@ remediation. No update may conceal partial rollback.
 
 ## Harness-specific configuration
 
-A harness integration is managed only when its configuration schema has a compatibility row.
+A harness integration is managed only through the reviewed adapter's schema and the admission gates
+above; a live assignable surface does not authorize writing an arbitrary new format.
 Configuration edits use the parser declared by the harness adapter. A JSONC configuration requires
 a comment-and-trailing-comma-preserving editor; strict JSON mutation must not be repurposed for
 JSONC.
@@ -133,7 +171,7 @@ never deletes a user-owned plugin entry or dependency.
 
 ## Verification and reporting
 
-Verification reports the tier carried by the compatibility row. `config-only` confirms the exact
+Verification reports the tier declared by the applicable adapter/recording. `config-only` confirms the exact
 managed entry is readable; it never claims runtime interception. A provider receipt or a
 Token-Harness-owned canary may raise the tier only where the fixture demonstrates the mechanism.
 

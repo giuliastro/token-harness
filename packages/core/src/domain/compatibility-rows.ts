@@ -1,5 +1,5 @@
 /**
- * RFC 0009 §Compatibility matrix — the row that admits managed mutation.
+ * RFC 0009 §Compatibility matrix — exact historical integration evidence.
  *
  * ## A row is evidence, not a semver guess
  *
@@ -14,15 +14,14 @@
  *
  * `CompatibilityRule` (domain/compatibility.ts) answers "which of two contesting providers owns
  * this interception point, and in what order" — it arbitrates, and the resolver consults it. A
- * row answers "may Token Harness mutate this one integration at these versions on this platform".
+ * row answers "has this exact integration tuple been recorded on this platform".
  * The two share only a name and a fixture reference, deliberately. Nothing in `planner/` may
  * import this module: the arbitration path must not be able to reach a row, and the resolver's
  * output is tested to be independent of the row table.
  *
  * ## Classification of a version outside every row
  *
- * RFC 0009: "A version outside every row is still reported by `doctor`. It is classified as
- * `unknown-newer`, `unknown-older`, or `below-range` and prevents a managed apply."
+ * RFC 0009's October 4 amendment separates these historical verdicts from live assignability.
  *
  * The three classes are positions relative to the row set for one provider × harness × platform
  * key, sorted by harness version range:
@@ -63,8 +62,8 @@ export interface CompatibilityRow {
  *
  * RFC 0009 §Initial delivery order item 5: "Add matrix rows only after the relevant
  * cross-platform fixtures and verification evidence pass." Every row below names the recording that
- * admits it. Every other combination stays refused with the missing schema or fixture named — the
- * table is an admission set, not a list of things that probably work.
+ * records it. Unrecorded combinations remain absent from this evidence table even when the
+ * independent live-assignability gate admits ordinary transactional setup.
  *
  * Windows supplied the first reviewed rows. Linux now has an exact Codex 0.152.1 row for HarnessTrim
  * 0.2.1, exact Codex 0.152.1 and 0.153.0 rows for mcptoon 0.7.10, an exact Claude Code 2.1.269 row
@@ -82,8 +81,8 @@ export interface CompatibilityRow {
  * ## What each row is standing on
  *
  * The harness ranges are points, not spans: one Claude Code or Codex version was observed in each
- * fixture, so one is claimed. A newer one reads `unknown-newer` and refuses, which is a true statement
- * rather than a guess that the next patch behaves the same way.
+ * fixture, so one is claimed. A newer one reads `unknown-newer` in historical lookup; ordinary setup
+ * still requires independent live assignability and the normal transactional safety checks.
  *
  * The tiers differ because the evidence does. RTK's row claims `canary`: its history database is a
  * per-harness receipt `verify` can read on the user's machine. HarnessTrim, mcptoon and GitNexus claim

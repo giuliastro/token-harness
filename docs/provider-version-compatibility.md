@@ -55,9 +55,10 @@ separately scoped. Capability acceptance is not a new benchmark tuple or promoti
 The published implementation uses historical compatibility rows plus live assignable capability,
 ownership, containment, drift and post-apply checks for ordinary managed setup. Some surfaces,
 including RFC 0030 native prompt-hook formats and exact combined-stack/selection evidence, retain
-stricter independent gates. RFC 0009's original exact-row-only language has not caught up with that
-shipped policy; [#362](https://github.com/giuliastro/token-harness/issues/362) tracks its explicit
-contract reconciliation. No evidence recording or promotion is widened by this documentation.
+stricter independent gates. RFC 0009's October 4 amendment explicitly documents these distinct
+admission paths and their negative cases following the review tracked by
+[#362](https://github.com/giuliastro/token-harness/issues/362).
+No evidence recording or promotion is widened by this documentation.
 
 ## Package updates are a separate gate
 
