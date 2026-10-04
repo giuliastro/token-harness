@@ -1,0 +1,349 @@
+{
+  "auditRecordVersion": 1,
+  "issue": 359,
+  "date": "2026-10-04",
+  "scope": "Native Linux prompt-hook runtime and reversible installation; not a savings benchmark",
+  "platform": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "kernel": "7.0.0-34-generic",
+    "wsl": false,
+    "node": "v24.13.0",
+    "codex": "0.159.0",
+    "claudeCode": "2.1.274"
+  },
+  "tokenHarness": {
+    "version": "0.1.28",
+    "source": "Public npm artifact installed in an isolated temporary prefix",
+    "globalVersionUnchanged": "0.1.26",
+    "hookExecutableSelection": "Published install bin directory prepended to each native process PATH",
+    "tarballSha256": "f2578b44f512b7577b39811298eb556fbafc62ffb93aab8afb077216691e6eb9",
+    "entrypointSha256": "3d1f342325963558fd445e74dcfb70bccf4b8265f858fea46baa7c0b4d1c1004"
+  },
+  "trials": [
+    {
+      "id": "codex-project-a",
+      "harness": "codex",
+      "freshProject": "project-a",
+      "routingEnabled": true,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 0,
+      "termination": "native-exit",
+      "modelTurnCompleted": true,
+      "authenticationBlocked": false,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:47:00.859Z",
+          "model": null,
+          "agentType": null
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": true,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "04942ebf5c9a3222efe65d6d3f85974a4fd6a39495c6fe73b943517183028037"
+    },
+    {
+      "id": "codex-project-b",
+      "harness": "codex",
+      "freshProject": "project-b",
+      "routingEnabled": true,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 0,
+      "termination": "native-exit",
+      "modelTurnCompleted": true,
+      "authenticationBlocked": false,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:50:41.643Z",
+          "model": null,
+          "agentType": null
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": true,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "99a51487579960733d62cf8dc0b97a751bbafdf2104d749478bc75ddcfd2363a"
+    },
+    {
+      "id": "codex-project-child",
+      "harness": "codex",
+      "freshProject": "project-child",
+      "routingEnabled": true,
+      "promptKind": "child-lifecycle-probe",
+      "nativeExitCode": 0,
+      "termination": "native-exit",
+      "modelTurnCompleted": true,
+      "authenticationBlocked": false,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:52:33.425Z",
+          "model": null,
+          "agentType": null
+        },
+        {
+          "type": "subagent-start",
+          "timestamp": "2026-10-04T11:52:43.304Z",
+          "model": null,
+          "agentType": "default"
+        },
+        {
+          "type": "subagent-stop",
+          "timestamp": "2026-10-04T11:52:47.157Z",
+          "model": null,
+          "agentType": "default"
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": true,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": true,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "643357066d013cab7669ee710ec08df989ff810fe3506c7eb18f1bf87944c67e"
+    },
+    {
+      "id": "codex-project-disabled",
+      "harness": "codex",
+      "freshProject": "project-disabled",
+      "routingEnabled": false,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 0,
+      "termination": "native-exit",
+      "modelTurnCompleted": true,
+      "authenticationBlocked": false,
+      "events": [],
+      "nativeStreamEvidence": {
+        "turnCompleted": true,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "1c2f8c4c555920220fef7f2528cb6956fa5f0f40d18e61249fc812b66f7372db"
+    },
+    {
+      "id": "codex-project-reenabled",
+      "harness": "codex",
+      "freshProject": "project-reenabled",
+      "routingEnabled": true,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 0,
+      "termination": "native-exit",
+      "modelTurnCompleted": true,
+      "authenticationBlocked": false,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:55:00.557Z",
+          "model": null,
+          "agentType": null
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": true,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "1051f27cee49fcc8406bf3c03bbc914135db56c63a5a24923bd53b363eed0456"
+    },
+    {
+      "id": "claude-project-a",
+      "harness": "claude",
+      "freshProject": "project-a",
+      "routingEnabled": true,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": null,
+      "termination": "collector-timeout-150s",
+      "modelTurnCompleted": false,
+      "authenticationBlocked": true,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:47:05.030Z",
+          "model": null,
+          "agentType": null
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": false,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 10
+      },
+      "nativeStreamSha256": "120606046e2469dde1883422f4e2dc41f62b84a404406378ea77eb53584c27b8"
+    },
+    {
+      "id": "claude-project-b",
+      "harness": "claude",
+      "freshProject": "project-b",
+      "routingEnabled": true,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 143,
+      "termination": "collector-stopped-after-callback",
+      "modelTurnCompleted": false,
+      "authenticationBlocked": true,
+      "events": [
+        {
+          "type": "prompt-submit",
+          "timestamp": "2026-10-04T11:57:32.302Z",
+          "model": null,
+          "agentType": null
+        }
+      ],
+      "nativeStreamEvidence": {
+        "turnCompleted": false,
+        "nativeInitialized": true,
+        "hookResponses": [
+          {
+            "hook_event": "UserPromptSubmit",
+            "exit_code": 0,
+            "outcome": "success"
+          }
+        ],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 0
+      },
+      "nativeStreamSha256": "8078391002e4b1ddaa2b4b2e3b296a4d7c16033498a955bffd955f4feb426f9d"
+    },
+    {
+      "id": "claude-project-disabled",
+      "harness": "claude",
+      "freshProject": "project-disabled",
+      "routingEnabled": false,
+      "promptKind": "ordinary-ready-prompt",
+      "nativeExitCode": 143,
+      "termination": "collector-stopped-after-initialization",
+      "modelTurnCompleted": false,
+      "authenticationBlocked": true,
+      "events": [],
+      "nativeStreamEvidence": {
+        "turnCompleted": false,
+        "nativeInitialized": true,
+        "hookResponses": [],
+        "collaborationWaitCompleted": false,
+        "apiRetryCount": 3
+      },
+      "nativeStreamSha256": "3f78e6ffbbcba39dc36b00e986a5ac90f6b218052a17d7b917d5df585474b08e"
+    }
+  ],
+  "receiptTotals": {
+    "codex": {
+      "prompt-submit": 4,
+      "subagent-start": 1,
+      "subagent-stop": 1
+    },
+    "claude": {
+      "prompt-submit": 2,
+      "subagent-start": 0,
+      "subagent-stop": 0
+    }
+  },
+  "configurationLifecycle": {
+    "codex": {
+      "previewApplyExitCode": 0,
+      "disableOwnedActions": 3,
+      "reenableActions": 1,
+      "unrelatedSettingsPreserved": true,
+      "reenableRollbackRestoredDisabledBytes": true,
+      "disableRollbackRestoredOriginalBytes": true
+    },
+    "claude": {
+      "previewApplyExitCode": 0,
+      "enableActions": 1,
+      "disableOwnedActions": 3,
+      "unrelatedSettingsPreserved": true,
+      "disabledPromptReceipts": 0,
+      "disableRollbackRestoredEnabledBytes": true,
+      "enableRollbackRestoredOriginalBytes": true
+    },
+    "originalConfigBytesRestored": {
+      "codex": true,
+      "claude": true
+    },
+    "trustStoreChanged": false,
+    "collectorUiStopped": true
+  },
+  "observedStates": {
+    "claudeEnabledAfterTwoPrompts": {
+      "state": "managed",
+      "enablement": "enabled",
+      "verificationTier": "runtime-observed",
+      "promptSubmissions": 2
+    },
+    "disabled": {
+      "state": "absent",
+      "label": "Disabled",
+      "enablement": "unknown",
+      "verificationTier": "config-only",
+      "historicalReceiptsRetained": true
+    },
+    "nativeUntrusted": {
+      "scope": "native hooks/list in an isolated config directory; no model or hook execution",
+      "routingHooks": [
+        {
+          "eventName": "userPromptSubmit",
+          "enabled": true,
+          "trustStatus": "untrusted"
+        },
+        {
+          "eventName": "subagentStart",
+          "enabled": true,
+          "trustStatus": "untrusted"
+        },
+        {
+          "eventName": "subagentStop",
+          "enabled": true,
+          "trustStatus": "untrusted"
+        }
+      ]
+    },
+    "finalRestored": {
+      "claude": {
+        "state": "absent",
+        "enablement": "unknown",
+        "verificationTier": "config-only",
+        "configured": false,
+        "promptSubmissions": 2,
+        "subagentsStarted": 0,
+        "subagentsStopped": 0,
+        "reportedModels": []
+      },
+      "codex": {
+        "state": "managed",
+        "enablement": "enabled",
+        "verificationTier": "runtime-observed",
+        "configured": true,
+        "promptSubmissions": 15,
+        "subagentsStarted": 5,
+        "subagentsStopped": 5,
+        "reportedModels": []
+      }
+    }
+  },
+  "limits": [
+    "Claude native model turns were blocked by an existing missing CCR apiKeyHelper; callback success is separately observed.",
+    "Claude project-a timed out after 150 seconds; project-b and disabled probes were deliberately terminated by the collector.",
+    "No Claude child was emitted; only actual Codex start/stop callbacks are counted.",
+    "All callback model values are null; requesting a model does not establish actual child model identity.",
+    "Codex stderr contained native rollout-persistence warnings; successful turn completion and callbacks do not prove session persistence.",
+    "No token, cost, quality or attributable subscription-quota comparison was performed.",
+    "Native Windows callbacks recorded earlier used a locally patched build; its published-artifact gate remains open."
+  ],
+  "privateEvidence": "Native streams, stderr and settings backups retained locally in an ignored private evaluation directory; no transcripts, credentials or personal paths are published."
+}

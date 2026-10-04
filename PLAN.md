@@ -15,8 +15,9 @@ code.
 ### Delivery checkpoint — 2026-10-04, release 0.1.28
 
 The MVP, transactional stack management, quota/native-policy evidence and guided skill lifecycle
-are shipped. Native automatic prompt routing is implemented; actual Windows/Linux callback coverage
-and attributable paired savings remain separate verification tasks. The closed-loop controller is
+are shipped. Native automatic prompt routing is implemented. Fresh native Linux callbacks and lifecycle
+are verified with published 0.1.28 on both agents; Claude model authentication is blocked. Windows
+published-artifact verification and attributable paired savings remain separate tasks. The closed-loop controller is
 partial: the public read-only §19.1 decision and §19.2 checkpoint contracts are complete;
 §19.3–19.4 enforcement and §19.5+ execution are not complete.
 
@@ -2201,6 +2202,12 @@ credit local token savings only to paired same-harness/task-class benchmarks wit
 observed routed callback, available local token counts, and both quality gates passed. Authoritative
 five-hour and weekly quota deltas remain separate percentages. No observed pair means **Not measured
 yet**, not zero.
+
+Fresh native Linux verification with published 0.1.28 records ordinary prompt callbacks in two
+projects per agent, a genuine Codex child start/stop pair, disabled negative probes and exact rollback.
+Claude hooks ran successfully before an existing authentication failure; no Claude model completion
+is claimed. See [the audit](docs/evaluation/linux-native-routing-2026-10-04.md). Windows's earlier local-build
+callbacks still need the published-artifact recheck, and neither platform establishes paired savings.
 
 Codex hook trust remains a manual `/hooks` step. Claude requires a fresh session after enabling. The
 configuration-fixture versions are Codex 0.159.0–0.159.1/0.160.0 and Claude Code 2.1.274–2.1.288; newer or

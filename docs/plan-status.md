@@ -1,11 +1,13 @@
 # Delivery status — 2026-10-04
 
 **Release: Token Harness 0.1.28.** The management, transaction, measurement and advisory foundations
-are shipped. Automatic native prompt-hook installation is implemented. Both agents now have genuine
-Windows callbacks and provider receipts on this locally patched branch. Published-artifact upgrade
+are shipped. Automatic native prompt-hook installation is implemented. Both agents have genuine
+Windows callbacks and provider receipts on the earlier locally patched build, plus fresh native
+Linux prompt callbacks with published 0.1.28. Linux hook lifecycle and exact rollback are verified;
+Claude model access is blocked by existing authentication. Windows published-artifact upgrade
 coverage, Codex sandbox access, attributable paired quota savings and the closed-loop controller remain incomplete.
-This checkpoint distinguishes the published product from the branch's startup, Codex 0.146.0,
-Windows RTK attribution and read-only decision/checkpoint fixes, pending merge and publication.
+The startup, Codex 0.146.0, Windows RTK attribution and read-only decision/checkpoint fixes
+were reviewed, merged and published in 0.1.28; their original live evidence keeps its build distinction.
 It does not declare broad-promotion readiness.
 
 ## What is complete, partial or still planned
@@ -16,7 +18,7 @@ It does not declare broad-promotion readiness.
 | Managed lifecycle (Phase 9) | Claude/Codex baseline lifecycle, package updates, pipeline status and evidence capture shipped. | Real current Windows combination (#255); historical Hermes/Pi/OMP lifecycle and broader 0.2.0 coverage are unfinished. |
 | Quota/native policy (Phase 10, §18) | Dual-window observations, conservative recommendations, paired outcome learning, scheduling/handoff and portable skill shipped. | Empirical coverage is narrower than all task/model/platform combinations. |
 | Guided skill (§18.13–18.14) | Bundled skill, reversible installation and owned/external/modified state implemented. | No remaining implementation task from the former “next UX work” notes. |
-| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. Both agents passed fresh Windows prompt/session probes on this branch. | Historical Linux Codex callbacks remain separate; fresh Linux coverage is deferred by the user (#359). Published-artifact checks and paired benefit (#360) remain open. Prompt guidance alone does not prove actual model choice. |
+| Native prompt routing (§18.15) | Opt-in hook lifecycle, version/schema checks, authorization reporting and privacy-bounded receipts shipped in 0.1.24–0.1.26. Both agents passed fresh Windows probes on the earlier local build and fresh Linux prompt-hook/lifecycle probes with published 0.1.28. | Windows published-artifact recheck (#359), Claude Linux model authentication and paired benefit (#360) remain open. Prompt guidance alone does not prove actual model choice. |
 | Efficiency Decision (§19.1) | Public read-only `optimize` decision composes existing observations, exact capacity receipts and optional controller scheduler advice. | Advance explicit escalation/budget contracts after reviewed integration (#361). |
 | Context Governor (§19.2) | Bounded metadata advice and checkpoint acceptance/fact fields integrated (#361). | Automatic context execution remains future work; no automatic context rewrite is proved. |
 | Adaptive escalation / task budgets (§19.3–19.4) | Native policy/quality/capacity foundations exist; the decision contract carries empirical allowance budgets and optional evidenced attempt limits. | Implement escalation receipts and task-budget enforcement; do not treat an internal suggested budget as a running controller. |
@@ -40,7 +42,7 @@ its evidence or promotion follow-up remains separate.
 | [#342 provider drift](https://github.com/giuliastro/token-harness/issues/342) | Closed as completed. | #357 and published 0.1.25/0.1.26 record RTK 0.51.0 / HarnessTrim 0.3.1; official upstream latest releases matched on 2026-10-03. |
 | [#348 old routing / RTK PR](https://github.com/giuliastro/token-harness/pull/348) | Closed as superseded, without merge. | #349 selected the active canonical PATH executable and preserved shadowed copies; #351 completed the old routing UI fixes; #353 withdrew CCR; #356/#358 supplied native routing. |
 | [#255 Windows stack](https://github.com/giuliastro/token-harness/issues/255) | Kept open; title/body refreshed. | RTK 0.51.0 + HarnessTrim 0.3.1, published Token Harness 0.1.26+, exact installed harness versions and genuine before/after receipts. Collector CI is not real stack evidence. |
-| [#359 native routing runtime](https://github.com/giuliastro/token-harness/issues/359) | New bounded verification task. | Ordinary prompts in fresh sessions/projects on native Windows and Linux, with native authorization and real callbacks. |
+| [#359 native routing runtime](https://github.com/giuliastro/token-harness/issues/359) | Linux callback/lifecycle coverage completed; Windows published-artifact gate retained. | Published 0.1.28, two fresh projects per agent, genuine Codex child, negative disabled probes and exact rollback; Claude hooks succeeded before blocked model authentication. See the [Linux audit](evaluation/linux-native-routing-2026-10-04.md). |
 | [#360 paired evidence](https://github.com/giuliastro/token-harness/issues/360) | New measurement task. | Routing and combined-stack baseline/optimized runs, attributable units, quality, retries and authoritative allowance. |
 | [#362 compatibility contract](https://github.com/giuliastro/token-harness/issues/362) | RFC 0009 amendment reviewed against the shipped admission paths. | Integrated in #365; no runtime guard or empirical gate is relaxed. |
 | [#361 decision/checkpoint integration](https://github.com/giuliastro/token-harness/issues/361) | Read-only public decisions and bounded checkpoint fields implemented and tested. | Integrated in #365; escalation, enforced budgets and loops remain future work. |
@@ -60,6 +62,8 @@ The current release is [0.1.28](releases/0.1.28.md), including the reviewed #365
 The previous release's evidence
 below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
 records the pre-release live results, local build distinction and remaining #255/#359/#360 gates.
+The [native Linux routing audit](evaluation/linux-native-routing-2026-10-04.md) adds published 0.1.28
+callbacks and lifecycle results without turning Claude authentication failures into successful model turns.
 The [six-pair native pilot](evaluation/native-pairs-2026-10-04.md) publishes accepted code, negative
 token/latency outcomes and failed Codex stack activation without attributing shared account quota.
 
@@ -82,9 +86,10 @@ combined-stack benchmark performance or subscription/API savings.
 1. **Verify the installed stack and automatic callbacks:** #255 and #359. The root Linux Codex
    setup was repaired in 0.1.26. A subsequent passive dashboard/API read reports it enabled and
    runtime-observed: 3 prompt callbacks, 2 starts and 2 stops, last receipt 2026-10-03T19:40:32Z.
-   No actual child model is reported. Both agents now have fresh-session Windows callbacks; a genuine
-   Windows Codex child emitted one start/stop pair without a reported model. Fresh Linux coverage is
-   deferred at the user's request. Published-artifact upgrade and Codex sandbox access remain gates.
+   No actual child model is reported. Both agents have fresh-session Windows callbacks on the earlier
+   local build. Published 0.1.28 now has two fresh native Linux prompt-hook probes per agent, a genuine
+   Codex child start/stop pair and exact lifecycle restoration. Claude model access is blocked by existing
+   authentication. Windows published-artifact upgrade and Codex sandbox access remain gates.
 2. **Run bounded paired experiments:** #360. Retain negative outcomes, actual activation,
    acceptance/retry evidence and independent five-hour/weekly observations. Never launch a broad
    campaign merely to fill a dashboard. The October 4 pilot already records six pairs; failed Codex
