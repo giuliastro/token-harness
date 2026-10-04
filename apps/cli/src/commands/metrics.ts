@@ -26,6 +26,7 @@ import {
   measurementUnit,
   commandResult,
   diagnostic,
+  harnessId,
   resolveMetricsWindow,
   type CommandResult,
   type Diagnostic,
@@ -273,10 +274,30 @@ export async function runMetrics(
     const timestamps = unique.map((event) => event.timestamp).sort();
     report.firstRecordedAt = timestamps[0] ?? null;
     report.lastRecordedAt = timestamps.at(-1) ?? null;
-    for (const row of report.providers) {
+    report.byHarness = [...new Set(unique.map((event) => event.context.harnessId))]
+      .filter((id) => id !== 'unknown')
+      .sort()
+      .map((id) => ({
+        harnessId: harnessId(id),
+        providers: aggregateEvents({
+          events: unique.filter((event) => event.context.harnessId === id),
+          windowStart: window.windowStart,
+          windowEnd: window.windowEnd,
+          managedProviders,
+          adapterModes,
+        }).providers,
+      }));
+    const scopedRows = [
+      ...report.providers.map((row) => ({ row, harness: null as string | null })),
+      ...report.byHarness.flatMap((group) =>
+        group.providers.map((row) => ({ row, harness: group.harnessId })),
+      ),
+    ];
+    for (const { row, harness } of scopedRows) {
       const matching = unique.filter(
         (event) =>
           event.provider.id === row.providerId &&
+          (harness === null || event.context.harnessId === harness) &&
           event.measurement.class === row.class &&
           event.outcome.changed &&
           measurementUnit(event) === row.unit,

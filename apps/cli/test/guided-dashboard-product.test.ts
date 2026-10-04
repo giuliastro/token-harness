@@ -81,16 +81,17 @@ describe('first-run guided overview', () => {
     assert.match(GUIDE_JS, /row\.unit/);
     assert.match(GUIDE_JS, /optimizerSignal/);
     assert.match(GUIDE_JS, /same optimizer records/);
-    assert.match(GUIDE_JS, /const routeStatus = routed\?\.state/);
+    assert.doesNotMatch(GUIDE_JS, /metricCard\('Automatic routing'/);
+    assert.match(GUIDE_HTML, /id="record-comparison"/);
   });
 
   it('makes Overview a real measured-impact summary', () => {
     assert.match(GUIDE_HTML, /Measured impact/);
     assert.match(GUIDE_JS, /5h \/ 7d allowance/);
-    assert.match(GUIDE_JS, /Not measured yet/);
-    assert.match(GUIDE_JS, /authoritative paired allowance evidence/);
+    assert.match(GUIDE_JS, /Comparison needed/);
+    assert.match(GUIDE_JS, /authoritative paired allowance evidence|paired allowance/);
     assert.match(GUIDE_JS, /billed-token evidence/);
-    assert.match(GUIDE_JS, /output savings alone are not proof/);
+    assert.match(GUIDE_JS, /Token reductions and callbacks do not evaluate correctness/);
   });
 
   it('never schedules a full overview refresh in the background', () => {

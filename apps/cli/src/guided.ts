@@ -116,6 +116,7 @@ export interface GuideAgent {
     remaining: number | null;
     resetsAt: string | null;
     source: string;
+    observedAt?: string;
   }>;
   allowanceNote: string;
   pending?: Array<'reasoning' | 'allowance'>;
@@ -138,6 +139,7 @@ export interface GuideSavings {
     agents: string[];
     impact: GuideImpact;
   }>;
+  byHarness?: Array<{ harnessId: string; rows: GuideSavings['rows'] }>;
   errors: number;
   inflated: number;
   note: string;
@@ -537,12 +539,8 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
     'estimated-local': 'Local estimate',
     'end-to-end-billed': 'Paired session measurement',
   };
-  return {
-    period,
-    scope: 'All locally recorded projects',
-    firstRecordedAt: report?.firstRecordedAt ?? null,
-    lastRecordedAt: report?.lastRecordedAt ?? null,
-    rows: (report?.providers ?? [])
+  const rows = (providers: MetricsReport['providers']): GuideSavings['rows'] =>
+    providers
       .filter((row) => row.class !== 'counterfactual')
       .map((row) => ({
         providerId: row.providerId,
@@ -560,7 +558,17 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
           end: report?.windowEnd ?? '',
           all: period === 'all',
         }),
-      })),
+      }));
+  return {
+    period,
+    scope: 'All locally recorded projects',
+    firstRecordedAt: report?.firstRecordedAt ?? null,
+    lastRecordedAt: report?.lastRecordedAt ?? null,
+    rows: rows(report?.providers ?? []),
+    byHarness: (report?.byHarness ?? []).map((group) => ({
+      harnessId: group.harnessId,
+      rows: rows(group.providers),
+    })),
     errors: report?.errors ?? 0,
     inflated: report?.inflatedOperations ?? 0,
     note: 'These are recorded output reductions, not money saved or extra subscription allowance. Provider results are kept separate. Simulations are excluded. Available history may predate Token Harness.',
@@ -1301,10 +1309,11 @@ export class GuideService {
           label: window.scope === 'five-hour' ? '5-hour allowance' : `${window.scope} allowance`,
           remaining: window.remainingPercent,
           resetsAt: window.resetsAt,
+          observedAt: window.observedAt,
           source:
             window.confidence === 'cached'
               ? 'Cached observation'
-              : 'Reported by the agent or companion',
+              : `${window.source} · ${window.confidence}`,
         })),
         allowanceNote: explainGuideIssue(
           usage?.diagnostics ?? [],

@@ -156,7 +156,7 @@ main,.setup-step{scroll-margin-top:7rem}
 .evidence-identity{display:grid;gap:.3rem;min-width:0}
 .evidence-identity>strong{font-size:.98rem;line-height:1.3}
 .evidence-kind{font-size:.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.evidence-signals{display:grid;gap:.75rem;min-width:0}
+.evidence-signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:.75rem;min-width:0}
 .evidence-signal{display:grid;gap:.2rem;line-height:1.4}
 .evidence-signal strong{font-size:1rem;font-weight:650}
 .evidence-signal.good strong{color:var(--good)}

@@ -68,6 +68,8 @@ export interface MetricsReport {
   /** One row per measurement class, always all four, in RFC order. */
   classes: MeasurementClassRow[];
   providers: ProviderSavingsRow[];
+  /** All-project evidence may expose independently aggregated, explicitly attributed app rows. */
+  byHarness?: Array<{ harnessId: HarnessId; providers: ProviderSavingsRow[] }>;
   /**
    * Raw-to-final measurements for the channels in the applied pipeline.
    *

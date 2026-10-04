@@ -347,19 +347,42 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const quality = current?.value?.quality;
     if (quality?.state === 'regressed') return { value: 'Regression detected', detail: 'Savings claims are blocked until quality is recovered.', cls: 'warn' };
     if (quality?.state === 'preserved') return { value: 'Preserved', detail: count(quality.pairs) + ' paired benchmark(s) support this result.', cls: 'good' };
-    return { value: 'Not measured yet', detail: 'Quality needs paired benchmarks; output savings alone are not proof.', cls: '' };
+    return { value: current?.value?.comparisons?.available === false ? 'Evidence unavailable' : 'Comparison needed', detail: comparisonReason('quality'), cls: '' };
+  }
+
+  function comparisonReason(topic) {
+    const comparisons = current?.value?.comparisons;
+    if (comparisons?.available === false) return 'Benchmark evidence could not be read. Refresh to retry.';
+    if (comparisons?.incomplete) return count(comparisons.incomplete) + ' comparison(s) are unfinished. Finish both task variants, then Refresh.';
+    if (comparisons?.invalid) return count(comparisons.invalid) + ' comparison(s) could not be validated. Capture a new matched pair.';
+    if (comparisons?.complete) return topic === 'quality'
+      ? 'Task checks are missing or failed for the recorded comparisons. Record the actual quality outcome for both runs.'
+      : 'Recorded comparisons lack authoritative quota readings in matching windows. Live balances alone do not measure savings.';
+    return 'No baseline/optimized task comparison for this project.' +
+      (comparisons?.otherProject ? ' Comparisons recorded in other projects are outside this view.' : '') +
+      ' Use Record a comparison to capture usage and quality checks.';
+  }
+
+  function allowanceSignal(evidence, label) {
+    if (evidence?.state === 'blocked-by-quality') return { value: 'Not credited', label: label + ' · quality gate did not pass', tone: 'warn' };
+    if (evidence?.state !== 'measured' || evidence.savedPercent === null || evidence.savedPercent === undefined) return null;
+    const value = evidence.savedPercent;
+    return { value: count(Math.abs(value)) + ' percentage points ' + (value < 0 ? 'more used' : value > 0 ? 'saved' : 'net change'), label, tone: value < 0 ? 'warn' : value > 0 ? 'good' : '' };
   }
 
   function allowanceSummary() {
     const five = current?.value?.allowance5h;
     const weekly = current?.value?.allowance7d;
-    if (five?.state === 'blocked-by-quality' || weekly?.state === 'blocked-by-quality')
+    if (!current?.value?.byHarness?.length && (five?.state === 'blocked-by-quality' || weekly?.state === 'blocked-by-quality'))
       return { value: 'Not credited', detail: 'A quota reduction exists, but quality evidence does not yet allow it to be credited.', cls: 'warn' };
-    const parts = [];
-    if (five?.state === 'measured' && five.savedPercent !== null) parts.push('5h ' + count(five.savedPercent) + '%');
-    if (weekly?.state === 'measured' && weekly.savedPercent !== null) parts.push('7d ' + count(weekly.savedPercent) + '%');
-    if (parts.length) return { value: parts.join(' · '), detail: 'Based only on authoritative paired allowance evidence.', cls: 'good' };
-    return { value: 'Not measured yet', detail: 'Needs paired before/after allowance readings.', cls: '' };
+    const sources = current?.value?.byHarness?.length ? current.value.byHarness : [{ allowance5h: five, allowance7d: weekly }];
+    const signals = sources.flatMap(source => [['allowance5h', '5h'], ['allowance7d', '7d']].flatMap(([key, label]) => {
+      const signal = allowanceSignal(source[key], (source.harnessId ? agentName(source.harnessId) + ' · ' : '') + label);
+      return signal ? [signal] : [];
+    }));
+    if (signals.length) return { value: signals.length === 1 ? signals[0].value : 'Paired readings', detail: signals.map(signal => signal.label + ': ' + signal.value).join(' · '), cls: signals.some(signal => signal.tone === 'warn') ? 'warn' : 'good' };
+    const live = activeAgents().some(agent => (agent.allowance || []).some(window => Number.isFinite(window.remaining)));
+    return { value: current?.value?.comparisons?.available === false ? 'Evidence unavailable' : 'Comparison needed', detail: (live ? 'Current quota is being read; savings need a comparison. ' : '') + comparisonReason('allowance'), cls: '' };
   }
 
   function metricCard(title, value, detail, cls = '') {
@@ -476,7 +499,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       reduction
         ? metricCard('Recorded output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement + ' · changed outputs only', 'positive')
         : metricCard('Recorded output', 'No result yet', 'Use a connected app to start recording results.'),
-      metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
+      metricCard('Allowance saved · 5h / 7d', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
   }
@@ -1433,7 +1456,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     disclosure.dataset.key = type + ':' + name;
     const summary = node('summary', undefined, 'evidence-summary');
     const identity = node('span', undefined, 'evidence-identity');
-    const types = { optimizer: 'Optimizer', routing: 'Routing', harness: 'Coding app', candidate: 'Experiment' };
+    const types = { optimizer: 'Optimizer', routing: 'Routing', harness: 'Coding app', measurement: 'Measurement', candidate: 'Experiment' };
     identity.append(node('span', types[type], 'evidence-kind'), node('strong', name), node('span', scope, 'caption'));
     const results = node('span', undefined, 'evidence-signals');
     for (const signal of signals) {
@@ -1501,9 +1524,10 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const lines = [];
     const tier = routing.verificationTier;
     if (routing.enablement === 'untrusted') lines.push('Action required: open /hooks in Codex and trust this hook, then submit a prompt.');
-    else if (tier === 'runtime-observed') lines.push('Runtime callback observed. Automatic routing runs on submitted prompts.');
+    else if (routing.enablement === 'disabled') lines.push('Hooks are disabled for this coding app. Recorded callbacks describe earlier activity.');
+    else if (routing.configured === false) lines.push('Automatic routing is not enabled. Recorded callbacks describe earlier activity.');
+    else if (tier === 'runtime-observed') lines.push('Runtime callback observed. Subagent starts prove delegation; savings require a comparison.');
     else if (routing.configured !== false && routing.enablement === 'unknown') lines.push('Authorization is unknown; check the hook status in the coding app.');
-    else if (routing.enablement === 'disabled') lines.push('Hooks are disabled for this coding app.');
     else if (routing.enablement === 'enabled' || (!routing.enablement && routing.state === 'managed')) lines.push('Configured; waiting for the first runtime callback after a prompt.');
     else if (routing.state === 'external') lines.push('Routing is managed elsewhere; Token Harness leaves it unchanged.');
     else lines.push('Automatic routing is not enabled for this coding app.');
@@ -1514,6 +1538,94 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (routing.reportedModels?.length) facts.push(['Reported models', routing.reportedModels.join(', ')]);
     if (routing.lastObservedAt) facts.push(['Last callback', date(routing.lastObservedAt)]);
     return evidenceSection(agent.name + ' · routing activity', facts, lines[0]);
+  }
+
+  function runtimeSignals(agent) {
+    const routing = agent.promptRouting;
+    if (routing?.verificationTier !== 'runtime-observed' || routing.receiptState === 'unavailable') return [];
+    return [['promptSubmissions', 'prompt callbacks'], ['subagentsStarted', 'subagents started'], ['subagentsStopped', 'subagents stopped']]
+      .filter(([key]) => Number.isFinite(routing[key]) && routing[key] > 0)
+      .map(([key, label]) => ({ value: count(routing[key]) + ' ' + label, label: agent.name + ' · observed routing activity' }));
+  }
+
+  function liveAllowanceSignals(agent) {
+    return (agent.allowance || []).filter(window => Number.isFinite(window.remaining)).map(window => ({
+      value: count(window.remaining) + '% remaining', label: agent.name + ' · ' + window.label + ' · current balance',
+    }));
+  }
+
+  function liveAllowanceDetails(agent) {
+    const windows = agent.allowance || [];
+    const sections = windows.map(window => evidenceSection(agent.name + ' · ' + window.label, [
+      ['Remaining', Number.isFinite(window.remaining) ? count(window.remaining) + '%' : 'Unavailable'],
+      ['Source', window.source || 'Not recorded'],
+      ['Reset', window.resetsAt ? date(window.resetsAt) : 'Not recorded'],
+      ['Read at', date(window.observedAt || current.generatedAt)],
+    ], 'Current balance observation; this is not a saved allowance percentage.'));
+    if (!sections.length) {
+      const section = evidenceSection(agent.name + ' · current allowance', [], agent.pending?.includes('allowance')
+        ? 'Reading current allowance…' : agent.allowanceNote || 'No readable allowance source is available. This does not mean a zero balance.');
+      section.append(actionButton('Refresh readings', () => refresh(true), 'secondary'));
+      sections.push(section);
+    }
+    return sections;
+  }
+
+  function comparisonSection() {
+    const comparisons = current?.value?.comparisons;
+    const section = evidenceSection('Current-project comparisons', [
+      ['Evidence read', !comparisons ? 'Not checked' : comparisons.available === false ? 'Unavailable' : 'Available'],
+      ['Complete pairs', count(comparisons?.complete || 0)],
+      ['Unfinished pairs', count(comparisons?.incomplete || 0)],
+      ['Invalid pairs', count(comparisons?.invalid || 0)],
+    ], 'Comparisons cover the project where Token Harness was opened. They are independent of the output-history period filter.');
+    section.append(actionButton('Record a comparison', () => measurementGuide(), 'secondary'));
+    return section;
+  }
+
+  function measurementGuide(agentId = activeAgents()[0]?.id) {
+    modal('Record a baseline/optimized comparison');
+    const agents = activeAgents();
+    if (!agents.length) {
+      $('modal-content').append(messageBox('Coding app needed', 'Open Overview and expose Codex or Claude Code before recording a comparison.'));
+      $('modal-actions').append(modalClose('Done'));
+      return;
+    }
+    const id = benchmarkId('task');
+    const selected = node('select');
+    selected.id = 'comparison-agent';
+    selected.setAttribute('aria-label', 'Coding app for both comparison runs');
+    for (const agent of agents) {
+      const option = node('option', agent.name);
+      option.value = agent.id;
+      selected.append(option);
+    }
+    selected.value = agents.some(agent => agent.id === agentId) ? agentId : agents[0].id;
+    const steps = node('div');
+    const renderSteps = () => {
+      steps.replaceChildren(
+        node('h3', '1. Prepare the baseline'),
+        node('p', 'Use the same representative task, starting state, coding app and checks for both runs. For a routing comparison, disable routing in Overview before starting the baseline. Start a fresh coding session after changing hooks.'),
+        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant baseline --task standard --harness ' + selected.value),
+        node('h3', '2. Run the task and check its result'),
+        node('p', 'Run the baseline task in the coding app, then run its tests or acceptance checks. Replace the placeholders below with the actual result and attempt counts; passed means the checks succeeded.'),
+        copyRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant baseline --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        node('h3', '3. Repeat with optimization enabled'),
+        node('p', 'Restore the same starting state. Enable the optimization under evaluation through Overview. For routing, trust the hook in Codex /hooks and start a fresh session; the optimized task must actually start a native subagent.'),
+        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant optimized --task standard --harness ' + selected.value),
+        node('p', 'Run the same task and checks, then record the actual optimized outcome.'),
+        copyRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant optimized --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        node('h3', '4. Refresh Results'),
+        node('p', 'Run the capture commands from the same project where this dashboard was opened. Start/finish read quota, local session usage and routing receipts automatically; quality comes from your recorded checks. If a quota window resets during a run or the source is unavailable, that window stays unmeasured. Repeat representative pairs before drawing conclusions.'),
+      );
+    };
+    selected.addEventListener('change', renderSteps);
+    renderSteps();
+    $('modal-content').append(
+      messageBox('Why a comparison is needed', 'Normal usage records optimizer output and routing activity. Demonstrated savings require comparable baseline and optimized tasks; Token Harness cannot reconstruct an unrecorded baseline or decide whether your task passed its checks.'),
+      selected, steps,
+    );
+    $('modal-actions').append(modalClose('Done'));
   }
 
   function renderEvidence() {
@@ -1545,7 +1657,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const routing = current?.value?.routing;
     const routingAgents = activeAgents();
     const blocked = routing?.state === 'blocked-by-quality';
-    const routeSignals = [];
+    const routeSignals = routingAgents.flatMap(runtimeSignals);
     if (blocked) routeSignals.push({ value: 'Not credited', label: 'Quality gate did not pass', tone: 'warn' });
     else {
       if (routing?.savedLocalTokens !== null && routing?.savedLocalTokens !== undefined)
@@ -1554,27 +1666,52 @@ export const GUIDE_PRODUCT_JS = String.raw`
           label: 'Paired end-to-end local usage',
           tone: routing.savedLocalTokens < 0 ? 'warn' : routing.savedLocalTokens > 0 ? 'good' : '',
         });
-      for (const [key, label] of [['allowance5h', '5h allowance'], ['allowance7d', '7d allowance']]) {
-        const evidence = routing?.[key];
-        if (evidence?.state === 'measured' && evidence.savedPercent !== null && evidence.savedPercent !== undefined)
-          routeSignals.push({ value: count(evidence.savedPercent) + '%', label: label + ' saved · paired evidence', tone: evidence.savedPercent < 0 ? 'warn' : 'good' });
+      const routeSources = current?.value?.byHarness?.length ? current.value.byHarness : [{ routing }];
+      for (const source of routeSources) {
+        for (const [key, label] of [['allowance5h', '5h allowance'], ['allowance7d', '7d allowance']]) {
+          const signal = allowanceSignal(source.routing?.[key], (source.harnessId ? agentName(source.harnessId) + ' · ' : '') + label + ' · paired evidence');
+          if (signal) routeSignals.push(signal);
+        }
       }
-      if (!routeSignals.length) routeSignals.push({ value: 'Not measured yet', label: 'Needs paired, quality-passed runs' });
+      if (routing?.state !== 'measured') routeSignals.push({ value: 'Savings comparison needed', label: routing?.pairs ? 'Quality passed; comparable usage is missing' : 'Activity is recorded automatically; savings need paired runs' });
+      if (!routingAgents.some(agent => runtimeSignals(agent).length) && !routing?.pairs) routeSignals.push({ value: 'No runtime activity yet', label: 'Open Details to check enablement and trust' });
     }
     const routingSections = [evidenceSection('Savings verification', [['Quality-passed pairs', count(routing?.pairs || 0)]],
-      blocked ? 'A quality regression blocks the savings claim.' : 'Callback activity proves the hook ran. Savings require paired runs with a passing quality gate.')];
+      blocked ? 'A quality regression blocks the savings claim.' : routing?.basis || 'Callback activity proves the hook ran. Savings require paired runs with a passing quality gate.'), comparisonSection()];
     for (const agent of routingAgents)
       routingSections.push(routingDetails(agent));
-    addEvidenceRow(body, 'routing', 'Automatic prompt routing', routingAgents.map(agent => agent.name).join(', ') || 'No coding app detected', routeSignals, routing?.pairs || 0, routingSections);
+    const runtimeCount = routingAgents.reduce((total, agent) => total + (agent.promptRouting?.verificationTier === 'runtime-observed' ? (agent.promptRouting.promptSubmissions || 0) + (agent.promptRouting.subagentsStarted || 0) + (agent.promptRouting.subagentsStopped || 0) : 0), 0);
+    addEvidenceRow(body, 'routing', 'Automatic prompt routing', 'Recorded callbacks across projects · ' + (routingAgents.map(agent => agent.name).join(', ') || 'No coding app detected'), routeSignals, runtimeCount + (routing?.pairs || 0), routingSections);
+
+    const allowanceSources = current?.value?.byHarness?.length ? current.value.byHarness : [current?.value || {}];
+    const quotaSignals = allowanceSources.flatMap(source => [['allowance5h', '5h'], ['allowance7d', '7d']].flatMap(([key, label]) => {
+      const signal = allowanceSignal(source[key], (source.harnessId ? agentName(source.harnessId) + ' · ' : '') + label + ' · paired allowance');
+      return signal ? [signal] : [];
+    }));
+    const liveSignals = routingAgents.flatMap(liveAllowanceSignals);
+    const allowanceSections = [evidenceSection('Allowance savings', [], allowanceSummary().detail), comparisonSection(), ...routingAgents.flatMap(liveAllowanceDetails)];
+    addEvidenceRow(body, 'measurement', '5h / 7d allowance', 'Current balances · current-project paired savings',
+      [...quotaSignals, ...liveSignals].length ? [...quotaSignals, ...liveSignals] : [{ value: 'No quota reading', label: 'Open Details for the missing source and comparison steps' }], quotaSignals.length + liveSignals.length, allowanceSections);
+    const quality = qualitySummary();
+    addEvidenceRow(body, 'measurement', 'Task quality', 'Current-project task checks', [{ value: quality.value, label: quality.detail, tone: quality.cls }], current?.value?.quality?.pairs || 0, [
+      evidenceSection('Quality checks', [['Evaluated pairs', count(current?.value?.quality?.pairs || 0)], ['Regressions', count(current?.value?.quality?.regressions || 0)]],
+        'Quality comes from the actual checks recorded for both task variants. Token reductions and callbacks do not evaluate correctness.'), comparisonSection(),
+    ]);
 
     for (const agent of routingAgents) {
-      const linked = savings.filter(row => row.harnesses?.includes(agent.id));
+      const linked = current?.savings?.byHarness?.find(group => group.harnessId === agent.id)?.rows || [];
       const configured = configuredProviders().filter(component => component.configuredHarnesses?.includes(agent.id)).map(component => optimizerInfo(component.providerId).name);
       const sections = [evidenceSection('App attribution', [['Detected setup', configured.join(', ') || 'None']],
-        linked.length ? 'These are the same optimizer records shown above, linked to this app. They are not additional savings.' : 'No optimizer record identifies this app for the selected period. Unattributed records stay under their optimizer.')];
+        linked.length ? 'These are the same optimizer records shown above, scoped to this app. They are not additional savings.' : 'No app-scoped reducer amount is available for this period. Shared and aggregate totals stay under their optimizer.')];
       sections.push(...linked.map(row => optimizerEvidenceDetail(row, true)));
+      sections.push(routingDetails(agent), ...liveAllowanceDetails(agent));
+      const signals = [...linked.map(row => optimizerSignal(row, true)), ...runtimeSignals(agent), ...liveAllowanceSignals(agent)];
+      const paired = current?.value?.byHarness?.find(source => source.harnessId === agent.id);
+      if (paired?.quality?.state === 'preserved') signals.push({ value: 'Quality preserved', label: count(paired.quality.pairs) + ' evaluated pairs · this app', tone: 'good' });
+      if (paired?.quality?.state === 'regressed') signals.push({ value: 'Quality regression', label: 'Savings claims need review', tone: 'warn' });
+      if (paired?.pairs) sections.push(evidenceSection('App comparisons', [['Paired tasks', count(paired.pairs)]], 'These comparisons identify ' + agent.name + '; they are part of the current-project results above.'));
       addEvidenceRow(body, 'harness', agent.name, agent.version ? 'v' + agent.version : 'Version unavailable',
-        linked.length ? linked.map(row => optimizerSignal(row, true)) : [{ value: 'No linked results', label: 'No output attributed to this app' }], linked.length, sections);
+        signals.length ? signals : [{ value: 'No activity recorded', label: 'Open Details for routing status and quota availability' }], signals.length, sections);
     }
 
     for (const item of current?.value?.candidates || []) {
@@ -1599,7 +1736,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const type = $('evidence-type').value;
     const sort = $('evidence-sort').value;
     const rows = [...body.children].filter(row => row.dataset.type);
-    const sourceOrder = { optimizer: 0, routing: 1, harness: 2, candidate: 3 };
+    const sourceOrder = { optimizer: 0, routing: 1, harness: 2, measurement: 3, candidate: 4 };
     rows.sort((a, b) => sort === 'evidence'
       ? Number(Number(b.dataset.amount) > 0) - Number(Number(a.dataset.amount) > 0)
         || sourceOrder[a.dataset.type] - sourceOrder[b.dataset.type]
@@ -1621,10 +1758,11 @@ export const GUIDE_PRODUCT_JS = String.raw`
     modal('How Token Harness measures results');
     $('modal-content').append(
       messageBox('Tool output', 'Local output reductions are shown only from recorded optimizer evidence. Different providers are never silently added together.'),
-      messageBox('Setup and results', 'A detected setup does not prove the optimizer ran. RTK records command reductions but its history does not say whether Codex or Claude ran each command, so those results cannot be shown under either app. HarnessTrim appears under an app only when its saved result names that app.'),
+      messageBox('Setup and results', 'App evidence includes attributed optimizer output, observed routing callbacks and current quota readings. RTK shared history stays unattributed; records from a Token Harness per-app hook database can identify their app. HarnessTrim records identify an app only when the telemetry names it. Setup alone does not establish attribution.'),
       messageBox('5h / 7d allowance', 'Subscription-plan savings appear only when authoritative paired allowance evidence exists and quality is preserved.'),
       messageBox('API cost', 'Money is shown only when billed-token evidence and a verified price basis exist. Token Harness does not convert local output reduction into invented dollars or euros.'),
-      messageBox('Quality', 'Quality is evaluated separately. A regression can block a positive savings claim.'),
+      messageBox('Quality', 'Both task variants need recorded quality checks. A regression can block a positive savings claim.'),
+      actionButton('Record a comparison', () => measurementGuide(), 'secondary'),
     );
     $('modal-actions').append(modalClose('Done'));
   }
@@ -1638,16 +1776,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
       reduction
         ? metricCard('Recorded output', reduction.impact.headline, reduction.provider + ' · ' + reduction.measurement + ' · changed outputs only', 'positive')
         : metricCard('Recorded output', savings.length ? count(savings.length) + ' measurement groups' : 'No records yet', savings.length ? 'Open Evidence for each source and unit.' : 'Use a connected app, then Refresh.'),
-      metricCard('5h / 7d allowance', allowance.value, allowance.detail, allowance.cls),
+      metricCard('Allowance saved · 5h / 7d', allowance.value, allowance.detail, allowance.cls),
       metricCard('Quality', quality.value, quality.detail, quality.cls),
     );
-    const routed = current?.value?.routing;
-    const routeStatus = routed?.state === 'blocked-by-quality'
-      ? 'Not credited'
-      : routed?.savedLocalTokens !== null && routed?.savedLocalTokens !== undefined
-        ? count(Math.abs(routed.savedLocalTokens)) + (routed.savedLocalTokens < 0 ? ' tokens added' : ' tokens saved')
-        : routed?.state === 'measured' ? 'Allowance measured' : 'Not measured yet';
-    $('result-summary').append(metricCard('Automatic routing', routeStatus, routed?.pairs ? count(routed.pairs) + ' quality-passed pairs · local usage' : 'Needs paired runs with a passing quality gate.', routed?.state === 'blocked-by-quality' || routed?.savedLocalTokens < 0 ? 'warn' : routed?.state === 'measured' ? 'positive' : ''));
     renderEvidence();
     $('results-period-note').textContent = current?.savings?.firstRecordedAt
       ? 'All locally recorded projects · ' + new Date(current.savings.firstRecordedAt).toLocaleDateString() + ' – ' + new Date(current.savings.lastRecordedAt).toLocaleDateString()
@@ -1847,6 +1978,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     $('evidence-filter').focus();
   });
   $('measurement-help').addEventListener('click', measurementHelp);
+  $('record-comparison').addEventListener('click', () => measurementGuide());
   $('theme').addEventListener('change', () => {
     const value = $('theme').value;
     localStorage.setItem('token-harness-theme', value);

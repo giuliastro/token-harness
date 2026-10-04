@@ -446,6 +446,58 @@ describe('help', () => {
 });
 
 describe('guided all-project savings', () => {
+  it('attributes only each app’s own changed output and leaves shared history outside app totals', async () => {
+    const codex = event({
+      id: 'codex',
+      timestamp: '2026-07-30T10:00:00Z',
+      harness: 'codex',
+      beforeTokens: 100,
+      afterTokens: 20,
+    });
+    const all = await runScopedMetrics(
+      ['savings'],
+      [
+        codex,
+        codex,
+        event({
+          id: 'claude',
+          timestamp: '2026-07-30T10:00:01Z',
+          harness: 'claude',
+          beforeTokens: 200,
+          afterTokens: 180,
+        }),
+        event({
+          id: 'shared',
+          timestamp: '2026-07-30T10:00:02Z',
+          harness: 'unknown',
+          beforeTokens: 300,
+          afterTokens: 30,
+        }),
+        event({
+          id: 'unchanged',
+          timestamp: '2026-07-30T10:00:03Z',
+          harness: 'codex',
+          beforeTokens: 70,
+          afterTokens: 70,
+        }),
+      ],
+      'p_1',
+    );
+    assert.equal(all.report.providers[0]?.saved, 370);
+    assert.deepEqual(
+      all.report.byHarness?.map((group) => ({
+        harness: group.harnessId,
+        before: group.providers[0]?.before,
+        after: group.providers[0]?.after,
+        saved: group.providers[0]?.saved,
+        operations: group.providers[0]?.operations,
+      })),
+      [
+        { harness: 'claude', before: 200, after: 180, saved: 20, operations: 1 },
+        { harness: 'codex', before: 100, after: 20, saved: 80, operations: 1 },
+      ],
+    );
+  });
   it('includes retained history from other projects without changing metrics default scope', async () => {
     const seed = [
       event({ id: 'one', timestamp: '2026-07-30T10:00:00Z', projectId: 'p_1' }),

@@ -43,6 +43,31 @@ not called an atomic group. Unsupported combinations remain blocked and explaine
 
 ## Measurement semantics
 
+### October 4 evidence clarity and paired-window repair
+
+Results distinguish current allowance observations, runtime routing activity and demonstrated
+savings. Coding-app evidence includes its explicitly attributed optimizer rows, native routing
+callbacks and current allowance readings; configuration never assigns shared output to an app.
+Routing activity also remains a separate searchable Evidence source. A runtime callback is
+execution evidence, not a token or subscription saving. Current quota readings show their source,
+reset and missing-data reason independently of paired savings.
+
+All-project reducer reports add optional `byHarness` provider rows computed from each event's
+explicit harness identity, before aggregation. App rows consume these scoped figures rather than
+the overall provider totals' list of contributing apps. Shared/unknown events remain in overall
+provider evidence only. Legacy reports without the breakdown do not prove an app-specific amount.
+
+The benchmark matrix retains every comparable quota window in additive `quotaComparisons`,
+while preserving the existing primary `quota` field and comparison verdict. Five-hour and weekly
+results are evaluated separately, including negative deltas. Additive `quality` carries the
+baseline and optimized gates so passing checks remain visible even when usage is unavailable.
+Unknown or failed gates cannot imply preserved quality. Attributed routing with passing quality
+but no measured usage remains unmeasured for savings. Empty states identify missing comparisons
+and link to the existing benchmark-start/finish measurement workflow; ordinary usage alone does
+not create a baseline or evaluate quality. Reducer history remains all-project and period-filtered;
+quota/quality comparisons remain current-project and live callbacks/current quota have their own
+observation dates, independent of the reducer period.
+
 `savings` reports all locally recorded projects by default, independent of the directory
 from which the dashboard was opened. The existing `metrics` command stays project-scoped.
 An internal all-project mode imports records through existing providers and keeps measurement
