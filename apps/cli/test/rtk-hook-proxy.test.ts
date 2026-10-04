@@ -8,7 +8,11 @@ import {
   type ProcessRunner,
 } from '@token-harness/core';
 
-import { attributeRtkHookResponse, runRtkHookProxy } from '../src/commands/rtk-hook-proxy.js';
+import {
+  attributeRtkHookResponse,
+  runAttributedRtkCommand,
+  runRtkHookProxy,
+} from '../src/commands/rtk-hook-proxy.js';
 
 const codex = harnessId('codex');
 
@@ -40,6 +44,52 @@ function codexResponse(command: string): string {
 }
 
 describe('RTK hook attribution', () => {
+  it('uses a shell-independent Windows launcher when Codex labels PowerShell as Bash', async () => {
+    const result = attributeRtkHookResponse(
+      codexResponse('rtk git status --short'),
+      JSON.stringify({ tool_name: 'Bash' }),
+      "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db",
+      codex,
+      'windows',
+    );
+    assert.equal(
+      JSON.parse(result).hookSpecificOutput.updatedInput.command,
+      'token-harness __internal-rtk-run codex git status --short',
+    );
+    let seen!: ProcessRequest;
+    await runAttributedRtkCommand({
+      runner: {
+        run: async (request) => {
+          seen = request;
+          return outcome('actual output');
+        },
+      },
+      cwd: 'C:\\work',
+      databasePath: "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db",
+      args: ['git', 'status', '--short'],
+    });
+    assert.equal(seen.executable, 'rtk');
+    assert.deepEqual(seen.args, ['git', 'status', '--short']);
+    assert.equal(seen.env?.['RTK_DB_PATH'], "C:\\Users\\O'Connor\\Token Harness\\rtk-codex.db");
+    assert.equal(seen.timeoutMs, 0, 'the wrapper must not shorten the native tool timeout');
+  });
+  it('retains POSIX/WSL assignments and leaves unknown Windows rewrites unchanged', () => {
+    assert.match(
+      attributeRtkHookResponse(
+        codexResponse('rtk git status'),
+        '{}',
+        '/data/rtk.db',
+        codex,
+        'linux',
+      ),
+      /RTK_DB_PATH=/,
+    );
+    const unrelated = codexResponse('other-tool git status');
+    assert.equal(
+      attributeRtkHookResponse(unrelated, '{}', 'C:\\data\\rtk.db', codex, 'windows'),
+      unrelated,
+    );
+  });
   it('adds the harness-specific database path to a Bash rewrite', () => {
     const result = attributeRtkHookResponse(
       codexResponse('rtk git status'),

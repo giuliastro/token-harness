@@ -1,4 +1,9 @@
-import type { HarnessId, ProcessRunner } from '@token-harness/core';
+import type {
+  HarnessId,
+  OperatingSystem,
+  ProcessOutcome,
+  ProcessRunner,
+} from '@token-harness/core';
 
 const MAX_HOOK_OUTPUT_BYTES = 1024 * 1024;
 const HOOK_TIMEOUT_MS = 5_000;
@@ -65,6 +70,7 @@ export function attributeRtkHookResponse(
   input: string,
   databasePath: string,
   harness: HarnessId,
+  os?: OperatingSystem,
 ): string {
   let response: unknown;
   try {
@@ -79,11 +85,20 @@ export function attributeRtkHookResponse(
   const updatedInput = hookOutput['updatedInput'];
   if (!isRecord(updatedInput) || typeof updatedInput['command'] !== 'string') return stdout;
 
-  const attributed = withDatabaseEnvironment(
-    updatedInput['command'],
-    databasePath,
-    toolNameFromInput(input, harness),
-  );
+  // Codex calls every shell tool "Bash" and omits its selected shell from hook stdin (0.146.0).
+  // On native Windows, pass the unchanged argument tail through a launcher that sets the child
+  // environment directly. The rewritten command then works in PowerShell, cmd and Git Bash.
+  const command = updatedInput['command'];
+  const attributed =
+    harness === 'codex' && os === 'windows'
+      ? /^\s*rtk(?:\.exe)?(?:\s|$)/i.test(command)
+        ? command.replace(/^\s*rtk(?:\.exe)?/i, 'token-harness __internal-rtk-run codex')
+        : null
+      : withDatabaseEnvironment(
+          updatedInput['command'],
+          databasePath,
+          toolNameFromInput(input, harness),
+        );
   if (attributed === null) return stdout;
 
   return `${JSON.stringify({
@@ -105,6 +120,7 @@ export async function runRtkHookProxy(input: {
   harness: HarnessId;
   databasePath: string;
   stdin: string;
+  os?: OperatingSystem;
 }): Promise<RtkHookProxyResult> {
   const outcome = await input.runner.run({
     executable: 'rtk',
@@ -131,7 +147,25 @@ export async function runRtkHookProxy(input: {
       input.stdin,
       input.databasePath,
       input.harness,
+      input.os,
     ),
     stderr: outcome.stderr,
   };
+}
+
+/** Shell-independent Windows child attribution; the native agent retains its operation timeout. */
+export function runAttributedRtkCommand(input: {
+  runner: ProcessRunner;
+  cwd: string;
+  databasePath: string;
+  args: readonly string[];
+}): Promise<ProcessOutcome> {
+  return input.runner.run({
+    executable: 'rtk',
+    args: [...input.args],
+    cwd: input.cwd,
+    env: { RTK_DB_PATH: input.databasePath },
+    timeoutMs: 0,
+    maxOutputBytes: 32 * 1024 * 1024,
+  });
 }

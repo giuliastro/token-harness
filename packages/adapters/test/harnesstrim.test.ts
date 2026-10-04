@@ -1389,6 +1389,82 @@ describe('planning', () => {
     assert.equal(result.diagnostics?.[0]?.code, 'harnesstrim-metrics-path-needs-review');
   });
 
+  it('repairs a missing standard Windows hook path while preserving live/custom and WSL hooks', async () => {
+    const binary = `${HOME}\\AppData\\Local\\pnpm\\harnesstrim.CMD`;
+    for (const item of [
+      { live: false, extra: '', os: 'windows', isWsl: false, repair: true },
+      { live: true, extra: '', os: 'windows', isWsl: false, repair: false },
+      { live: false, extra: ' --custom', os: 'windows', isWsl: false, repair: false },
+      { live: false, extra: '', os: 'linux', isWsl: true, repair: false },
+    ] as const) {
+      const command = `"${binary}" hook codex --metrics .harnesstrim/metrics.jsonl${item.extra}`;
+      const config: HarnessConfigSummary = {
+        harnessId: harnessId('codex'),
+        configPath: `${HOME}\\.codex\\hooks.json`,
+        scope: 'user',
+        interceptionPoints: ['post-tool-use'],
+        matchers: ['^Bash$'],
+        commands: [command],
+        hookCommands: [
+          {
+            eventName: 'PostToolUse',
+            interceptionPoint: 'post-tool-use',
+            matcher: '^Bash$',
+            toolFamilies: ['Bash'],
+            command,
+            entryPointer: 'hooks.PostToolUse.0',
+            commandPointer: 'hooks.PostToolUse.0.hooks.0.command',
+          },
+        ],
+      };
+      const base = context({
+        version: '0.3.1',
+        capabilities: dynamicCapabilities('0.3.1', '# Skill'),
+        configs: [config],
+        files: item.live ? { [binary]: '@echo off' } : {},
+      });
+      const ctx = { ...base, facts: { ...base.facts, os: item.os, isWsl: item.isWsl } };
+      const result = await harnesstrimAdapter.plan(ctx, {
+        ownership: [
+          {
+            scope: {
+              harness: harnessId('codex'),
+              toolFamily: 'Bash',
+              interceptionPoint: 'post-tool-use',
+              capability: 'shell.output.reduce',
+            },
+            owner: HARNESSTRIM,
+            mode: 'chainable',
+            order: 1,
+          },
+        ],
+        harnesses: [codexAdapter.manifest],
+        desiredState: 'configured',
+      });
+      const changes = result.actions.filter((action) => action.kind === 'merge-json');
+      assert.equal(changes.length, item.repair ? 1 : 0, JSON.stringify(item));
+      if (item.repair) {
+        const change = changes[0]!;
+        assert.equal(change.rollbackData, 'file-snapshot');
+        assert.deepEqual(change.operations, [
+          {
+            kind: 'set',
+            pointer: config.hookCommands![0]!.commandPointer,
+            value: 'harnesstrim hook codex --metrics .harnesstrim/metrics.jsonl',
+            expectedValueDigest: jsonValueDigest(command),
+          },
+        ]);
+      }
+      const verification = await harnesstrimAdapter.verify(ctx);
+      assert.equal(
+        verification.checks.some(
+          (check) => check.id.startsWith('hook-executable-') && check.status === 'fail',
+        ),
+        !item.live && item.os === 'windows',
+      );
+    }
+  });
+
   it('recognizes skills-only setup without claiming runtime measurement verification', async () => {
     const skill = '# Latest HarnessTrim skill\n';
     const capabilities = dynamicCapabilities('0.3.0', skill);

@@ -1207,6 +1207,29 @@ async function verify(context: ProviderContext): Promise<ProviderVerification> {
   );
   const runtimeConfigured = harnessesWiredToHarnessTrim(context.harnessConfigs);
   const skillsOnly = configured.filter((harness) => !runtimeConfigured.includes(harness));
+  if (context.facts.os === 'windows' && !context.facts.isWsl) {
+    for (const config of context.harnessConfigs) {
+      for (const hook of config.hookCommands ?? []) {
+        const binary = windowsHookExecutable(hook.command);
+        if (binary === null || (await context.fs.stat(binary)) !== null) continue;
+        checks.push({
+          id: `hook-executable-${config.harnessId}-${digestText(hook.commandPointer).slice(7, 15)}`,
+          status: 'fail',
+          summary: `${config.harnessId} HarnessTrim hook points to a missing executable`,
+          achievedTier: null,
+          evidence: [
+            evidence({
+              kind: 'config-entry',
+              source: 'HarnessTrim hook',
+              path: config.configPath,
+              detail: `${hook.commandPointer}: ${binary}`,
+            }),
+          ],
+          remediation: 'Preview a HarnessTrim setup repair; custom commands require manual review.',
+        });
+      }
+    }
+  }
   checks.push({
     id: 'integration-configured',
     status:
@@ -1892,6 +1915,53 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
     const correctlyMonitored = existing.some((entry) =>
       commandHasMetricsPath(entry.command, metricsPath),
     );
+    // Repair only one missing absolute executable with the exact standard argument contract.
+    // Live/custom absolute hooks retain their command, telemetry path and extra arguments.
+    const missingExecutables = [];
+    if (context.facts.os === 'windows' && !context.facts.isWsl) {
+      for (const entry of existing) {
+        const binary = windowsHookExecutable(entry.command);
+        if (binary !== null && (await context.fs.stat(binary)) === null)
+          missingExecutables.push(entry);
+      }
+    }
+    if (existing.length === 1 && missingExecutables.length === 1) {
+      const entry = missingExecutables[0]!;
+      const binary = windowsHookExecutable(entry.command);
+      const standardTail = entry.command.trim().slice(entry.command.indexOf(' hook ') + 1);
+      if (
+        binary !== null &&
+        (standardTail === `hook ${harness.id}` ||
+          standardTail === `hook ${harness.id} --metrics ${metricsPath}`)
+      ) {
+        actions.push(
+          replaceHookCommandAction({
+            target,
+            commandPointer: entry.commandPointer,
+            currentCommand: entry.command,
+            nextCommand: command,
+            actionId: `harnesstrim-${harness.id}-executable-${digestText(target.configPath).slice(7, 15)}`,
+            explanation: `Repair the missing HarnessTrim hook executable on ${harness.displayName}`,
+          }),
+        );
+        plannedHarnesses.push(harness.id);
+        continue;
+      }
+    }
+    if (missingExecutables.length > 0) {
+      diagnostics.push(
+        diagnostic({
+          severity: 'warning',
+          code: 'harnesstrim-hook-executable-needs-review',
+          subject: harness.id,
+          path: target.configPath,
+          message:
+            'An absolute HarnessTrim hook executable is missing; its custom or ambiguous command was left unchanged',
+          remediation: 'Review the executable and arguments before replacing this hook.',
+        }),
+      );
+      continue;
+    }
     if (correctlyMonitored) {
       plannedHarnesses.push(harness.id);
       continue;
@@ -1952,6 +2022,15 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
 const HARNESSTRIM_HOOK_COMMAND =
   /^(?:"?[^"\n]*[\\/]?harnesstrim(?:\.cmd|\.exe)?"?|harnesstrim(?:\.cmd|\.exe)?)\s+hook\s+(claude|codex)(?:\s+(.*))?$/i;
 
+function windowsHookExecutable(command: string): string | null {
+  const match =
+    /^(?:"([a-z]:[\\/][^"\r\n]+)"|([a-z]:[\\/][^\s"\r\n]+))\s+hook\s+(?:claude|codex)(?:\s|$)/i.exec(
+      command.trim(),
+    );
+  const binary = match?.[1] ?? match?.[2];
+  return binary !== undefined && /[\\/]harnesstrim(?:\.cmd|\.exe)?$/i.test(binary) ? binary : null;
+}
+
 function isHarnessTrimHookFor(command: string, harness: HarnessId): boolean {
   const match = HARNESSTRIM_HOOK_COMMAND.exec(command.trim());
   return match?.[1]?.toLowerCase() === harness;
@@ -1982,6 +2061,7 @@ function replaceHookCommandAction(input: {
   currentCommand: string;
   nextCommand: string;
   actionId: string;
+  explanation?: string;
 }): MergeJsonAction {
   return {
     kind: 'merge-json',
@@ -1998,7 +2078,7 @@ function replaceHookCommandAction(input: {
       `${input.commandPointer} records HarnessTrim reductions to .harnesstrim/metrics.jsonl`,
     ],
     rollbackData: 'file-snapshot',
-    explanation: `Enable per-harness HarnessTrim telemetry for ${input.target.harness.displayName}${codexActivationNote(input.target.harnessId)}`,
+    explanation: `${input.explanation ?? `Enable per-harness HarnessTrim telemetry for ${input.target.harness.displayName}`}${codexActivationNote(input.target.harnessId)}`,
     path: input.target.configPath,
     ownedPointers: [input.commandPointer],
     operations: [
