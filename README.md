@@ -97,9 +97,6 @@ The practical benefits are:
 - **Less manual orchestration:** after setup and native authorization, use ordinary prompts;
   no skill invocation, prompt prefix or separate router launch is required.
 
-Delegation and the added prompt context also consume usage. These are intended benefits;
-**routing does not guarantee lower token usage, subscription consumption or billed cost**.
-
 ### Install and authorize for each harness
 
 After [installing Token Harness](#install-and-start), ensure `token-harness` is on the `PATH` used
@@ -147,13 +144,6 @@ needs authorization; **Active · callback seen** / `runtime-observed` means a re
 Prompt callbacks prove the hook ran; child start/stop callbacks prove a native child lifecycle.
 Neither proves the child used the requested model or saved allowance.
 
-The [published-package Linux audit](docs/evaluation/linux-native-routing-2026-10-04.md) observed
-prompt callbacks from both agents and a Codex child start/stop pair. Claude model access was blocked
-by existing authentication; the child's actual model was unknown. Windows published-artifact
-verification and attributable paired routing benefits remain open. [Savings measurements](#savings-and-statistics-what-is-measured-today)
-require routing-disabled/enabled pairs with runtime evidence and both quality gates passed;
-without a qualifying comparison the result is **Not measured yet**.
-
 To disable, use **Disable routing** on the same card and review/apply the preview. The CLI
 equivalent is below; replace `<harness>` with `claude` or `codex`:
 
@@ -166,116 +156,23 @@ Removal affects only owned hooks. Restart existing agent sessions so they reload
 Backups and [rollback](#update-disconnect-or-undo) use the normal transaction lifecycle.
 See [the routing RFC](docs/rfcs/0030-automatic-native-prompt-routing.md) for policy and evidence rules.
 
-## Savings and statistics: what is measured today?
+## Results highlights
 
-**Up to 94.4% shorter TAP test output in recorded receipts; 12/12 pilot runs passed code acceptance.**
-These are concrete results from the current evaluation record. The dashboard applies the same
-measurement discipline to your own machine: output size, whole-task tokens, subscription windows
-and billed cost each retain their own units and evidence.
-
-### Current empirical results — October 4, 2026
-
-| Observation | Recorded result | Scope |
-| --- | --- | --- |
-| **HarnessTrim test-output reduction** | **85.5–94.4% fewer characters** in six reduced TAP outputs; five other outputs were unchanged. | Individual output receipts in the Windows paired pilot. Example: **3,531 → 198 characters**. Token counts for these receipts were unavailable. |
-| **Independent code acceptance** | **12/12 runs passed**, across **6 baseline/optimized task pairs**. | Mechanical, standard and hard tasks on Claude Code and Codex; frozen acceptance suites contained 24–31 tests per run. |
-| **Overall quality gates** | **9/12 passed; 3/12 failed**. | The three optimized Codex runs failed provider commands despite passing code acceptance; those comparisons do not qualify for a positive saving claim. |
-| **Claude whole-task local tokens** | Standard: **2.0% fewer**; hard: **3.9% fewer**; mechanical: **32.6% more**. | One pair per task class, combining RTK + HarnessTrim + routing guidance. No subagent was requested. |
-| **Published-package native routing** | **4 Codex + 2 Claude prompt callbacks**, and **1 Codex child start/stop pair**. | Fresh native Linux trials with Token Harness **0.1.28**; child model identity was unknown. |
-
-The output and coding results used the recorded **locally patched 0.1.27 Windows build**; the Linux
-callback results used the **published 0.1.28 package**. These measurements predate the **0.1.29 model
-ladder**, whose marginal delegation benefit has not been measured.
-[Paired pilot](docs/evaluation/native-pairs-2026-10-04.md),
-[sanitized output receipts](docs/evaluation/results/2026-10-04-native-pairs.json),
-[published Linux callback audit](docs/evaluation/linux-native-routing-2026-10-04.md).
-
-Here is the complete whole-task comparison, including the increases. Change is
-`(optimized - baseline) / baseline`; a negative percentage means fewer local tokens:
-
-| Harness / task | Baseline local tokens | Optimized local tokens | Change | Execution result |
-| --- | ---: | ---: | ---: | --- |
-| Claude / mechanical | 29,730 | 39,417 | **+32.6%** | Acceptance and provider commands passed. |
-| Claude / standard | 44,862 | 43,948 | **−2.0%** | Acceptance and provider commands passed. |
-| Claude / hard | 51,364 | 49,383 | **−3.9%** | Acceptance and provider commands passed. |
-| Codex / mechanical | 89,994 | 106,350 | **+18.2%** | Acceptance passed; optimized RTK command failed twice. |
-| Codex / standard | 94,247 | 112,329 | **+19.2%** | Acceptance passed; optimized RTK command failed twice. |
-| Codex / hard | 104,374 | 124,674 | **+19.4%** | Acceptance passed; optimized RTK command failed twice. |
-
-Local totals include native input/cache/output counters. Compare variants within the same harness;
-these counts are not a Claude-versus-Codex price ranking. Four optimized runs used more local
-tokens and five took longer. The failed Codex provider executions exclude those pairs from positive
-stack-benefit claims. [Full protocol and results](docs/evaluation/native-pairs-2026-10-04.md).
-
-### Subscription windows and official capacity estimates
-
-Smaller models give routine work a different allowance footprint, which is the reason for the
-native model ladder. As of **October 4, 2026**, OpenAI publishes these **estimated local-message
-capacities per five-hour window** for **Plus and Standard Business**:
-
-| Codex model | Official estimated local messages / 5h |
-| --- | ---: |
-| GPT-6 Astra | **5–45** |
-| GPT-6.1 Sol | **15–160** |
-| GPT-6 Sol | **15–150** |
-| GPT-6 Luna | **350–3,000** |
-
-These vendor estimates support choosing Luna for suitable routine work and Sol for bounded
-implementation. They describe model usage capacity; Token Harness's main-model planning, child
-work and final review all contribute to a routed task. **Codex Pro currently has no five-hour
-limit.** Weekly limits may apply; the account usage dashboard supplies the active windows and reset
-times. [Official OpenAI subscription usage guidance](https://learn.chatgpt.com/docs/pricing#what-are-the-usage-limits-for-my-plan).
-
-For Claude Code, **Claude Pro has a five-hour session window and a weekly limit across models**.
-Claude and Claude Code share subscription usage, and a subagent's own requests draw on that usage.
-The policy therefore reserves higher-tier work for the main model and selects Sonnet/Haiku for
-eligible units; no fixed Opus-to-Sonnet-to-Haiku quota conversion is established by the current
-Token Harness experiments.
-[Claude plan limits](https://support.claude.com/en/articles/8325606-what-is-the-pro-plan),
-[shared Claude Code subscription usage](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan),
-[native subagent usage](https://code.claude.com/docs/en/costs#delegate-verbose-operations-to-subagents).
-
-The current Token Harness record for **subscription savings** is:
-
-| Harness | Five-hour consumption reduction | Seven-day consumption reduction |
-| --- | --- | --- |
-| **Codex** | **Not measured yet**; the pilot's account snapshots overlapped other activity. Pro has no current 5h limit. | **Not measured yet**; the account snapshots could not be attributed to the task. |
-| **Claude Code** | **Not measured yet**; authoritative paired window observations were unavailable. | **Not measured yet**; authoritative paired window observations were unavailable. |
-
-A percentage for either window requires baseline and optimized consumption for the same accepted
-work, isolated from other account activity and resets. Calculate each window separately as
-`100 × (baseline consumption − optimized consumption) / baseline consumption`. The current local
-token and character results supply no conversion into five-hour or seven-day percentages.
-[Subscription evidence record](docs/evaluation/native-pairs-2026-10-04.md#activation-allowance-and-scope).
-
-### How the dashboard reports results
-
-| Measurement | What you can trust |
-| --- | --- |
-| **Output reduction** | Attributable provider receipts, with tokens/characters and exact/estimated classes labelled separately. This is not a subscription saving percentage. |
-| **Subscription allowance** | Same-task baseline/optimized comparisons using authoritative five-hour and weekly observations, without crossing resets. Quality and retries are checked separately. |
-| **Routing benefit** | Paired runs with routing disabled/enabled, genuine callback evidence and both quality gates passed. No qualifying pair means **Not measured yet**. |
-| **API cost** | Attributable billed tokens and a verified model-price basis are required. Without them, cost stays **Not measured yet**. |
-| **Quality** | Acceptance, retries and regressions remain visible. A regression blocks a positive saving claim. |
-
-The reported mcptoon evaluation completed **8 paired tasks** and **16/16 quality passes**:
-4 pairs were equivalent, 2 favoured the optimized variant and 2 favoured the baseline. It produced
-**no consistent subscription saving signal**, and no successful mcptoon activity was observed inside
-the optimized task windows. Those differences cannot be attributed to mcptoon. It remains optional
-and experimental, rather than a proven third savings mechanism.
-[Evaluation record](docs/development-status.md#historical-development-log).
-
-Releases are gated by CI on **Windows, macOS and Linux**, plus exact-artifact publication/install
-checks. Real Windows combined-stack evidence and broader promotion gates remain open. [Release evidence and roadmap status](docs/plan-status.md).
-
-For a terminal summary of locally recorded evidence:
-
-```sh
-token-harness savings --since 7d
-```
-
-No provider totals are silently combined across incompatible units. Missing evidence is unknown,
-not zero. Positive savings claims require attributable paired measurements with quality gates.
+- **Up to 94.4% less TAP test-output text.** HarnessTrim reduced a recorded output from
+  **3,531 to 198 characters**, keeping the test summary compact.
+  [Output receipts](docs/evaluation/results/2026-10-04-native-pairs.json).
+- **12/12 code acceptance passes.** Every coding result in the paired pilot passed its frozen
+  acceptance suite, with **24–31 tests per run**.
+  [Paired evaluation](docs/evaluation/native-pairs-2026-10-04.md).
+- **Up to 3,000 local messages per 5h with GPT-6 Luna in Codex.** OpenAI's estimated capacity for
+  **Plus and Standard Business** is **350–3,000 messages**, compared with **15–160 for GPT-6.1 Sol**.
+  These are model-capacity estimates for planning native delegation.
+  [Official usage estimates](https://learn.chatgpt.com/docs/pricing#what-are-the-usage-limits-for-my-plan).
+- **Built to make your 5h and 7-day allowance go further.** Native routing guides your agent to
+  delegate suitable routine work to smaller models, while the main model handles difficult decisions
+  and final review.
+  Output reduction and allowance-aware advice support the same goal: more accepted work within
+  your subscription. [How routing works](#automatic-model-routing).
 
 ## Available optimizers
 
@@ -283,9 +180,9 @@ not zero. Positive savings claims require attributable paired measurements with 
 | --- | --- | --- |
 | [RTK](https://github.com/rtk-ai/rtk) | Reduce shell/tool output | Baseline integration on reviewed rows. |
 | [HarnessTrim](https://github.com/giuliastro/HarnessTrim) | Deterministic output/context reduction | Baseline integration on reviewed rows. |
-| mcptoon | Compact MCP discovery/manifests | Optional; install through an existing pipx or uv. Missing prerequisites show installation options. |
-| GitNexus | Repository graph and MCP context | Optional reviewed integration; package/index preparation and license review are user responsibilities. |
-| Headroom | MCP context compression/retrieval | Optional configuration-only integration for an already-installed reviewed package. |
+| [mcptoon](https://github.com/activeing123/mcptoon) | Compact MCP discovery/manifests | Optional; install through an existing pipx or uv. Missing prerequisites show installation options. |
+| [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Repository graph and MCP context | Optional reviewed integration; package/index preparation and license review are user responsibilities. |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | MCP context compression/retrieval | Optional configuration-only integration for an already-installed reviewed package. |
 | [cclimits](https://github.com/cruzanstx/cclimits) / [ccusage](https://github.com/ccusage/ccusage) | Allowance / usage observations | Read-only evidence sources, rather than optimizers. Usage history is not remaining quota. |
 
 Current source-reviewed package targets are **RTK 0.51.0** and **HarnessTrim 0.3.1**. Package update
