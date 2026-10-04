@@ -1,6 +1,6 @@
 # Delivery status — 2026-10-04
 
-**Published: Token Harness 0.1.27.** The management, transaction, measurement and advisory foundations
+**Release: Token Harness 0.1.28.** The management, transaction, measurement and advisory foundations
 are shipped. Automatic native prompt-hook installation is implemented. Both agents now have genuine
 Windows callbacks and provider receipts on this locally patched branch. Published-artifact upgrade
 coverage, Codex sandbox access, attributable paired quota savings and the closed-loop controller remain incomplete.
@@ -42,8 +42,8 @@ its evidence or promotion follow-up remains separate.
 | [#255 Windows stack](https://github.com/giuliastro/token-harness/issues/255) | Kept open; title/body refreshed. | RTK 0.51.0 + HarnessTrim 0.3.1, published Token Harness 0.1.26+, exact installed harness versions and genuine before/after receipts. Collector CI is not real stack evidence. |
 | [#359 native routing runtime](https://github.com/giuliastro/token-harness/issues/359) | New bounded verification task. | Ordinary prompts in fresh sessions/projects on native Windows and Linux, with native authorization and real callbacks. |
 | [#360 paired evidence](https://github.com/giuliastro/token-harness/issues/360) | New measurement task. | Routing and combined-stack baseline/optimized runs, attributable units, quality, retries and authoritative allowance. |
-| [#362 compatibility contract](https://github.com/giuliastro/token-harness/issues/362) | RFC 0009 amendment reviewed against the shipped admission paths. | Merge the explicit contract reconciliation; no runtime guard or empirical gate is relaxed. |
-| [#361 decision/checkpoint integration](https://github.com/giuliastro/token-harness/issues/361) | Read-only public decisions and bounded checkpoint fields implemented and tested. | Merge this advisory milestone before escalation, enforced budgets or loops. |
+| [#362 compatibility contract](https://github.com/giuliastro/token-harness/issues/362) | RFC 0009 amendment reviewed against the shipped admission paths. | Integrated in #365; no runtime guard or empirical gate is relaxed. |
+| [#361 decision/checkpoint integration](https://github.com/giuliastro/token-harness/issues/361) | Read-only public decisions and bounded checkpoint fields implemented and tested. | Integrated in #365; escalation, enforced budgets and loops remain future work. |
 
 The other 20 issues were already closed: substantive lifecycle, attribution, campaign and update work
 stays closed; three accidental/temporary records and duplicate campaign issue #227 add no roadmap
@@ -56,9 +56,10 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The latest published baseline is [0.1.27](releases/0.1.27.md). The previous release's evidence
+The current release is [0.1.28](releases/0.1.28.md), including the reviewed #365 and #366 changes.
+The previous release's evidence
 below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
-records this branch's live results, local build distinction and remaining #255/#359/#360 gates.
+records the pre-release live results, local build distinction and remaining #255/#359/#360 gates.
 The [six-pair native pilot](evaluation/native-pairs-2026-10-04.md) publishes accepted code, negative
 token/latency outcomes and failed Codex stack activation without attributing shared account quota.
 

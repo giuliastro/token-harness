@@ -12,16 +12,16 @@ The implementation starts from the accepted Phase 0 RFCs. Scope changes that alt
 public contract, safety invariant, or attribution rule require an RFC update before
 code.
 
-### Delivery checkpoint — 2026-10-04, based on published 0.1.27
+### Delivery checkpoint — 2026-10-04, release 0.1.28
 
 The MVP, transactional stack management, quota/native-policy evidence and guided skill lifecycle
 are shipped. Native automatic prompt routing is implemented; actual Windows/Linux callback coverage
 and attributable paired savings remain separate verification tasks. The closed-loop controller is
-partial: this branch completes the public read-only §19.1 decision and §19.2 checkpoint contracts;
+partial: the public read-only §19.1 decision and §19.2 checkpoint contracts are complete;
 §19.3–19.4 enforcement and §19.5+ execution are not complete.
 
 Current work: **#255** real Windows stack → **#359** native routing callbacks → **#360** paired
-quality-gated measurements. Review the completed **#361** unified decision/checkpoint integration. Then finish
+quality-gated measurements. The **#361** unified decision/checkpoint integration is complete. Then finish
 §19.3–19.5 before later analytics/autonomy. The historical 0.2.0 provider/harness expansion list is
 secondary to this sequence. Broad promotion remains gated by combined-stack and third-mechanism
 value plus clean fresh-user validation.
