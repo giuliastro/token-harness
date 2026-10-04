@@ -66,16 +66,189 @@ agent or optimizer when a version or prerequisite needs attention.
 | **Measured results** | Search and filter sources; expand each result for before/after values and attribution. |
 | **Safe maintenance** | Preview changes, retain backups, verify updates and remove owned configuration. |
 
-Automatic routing needs no skill invocation or prompt prefix after setup and native authorization.
-The root model stays in place; the agent may delegate an eligible bounded subtask to a cheaper native
-model and review the result. A callback proves the hook ran, not that a particular child model was
-used or that allowance was saved. See [routing details](docs/rfcs/0030-automatic-native-prompt-routing.md).
+See [automatic model routing](#automatic-model-routing) for supported agents, setup and benefits.
+
+## Automatic model routing
+
+Token Harness can add a short delegation policy to each submitted prompt through the agent's
+native hooks. Your main model stays in charge: it decides whether an independent unit of work fits
+a cheaper native subagent, starts that subagent, then reviews and integrates the result. One routed
+worker runs at a time. The hook runs locally without a model call; routing can be enabled
+independently of RTK, HarnessTrim or the optional Agent Skill.
+
+Good candidates include repository exploration, test/log triage, mechanical edits and tests or
+documentation with a clear specification. Quick tasks, unclear debugging, architecture, security,
+releases and tightly coupled changes stay with the main model. If a requested model is unavailable,
+the work stays on the main model; if a child's result fails its check, the main model finishes it.
+
+The current policy requests these models **when the native harness makes them available**:
+
+| Harness | Delegation policy |
+| --- | --- |
+| **Claude Code** | Fable can use Opus for hard independent work, Sonnet for bounded implementation/tests and Haiku for read-only/mechanical work. Opus can use Sonnet or Haiku; Sonnet can use Haiku for read-only/mechanical work; Haiku keeps the work. The policy requests an explicit native model alias. |
+| **Codex** | Astra can use `gpt-6.1-sol` for bounded implementation/tests and `gpt-6-luna` for read-only/mechanical work. Sol/workhorse roots can use Luna; Luna keeps the work. The policy requests an explicit model and reasoning effort with a self-contained brief. |
+
+The practical benefits are:
+
+- **More selective use of your main model:** suitable routine work can run on a smaller model,
+  potentially leaving more allowance for difficult work.
+- **Review stays with the main model:** each delegated unit has a check and a fallback when its
+  result is insufficient.
+- **Less manual orchestration:** after setup and native authorization, use ordinary prompts;
+  no skill invocation, prompt prefix or separate router launch is required.
+
+Delegation and the added prompt context also consume usage. These are intended benefits;
+**routing does not guarantee lower token usage, subscription consumption or billed cost**.
+
+### Install and authorize for each harness
+
+After [installing Token Harness](#install-and-start), ensure `token-harness` is on the `PATH` used
+by your coding agent. Open the dashboard, go to **Overview → Coding agents**, and select
+**Enable routing** under the agent's **Automatic prompt routing** card. Review and apply the
+preview. Setup merges user-scope hooks and preserves unrelated configuration.
+
+| Harness | Reviewed routing configuration versions | Native activation after apply |
+| --- | --- | --- |
+| **Claude Code** (`--harness claude`) | **2.1.274–2.1.288** | Hooks are added to `~/.claude/settings.json`. Ensure hooks are enabled in `/hooks`, then start a fresh Claude Code session. |
+| **Codex** (`--harness codex`) | **0.146.0**, **0.159.0–0.159.1**, **0.160.0** | Hooks are added to `~/.codex/hooks.json`. Open `/hooks` in the Codex CLI; review, enable and trust the three Token Harness hooks: `UserPromptSubmit`, `SubagentStart`, `SubagentStop`. Start a fresh session and submit an ordinary prompt. |
+| **OpenCode, Hermes, Pi** | Automatic prompt routing is not implemented | Other optimizer integrations have their own support; there is no routing installation for these agents. |
+| **Other harnesses** | Automatic prompt routing is not implemented | Use the agent's own model/delegation controls. |
+
+**Codex is supported through its native hooks.** Trust is a separate native step: new or changed
+definitions require review before they can run, as described in the
+[official OpenAI hooks documentation](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
+The versions above describe reviewed configuration schemas; other versions and prereleases are
+blocked pending compatibility evidence. Platform launch formats are fixture-tested for Windows,
+macOS, Linux and WSL; this does not establish live execution on every platform or Codex surface.
+
+For terminal setup, choose the block for your agent. Each `plan` command is a dry run; replace
+`<plan-id>` with its printed ID and inspect the changes before applying:
+
+```sh
+# Claude Code
+token-harness plan --provider none --harness claude --agent-routing
+token-harness apply --plan <plan-id> --yes
+```
+
+```sh
+# Codex
+token-harness plan --provider none --harness codex --agent-routing
+token-harness apply --plan <plan-id> --yes
+```
+
+Complete the native activation step in the table even when installing through the CLI. The
+dashboard can be closed afterward; the agent invokes the installed hooks itself.
+
+### Verify, measure and disable
+
+Submit an ordinary prompt in a fresh agent session, then inspect its routing card in **Overview**.
+**Configured** / `config-only` means the definitions exist; **Trust required** means Codex still
+needs authorization; **Active · callback seen** / `runtime-observed` means a real callback arrived.
+Prompt callbacks prove the hook ran; child start/stop callbacks prove a native child lifecycle.
+Neither proves the child used the requested model or saved allowance.
+
+The [published-package Linux audit](docs/evaluation/linux-native-routing-2026-10-04.md) observed
+prompt callbacks from both agents and a Codex child start/stop pair. Claude model access was blocked
+by existing authentication; the child's actual model was unknown. Windows published-artifact
+verification and attributable paired routing benefits remain open. [Savings measurements](#savings-and-statistics-what-is-measured-today)
+require routing-disabled/enabled pairs with runtime evidence and both quality gates passed;
+without a qualifying comparison the result is **Not measured yet**.
+
+To disable, use **Disable routing** on the same card and review/apply the preview. The CLI
+equivalent is below; replace `<harness>` with `claude` or `codex`:
+
+```sh
+token-harness plan --provider none --harness <harness> --disable-agent-routing
+token-harness apply --plan <plan-id> --yes
+```
+
+Removal affects only owned hooks. Restart existing agent sessions so they reload the configuration.
+Backups and [rollback](#update-disconnect-or-undo) use the normal transaction lifecycle.
+See [the routing RFC](docs/rfcs/0030-automatic-native-prompt-routing.md) for policy and evidence rules.
 
 ## Savings and statistics: what is measured today?
 
-**There is no verified universal “save X%” claim.** Your results depend on the workload, installed
-stack and available observations. The dashboard reports evidence from your own machine rather than
-turning upstream marketing numbers into your savings.
+**Up to 94.4% shorter TAP test output in recorded receipts; 12/12 pilot runs passed code acceptance.**
+These are concrete results from the current evaluation record. The dashboard applies the same
+measurement discipline to your own machine: output size, whole-task tokens, subscription windows
+and billed cost each retain their own units and evidence.
+
+### Current empirical results — October 4, 2026
+
+| Observation | Recorded result | Scope |
+| --- | --- | --- |
+| **HarnessTrim test-output reduction** | **85.5–94.4% fewer characters** in six reduced TAP outputs; five other outputs were unchanged. | Individual output receipts in the Windows paired pilot. Example: **3,531 → 198 characters**. Token counts for these receipts were unavailable. |
+| **Independent code acceptance** | **12/12 runs passed**, across **6 baseline/optimized task pairs**. | Mechanical, standard and hard tasks on Claude Code and Codex; frozen acceptance suites contained 24–31 tests per run. |
+| **Overall quality gates** | **9/12 passed; 3/12 failed**. | The three optimized Codex runs failed provider commands despite passing code acceptance; those comparisons do not qualify for a positive saving claim. |
+| **Claude whole-task local tokens** | Standard: **2.0% fewer**; hard: **3.9% fewer**; mechanical: **32.6% more**. | One pair per task class, combining RTK + HarnessTrim + routing guidance. No subagent was requested. |
+| **Published-package native routing** | **4 Codex + 2 Claude prompt callbacks**, and **1 Codex child start/stop pair**. | Fresh native Linux trials with Token Harness **0.1.28**; child model identity was unknown. |
+
+The output and coding results used the recorded **locally patched 0.1.27 Windows build**; the Linux
+callback results used the **published 0.1.28 package**. These measurements predate the **0.1.29 model
+ladder**, whose marginal delegation benefit has not been measured.
+[Paired pilot](docs/evaluation/native-pairs-2026-10-04.md),
+[sanitized output receipts](docs/evaluation/results/2026-10-04-native-pairs.json),
+[published Linux callback audit](docs/evaluation/linux-native-routing-2026-10-04.md).
+
+Here is the complete whole-task comparison, including the increases. Change is
+`(optimized - baseline) / baseline`; a negative percentage means fewer local tokens:
+
+| Harness / task | Baseline local tokens | Optimized local tokens | Change | Execution result |
+| --- | ---: | ---: | ---: | --- |
+| Claude / mechanical | 29,730 | 39,417 | **+32.6%** | Acceptance and provider commands passed. |
+| Claude / standard | 44,862 | 43,948 | **−2.0%** | Acceptance and provider commands passed. |
+| Claude / hard | 51,364 | 49,383 | **−3.9%** | Acceptance and provider commands passed. |
+| Codex / mechanical | 89,994 | 106,350 | **+18.2%** | Acceptance passed; optimized RTK command failed twice. |
+| Codex / standard | 94,247 | 112,329 | **+19.2%** | Acceptance passed; optimized RTK command failed twice. |
+| Codex / hard | 104,374 | 124,674 | **+19.4%** | Acceptance passed; optimized RTK command failed twice. |
+
+Local totals include native input/cache/output counters. Compare variants within the same harness;
+these counts are not a Claude-versus-Codex price ranking. Four optimized runs used more local
+tokens and five took longer. The failed Codex provider executions exclude those pairs from positive
+stack-benefit claims. [Full protocol and results](docs/evaluation/native-pairs-2026-10-04.md).
+
+### Subscription windows and official capacity estimates
+
+Smaller models give routine work a different allowance footprint, which is the reason for the
+native model ladder. As of **October 4, 2026**, OpenAI publishes these **estimated local-message
+capacities per five-hour window** for **Plus and Standard Business**:
+
+| Codex model | Official estimated local messages / 5h |
+| --- | ---: |
+| GPT-6 Astra | **5–45** |
+| GPT-6.1 Sol | **15–160** |
+| GPT-6 Sol | **15–150** |
+| GPT-6 Luna | **350–3,000** |
+
+These vendor estimates support choosing Luna for suitable routine work and Sol for bounded
+implementation. They describe model usage capacity; Token Harness's main-model planning, child
+work and final review all contribute to a routed task. **Codex Pro currently has no five-hour
+limit.** Weekly limits may apply; the account usage dashboard supplies the active windows and reset
+times. [Official OpenAI subscription usage guidance](https://learn.chatgpt.com/docs/pricing#what-are-the-usage-limits-for-my-plan).
+
+For Claude Code, **Claude Pro has a five-hour session window and a weekly limit across models**.
+Claude and Claude Code share subscription usage, and a subagent's own requests draw on that usage.
+The policy therefore reserves higher-tier work for the main model and selects Sonnet/Haiku for
+eligible units; no fixed Opus-to-Sonnet-to-Haiku quota conversion is established by the current
+Token Harness experiments.
+[Claude plan limits](https://support.claude.com/en/articles/8325606-what-is-the-pro-plan),
+[shared Claude Code subscription usage](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan),
+[native subagent usage](https://code.claude.com/docs/en/costs#delegate-verbose-operations-to-subagents).
+
+The current Token Harness record for **subscription savings** is:
+
+| Harness | Five-hour consumption reduction | Seven-day consumption reduction |
+| --- | --- | --- |
+| **Codex** | **Not measured yet**; the pilot's account snapshots overlapped other activity. Pro has no current 5h limit. | **Not measured yet**; the account snapshots could not be attributed to the task. |
+| **Claude Code** | **Not measured yet**; authoritative paired window observations were unavailable. | **Not measured yet**; authoritative paired window observations were unavailable. |
+
+A percentage for either window requires baseline and optimized consumption for the same accepted
+work, isolated from other account activity and resets. Calculate each window separately as
+`100 × (baseline consumption − optimized consumption) / baseline consumption`. The current local
+token and character results supply no conversion into five-hour or seven-day percentages.
+[Subscription evidence record](docs/evaluation/native-pairs-2026-10-04.md#activation-allowance-and-scope).
+
+### How the dashboard reports results
 
 | Measurement | What you can trust |
 | --- | --- |
