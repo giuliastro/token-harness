@@ -1,7 +1,8 @@
 # Delivery status — 2026-10-04
 
-**Release: Token Harness 0.1.28.** The management, transaction, measurement and advisory foundations
-are shipped. Automatic native prompt-hook installation is implemented. Both agents have genuine
+**Release: Token Harness 0.1.29.** The management, transaction, measurement and advisory foundations
+are shipped. Automatic native prompt-hook installation now supplies a per-harness model ladder with
+explicit child models and override-capable Codex forks (#368). Both agents have genuine
 Windows callbacks and provider receipts on the earlier locally patched build, plus fresh native
 Linux prompt callbacks with published 0.1.28. Linux hook lifecycle and exact rollback are verified;
 Claude model access is blocked by existing authentication. Windows published-artifact upgrade
@@ -58,7 +59,11 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The current release is [0.1.28](releases/0.1.28.md), including the reviewed #365 and #366 changes.
+The current release is [0.1.29](releases/0.1.29.md), including the reviewed routing policy in #368.
+Local validation passed 2,403 tests with nine expected skips, plus typecheck, lint, build and bundle
+smoke. Synthetic hook CLI checks cover Sol/Astra ladders, the Luna no-op, Claude's explicit model
+parameter, malformed input and event isolation; they do not establish actual native child selection.
+Cross-platform candidate CI and the exact-tag publication workflow remain required release gates.
 The previous release's evidence
 below retains its original version and date. The [October 4 native Windows repair audit](evaluation/2026-10-04-local-fixes.md)
 records the pre-release live results, local build distinction and remaining #255/#359/#360 gates.
