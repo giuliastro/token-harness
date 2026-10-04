@@ -15,6 +15,20 @@ For API users, it is **less avoidable token usage with costs reported only when 
 available**. Token reduction, subscription quota and billed cost are different measurements; Token
 Harness keeps them separate.
 
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/dashboard-overview.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/dashboard-overview.jpeg" alt="Token Harness Overview: setup status, measured impact, coding agents with automatic routing, and optimizer setup" width="360"></a>
+      <br><sub><b>Overview</b> · agents, routing and optimizers in one place</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/dashboard-results.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/dashboard-results.jpeg" alt="Token Harness Results: measured output reduction, routing activity and allowance balances per source" width="360"></a>
+      <br><sub><b>Results</b> · measured impact and the evidence behind it</sub>
+    </td>
+  </tr>
+</table>
+<p align="center"><sub>Click a screenshot to open it at full size.</sub></p>
+
 ## Install and start
 
 You need **Node.js 22.13+** and an installed, signed-in **Claude Code or Codex**.
