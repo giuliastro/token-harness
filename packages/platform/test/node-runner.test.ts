@@ -272,7 +272,7 @@ describe('bounded output', () => {
       executable: 'node',
       args: [
         '-e',
-        'process.stdout.write("x".repeat(20000));process.stderr.write("y".repeat(20000));process.exit(7)',
+        'process.stdout.write("x".repeat(20000),()=>process.stderr.write("y".repeat(20000),()=>process.exit(7)))',
       ],
       cwd: sandbox,
       maxOutputBytes: 8,

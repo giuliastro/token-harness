@@ -25,11 +25,13 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { posix, win32 } from 'node:path';
 
 import type { FileStat, FileSystemPort, PlatformFacts } from '@token-harness/core';
 
 import { isInsideDirectory } from '../platform/paths.js';
+import { replaceAtomically } from './atomic-replace.js';
 
 function octal(mode: number): string {
   return (mode & 0o7777).toString(8).padStart(4, '0');
@@ -126,7 +128,13 @@ export class NodeFileSystem implements FileSystemPort {
       } finally {
         await handle.close();
       }
-      await rename(temporary, path);
+      await replaceAtomically({
+        source: temporary,
+        target: path,
+        nativeWindows: this.nativeWindows,
+        rename,
+        wait: delay,
+      });
     } finally {
       await rm(temporary, { force: true });
     }
