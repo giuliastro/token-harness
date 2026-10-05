@@ -12,9 +12,12 @@
  * error is the only way that surfaces as one.
  */
 
+import { outputEvidenceCapture } from './output-evidence.js';
+
 import {
   formatDisplayCommand,
   redactionPolicy,
+  secretValuesIn,
   type ProcessOutcome,
   type ProcessRequest,
   type ProcessRunner,
@@ -110,7 +113,10 @@ export class FakeProcessRunner implements ProcessRunner {
   // every caller wrap its own `await` in a try block.
   async run(request: ProcessRequest): Promise<ProcessOutcome> {
     this.recorded.push(request);
-    const policy = redactionPolicy({ secretValues: request.secretValues ?? [] });
+    const policy = redactionPolicy({
+      secretValues: [...(request.secretValues ?? []), ...secretValuesIn(request.env ?? {})],
+      secretArgFlags: request.secretArgFlags ?? [],
+    });
     const displayCommand = formatDisplayCommand(request.executable, request.args, policy);
 
     for (const entry of this.registered) {
@@ -125,7 +131,7 @@ export class FakeProcessRunner implements ProcessRunner {
         typeof expectation.respond === 'function'
           ? expectation.respond(request)
           : (expectation.respond ?? {});
-      return {
+      const outcome: ProcessOutcome = {
         displayCommand,
         interpreter: 'direct',
         executablePath: request.executable,
@@ -140,6 +146,25 @@ export class FakeProcessRunner implements ProcessRunner {
         failure: null,
         ...override,
       };
+      if (request.captureOutputEvidence && outcome.outputEvidence === undefined) {
+        if (outcome.stdoutTruncated || outcome.stderrTruncated) {
+          throw new Error(
+            'FakeProcessRunner requires explicit outputEvidence for truncated output fixtures',
+          );
+        }
+        // An untruncated fake fixture is the complete stream, so its UTF-8 bytes
+        // provide a deterministic digest and tail without inventing discarded data.
+        const evidence = (value: string) => {
+          const capture = outputEvidenceCapture(policy);
+          capture.append(Buffer.from(value, 'utf8'));
+          return capture.finish();
+        };
+        outcome.outputEvidence = {
+          stdout: evidence(outcome.stdout),
+          stderr: evidence(outcome.stderr),
+        };
+      }
+      return outcome;
     }
 
     const known =

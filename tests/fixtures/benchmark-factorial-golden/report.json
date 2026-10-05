@@ -1,0 +1,47 @@
+{
+  "benchmarkId": "four-golden",
+  "status": "quality-blocked",
+  "interpretation": "exploratory",
+  "configurationEvidence": "user-declared",
+  "missingArms": [],
+  "quality": {
+    "baseline": "passed",
+    "compression-only": "passed",
+    "routing-only": "passed",
+    "combined": "failed"
+  },
+  "qualitySources": {
+    "baseline": "check-command",
+    "compression-only": "check-command",
+    "routing-only": "check-command",
+    "combined": "check-command"
+  },
+  "qualityMismatches": [
+    "combined"
+  ],
+  "combinedQualityRegression": true,
+  "effects": [
+    {
+      "unit": "local-tokens",
+      "windowKey": null,
+      "scope": null,
+      "compressionSaving": 200,
+      "routingSaving": 300,
+      "combinedSaving": null,
+      "interactionCost": null
+    },
+    {
+      "unit": "percentage-points",
+      "windowKey": "codex|id:main|weekly|secondary|native-rpc",
+      "scope": "weekly",
+      "compressionSaving": 1,
+      "routingSaving": 2,
+      "combinedSaving": null,
+      "interactionCost": null
+    }
+  ],
+  "reasons": [
+    "Compression activation and starting state are user-declared.",
+    "Combined quality regressed; combined savings and interaction are blocked."
+  ]
+}

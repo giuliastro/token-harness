@@ -25,6 +25,7 @@
 import { spawn } from 'node:child_process';
 import { win32 } from 'node:path';
 import process from 'node:process';
+import { outputEvidenceCapture } from './output-evidence.js';
 
 import {
   DEFAULT_MAX_OUTPUT_BYTES,
@@ -362,6 +363,12 @@ export class NodeProcessRunner implements ProcessRunner {
     return new Promise<ProcessOutcome>((resolvePromise) => {
       const stdout = boundedCapture(limit);
       const stderr = boundedCapture(limit);
+      const stdoutEvidence = request.captureOutputEvidence
+        ? outputEvidenceCapture(policy)
+        : undefined;
+      const stderrEvidence = request.captureOutputEvidence
+        ? outputEvidenceCapture(policy)
+        : undefined;
       let settled = false;
       let timedOut = false;
       let timer: NodeJS.Timeout | undefined;
@@ -410,6 +417,7 @@ export class NodeProcessRunner implements ProcessRunner {
 
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout.append(chunk);
+        stdoutEvidence?.append(chunk);
         if (pendingStdinMarkers.size === 0 || stdinEnded) return;
 
         stdoutLineBuffer += chunk.toString('utf8');
@@ -430,7 +438,10 @@ export class NodeProcessRunner implements ProcessRunner {
           stdoutLineBuffer = stdoutLineBuffer.slice(-Math.max(4096, longestMarker * 2));
         }
       });
-      child.stderr?.on('data', (chunk: Buffer) => stderr.append(chunk));
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr.append(chunk);
+        stderrEvidence?.append(chunk);
+      });
 
       // stdin is never inherited. Ordinarily it closes immediately after the payload is written.
       // Request/response servers may opt into holding it open until specific JSONL response lines
@@ -478,6 +489,14 @@ export class NodeProcessRunner implements ProcessRunner {
             stderr: stderr.text(policy),
             stdoutTruncated: stdout.truncated,
             stderrTruncated: stderr.truncated,
+            ...(stdoutEvidence === undefined || stderrEvidence === undefined
+              ? {}
+              : {
+                  outputEvidence: {
+                    stdout: stdoutEvidence.finish(),
+                    stderr: stderrEvidence.finish(),
+                  },
+                }),
             durationMs,
             timedOut: true,
             failure: {
@@ -497,6 +516,14 @@ export class NodeProcessRunner implements ProcessRunner {
           stderr: stderr.text(policy),
           stdoutTruncated: stdout.truncated,
           stderrTruncated: stderr.truncated,
+          ...(stdoutEvidence === undefined || stderrEvidence === undefined
+            ? {}
+            : {
+                outputEvidence: {
+                  stdout: stdoutEvidence.finish(),
+                  stderr: stderrEvidence.finish(),
+                },
+              }),
           durationMs,
           timedOut: false,
           failure: null,

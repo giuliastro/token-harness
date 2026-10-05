@@ -6,6 +6,8 @@
  * compare baseline versus optimized. A mid-task configuration change is not attributable evidence.
  */
 
+import { sameQualityGateEvidence } from './benchmark-quality.js';
+import type { TaskBenchmarkFactorialReport } from './benchmark-factorial.js';
 import {
   compareTaskBenchmarkContextSnapshots,
   type TaskBenchmarkContextComparison,
@@ -40,6 +42,13 @@ export interface TaskBenchmarkContextMatrixSummary {
 export interface TaskBenchmarkContextMatrixReport
   extends Omit<TaskBenchmarkMatrixReport, 'entries'> {
   entries: TaskBenchmarkContextMatrixEntry[];
+  factorial?: TaskBenchmarkFactorialReport[];
+  pendingConfiguration?: {
+    state: 'active' | 'unreadable';
+    benchmarkId: string | null;
+    variant: string | null;
+    recoveryCommand: string | null;
+  };
   context: {
     byTaskClass: TaskBenchmarkContextMatrixSummary[];
     overall: TaskBenchmarkContextMatrixSummary;
@@ -98,7 +107,11 @@ export function compareTaskBenchmarkReceiptContexts(
     };
   }
 
-  if (baseline.outcome.qualityGate !== 'passed' || optimized.outcome.qualityGate !== 'passed') {
+  if (
+    !sameQualityGateEvidence(baseline.outcome.qualityEvidence, optimized.outcome.qualityEvidence) ||
+    baseline.outcome.qualityGate !== 'passed' ||
+    optimized.outcome.qualityGate !== 'passed'
+  ) {
     return {
       verdict: 'unknown',
       baseline: baseline.contextAtStart ?? null,

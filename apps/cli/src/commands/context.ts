@@ -21,6 +21,8 @@ import type {
   ResolvedExecutable,
   ProviderId,
   TaskBenchmarkVariant,
+  TaskBenchmarkCheck,
+  TaskBenchmarkPreparedConfiguration,
   TaskClass,
   TaskQualityGate,
 } from '@token-harness/core';
@@ -38,6 +40,8 @@ export interface CommandContext {
   stateRoot: string | null;
   harness: HarnessId | null;
   provider: ProviderId | null;
+  /** Internal narrow provider set for transactional benchmark preparation. */
+  providerSelection?: readonly ProviderId[];
   /** Paired task benchmark receipt paths, supplied by the CLI. */
   baselineReceipt?: string | null;
   optimizedReceipt?: string | null;
@@ -46,6 +50,11 @@ export interface CommandContext {
   benchmarkQuality?: TaskQualityGate | null;
   benchmarkAttempts?: number | null;
   benchmarkFailedAttempts?: number | null;
+  benchmarkCheck?: TaskBenchmarkCheck | null;
+  benchmarkStartingState?: string | null;
+  benchmarkPreparedConfiguration?: TaskBenchmarkPreparedConfiguration;
+  /** Internal validation pass before any temporary configuration mutation. */
+  benchmarkValidateOnly?: boolean;
   /** Optional experiment target. It attributes a pair; it does not prove activation. */
   optimizationCandidate?: OptimizationCandidateId | null;
   /** RFC 0011 optimizer policy inputs; optional for hand-built test contexts. */

@@ -9,6 +9,8 @@
 export * from './domain/actions.js';
 export * from './domain/budget.js';
 export * from './domain/benchmark.js';
+export * from './domain/benchmark-quality.js';
+export * from './domain/benchmark-factorial.js';
 export * from './domain/benchmark-context.js';
 export * from './domain/benchmark-context-report.js';
 export * from './domain/context-owner-admission.js';
@@ -80,6 +82,8 @@ export * from './state/actions.js';
 export * from './state/filesystem.js';
 export * from './state/install.js';
 export * from './state/journal.js';
+export * from './state/mutation-lease.js';
+export * from './state/file-plan-preview.js';
 export * from './state/jsonl-store.js';
 export * from './state/json-merge.js';
 export * from './state/jsonc.js';

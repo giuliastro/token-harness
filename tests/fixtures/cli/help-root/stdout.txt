@@ -34,6 +34,8 @@ Advanced commands
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
   benchmark, benchmark-start, benchmark-finish, benchmark-matrix
+  benchmark-factorial
+  benchmark-prepare, benchmark-restore
               Compare real task results for advanced evaluation
 
 Useful flags

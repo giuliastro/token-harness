@@ -3,6 +3,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { FakeProcessRunner } from '../src/index.js';
@@ -118,5 +119,63 @@ describe('expectation matching', () => {
   it('does not match when the working directory differs', async () => {
     const runner = new FakeProcessRunner().expect({ executable: 'rtk', cwd: '/expected' });
     await assert.rejects(() => runner.run({ executable: 'rtk', args: [], cwd: '/other' }));
+  });
+
+  it('generates output evidence from complete fixtures when requested', async () => {
+    const runner = new FakeProcessRunner().expect({
+      executable: 'rtk',
+      respond: { stdout: 'out-secret', stderr: 'error' },
+    });
+    const outcome = await runner.run({
+      executable: 'rtk',
+      args: [],
+      cwd: '/w',
+      secretValues: ['out-secret'],
+      captureOutputEvidence: true,
+    });
+    assert.deepEqual(outcome.outputEvidence?.stdout, {
+      sha256: createHash('sha256').update('out-secret').digest('hex'),
+      bytes: 10,
+      tail: '[redacted]',
+    });
+    assert.deepEqual(outcome.outputEvidence?.stderr, {
+      sha256: createHash('sha256').update('error').digest('hex'),
+      bytes: 5,
+      tail: 'error',
+    });
+  });
+
+  it('redacts secrets spanning the tail boundary without changing full-output hashes', async () => {
+    for (const secret of ['boundary-secret', 'chiave-秘密-private']) {
+      const padding = 'z'.repeat(8192 - 3);
+      const raw = 'before' + secret + padding;
+      const runner = new FakeProcessRunner().expect({
+        executable: 'fixture',
+        respond: { stdout: raw },
+      });
+      const result = await runner.run({
+        executable: 'fixture',
+        args: [],
+        cwd: '/w',
+        secretValues: [secret],
+        captureOutputEvidence: true,
+      });
+      assert.deepEqual(result.outputEvidence?.stdout, {
+        sha256: createHash('sha256').update(raw).digest('hex'),
+        bytes: Buffer.byteLength(raw),
+        tail: '[redacted]' + padding,
+      });
+    }
+  });
+
+  it('requires explicit evidence for truncated output fixtures', async () => {
+    const runner = new FakeProcessRunner().expect({
+      executable: 'rtk',
+      respond: { stdout: 'prefix', stdoutTruncated: true },
+    });
+    await assert.rejects(
+      () => runner.run({ executable: 'rtk', args: [], cwd: '/w', captureOutputEvidence: true }),
+      /requires explicit outputEvidence/,
+    );
   });
 });

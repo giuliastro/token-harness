@@ -1,0 +1,4 @@
+Benchmark restoration — four-golden / baseline
+Status: planned
+Restore: /tmp/fixture-home/.codex/hooks.json
+Preview only; repeat with --yes to restore.

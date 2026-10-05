@@ -1829,6 +1829,11 @@ async function plan(context: ProviderContext, request: ProviderPlanRequest): Pro
         : writeSetStillReviewed(currentCapabilities, harnessId(harness));
     if (!reviewed) continue;
 
+    // Keep an already matching skill set in place. Runtime hooks below remain independently
+    // planned; a delegated installer is unnecessary for an artifact contract already satisfied.
+    if (await harnessTrimSkillsConfigured(context, harnessId(harness), currentCapabilities))
+      continue;
+
     const expectedArtifacts = skillArtifacts(context, harness, currentCapabilities);
     if (expectedArtifacts.length === 0) continue;
     const protectedPaths = [

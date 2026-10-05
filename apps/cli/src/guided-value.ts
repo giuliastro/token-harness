@@ -1,6 +1,7 @@
 import type {
   OptimizationCandidateId,
   TaskBenchmarkContextMatrixReport,
+  TaskBenchmarkFactorialReport,
 } from '@token-harness/core';
 
 export type GuideAllowanceEvidenceState = 'not-measured' | 'measured' | 'blocked-by-quality';
@@ -55,6 +56,9 @@ export interface GuideCandidateBenchmarkEvidence {
 
 export interface GuideValueEvidence {
   source: 'benchmark-matrix' | 'unavailable';
+  factorial?: TaskBenchmarkFactorialReport[];
+  pendingConfiguration?: TaskBenchmarkContextMatrixReport['pendingConfiguration'];
+  qualityMismatches?: Array<{ benchmarkId: string; details: string[] }>;
   allowance5h: GuideAllowanceEvidence;
   allowance7d: GuideAllowanceEvidence;
   quality: GuideQualityEvidence;
@@ -269,6 +273,20 @@ export function guidedValueEvidence(report: CandidateAwareMatrix | null): GuideV
   const quality = qualityEvidence(entries);
   return {
     source: entries.length > 0 ? 'benchmark-matrix' : 'unavailable',
+    ...(report?.factorial === undefined ? {} : { factorial: report.factorial }),
+    ...(report?.pendingConfiguration === undefined
+      ? {}
+      : { pendingConfiguration: report.pendingConfiguration }),
+    ...(entries.some((entry) => (entry.qualityMismatches?.length ?? 0) > 0)
+      ? {
+          qualityMismatches: entries
+            .filter((entry) => (entry.qualityMismatches?.length ?? 0) > 0)
+            .map((entry) => ({
+              benchmarkId: entry.benchmarkId,
+              details: entry.qualityMismatches!,
+            })),
+        }
+      : {}),
     allowance5h: allowanceEvidence(entries, 'five-hour', quality),
     allowance7d: allowanceEvidence(entries, 'weekly', quality),
     quality,

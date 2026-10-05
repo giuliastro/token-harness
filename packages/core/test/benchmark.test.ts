@@ -235,7 +235,7 @@ describe('task benchmark receipt parser', () => {
   });
 
   it('rejects a future schema explicitly', () => {
-    const source = { ...receipt('baseline'), schemaVersion: 2 };
+    const source = { ...receipt('baseline'), schemaVersion: 3 };
     const parsed = parseTaskBenchmarkReceipt(source);
     assert.equal(parsed.ok, false);
     if (parsed.ok) return;

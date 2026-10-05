@@ -17,6 +17,7 @@ import type {
   TaskBenchmarkCaptureStartReport,
   TaskBenchmarkCompareReport,
   TaskBenchmarkMatrixReport,
+  TaskBenchmarkFactorialReport,
   CommandResult,
   ContextReport,
   Diagnostic,
@@ -34,6 +35,10 @@ import type {
 } from '@token-harness/core';
 
 import { renderApplyReport } from './apply.js';
+import { renderBenchmarkFactorialReport } from './benchmark-factorial.js';
+import { renderBenchmarkPrepare, renderBenchmarkRestore } from './benchmark-session.js';
+import type { BenchmarkPrepareReport } from '../commands/benchmark-prepare.js';
+import type { BenchmarkRestoreReport } from '../commands/benchmark-session.js';
 import { renderBenchmarkReport } from './benchmark.js';
 import { renderBenchmarkFinishReport, renderBenchmarkStartReport } from './benchmark-capture.js';
 import { renderBenchmarkMatrixReport } from './benchmark-matrix.js';
@@ -153,6 +158,12 @@ export function renderHuman(
       return plain(renderApplyReport(data as ApplyReport, context, result.command));
     case 'setup':
       return plain(renderVerboseSetup(data as SetupReport, context));
+    case 'benchmark-factorial':
+      return plain(renderBenchmarkFactorialReport(data as TaskBenchmarkFactorialReport));
+    case 'benchmark-prepare':
+      return plain(renderBenchmarkPrepare(data as BenchmarkPrepareReport));
+    case 'benchmark-restore':
+      return plain(renderBenchmarkRestore(data as BenchmarkRestoreReport));
     case 'benchmark':
       return plain(renderBenchmarkReport(data as TaskBenchmarkCompareReport, context));
     case 'benchmark-matrix':

@@ -13,6 +13,7 @@ import {
   buildTaskBenchmarkMatrix,
   commandResult,
   diagnostic,
+  readMutationLease,
   isTaskBenchmarkId,
   parseTaskBenchmarkCapture,
   parseTaskBenchmarkReceipt,
@@ -21,8 +22,10 @@ import {
   type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixPair,
   type TaskBenchmarkReceipt,
+  type TaskBenchmarkFactorialReport,
 } from '@token-harness/core';
 
+import { readFactorialBenchmark } from './benchmark-factorial.js';
 import type { CommandContext } from './context.js';
 
 async function readJson(context: CommandContext, path: string): Promise<unknown | null> {
@@ -104,13 +107,34 @@ export async function runBenchmarkMatrix(
   }
 
   const root = context.adapters.fs.join(context.stateRoot, 'benchmarks');
+  let pendingConfiguration: TaskBenchmarkContextMatrixReport['pendingConfiguration'];
+  try {
+    const lease = await readMutationLease(context.adapters.fs, context.stateRoot);
+    if (lease !== null)
+      pendingConfiguration = {
+        state: 'active',
+        benchmarkId: lease.benchmarkId,
+        variant: lease.variant,
+        recoveryCommand: `token-harness benchmark-restore --benchmark-id ${lease.benchmarkId} --variant ${lease.variant} --yes`,
+      };
+  } catch {
+    pendingConfiguration = {
+      state: 'unreadable',
+      benchmarkId: null,
+      variant: null,
+      recoveryCommand: null,
+    };
+  }
   const rootStat = await context.adapters.fs.stat(root);
   if (rootStat === null || rootStat.kind !== 'directory') {
     const empty = buildTaskBenchmarkMatrix([]);
     return commandResult({
       command: 'benchmark-matrix',
       exitCode: EXIT_CODES.ok,
-      data: addContextToTaskBenchmarkMatrixReport(empty, []),
+      data: {
+        ...addContextToTaskBenchmarkMatrixReport(empty, []),
+        ...(pendingConfiguration === undefined ? {} : { pendingConfiguration }),
+      },
       diagnostics: [
         diagnostic({
           severity: 'info',
@@ -132,12 +156,18 @@ export async function runBenchmarkMatrix(
   };
   let crossHarnessSkipped = 0;
   const pairs: TaskBenchmarkMatrixPair[] = [];
+  const factorial: TaskBenchmarkFactorialReport[] = [];
 
   for (const name of (await context.adapters.fs.readDirectory(root)).sort()) {
     if (!isTaskBenchmarkId(name)) continue;
     const directory = context.adapters.fs.join(root, name);
     const stat = await context.adapters.fs.stat(directory);
     if (stat === null || stat.kind !== 'directory') continue;
+    const experiment = await readFactorialBenchmark(context, name);
+    if (experiment !== null) {
+      factorial.push(experiment);
+      continue;
+    }
     selection.scanned += 1;
 
     const baselineReceiptRaw = await readJson(
@@ -219,7 +249,11 @@ export async function runBenchmarkMatrix(
   return commandResult({
     command: 'benchmark-matrix',
     exitCode: EXIT_CODES.ok,
-    data: addContextToTaskBenchmarkMatrixReport(matrix, pairs),
+    data: {
+      ...addContextToTaskBenchmarkMatrixReport(matrix, pairs),
+      ...(factorial.length > 0 ? { factorial } : {}),
+      ...(pendingConfiguration === undefined ? {} : { pendingConfiguration }),
+    },
     diagnostics:
       crossHarnessSkipped === 0
         ? []

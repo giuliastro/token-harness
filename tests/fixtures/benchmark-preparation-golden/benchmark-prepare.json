@@ -1,0 +1,19 @@
+{
+  "benchmarkId": "four-golden",
+  "variant": "baseline",
+  "planId": "1234abcd",
+  "initialConfigurationId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "providers": [
+    "rtk"
+  ],
+  "compression": false,
+  "routing": false,
+  "status": "planned",
+  "verificationTier": "config-only",
+  "actions": [],
+  "paths": [
+    "/tmp/fixture-home/.codex/hooks.json"
+  ],
+  "capture": null,
+  "recoveryCommand": "token-harness benchmark-restore --benchmark-id four-golden --variant baseline --yes"
+}

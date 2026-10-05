@@ -45,6 +45,8 @@ export interface ProcessRequest {
   timeoutMs?: number;
   /** RFC 0004: "Bound output retained in diagnostics." Per stream. */
   maxOutputBytes?: number;
+  /** Opt in to full-stream hashes and bounded redacted tails for both output streams. */
+  captureOutputEvidence?: boolean;
   /** Values redacted from the displayed command, the logs, and the captured streams. */
   secretValues?: readonly string[];
   /** Extra flags whose argument is a secret, on top of the defaults. */
@@ -86,6 +88,19 @@ export interface ProcessFailure {
   message: string;
 }
 
+export interface ProcessOutputStreamEvidence {
+  sha256: string;
+  /** Number of raw bytes read from the stream. */
+  bytes: number;
+  /** Redacted UTF-8 rendering of the last at most 8192 raw bytes. */
+  tail: string;
+}
+
+export interface ProcessOutputEvidence {
+  stdout: ProcessOutputStreamEvidence;
+  stderr: ProcessOutputStreamEvidence;
+}
+
 export interface ProcessOutcome {
   /**
    * The command as it may be shown to a user or written to a log: redacted, and
@@ -103,6 +118,8 @@ export interface ProcessOutcome {
   stderr: string;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
+  /** Present when requested and the process started. Hashes cover all raw stream bytes. */
+  outputEvidence?: ProcessOutputEvidence;
   durationMs: number;
   timedOut: boolean;
   /**

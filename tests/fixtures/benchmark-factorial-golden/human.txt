@@ -1,0 +1,19 @@
+Factorial benchmark — four-golden
+Status: quality-blocked; exploratory; configuration user-declared
+baseline: quality passed (check-command)
+compression-only: quality passed (check-command)
+routing-only: quality passed (check-command)
+combined: quality failed (check-command)
+Check overrides recorded quality: combined
+local-tokens (separate evidence)
+Compression saving: 200
+Routing saving: 300
+Combined saving: unknown
+Interaction cost: unknown (positive: above additive prediction)
+percentage-points / weekly (separate evidence)
+Compression saving: 1
+Routing saving: 2
+Combined saving: unknown
+Interaction cost: unknown (positive: above additive prediction)
+Compression activation and starting state are user-declared.
+Combined quality regressed; combined savings and interaction are blocked.

@@ -1,0 +1,11 @@
+Benchmark preparation — four-golden / baseline
+Status: planned; plan 1234abcd; verification config-only
+Compression: OFF (rtk); native routing: OFF
+Initial configuration:
+sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Snapshot: /tmp/fixture-home/.codex/hooks.json
+Preview only. --yes approves temporary changes and verified restoration.
+Finish records measurements and quality before restoring the original
+configuration.
+Recovery: token-harness benchmark-restore --benchmark-id four-golden --variant
+baseline --yes

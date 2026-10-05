@@ -26,6 +26,9 @@ import {
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
 import { runApply } from './commands/apply.js';
+import { runBenchmarkFactorial } from './commands/benchmark-factorial.js';
+import { runBenchmarkPrepare } from './commands/benchmark-prepare.js';
+import { runBenchmarkRestore } from './commands/benchmark-session.js';
 import { runBenchmark } from './commands/benchmark.js';
 import {
   runCandidateBenchmarkFinish,
@@ -71,6 +74,9 @@ export type CommandTable = Readonly<
 export const DEFAULT_COMMANDS: CommandTable = {
   apply: runApply,
   benchmark: runBenchmark,
+  'benchmark-factorial': runBenchmarkFactorial,
+  'benchmark-prepare': runBenchmarkPrepare,
+  'benchmark-restore': runBenchmarkRestore,
   'benchmark-matrix': runCandidateBenchmarkMatrix,
   'benchmark-finish': runCandidateBenchmarkFinish,
   'benchmark-start': runCandidateBenchmarkStart,
@@ -425,6 +431,8 @@ export async function run(options: RunOptions): Promise<number> {
     benchmarkQuality: invocation.options.benchmarkQuality,
     benchmarkAttempts: invocation.options.benchmarkAttempts,
     benchmarkFailedAttempts: invocation.options.benchmarkFailedAttempts,
+    benchmarkCheck: invocation.options.benchmarkCheck,
+    benchmarkStartingState: invocation.options.benchmarkStartingState,
     optimizationCandidate: invocation.options.optimizationCandidate,
     taskClass: invocation.options.task,
     budgetProfile: invocation.options.profile,

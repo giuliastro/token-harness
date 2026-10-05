@@ -1,0 +1,8 @@
+{
+  "benchmarkId": "four-golden",
+  "variant": "baseline",
+  "status": "planned",
+  "paths": [
+    "/tmp/fixture-home/.codex/hooks.json"
+  ]
+}

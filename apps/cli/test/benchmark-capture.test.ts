@@ -3,12 +3,16 @@ import { describe, it } from 'node:test';
 
 import {
   harnessId,
+  EXIT_CODES,
   type FileStat,
   type PlatformFacts,
   type ProcessOutcome,
   type ProcessRequest,
 } from '@token-harness/core';
 
+import { runBenchmarkFactorial } from '../src/commands/benchmark-factorial.js';
+import { runBenchmarkMatrix } from '../src/commands/benchmark-matrix.js';
+import { parseArgv } from '../src/argv.js';
 import { runBenchmarkFinish, runBenchmarkStart } from '../src/commands/benchmark-capture.js';
 import type { CommandContext } from '../src/commands/context.js';
 
@@ -43,6 +47,8 @@ function fixture() {
   let usedPercent = 20;
   let now = '2026-09-02T10:00:00.000Z';
   let projectId = 'p_test';
+  let checkResult: Partial<ProcessOutcome> = {};
+  const checkRequests: ProcessRequest[] = [];
   let localSession = {
     inputTokens: 800,
     cacheCreationTokens: 0,
@@ -60,6 +66,17 @@ function fixture() {
 
   const runner = {
     run: async (request: ProcessRequest): Promise<ProcessOutcome> => {
+      if (request.executable === 'test-check') {
+        checkRequests.push(request);
+        return {
+          ...outcome(request, 'passed'),
+          outputEvidence: {
+            stdout: { sha256: 'a'.repeat(64), bytes: 6, tail: 'passed' },
+            stderr: { sha256: 'b'.repeat(64), bytes: 0, tail: '' },
+          },
+          ...checkResult,
+        };
+      }
       if (request.executable === 'ccusage' && request.args[0] === '--version') {
         return outcome(request, 'ccusage 20.0.20');
       }
@@ -228,17 +245,23 @@ function fixture() {
         },
         writeFile: async (path, bytes) => {
           files.set(path, new Uint8Array(bytes));
+          const parent = path.split('/').slice(0, -1).join('/');
+          directories.add(parent);
+          directories.add(parent.split('/').slice(0, -1).join('/'));
         },
         appendFile: async () => {
           throw new Error('not used');
         },
-        createDirectory: async () => undefined,
+        createDirectory: async (path) => {
+          directories.add(path);
+          directories.add(path.split('/').slice(0, -1).join('/'));
+        },
         remove: async (path) => {
           files.delete(path);
         },
         readDirectory: async (path) => {
           const prefix = path.endsWith('/') ? path : `${path}/`;
-          return [...files.keys()]
+          return [...new Set([...files.keys(), ...directories])]
             .filter((candidate) => candidate.startsWith(prefix))
             .map((candidate) => candidate.slice(prefix.length))
             .filter((name) => name !== '' && !name.includes('/'));
@@ -260,6 +283,10 @@ function fixture() {
   return {
     context,
     files,
+    checkRequests,
+    setCheckResult(value: Partial<ProcessOutcome>) {
+      checkResult = value;
+    },
     setFile(path: string, value: unknown) {
       files.set(path, new TextEncoder().encode(JSON.stringify(value)));
     },
@@ -387,5 +414,196 @@ describe('benchmark capture commands', () => {
     const finished = await runBenchmarkFinish(finishContext);
     assert.equal(finished.exitCode, 2);
     assert.equal(finished.diagnostics[0]?.code, 'benchmark-failed-attempts-exceed-attempts');
+  });
+});
+
+describe('saved direct quality checks', () => {
+  const check = { executable: 'test-check', args: ['run', 'verify'], timeoutMs: 120000 };
+  const finish = (world: ReturnType<typeof fixture>, extra: Partial<CommandContext> = {}) => ({
+    ...world.context(),
+    benchmarkAttempts: 1,
+    benchmarkFailedAttempts: 0,
+    ...extra,
+  });
+  it('previews without executing or finalizing, then executes only the saved argv in the project', async () => {
+    const world = fixture();
+    const start = await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
+    assert.ok(start.data);
+    assert.equal(start.data.capture.schemaVersion, 2);
+    assert.deepEqual(start.data.capture.qualityCheck, check);
+    const plan = await runBenchmarkFinish(finish(world));
+    assert.equal(plan.exitCode, 0);
+    assert.equal(plan.data, null);
+    assert.equal(plan.diagnostics[0]!.code, 'benchmark-check-plan');
+    assert.equal(world.checkRequests.length, 0);
+    assert.equal(world.files.has(start.data.capturePath.replace('.capture.json', '.json')), false);
+    const result = await runBenchmarkFinish(finish(world, { confirmed: true }));
+    assert.ok(result.data);
+    assert.equal(result.data.receipt.outcome.qualityGate, 'passed');
+    assert.equal(world.checkRequests.length, 1);
+    assert.deepEqual(world.checkRequests[0], {
+      executable: 'test-check',
+      args: ['run', 'verify'],
+      cwd: '/home/dev/project',
+      timeoutMs: 120000,
+      maxOutputBytes: 8192,
+      captureOutputEvidence: true,
+    });
+    assert.equal(result.data.receipt.outcome.qualityEvidence?.source, 'check-command');
+    assert.equal(
+      world.files.has(result.data.receiptPath.replace('.json', '.check-output.json')),
+      true,
+    );
+    assert.doesNotMatch(world.text(result.data.receiptPath), /"tail"/);
+  });
+  it('uses a nonzero exit despite truncated passing output and contradicting recorded quality', async () => {
+    const world = fixture();
+    await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
+    world.setCheckResult({
+      exitCode: 1,
+      stdout: 'passing output only',
+      stdoutTruncated: true,
+      outputEvidence: {
+        stdout: { sha256: 'c'.repeat(64), bytes: 50000, tail: 'LAST TEST FAILED' },
+        stderr: { sha256: 'd'.repeat(64), bytes: 0, tail: '' },
+      },
+    });
+    const result = await runBenchmarkFinish(
+      finish(world, { confirmed: true, benchmarkQuality: 'passed' }),
+    );
+    assert.ok(result.data);
+    assert.equal(result.data.receipt.outcome.qualityGate, 'failed');
+    assert.ok(result.diagnostics.some((d) => d.code === 'benchmark-check-quality-mismatch'));
+    const e = result.data.receipt.outcome.qualityEvidence;
+    assert.ok(e?.source === 'check-command');
+    assert.equal(e.output!.stdout.bytes, 50000);
+    assert.equal(e.output!.stdout.sha256, 'c'.repeat(64));
+    assert.equal(e.userRecordedQuality, 'passed');
+    assert.match(
+      world.text(result.data.receiptPath.replace('.json', '.check-output.json')),
+      /LAST TEST FAILED/,
+    );
+  });
+  it('records timeout, start failure or signal as unknown', async () => {
+    for (const overrides of [
+      {
+        timedOut: true,
+        exitCode: 0,
+        failure: { reason: 'timed-out' as const, message: 'fixture' },
+      },
+      { exitCode: null, failure: { reason: 'executable-not-found' as const, message: 'fixture' } },
+      { signal: 'SIGTERM', exitCode: 0 },
+    ]) {
+      const world = fixture();
+      await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
+      world.setCheckResult(overrides);
+      const result = await runBenchmarkFinish(finish(world, { confirmed: true }));
+      assert.ok(result.data);
+      assert.equal(result.data.receipt.outcome.qualityGate, 'unknown');
+    }
+  });
+  it('freezes the check and blocks a changed counterpart without executing it', async () => {
+    const world = fixture();
+    await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
+    const changed = await runBenchmarkStart({
+      ...world.context(),
+      benchmarkVariant: 'optimized',
+      benchmarkCheck: { ...check, args: ['other'] },
+    });
+    assert.equal(changed.exitCode, EXIT_CODES['precondition-drift']);
+    assert.equal(changed.diagnostics[0]!.code, 'benchmark-arm-identity-mismatch');
+    const finishChanged = await runBenchmarkFinish(
+      finish(world, { confirmed: true, benchmarkCheck: { ...check, args: ['other'] } }),
+    );
+    assert.equal(finishChanged.exitCode, 2);
+    assert.equal(world.checkRequests.length, 0);
+  });
+  it('validates JSON argv, timeout ranges and start-only options at the public parser', () => {
+    const args = [
+      'benchmark-start',
+      '--check-command',
+      '["npm","run","verify"]',
+      '--check-timeout',
+      '120000',
+    ];
+    const parsed = parseArgv(args);
+    assert.equal(parsed.kind, 'command');
+    if (parsed.kind === 'command') assert.equal(parsed.options.benchmarkCheck!.timeoutMs, 120000);
+    for (const argv of [
+      ['benchmark-start', '--check-command', 'npm test'],
+      ['benchmark-start', '--check-command', '[]'],
+      ['benchmark-start', '--check-timeout', '0'],
+      ['benchmark-start', '--check-timeout', '1000'],
+      ['benchmark-finish', '--check-command', '["npm","test"]'],
+    ])
+      assert.equal(parseArgv(argv).kind, 'usage-error');
+  });
+});
+
+describe('factorial capture/report integration', () => {
+  it('keeps a four-arm set out of paired matrix history and exposes its incomplete report', async () => {
+    const world = fixture();
+    const start = await runBenchmarkStart({
+      ...world.context(),
+      benchmarkStartingState: 'initial-commit',
+    });
+    assert.equal(start.exitCode, 0);
+    const report = await runBenchmarkFactorial(world.context());
+    assert.ok(report.data);
+    assert.equal(report.data.status, 'incomplete');
+    const matrix = await runBenchmarkMatrix(world.context());
+    assert.ok(matrix.data);
+    assert.equal(matrix.data.entries.length, 0);
+    assert.equal(matrix.data.factorial!.length, 1);
+    assert.equal(matrix.data.selection.incomplete, 0);
+  });
+  it('records all four arms with identical checks, then reports routing evidence as unverified', async () => {
+    const world = fixture();
+    const check = { executable: 'test-check', args: [], timeoutMs: 120000 };
+    for (const arm of ['baseline', 'compression-only', 'routing-only', 'combined'] as const) {
+      const ctx = {
+        ...world.context(),
+        benchmarkVariant: arm,
+        benchmarkStartingState: 'initial-commit',
+        benchmarkCheck: check,
+      };
+      assert.equal((await runBenchmarkStart(ctx)).exitCode, 0);
+      const result = await runBenchmarkFinish({
+        ...world.context(),
+        benchmarkVariant: arm,
+        benchmarkAttempts: 1,
+        benchmarkFailedAttempts: 0,
+        confirmed: true,
+      });
+      assert.equal(result.exitCode, 0);
+    }
+    const result = await runBenchmarkFactorial(world.context());
+    assert.ok(result.data);
+    assert.equal(result.data.status, 'routing-unverified');
+    assert.equal(result.data.missingArms.length, 0);
+    const matrix = await runBenchmarkMatrix(world.context());
+    assert.ok(matrix.data);
+    assert.equal(matrix.data.overall.pairs, 0);
+    assert.equal(matrix.data.factorial![0]!.status, 'routing-unverified');
+  });
+  it('rejects missing state ids, changed initial states and cross-project access', async () => {
+    const world = fixture();
+    assert.equal(
+      (await runBenchmarkStart({ ...world.context(), benchmarkVariant: 'combined' })).exitCode,
+      2,
+    );
+    await runBenchmarkStart({ ...world.context(), benchmarkStartingState: 'initial-commit' });
+    assert.equal(
+      (
+        await runBenchmarkStart({
+          ...world.context(),
+          benchmarkVariant: 'compression-only',
+          benchmarkStartingState: 'different',
+        })
+      ).exitCode,
+      EXIT_CODES['precondition-drift'],
+    );
+    world.setProjectId('other');
+    assert.equal((await runBenchmarkFactorial(world.context())).exitCode, 2);
   });
 });

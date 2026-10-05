@@ -16,6 +16,10 @@
 
 import {
   diagnostic,
+  DEFAULT_BENCHMARK_CHECK_TIMEOUT_MS,
+  MAX_BENCHMARK_CHECK_TIMEOUT_MS,
+  parseTaskBenchmarkCheck,
+  type TaskBenchmarkCheck,
   isBudgetProfile,
   isHarnessId,
   isTaskBenchmarkId,
@@ -39,6 +43,9 @@ export const AVAILABLE_COMMANDS = [
   'budget',
   'benchmark',
   'benchmark-matrix',
+  'benchmark-factorial',
+  'benchmark-prepare',
+  'benchmark-restore',
   'benchmark-finish',
   'benchmark-start',
   'context',
@@ -95,6 +102,9 @@ export interface CommandOptions {
   benchmarkQuality: TaskQualityGate | null;
   benchmarkAttempts: number | null;
   benchmarkFailedAttempts: number | null;
+  benchmarkCheck: TaskBenchmarkCheck | null;
+  benchmarkCheckTimeoutMs: number | null;
+  benchmarkStartingState: string | null;
   optimizationCandidate: OptimizationCandidateId | null;
   /** RFC 0011 advisory optimizer inputs. */
   task: TaskClass | null;
@@ -140,6 +150,9 @@ const VALUE_FLAGS = new Set([
   '--quality',
   '--attempts',
   '--failed-attempts',
+  '--check-command',
+  '--check-timeout',
+  '--starting-state',
   '--task',
   '--profile',
   '--reserve',
@@ -228,6 +241,9 @@ export function parseArgv(
     benchmarkQuality: null,
     benchmarkAttempts: null,
     benchmarkFailedAttempts: null,
+    benchmarkCheck: null,
+    benchmarkCheckTimeoutMs: null,
+    benchmarkStartingState: null,
     optimizationCandidate: null,
     task: null,
     profile: null,
@@ -409,12 +425,68 @@ export function parseArgv(
               severity: 'error',
               code: 'invalid-benchmark-variant',
               message: `Benchmark variant ${JSON.stringify(value)} is not supported`,
-              remediation: 'Use baseline or optimized',
+              remediation: 'Use baseline, optimized, compression-only, routing-only or combined',
             }),
           );
         } else {
           options.benchmarkVariant = value;
         }
+        break;
+      case '--check-command': {
+        let check: TaskBenchmarkCheck | null = null;
+        try {
+          const argv: unknown = value.length <= 20_480 ? JSON.parse(value) : null;
+          if (Array.isArray(argv) && argv.length > 0)
+            check = parseTaskBenchmarkCheck({
+              executable: argv[0],
+              args: argv.slice(1),
+              timeoutMs: DEFAULT_BENCHMARK_CHECK_TIMEOUT_MS,
+            });
+        } catch {
+          /* A shell expression is deliberately not accepted. */
+        }
+        if (check === null)
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-check-command',
+              message:
+                'Check command must be a bounded JSON array of an executable and string arguments',
+              remediation: 'Use --check-command \'["npm","run","verify"]\'',
+            }),
+          );
+        else options.benchmarkCheck = check;
+        break;
+      }
+      case '--check-timeout': {
+        const timeout = Number(value);
+        if (
+          !Number.isSafeInteger(timeout) ||
+          timeout < 1 ||
+          timeout > MAX_BENCHMARK_CHECK_TIMEOUT_MS
+        )
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-check-timeout',
+              message: 'Check timeout must be 1–3600000 milliseconds',
+              remediation: 'Use --check-timeout 300000',
+            }),
+          );
+        else options.benchmarkCheckTimeoutMs = timeout;
+        break;
+      }
+      case '--starting-state':
+        if (!/^[A-Za-z0-9._-]{1,128}$/.test(value))
+          diagnostics.push(
+            diagnostic({
+              severity: 'error',
+              code: 'invalid-benchmark-starting-state',
+              message: 'Starting state must be a bounded identifier',
+              remediation: 'Use the initial Git commit or a fixture identifier',
+            }),
+          );
+        else options.benchmarkStartingState = value;
         break;
       case '--quality':
         if (value !== 'passed' && value !== 'failed') {
@@ -595,6 +667,32 @@ export function parseArgv(
     return usageError(json, diagnostics);
   }
 
+  if (
+    (options.benchmarkCheck !== null ||
+      options.benchmarkCheckTimeoutMs !== null ||
+      options.benchmarkStartingState !== null) &&
+    command !== 'benchmark-start' &&
+    command !== 'benchmark-prepare'
+  )
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'benchmark-start-options-only',
+        message: 'Check commands, timeouts and starting state are fixed at benchmark-start',
+        remediation: 'Finish using the saved capture; do not change its check',
+      }),
+    );
+  if (options.benchmarkCheckTimeoutMs !== null && options.benchmarkCheck === null)
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'benchmark-check-command-required',
+        message: '--check-timeout requires --check-command',
+        remediation: 'Specify both at benchmark-start',
+      }),
+    );
+  if (options.benchmarkCheck !== null && options.benchmarkCheckTimeoutMs !== null)
+    options.benchmarkCheck.timeoutMs = options.benchmarkCheckTimeoutMs;
   if (diagnostics.length > 0) return usageError(json, diagnostics);
 
   return { kind: 'command', json, command, options };

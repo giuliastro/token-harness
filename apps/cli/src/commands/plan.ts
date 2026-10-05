@@ -496,7 +496,10 @@ export async function computePlan(context: CommandContext): Promise<ComputedPlan
   const diagnostics: Diagnostic[] = [];
 
   const providerAdapters = listProviderAdapters().filter(
-    (adapter) => context.provider === null || adapter.manifest.id === context.provider,
+    (adapter) =>
+      (context.provider === null || adapter.manifest.id === context.provider) &&
+      (context.providerSelection === undefined ||
+        context.providerSelection.includes(adapter.manifest.id)),
   );
   const harnessAdapters = listHarnessAdapters().filter(
     (adapter) => context.harness === null || adapter.manifest.id === context.harness,
