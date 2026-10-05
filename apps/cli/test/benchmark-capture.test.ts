@@ -311,6 +311,24 @@ function fixture() {
 }
 
 describe('benchmark capture commands', () => {
+  it('retains legacy cross-harness capture boundaries for transfer experiments', async () => {
+    const f = fixture();
+    const baseline = await runBenchmarkStart({
+      ...f.context(),
+      benchmarkId: 'legacy-transfer',
+      benchmarkVariant: 'baseline',
+      harness: harnessId('claude'),
+    });
+    assert.equal(baseline.exitCode, 0);
+    const optimized = await runBenchmarkStart({
+      ...f.context(),
+      benchmarkId: 'legacy-transfer',
+      benchmarkVariant: 'optimized',
+      harness: harnessId('codex'),
+    });
+    assert.equal(optimized.exitCode, 0, JSON.stringify(optimized.diagnostics));
+    assert.equal(optimized.data!.capture.experiment, undefined);
+  });
   it('captures policy/quota before the task and closes a receipt after it', async () => {
     const world = fixture();
     const started = await runBenchmarkStart(world.context());

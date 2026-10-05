@@ -304,8 +304,8 @@ export async function runBenchmarkStart(
         experiment?.configuration?.initialConfigurationId ||
       JSON.stringify(previous.capture.experiment?.configuration?.providers) !==
         JSON.stringify(experiment?.configuration?.providers) ||
-      previous.capture.harnessId !== harness ||
-      previous.capture.taskClass !== taskClass ||
+      (experiment !== null &&
+        (previous.capture.harnessId !== harness || previous.capture.taskClass !== taskClass)) ||
       (previous.capture.experiment === undefined) !== (experiment === null)
     ) {
       return commandResult({
