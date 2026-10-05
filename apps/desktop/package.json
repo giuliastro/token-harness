@@ -1,0 +1,9 @@
+{
+  "name": "@token-harness/desktop",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@token-harness/platform": "workspace:*"
+  }
+}

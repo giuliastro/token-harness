@@ -20,11 +20,15 @@ export interface ApplicationUpdateInspection {
   destination: string | null;
 }
 
-function unsupported(message: string, remediation: string): ApplicationUpdateInspection {
+function unsupported(
+  message: string,
+  remediation: string,
+  installed: string | null = null,
+): ApplicationUpdateInspection {
   return {
     row: {
       applicationId: PACKAGE_NAME,
-      installed: null,
+      installed,
       available: null,
       channel: null,
       verdict: 'unsupported-installation',
@@ -114,6 +118,14 @@ export async function inspectApplicationUpdate(
     );
   }
   const installed = manifest['version'] as string;
+
+  if (manifest['tokenHarnessDistribution'] === 'desktop') {
+    return unsupported(
+      'This desktop installation is updated through GitHub Releases, separately from npm',
+      'Download the matching desktop package from https://github.com/giuliastro/token-harness/releases and replace the application at the same installation path',
+      installed,
+    );
+  }
 
   const globalRootResult = await adapters.runner.run({
     executable: 'npm',

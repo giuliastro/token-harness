@@ -29,6 +29,37 @@ Harness keeps them separate.
 </table>
 <p align="center"><sub>Click a screenshot to open it at full size.</sub></p>
 
+## Desktop application
+
+Native desktop packages are built from the same release tag and attached to
+[GitHub Releases](https://github.com/giuliastro/token-harness/releases), alongside the npm
+package and a desktop SHA-256 checksum file:
+
+- **Windows x64:** run the setup `.exe` and launch Token Harness from the Start menu.
+- **Linux x64:** install the `.deb`, or extract the `.tar.gz` into a permanent directory
+  and run `token-harness-desktop`. A graphical session and Electron system libraries are required.
+- **macOS Intel / Apple Silicon:** choose the matching x64 / arm64 `.dmg` or `.zip` and
+  copy **Token Harness.app** into Applications before configuring integrations.
+
+The application includes its own Node runtime and the existing local dashboard. Coding
+agents and optimizers remain separate installations. Use **File → Open project** to
+choose the project for configuration and project-scoped evidence. Global recorded results
+retain their existing scope. The app starts in your home directory.
+
+Initial desktop packages are unsigned on Windows and ad-hoc signed on macOS, without
+notarization; the operating system may require a manual security review. Update through
+**Help → Download desktop updates**, replacing the app at the same installation path.
+Installed hooks continue to run after the app closes. Before moving/uninstalling the app,
+review and remove its owned integrations through Token Harness. The Windows desktop
+app manages native Windows; use the CLI inside WSL for that separate environment.
+Advanced CLI workflows remain available through the npm installation.
+
+For contributors, `pnpm desktop:package` builds native packages for the current platform;
+`pnpm desktop:smoke` checks the packaged runtime and hidden renderer in an isolated profile
+(on Linux, use `xvfb-run --auto-servernum pnpm desktop:smoke`). The release workflow calls
+`.github/workflows/desktop.yml` directly, so publication waits for all four native builds.
+Manual release recovery uses the existing release workflow's exact `tag` input.
+
 ## Install and start
 
 You need **Node.js 22.13+** and an installed, signed-in **Claude Code or Codex**.

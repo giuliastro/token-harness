@@ -721,7 +721,34 @@ async function runGuidedUi(
   }
   authority = `127.0.0.1:${address.port}`;
   const url = `http://${authority}/`;
-  if (process.send !== undefined) process.send({ type: 'token-harness-guide-ready', url });
+  if (process.send !== undefined && process.env['TOKEN_HARNESS_GUIDE_LIFECYCLE'] === 'managed') {
+    // Closing the listener drains active approved operations. Disconnect also handles a desktop
+    // parent crash without leaving a permanent local supervisor or killing an active transaction.
+    let closing = false;
+    const stop = (): void => {
+      if (closing) return;
+      closing = true;
+      server.close();
+    };
+    const onMessage = (message: unknown): void => {
+      if (
+        message !== null &&
+        typeof message === 'object' &&
+        (message as Record<string, unknown>)['type'] === 'token-harness-guide-stop'
+      )
+        stop();
+    };
+    process.on('message', onMessage);
+    process.once('disconnect', stop);
+    server.once('close', () => {
+      process.off('message', onMessage);
+      process.off('disconnect', stop);
+      if (process.connected) process.disconnect();
+    });
+    if (!process.connected) stop();
+  }
+  if (process.send !== undefined && process.connected)
+    process.send({ type: 'token-harness-guide-ready', url });
   process.stdout.write(
     `Token Harness is ready: ${url}\n\n` +
       'Use the browser to review setup, see recorded savings and read the active rules.\n' +

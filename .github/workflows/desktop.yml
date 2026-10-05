@@ -1,0 +1,130 @@
+name: Desktop packages
+
+on:
+  workflow_call:
+    outputs:
+      enabled:
+        description: Whether the exact source tag includes the desktop application
+        value: ${{ jobs.inspect.outputs.enabled }}
+    inputs:
+      ref:
+        description: Exact source ref to build
+        required: true
+        type: string
+      release-tag:
+        description: Optional tag/version guard for release builds
+        required: false
+        default: ''
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source ref to build (defaults to this workflow ref)
+        required: false
+        type: string
+      release-tag:
+        description: Optional exact v<version> tag/version guard
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.support.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Inspect exact source for desktop support
+        id: support
+        # Recovery of a historical pre-desktop tag must still publish its original CLI.
+        run: node -e "const fs = require('node:fs'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'enabled=' + fs.existsSync('apps/desktop/package.json') + '\n');"
+
+  package:
+    needs: inspect
+    if: needs.inspect.outputs.enabled == 'true'
+    name: desktop ${{ matrix.target }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+            arch: x64
+          - os: ubuntu-22.04
+            target: linux
+            arch: x64
+          - os: macos-15-intel
+            target: mac
+            arch: x64
+          - os: macos-15
+            target: mac
+            arch: arm64
+    env:
+      RELEASE_TAG: ${{ inputs.release-tag }}
+      # No signing credentials are consumed by PR builds. Windows is unsigned;
+      # macOS uses the explicitly configured ad-hoc identity, without notarization.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          # This exact native plain-Node binary and its upstream LICENSE are bundled.
+          node-version: '24.13.0'
+          cache: pnpm
+
+      - name: Install build dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and stage desktop resources
+        run: pnpm desktop:build
+
+      - name: Validate release tag
+        if: env.RELEASE_TAG != ''
+        shell: bash
+        run: node scripts/check-release-tag.mjs "$RELEASE_TAG"
+
+      - name: Package native application
+        run: pnpm exec electron-builder --config dist/desktop/electron-builder.json --publish never --${{ matrix.target }} --${{ matrix.arch }}
+
+      - name: Smoke-check packaged runtime and renderer
+        if: runner.os != 'Linux'
+        run: pnpm desktop:smoke
+
+      - name: Smoke-check packaged runtime and renderer with a virtual display
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm desktop:smoke
+
+      - name: Retain native desktop packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: token-harness-desktop-${{ matrix.target }}-${{ matrix.arch }}
+          path: |
+            dist/desktop/artifacts/token-harness-*.exe
+            dist/desktop/artifacts/token-harness-*.deb
+            dist/desktop/artifacts/token-harness-*.tar.gz
+            dist/desktop/artifacts/token-harness-*.dmg
+            dist/desktop/artifacts/token-harness-*.zip
+          if-no-files-found: error

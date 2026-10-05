@@ -22,8 +22,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  desktop:
+    name: build native desktop applications
+    permissions:
+      contents: read
+    uses: ./.github/workflows/desktop.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+      release-tag: ${{ inputs.tag || github.ref_name }}
+
   verify:
     name: verify and publish release
+    needs: desktop
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -79,6 +89,18 @@ jobs:
 
       - name: Refuse a tag that does not match the staged version
         run: node scripts/check-release-tag.mjs "$RELEASE_TAG"
+
+      - name: Download verified desktop packages
+        if: needs.desktop.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: token-harness-desktop-*
+          path: dist/desktop-release
+          merge-multiple: true
+
+      - name: Validate the complete desktop artifact set and generate checksums
+        if: needs.desktop.outputs.enabled == 'true'
+        run: node scripts/desktop-release.mjs "$RELEASE_TAG" --check
 
       - name: Pack the exact release artifact
         run: |
@@ -173,3 +195,9 @@ jobs:
           else
             gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes
           fi
+
+      - name: Attach the complete desktop artifact set and checksums to this release
+        if: needs.desktop.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/desktop-release.mjs "$RELEASE_TAG"
