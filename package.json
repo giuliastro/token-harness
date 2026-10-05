@@ -10,14 +10,15 @@
   "packageManager": "pnpm@10.33.4",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "electron"
     ]
   },
   "scripts": {
     "clean": "node scripts/clean.mjs",
     "compile": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "tsc -b && node --test --test-reporter=spec \"packages/*/dist/test/**/*.test.js\" \"apps/*/dist/test/**/*.test.js\" \"tests/dist/integration/**/*.test.js\"",
+    "test": "tsc -b && node --test --test-reporter=spec \"packages/*/dist/test/**/*.test.js\" \"apps/*/dist/test/**/*.test.js\" \"tests/dist/integration/**/*.test.js\" && node --test --test-reporter=spec \"apps/desktop/test/*.test.mjs\"",
     "build": "tsc -b && node scripts/bundle.mjs",
     "package": "node scripts/package.mjs",
     "smoke": "node scripts/smoke.mjs",
@@ -27,11 +28,16 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "start": "npm run build && node dist/bundle/token-harness.mjs"
+    "start": "npm run build && node dist/bundle/token-harness.mjs",
+    "desktop:build": "pnpm build && pnpm package && node scripts/desktop-stage.mjs",
+    "desktop:package": "pnpm desktop:build && electron-builder --config dist/desktop/electron-builder.json --publish never",
+    "desktop:smoke": "node scripts/desktop-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
     "@types/node": "22.13.0",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
     "esbuild": "0.25.12",
     "eslint": "9.39.1",
     "prettier": "3.6.2",

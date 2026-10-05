@@ -21,6 +21,7 @@ const SOURCE_ROOTS = [
   join(REPO_ROOT, 'packages', 'platform', 'src'),
   join(REPO_ROOT, 'packages', 'adapters', 'src'),
   join(REPO_ROOT, 'apps', 'cli', 'src'),
+  join(REPO_ROOT, 'apps', 'desktop', 'src'),
 ];
 
 const TEST_ROOTS = [
@@ -28,6 +29,7 @@ const TEST_ROOTS = [
   join(REPO_ROOT, 'packages', 'platform', 'test'),
   join(REPO_ROOT, 'packages', 'adapters', 'test'),
   join(REPO_ROOT, 'apps', 'cli', 'test'),
+  join(REPO_ROOT, 'apps', 'desktop', 'test'),
   join(REPO_ROOT, 'tests', 'integration'),
   join(REPO_ROOT, 'tests', 'src'),
 ];
