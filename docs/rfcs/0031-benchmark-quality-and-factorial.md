@@ -55,7 +55,10 @@ milliseconds (default 300000, maximum 3600000). The start report previews the ch
 The command comes only from explicit CLI input, not repository or observed content.
 
 At finish, an automated check replaces the required manual `--quality` value.
-Without `--yes`, finish returns a check plan and executes nothing. With `--yes`,
+Without `--yes`, finish returns a check plan in the command payload and executes
+nothing. Its human rendering appears on stdout in both default and verbose mode,
+including saved argv, timeout, working directory and the exact approval command;
+it must not depend on visibility of informational diagnostics. With `--yes`,
 Token Harness runs the saved command directly through its process runner in the
 same project. No agent hooks or reducers mediate that invocation. Zero means
 passed, a completed nonzero exit means failed, and timeout, signal or start failure

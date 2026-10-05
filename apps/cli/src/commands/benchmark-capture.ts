@@ -34,7 +34,7 @@ import {
   type CommandResult,
   type HarnessId,
   type TaskBenchmarkCapture,
-  type TaskBenchmarkCaptureFinishReport,
+  type TaskBenchmarkCaptureFinishResult,
   type TaskBenchmarkCaptureStartReport,
 } from '@token-harness/core';
 
@@ -418,7 +418,7 @@ export async function runBenchmarkStart(
 
 async function recordBenchmarkFinish(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkCaptureFinishReport | null>> {
+): Promise<CommandResult<TaskBenchmarkCaptureFinishResult | null>> {
   const benchmarkId = context.benchmarkId ?? null;
   const variant = context.benchmarkVariant ?? null;
   const qualityGate = context.benchmarkQuality ?? null;
@@ -628,16 +628,26 @@ async function recordBenchmarkFinish(
     });
   }
   if (check !== undefined && !context.confirmed) {
+    const nextCommand = `token-harness benchmark-finish --benchmark-id ${benchmarkId} --variant ${variant} --attempts ${attempts} --failed-attempts ${failedAttempts}${qualityGate === null ? '' : ` --quality ${qualityGate}`} --yes`;
     return commandResult({
       command: 'benchmark-finish',
       exitCode: EXIT_CODES.ok,
-      data: null,
+      data: {
+        status: 'check-planned',
+        benchmarkId,
+        variant,
+        check,
+        cwd: context.projectRoot,
+        checkExecuted: false,
+        receiptFinalized: false,
+        nextCommand,
+      },
       diagnostics: [
         diagnostic({
           severity: 'info',
           code: 'benchmark-check-plan',
           message: `Check plan: ${JSON.stringify(check)} in ${context.projectRoot}. No check was executed and no receipt was finalized.`,
-          remediation: `Review this command, then repeat benchmark-finish --benchmark-id ${benchmarkId} --variant ${variant} --attempts ${attempts} --failed-attempts ${failedAttempts} --yes`,
+          remediation: `Review this command, then run ${nextCommand}`,
         }),
       ],
     });
@@ -860,7 +870,7 @@ async function recordBenchmarkFinish(
 /** A prepared arm approves cleanup at prepare time; measure before restoring it. */
 export async function runBenchmarkFinish(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkCaptureFinishReport | null>> {
+): Promise<CommandResult<TaskBenchmarkCaptureFinishResult | null>> {
   if (context.adapters === null || context.stateRoot === null)
     return recordBenchmarkFinish(context);
   let session: Awaited<ReturnType<typeof readBenchmarkSession>> = null;
@@ -925,7 +935,7 @@ export async function runBenchmarkFinish(
       ],
     });
   }
-  let result: CommandResult<TaskBenchmarkCaptureFinishReport | null>;
+  let result: CommandResult<TaskBenchmarkCaptureFinishResult | null>;
   if (session !== null) {
     const safety = await restoreBenchmarkSession({ ...context, confirmed: false }, session);
     if (safety.exitCode !== 0)

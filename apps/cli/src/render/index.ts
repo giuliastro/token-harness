@@ -13,7 +13,7 @@
 import type {
   ApplyReport,
   BudgetReport,
-  TaskBenchmarkCaptureFinishReport,
+  TaskBenchmarkCaptureFinishResult,
   TaskBenchmarkCaptureStartReport,
   TaskBenchmarkCompareReport,
   TaskBenchmarkMatrixReport,
@@ -169,7 +169,7 @@ export function renderHuman(
     case 'benchmark-matrix':
       return plain(renderBenchmarkMatrixReport(data as TaskBenchmarkMatrixReport, context));
     case 'benchmark-finish':
-      return plain(renderBenchmarkFinishReport(data as TaskBenchmarkCaptureFinishReport, context));
+      return plain(renderBenchmarkFinishReport(data as TaskBenchmarkCaptureFinishResult, context));
     case 'benchmark-start':
       return plain(renderBenchmarkStartReport(data as TaskBenchmarkCaptureStartReport, context));
     case 'budget':

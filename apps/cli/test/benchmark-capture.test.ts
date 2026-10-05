@@ -14,6 +14,7 @@ import { runBenchmarkFactorial } from '../src/commands/benchmark-factorial.js';
 import { runBenchmarkMatrix } from '../src/commands/benchmark-matrix.js';
 import { parseArgv } from '../src/argv.js';
 import { runBenchmarkFinish, runBenchmarkStart } from '../src/commands/benchmark-capture.js';
+import { runCandidateBenchmarkFinish } from '../src/commands/candidate-benchmark.js';
 import type { CommandContext } from '../src/commands/context.js';
 
 const PLATFORM: PlatformFacts = {
@@ -361,7 +362,7 @@ describe('benchmark capture commands', () => {
 
     const finished = await runBenchmarkFinish(finishContext);
     assert.equal(finished.exitCode, 0);
-    assert.ok(finished.data);
+    assert.ok(finished.data && 'receipt' in finished.data);
     assert.equal(finished.data.receipt.usageBefore[0]?.usedPercent, 20);
     assert.equal(finished.data.receipt.usageAfter[0]?.usedPercent, 26);
     assert.equal(finished.data.receipt.outcome.qualityGate, 'passed');
@@ -449,14 +450,24 @@ describe('saved direct quality checks', () => {
     assert.ok(start.data);
     assert.equal(start.data.capture.schemaVersion, 2);
     assert.deepEqual(start.data.capture.qualityCheck, check);
-    const plan = await runBenchmarkFinish(finish(world));
+    const plan = await runCandidateBenchmarkFinish(finish(world));
     assert.equal(plan.exitCode, 0);
-    assert.equal(plan.data, null);
+    assert.deepEqual(plan.data, {
+      status: 'check-planned',
+      benchmarkId: 'mechanical-real-1',
+      variant: 'baseline',
+      check,
+      cwd: '/home/dev/project',
+      checkExecuted: false,
+      receiptFinalized: false,
+      nextCommand:
+        'token-harness benchmark-finish --benchmark-id mechanical-real-1 --variant baseline --attempts 1 --failed-attempts 0 --yes',
+    });
     assert.equal(plan.diagnostics[0]!.code, 'benchmark-check-plan');
     assert.equal(world.checkRequests.length, 0);
     assert.equal(world.files.has(start.data.capturePath.replace('.capture.json', '.json')), false);
     const result = await runBenchmarkFinish(finish(world, { confirmed: true }));
-    assert.ok(result.data);
+    assert.ok(result.data && 'receipt' in result.data);
     assert.equal(result.data.receipt.outcome.qualityGate, 'passed');
     assert.equal(world.checkRequests.length, 1);
     assert.deepEqual(world.checkRequests[0], {
@@ -489,7 +500,7 @@ describe('saved direct quality checks', () => {
     const result = await runBenchmarkFinish(
       finish(world, { confirmed: true, benchmarkQuality: 'passed' }),
     );
-    assert.ok(result.data);
+    assert.ok(result.data && 'receipt' in result.data);
     assert.equal(result.data.receipt.outcome.qualityGate, 'failed');
     assert.ok(result.diagnostics.some((d) => d.code === 'benchmark-check-quality-mismatch'));
     const e = result.data.receipt.outcome.qualityEvidence;
@@ -501,6 +512,17 @@ describe('saved direct quality checks', () => {
       world.text(result.data.receiptPath.replace('.json', '.check-output.json')),
       /LAST TEST FAILED/,
     );
+  });
+  it('preserves a manual verdict in the approval command without running the check', async () => {
+    const world = fixture();
+    await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
+    const plan = await runCandidateBenchmarkFinish(finish(world, { benchmarkQuality: 'failed' }));
+    assert.ok(plan.data && 'status' in plan.data);
+    assert.equal(
+      plan.data.nextCommand,
+      'token-harness benchmark-finish --benchmark-id mechanical-real-1 --variant baseline --attempts 1 --failed-attempts 0 --quality failed --yes',
+    );
+    assert.equal(world.checkRequests.length, 0);
   });
   it('records timeout, start failure or signal as unknown', async () => {
     for (const overrides of [
@@ -516,7 +538,7 @@ describe('saved direct quality checks', () => {
       await runBenchmarkStart({ ...world.context(), benchmarkCheck: check });
       world.setCheckResult(overrides);
       const result = await runBenchmarkFinish(finish(world, { confirmed: true }));
-      assert.ok(result.data);
+      assert.ok(result.data && 'receipt' in result.data);
       assert.equal(result.data.receipt.outcome.qualityGate, 'unknown');
     }
   });

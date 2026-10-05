@@ -1,0 +1,10 @@
+Benchmark check preview — check-golden / baseline
+
+Command: ["node","-e","process.exit(0)"]
+Timeout: 300000ms
+Working directory: /tmp/fixture-project
+No check was executed and no receipt was finalized.
+
+NEXT STEP
+token-harness benchmark-finish --benchmark-id check-golden --variant baseline
+--attempts 1 --failed-attempts 0 --yes

@@ -16,7 +16,7 @@ import {
   type ProcessRequest,
   type ProcessRunner,
   type TaskBenchmarkCaptureStartReport,
-  type TaskBenchmarkCaptureFinishReport,
+  type TaskBenchmarkCaptureFinishResult,
 } from '@token-harness/core';
 import type { BenchmarkPrepareReport } from '../src/commands/benchmark-prepare.js';
 import { recordNativePromptRoutingHook } from '../src/prompt-router.js';
@@ -164,7 +164,7 @@ function world(harness: 'claude' | 'codex' = 'claude', empty = false) {
       ...(yes ? ['--yes'] : []),
     ]);
   const finish = (id: string, arm: string, extra: string[] = []) =>
-    invoke<TaskBenchmarkCaptureFinishReport>([
+    invoke<TaskBenchmarkCaptureFinishResult>([
       'benchmark-finish',
       '--benchmark-id',
       id,
@@ -337,12 +337,16 @@ describe('managed factorial preparation', () => {
       assert.equal(prepared.exitCode, 0, JSON.stringify(prepared.diagnostics));
       const preview = await w.finish('check', 'combined');
       assert.equal(preview.exitCode, 0);
-      assert.equal(preview.data, null);
+      assert.ok(preview.data && 'status' in preview.data);
+      assert.equal(preview.data.status, 'check-planned');
+      assert.equal(preview.data.checkExecuted, false);
+      assert.equal(preview.data.receiptFinalized, false);
       assert.equal(existsSync(join(w.state, 'mutation-lease.json')), true);
       assert.equal(w.calls.filter((c) => c.executable === 'fixture-check').length, 0);
       w.tick();
       const finish = await w.finish('check', 'combined', ['--yes']);
       assert.equal(finish.exitCode, 0, JSON.stringify(finish.diagnostics));
+      assert.ok(finish.data && 'receipt' in finish.data);
       assert.equal(
         finish.data!.receipt.outcome.qualityGate,
         failure === null ? 'failed' : 'unknown',
@@ -496,6 +500,7 @@ describe('managed factorial preparation', () => {
     w.tick();
     const finish = await w.finish('callbacks', 'combined', ['--quality', 'passed']);
     assert.equal(finish.exitCode, 0);
+    assert.ok(finish.data && 'receipt' in finish.data);
     assert.equal(finish.data!.receipt.nativeRoutingAtFinish!.configured, true);
     assert.equal(finish.data!.receipt.nativeRoutingAtFinish!.subagentsStarted, 1);
     assert.equal(readFileSync(w.config, 'utf8'), w.original);

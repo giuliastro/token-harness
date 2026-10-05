@@ -1,0 +1,14 @@
+{
+  "status": "check-planned",
+  "benchmarkId": "check-golden",
+  "variant": "baseline",
+  "check": {
+    "executable": "node",
+    "args": ["-e", "process.exit(0)"],
+    "timeoutMs": 300000
+  },
+  "cwd": "/tmp/fixture-project",
+  "checkExecuted": false,
+  "receiptFinalized": false,
+  "nextCommand": "token-harness benchmark-finish --benchmark-id check-golden --variant baseline --attempts 1 --failed-attempts 0 --yes"
+}

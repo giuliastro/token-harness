@@ -4,7 +4,7 @@
 
 import type {
   OptimizationCandidateId,
-  TaskBenchmarkCaptureFinishReport,
+  TaskBenchmarkCaptureFinishResult,
   TaskBenchmarkCaptureStartReport,
 } from '@token-harness/core';
 
@@ -21,6 +21,23 @@ type CandidateAwareStartReport = TaskBenchmarkCaptureStartReport & {
   /** Experiment target only. This is not proof that the candidate was active. */
   candidateId?: OptimizationCandidateId;
 };
+
+/** Keep complete saved argv and paths visible, including tokens longer than the terminal width. */
+function wrapCheckPreview(text: string): string[] {
+  return wrap(text, 0).flatMap((line) => {
+    const lines: string[] = [];
+    let current = '';
+    for (const character of line) {
+      if (current.length + character.length > MAX_WIDTH) {
+        lines.push(current);
+        current = '';
+      }
+      current += character;
+    }
+    if (current !== '') lines.push(current);
+    return lines;
+  });
+}
 
 function candidateNextStep(report: CandidateAwareStartReport): string[] {
   const { capture, candidateId } = report;
@@ -96,9 +113,23 @@ export function renderBenchmarkStartReport(
 }
 
 export function renderBenchmarkFinishReport(
-  report: TaskBenchmarkCaptureFinishReport,
+  report: TaskBenchmarkCaptureFinishResult,
   context: RenderContext,
 ): string {
+  if ('status' in report)
+    return document([
+      ...wrapCheckPreview(`Benchmark check preview — ${report.benchmarkId} / ${report.variant}`),
+      '',
+      ...wrapCheckPreview(
+        `Command: ${JSON.stringify([report.check.executable, ...report.check.args])}`,
+      ),
+      `Timeout: ${report.check.timeoutMs}ms`,
+      ...wrapCheckPreview(`Working directory: ${displayPath(report.cwd, context.home)}`),
+      'No check was executed and no receipt was finalized.',
+      '',
+      'NEXT STEP',
+      ...wrapCheckPreview(report.nextCommand),
+    ]);
   const { receipt } = report;
   const receiptPath = truncatePath(
     displayPath(report.receiptPath, context.home),

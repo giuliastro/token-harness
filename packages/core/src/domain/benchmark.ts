@@ -167,6 +167,21 @@ export interface TaskBenchmarkCaptureFinishReport {
   receiptPath: string;
 }
 
+export interface TaskBenchmarkCaptureCheckPlanReport {
+  status: 'check-planned';
+  benchmarkId: string;
+  variant: TaskBenchmarkVariant;
+  check: TaskBenchmarkCheck;
+  cwd: string;
+  checkExecuted: false;
+  receiptFinalized: false;
+  nextCommand: string;
+}
+
+export type TaskBenchmarkCaptureFinishResult =
+  | TaskBenchmarkCaptureFinishReport
+  | TaskBenchmarkCaptureCheckPlanReport;
+
 export type TaskBenchmarkCaptureParseResult =
   | { ok: true; capture: TaskBenchmarkCapture }
   | { ok: false; reason: 'unsupported-schema' | 'invalid-shape'; message: string };
