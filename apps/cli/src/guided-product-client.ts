@@ -1580,6 +1580,11 @@ export const GUIDE_PRODUCT_JS = String.raw`
       ['Invalid pairs', count(comparisons?.invalid || 0)],
     ], 'Comparisons cover the project where Token Harness was opened. They are independent of the output-history period filter.');
     section.append(actionButton('Record a comparison', () => measurementGuide(), 'secondary'));
+    const pending=current?.value?.pendingConfiguration;
+    if(pending){
+      section.append(messageBox('Temporary configuration needs completion or recovery',pending.state==='active'?'Prepared arm: '+pending.benchmarkId+' / '+pending.variant+'. Finish this arm or restore it before another managed change.':'The configuration lease is unreadable. Preserve the checkpoint and backups and inspect local state.'));
+      if(pending.recoveryCommand)section.append(copyRow(pending.recoveryCommand));
+    }
     return section;
   }
 
@@ -1601,29 +1606,84 @@ export const GUIDE_PRODUCT_JS = String.raw`
       selected.append(option);
     }
     selected.value = agents.some(agent => agent.id === agentId) ? agentId : agents[0].id;
-    const steps = node('div');
+    const design = node('select');
+    design.id = 'comparison-design'; design.setAttribute('aria-label', 'Comparison design');
+    for (const [value, text] of [['paired', 'Baseline / optimized'], ['factorial', 'Four arms: compression and routing']]) {
+      const option = node('option', text); option.value = value; design.append(option);
+    }
+    design.value = 'paired';
+    const designLabel = node('label', 'Comparison design'); designLabel.setAttribute('for', design.id);
+    const checkInput = node('input'); checkInput.id = 'comparison-check';
+    checkInput.setAttribute('aria-label', 'Optional quality check'); checkInput.maxLength = 20480;
+    checkInput.placeholder = '["npm","run","verify"]';
+    const checkLabel = node('label', 'Optional quality check (executable and arguments)'); checkLabel.setAttribute('for', checkInput.id);
+    const checkHint = node('p', 'Leave empty to record your checks manually. Commands below use Bash or PowerShell quoting.', 'caption');
+    checkHint.id = 'comparison-check-hint'; checkInput.setAttribute('aria-describedby', checkHint.id);
+    const stateInput = node('input'); stateInput.id = 'comparison-starting-state'; stateInput.setAttribute('aria-label', 'Same starting state'); stateInput.placeholder = 'Initial Git commit or fixture id';
+    const stateLabel = node('label', 'Same starting state for all four arms'); stateLabel.setAttribute('for', stateInput.id);
+    const steps = node('div'); steps.setAttribute('aria-live', 'polite');
     const renderSteps = () => {
+      stateInput.hidden = stateLabel.hidden = design.value !== 'factorial';
+      checkInput.setAttribute('aria-invalid', 'false'); stateInput.setAttribute('aria-invalid', 'false');
+      let checkSuffix = '';
+      if (checkInput.value.trim()) {
+        try {
+          const argv = checkInput.value.length <= 20480 ? JSON.parse(checkInput.value) : null;
+          if (checkInput.value.length > 20480 || !Array.isArray(argv) || argv.length < 1 || argv.length > 65 ||
+            typeof argv[0] !== 'string' || !argv[0].trim() || argv[0].length > 4096 ||
+            argv.some(part => typeof part !== 'string' || /[\x00-\x1f']/.test(part)) || JSON.stringify(argv.slice(1)).length > 16384)
+            throw new Error('invalid argv');
+          checkSuffix = " --check-command '" + JSON.stringify(argv) + "'";
+        } catch {
+          checkInput.setAttribute('aria-invalid', 'true');
+          steps.replaceChildren(messageBox('Check needs an executable and arguments', 'Enter a JSON array such as ["npm","run","verify"]. For arguments containing apostrophes, use the CLI with your shell’s quoting.'));
+          return;
+        }
+      }
+      const finish = arm => 'token-harness benchmark-finish --benchmark-id ' + id + ' --variant ' + arm +
+        (checkSuffix ? ' --yes' : ' --quality <passed|failed>') + ' --attempts <n> --failed-attempts <n>';
+      if (design.value === 'factorial') {
+        const state = stateInput.value.trim();
+        if (!/^[A-Za-z0-9._-]{1,128}$/.test(state)) {
+          stateInput.setAttribute('aria-invalid', 'true');
+          steps.replaceChildren(messageBox('Starting state needed', 'Enter the initial Git commit or fixture id. Restore that same starting tree before every arm.'));
+          return;
+        }
+        const rows = [messageBox('Exploratory four-arm comparison', 'Preview each temporary configuration with benchmark-prepare, then repeat that command with --yes. Finish restores the original configuration. Restore the same starting tree and start a fresh coding session before every task. Setup must already support owned RTK/HarnessTrim changes. Configuration checks are config-only; routing arms need real callbacks.')];
+        for (const [arm, label] of [['baseline', 'Compression off · routing off'], ['compression-only', 'Compression on · routing off'], ['routing-only', 'Compression off · routing on'], ['combined', 'Compression on · routing on']]) {
+          rows.push(node('h3', arm + ' — ' + label),
+            copyRow('token-harness benchmark-prepare --benchmark-id ' + id + ' --variant ' + arm + ' --starting-state ' + state + ' --task standard --harness ' + selected.value + checkSuffix),
+            node('p', 'Run the same task. ' + (checkSuffix ? 'Review the saved check before running the finish command.' : 'Run the same acceptance checks and record their result.')),
+            copyRow(finish(arm)),
+            node('p','If the task is cancelled or the process is interrupted, preview recovery, then add --yes:'),
+            copyRow('token-harness benchmark-restore --benchmark-id ' + id + ' --variant ' + arm));
+        }
+        rows.push(copyRow('token-harness benchmark-factorial --benchmark-id ' + id),
+          node('p', 'Run from the same project where this dashboard was opened, then refresh Results. Repeat controlled four-arm sets before drawing conclusions.'));
+        steps.replaceChildren(...rows); return;
+      }
       steps.replaceChildren(
         node('h3', '1. Prepare the baseline'),
         node('p', 'Use the same representative task, starting state, coding app and checks for both runs. For a routing comparison, disable routing in Overview before starting the baseline. Start a fresh coding session after changing hooks.'),
-        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant baseline --task standard --harness ' + selected.value),
+        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant baseline --task standard --harness ' + selected.value + checkSuffix),
         node('h3', '2. Run the task and check its result'),
         node('p', 'Run the baseline task in the coding app, then run its tests or acceptance checks. Replace the placeholders below with the actual result and attempt counts; passed means the checks succeeded.'),
-        copyRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant baseline --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        copyRow(finish('baseline')),
         node('h3', '3. Repeat with optimization enabled'),
         node('p', 'Restore the same starting state. Enable the optimization under evaluation through Overview. For routing, trust the hook in Codex /hooks and start a fresh session; the optimized task must actually start a native subagent.'),
-        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant optimized --task standard --harness ' + selected.value),
+        copyRow('token-harness benchmark-start --benchmark-id ' + id + ' --variant optimized --task standard --harness ' + selected.value + checkSuffix),
         node('p', 'Run the same task and checks, then record the actual optimized outcome.'),
-        copyRow('token-harness benchmark-finish --benchmark-id ' + id + ' --variant optimized --quality <passed|failed> --attempts <n> --failed-attempts <n>'),
+        copyRow(finish('optimized')),
         node('h3', '4. Refresh Results'),
-        node('p', 'Run the capture commands from the same project where this dashboard was opened. Start/finish read quota, local session usage and routing receipts automatically; quality comes from your recorded checks. If a quota window resets during a run or the source is unavailable, that window stays unmeasured. Repeat representative pairs before drawing conclusions.'),
+        node('p', 'Run the capture commands from the same project where this dashboard was opened. Start/finish read quota, local session usage and routing receipts automatically; quality comes from the saved direct check, or from your recorded checks when no command is set. If a quota window resets during a run or the source is unavailable, that window stays unmeasured. Repeat representative pairs before drawing conclusions.'),
       );
     };
     selected.addEventListener('change', renderSteps);
+    design.addEventListener('change', renderSteps); checkInput.addEventListener('input', renderSteps); stateInput.addEventListener('input', renderSteps);
     renderSteps();
     $('modal-content').append(
       messageBox('Why a comparison is needed', 'Normal usage records optimizer output and routing activity. Demonstrated savings require comparable baseline and optimized tasks; Token Harness cannot reconstruct an unrecorded baseline or decide whether your task passed its checks.'),
-      selected, steps,
+      selected, designLabel, design, checkLabel, checkInput, checkHint, stateLabel, stateInput, steps,
     );
     $('modal-actions').append(modalClose('Done'));
   }
@@ -1697,6 +1757,27 @@ export const GUIDE_PRODUCT_JS = String.raw`
       evidenceSection('Quality checks', [['Evaluated pairs', count(current?.value?.quality?.pairs || 0)], ['Regressions', count(current?.value?.quality?.regressions || 0)]],
         'Quality comes from the actual checks recorded for both task variants. Token reductions and callbacks do not evaluate correctness.'), comparisonSection(),
     ]);
+
+    for (const mismatch of current?.value?.qualityMismatches || []) {
+      addEvidenceRow(body, 'measurement', 'Check disagreement · ' + mismatch.benchmarkId, 'Direct check result takes precedence',
+        [{value:'Check overrides recorded quality',label:mismatch.details.join('; '),tone:'warn'}],1,[]);
+    }
+    for (const experiment of current?.value?.factorial || []) {
+      const sections = [evidenceSection('Quality by arm', Object.entries(experiment.quality || {}),
+        'Direct checks or manually recorded acceptance; all effects retain their quality gate.')];
+      for (const effect of experiment.effects || []) {
+        const value = amount => amount === null ? 'Not measured' : count(amount);
+        sections.push(evidenceSection(effect.unit + (effect.scope ? ' · ' + effect.scope : ''), [
+          ['Compression saving',value(effect.compressionSaving)],['Routing saving',value(effect.routingSaving)],
+          ['Combined saving',value(effect.combinedSaving)],['Interaction cost',value(effect.interactionCost)],
+        ], 'Positive interaction cost means the combined run cost more than the single effects predict. Units and quota windows remain separate.'));
+      }
+      sections.push(evidenceSection('Evidence limits', [], (experiment.reasons || []).join(' ')));
+      if (experiment.qualityMismatches?.length) sections.push(evidenceSection('Check disagreements',[],experiment.qualityMismatches.join(', ') + ': direct check overrides recorded quality.'));
+      addEvidenceRow(body,'measurement','Four-arm comparison · ' + experiment.benchmarkId,'Exploratory · configuration '+(experiment.configurationEvidence||'user-declared'),
+        [{value:experiment.status,label:experiment.combinedQualityRegression ? 'Combined quality regressed; savings blocked' : 'Repeated controlled sets needed',tone:experiment.combinedQualityRegression?'warn':''}],
+        Object.keys(experiment.quality || {}).length,sections);
+    }
 
     for (const agent of routingAgents) {
       const linked = current?.savings?.byHarness?.find(group => group.harnessId === agent.id)?.rows || [];

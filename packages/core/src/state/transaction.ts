@@ -61,6 +61,7 @@ export type TransactionExitCode =
   (typeof TRANSACTION_EXIT_CODES)[keyof typeof TRANSACTION_EXIT_CODES];
 
 export interface TransactionRequest {
+  pinned?: boolean;
   transactionId: string;
   planId: string | null;
   projectId: string | null;
@@ -231,12 +232,24 @@ export async function executeTransaction(request: TransactionRequest): Promise<T
           },
         }
       : {}),
-    pinned: false,
+    pinned: request.pinned ?? false,
     diagnostics,
   };
 
   // Written before the first action, so a process that dies mid-apply leaves the
   // record a later rollback needs.
+  const leaseProblems =
+    (await request.journal.checkMutationAllowed?.(request.transactionId, 'apply')) ?? [];
+  if (leaseProblems.some((problem) => problem.severity === 'error')) {
+    journal.outcome = 'rolled-back';
+    journal.finishedAt = request.now();
+    return {
+      journal,
+      exitCode: TRANSACTION_EXIT_CODES.preconditionDrift,
+      diagnostics: leaseProblems,
+      unrestored: [],
+    };
+  }
   await request.journal.write(journal);
 
   const context: ActionContext = {
@@ -454,6 +467,16 @@ export interface RollbackResult {
 }
 
 export async function rollbackTransaction(request: RollbackRequest): Promise<RollbackResult> {
+  const leaseProblems =
+    (await request.journal.checkMutationAllowed?.(request.transactionId, 'rollback')) ?? [];
+  if (leaseProblems.some((problem) => problem.severity === 'error'))
+    return {
+      journal: null,
+      exitCode: TRANSACTION_EXIT_CODES.preconditionDrift,
+      refusal: 'transaction-not-committed',
+      unrestored: [],
+      diagnostics: leaseProblems,
+    };
   const journal = await request.journal.read(request.transactionId);
 
   if (journal === null) {

@@ -10,6 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -204,6 +205,97 @@ describe('bounded output', () => {
     assert.equal(outcome.exitCode, 0);
     assert.equal(outcome.stdout.length, 512);
   });
+
+  it('captures hashes and bounded redacted tails across chunks beyond the retained head', async () => {
+    const stdout = 'a'.repeat(9000) + 'z'.repeat(9000) + 'secret-value' + 'z'.repeat(1000);
+    const stderr = 'stderr-secret';
+    const outcome = await runner().run({
+      executable: 'node',
+      args: [
+        '-e',
+        'const chunks=JSON.parse(process.argv[1]);let i=0;const write=()=>{if(i===chunks.length)return;process.stdout.write(chunks[i++]);setImmediate(write)};write();process.stderr.write(process.argv[2]);',
+        JSON.stringify([stdout.slice(0, 4000), stdout.slice(4000, 9001), stdout.slice(9001)]),
+        stderr,
+      ],
+      cwd: sandbox,
+      maxOutputBytes: 32,
+      secretValues: ['secret-value', 'stderr-secret'],
+      captureOutputEvidence: true,
+    });
+
+    assert.equal(outcome.failure, null);
+    assert.equal(outcome.exitCode, 0);
+    assert.equal(outcome.stdoutTruncated, true);
+    assert.equal(outcome.stdout.length, 32);
+    assert.deepEqual(outcome.outputEvidence?.stdout, {
+      sha256: createHash('sha256').update(stdout).digest('hex'),
+      bytes: Buffer.byteLength(stdout),
+      tail: 'z'.repeat(7180) + '[redacted]' + 'z'.repeat(1000),
+    });
+    assert.deepEqual(outcome.outputEvidence?.stderr, {
+      sha256: createHash('sha256').update(stderr).digest('hex'),
+      bytes: Buffer.byteLength(stderr),
+      tail: '[redacted]',
+    });
+    assert.ok(!JSON.stringify(outcome.outputEvidence).includes('stderr-secret'));
+    assert.ok(!JSON.stringify(outcome.outputEvidence).includes('secret-value'));
+  });
+
+  it('redacts a declared secret spanning the raw tail boundary across chunks', async () => {
+    for (const secret of ['boundary-secret', 'chiave-秘密-private']) {
+      const padding = 'z'.repeat(8192 - 3);
+      const raw = 'before' + secret + padding;
+      const result = await runner().run({
+        executable: 'node',
+        args: [
+          '-e',
+          'process.stdout.write(process.argv[1]);setImmediate(()=>process.stdout.write(process.argv[2]))',
+          'before' + secret,
+          padding,
+        ],
+        cwd: sandbox,
+        maxOutputBytes: 16,
+        secretValues: [secret],
+        captureOutputEvidence: true,
+      });
+      assert.deepEqual(result.outputEvidence?.stdout, {
+        sha256: createHash('sha256').update(raw).digest('hex'),
+        bytes: Buffer.byteLength(raw),
+        tail: '[redacted]' + padding,
+      });
+    }
+  });
+
+  it('preserves non-zero exit status after output exceeds the cap', async () => {
+    const stdout = 'x'.repeat(20_000);
+    const outcome = await runner().run({
+      executable: 'node',
+      args: [
+        '-e',
+        'process.stdout.write("x".repeat(20000),()=>process.stderr.write("y".repeat(20000),()=>process.exit(7)))',
+      ],
+      cwd: sandbox,
+      maxOutputBytes: 8,
+      captureOutputEvidence: true,
+    });
+    assert.equal(outcome.failure, null);
+    assert.equal(outcome.exitCode, 7);
+    assert.equal(
+      outcome.outputEvidence?.stdout.sha256,
+      createHash('sha256').update(stdout).digest('hex'),
+    );
+    assert.equal(outcome.outputEvidence?.stdout.bytes, 20_000);
+    assert.equal(outcome.outputEvidence?.stderr.bytes, 20_000);
+  });
+
+  it('does not capture output evidence unless requested', async () => {
+    const outcome = await runner().run({
+      executable: 'node',
+      args: ['-e', 'process.stdout.write("short")'],
+      cwd: sandbox,
+    });
+    assert.equal(outcome.outputEvidence, undefined);
+  });
 });
 
 describe('timeouts', () => {
@@ -242,9 +334,15 @@ describe('timeouts', () => {
       args: ['-e', 'process.stdout.write("partial");setTimeout(() => {}, 60000)'],
       cwd: sandbox,
       timeoutMs: 800,
+      captureOutputEvidence: true,
     });
     assert.equal(outcome.timedOut, true);
     assert.equal(outcome.stdout, 'partial');
+    assert.equal(
+      outcome.outputEvidence?.stdout.sha256,
+      createHash('sha256').update('partial').digest('hex'),
+    );
+    assert.equal(outcome.outputEvidence?.stdout.bytes, 7);
   });
 });
 

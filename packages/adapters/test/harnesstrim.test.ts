@@ -1248,6 +1248,23 @@ describe('planning', () => {
     ]);
   });
 
+  it('does not plan a delegated installer when all published skill artifacts already match', async () => {
+    const skill = '# Matching skill\n';
+    const result = await harnesstrimAdapter.plan(
+      context({
+        version: '0.3.1',
+        capabilities: dynamicCapabilities('0.3.1', skill),
+        files: { [`${PROJECT}\\.claude\\skills\\latest\\SKILL.md`]: skill },
+      }),
+      {
+        ownership: [],
+        harnesses: [claudeAdapter.manifest],
+        desiredState: 'configured',
+      },
+    );
+    assert.deepEqual(result.actions, []);
+  });
+
   it('adds a monitored post-tool hook on the harness-declared file for Claude and Codex', async () => {
     const skill = '# Latest HarnessTrim skill\n';
     const capabilities = dynamicCapabilities('0.3.1', skill);

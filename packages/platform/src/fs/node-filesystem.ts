@@ -15,18 +15,23 @@
 import {
   appendFile,
   mkdir,
+  open,
   readFile,
   readdir,
   realpath,
+  rename,
   rm,
   stat,
   writeFile,
 } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { posix, win32 } from 'node:path';
 
 import type { FileStat, FileSystemPort, PlatformFacts } from '@token-harness/core';
 
 import { isInsideDirectory } from '../platform/paths.js';
+import { replaceAtomically } from './atomic-replace.js';
 
 function octal(mode: number): string {
   return (mode & 0o7777).toString(8).padStart(4, '0');
@@ -92,6 +97,47 @@ export class NodeFileSystem implements FileSystemPort {
     await mkdir(this.dirname(path), { recursive: true });
     const parsed = mode == null || this.nativeWindows ? null : Number.parseInt(mode, 8);
     await writeFile(path, content, parsed === null || Number.isNaN(parsed) ? {} : { mode: parsed });
+  }
+
+  async writeFileExclusive(path: string, content: Uint8Array): Promise<boolean> {
+    await mkdir(this.dirname(path), { recursive: true });
+    let handle;
+    try {
+      handle = await open(path, 'wx', 0o600);
+    } catch (error) {
+      if ((error as { code?: string }).code === 'EEXIST') return false;
+      throw error;
+    }
+    try {
+      await handle.writeFile(content);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    return true;
+  }
+
+  async atomicWriteFile(path: string, content: Uint8Array): Promise<void> {
+    await mkdir(this.dirname(path), { recursive: true });
+    const temporary = path + '.tmp-' + randomUUID();
+    const handle = await open(temporary, 'wx', 0o600);
+    try {
+      try {
+        await handle.writeFile(content);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await replaceAtomically({
+        source: temporary,
+        target: path,
+        nativeWindows: this.nativeWindows,
+        rename,
+        wait: delay,
+      });
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 
   async appendFile(path: string, content: Uint8Array): Promise<void> {

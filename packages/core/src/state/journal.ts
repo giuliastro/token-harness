@@ -29,6 +29,7 @@ import type { ResolvedCapability } from '../domain/capabilities.js';
 
 import type { FileSystemPort } from './filesystem.js';
 import type { ActionStatus } from './actions.js';
+import { mutationLeaseDiagnostics } from './mutation-lease.js';
 import type { PackageInventoryCapture } from './install.js';
 
 export const JOURNAL_SCHEMA_VERSION = 1;
@@ -119,6 +120,10 @@ export interface TransactionJournal {
 }
 
 export interface JournalStore {
+  checkMutationAllowed?(
+    transactionId: string,
+    operation?: 'apply' | 'rollback',
+  ): Promise<Diagnostic[]>;
   write(journal: TransactionJournal): Promise<void>;
   read(transactionId: string): Promise<TransactionJournal | null>;
   list(): Promise<TransactionJournal[]>;
@@ -142,6 +147,18 @@ export class FileJournalStore implements JournalStore {
 
   constructor(input: FileJournalStoreInput) {
     this.input = input;
+  }
+
+  checkMutationAllowed(
+    transactionId: string,
+    operation: 'apply' | 'rollback' = 'apply',
+  ): Promise<Diagnostic[]> {
+    return mutationLeaseDiagnostics(
+      this.input.fs,
+      this.input.fs.dirname(this.input.journalRoot),
+      transactionId,
+      operation !== 'rollback',
+    );
   }
 
   private pathFor(transactionId: string): string {

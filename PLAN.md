@@ -34,6 +34,13 @@ admission guard. See [the reconciled status, issue/PR decisions and release evid
 Historical implementation notes below retain their original evidence dates unless explicitly
 reconciled; they are not a current-release status dashboard.
 
+Benchmark follow-up (#377 and #376) follows RFC 0031: optional direct checks with
+explicit execution approval, schema-2 receipts with schema-1 reading, exploratory
+four-arm reports, reviewed local arm preparation and guarded configuration recovery.
+Preparation uses already-installed RTK/HarnessTrim and native routing adapters,
+records config-only evidence, and restores after finish. Coding tasks, Git resets,
+hook trust and repeated/randomized campaigns remain outside automatic preparation.
+
 ### Desktop distribution workstream — issue #379
 
 RFC 0032 proposes a first desktop milestone: an Electron shell around the existing
@@ -136,6 +143,7 @@ Exit criteria:
 | 0028 | Smart model routing, shadow-first | Withdrawn 2026-09-27 |
 | 0029 | Prompt-guided native subagent routing | Accepted for skill guidance |
 | 0030 | Automatic native prompt routing and evidence | Implemented; Windows Claude runtime test pending |
+| 0031 | Benchmark quality checks and factorial preparation | Implemented; config-only preparation and guarded recovery |
 
 ## 6. Phase 1 — Repository and domain skeleton
 

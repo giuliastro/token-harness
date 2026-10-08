@@ -472,4 +472,114 @@ describe('guided evidence interactions', () => {
     assert.match(guide.textContent, /same project where this dashboard was opened/);
     assert.equal(reads.length, before, 'Opening guidance must not execute captures or tasks');
   });
+  it('shows the pending configuration recovery command without executing it', async () => {
+    const data = observation();
+    Object.assign(data.value, {
+      pendingConfiguration: {
+        state: 'active',
+        benchmarkId: 'active-four',
+        variant: 'combined',
+        recoveryCommand:
+          'token-harness benchmark-restore --benchmark-id active-four --variant combined --yes',
+      },
+    });
+    const { get, reads } = await browser(data);
+    const content = get('result-evidence').textContent;
+    assert.match(content, /Temporary configuration needs completion or recovery/);
+    assert.match(content, /benchmark-restore.*active-four.*combined/);
+    assert.ok(!reads.some((r) => r.includes('benchmark-restore')));
+  });
+
+  it('offers a saved direct check and four arms without executing anything from the guide', async () => {
+    const { get, reads } = await browser();
+    get('record-comparison').fire('click');
+    const guide = get('modal-content');
+    const check = guide
+      .querySelectorAll('input')
+      .find((e) => e.attributes['aria-label'] === 'Optional quality check')!;
+    const design = guide
+      .querySelectorAll('select')
+      .find((e) => e.attributes['aria-label'] === 'Comparison design')!;
+    const state = guide
+      .querySelectorAll('input')
+      .find((e) => e.attributes['aria-label'] === 'Same starting state')!;
+    const before = reads.length;
+    check.value = '["npm","run","verify"]';
+    check.fire('input');
+    assert.equal(check.attributes['aria-invalid'], 'false');
+    assert.match(guide.textContent, /--check-command '\["npm","run","verify"\]'/);
+    assert.match(guide.textContent, /benchmark-finish.*--yes/);
+    assert.doesNotMatch(guide.textContent, /--quality <passed/);
+    design.value = 'factorial';
+    design.fire('change');
+    assert.match(guide.textContent, /Starting state needed/);
+    state.value = 'initial-commit';
+    state.fire('input');
+    for (const arm of ['baseline', 'compression-only', 'routing-only', 'combined'])
+      assert.ok(guide.textContent.includes('--variant ' + arm));
+    assert.match(guide.textContent, /benchmark-factorial/);
+    assert.match(guide.textContent, /benchmark-prepare/);
+    assert.match(guide.textContent, /benchmark-restore/);
+    assert.match(guide.textContent, /Finish restores the original configuration/);
+    assert.equal(reads.length, before);
+    check.value = 'npm test';
+    check.fire('input');
+    assert.equal(check.attributes['aria-invalid'], 'true');
+    assert.match(guide.textContent, /Enter a JSON array/);
+    assert.doesNotMatch(guide.textContent, /benchmark-start/);
+  });
+
+  it('shows check disagreements and combined-only regressions in Results without merging evidence classes', async () => {
+    const data = observation();
+    Object.assign(data.value, {
+      qualityMismatches: [
+        { benchmarkId: 'check-test', details: ['optimized: user recorded passed; check failed'] },
+      ],
+      factorial: [
+        {
+          benchmarkId: 'four-test',
+          status: 'quality-blocked',
+          quality: {
+            baseline: 'passed',
+            'compression-only': 'passed',
+            'routing-only': 'passed',
+            combined: 'failed',
+          },
+          combinedQualityRegression: true,
+          qualityMismatches: ['combined'],
+          reasons: ['Compression activation is user-declared'],
+          effects: [
+            {
+              unit: 'local-tokens',
+              scope: null,
+              compressionSaving: 200,
+              routingSaving: 300,
+              combinedSaving: null,
+              interactionCost: null,
+            },
+            {
+              unit: 'percentage-points',
+              scope: 'weekly',
+              compressionSaving: 1,
+              routingSaving: 2,
+              combinedSaving: null,
+              interactionCost: null,
+            },
+          ],
+        },
+      ],
+    });
+    const { get } = await browser(data);
+    const body = get('result-evidence');
+    const disagreement = body.children.find(
+      (e) => e.dataset['name'] === 'check disagreement · check-test',
+    )!;
+    assert.match(disagreement.textContent, /user recorded passed; check failed/);
+    const experiment = body.children.find(
+      (e) => e.dataset['name'] === 'four-arm comparison · four-test',
+    )!;
+    assert.match(experiment.textContent, /Combined quality regressed; savings blocked/);
+    assert.match(experiment.textContent, /local-tokens.*percentage-points.*weekly/);
+    assert.match(experiment.textContent, /Combined saving.*Not measured/);
+  });
 });

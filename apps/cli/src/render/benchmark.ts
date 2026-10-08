@@ -47,6 +47,26 @@ export function renderBenchmarkReport(
     '',
   ];
 
+  for (const [label, receipt] of [
+    ['Baseline', baseline],
+    ['Optimized', optimized],
+  ] as const) {
+    const evidence = receipt.outcome.qualityEvidence;
+    if (evidence !== undefined)
+      lines.push(...wrap(`${label} quality source: ${evidence.source}`, 0));
+    if (
+      evidence?.source === 'check-command' &&
+      evidence.userRecordedQuality !== null &&
+      evidence.userRecordedQuality !== receipt.outcome.qualityGate
+    )
+      lines.push(
+        ...wrap(
+          `${label}: check ${receipt.outcome.qualityGate} overrides user-recorded ${evidence.userRecordedQuality}`,
+          0,
+        ),
+      );
+  }
+
   if (comparison.quota === null) {
     lines.push('Backend quota: no comparable authoritative/reported window');
   } else {

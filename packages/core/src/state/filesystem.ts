@@ -46,6 +46,9 @@ export interface FileSystemPort {
   readFile(path: string): Promise<Uint8Array>;
   /** Creates parent directories as needed. `mode` is ignored where it means nothing. */
   writeFile(path: string, content: Uint8Array, mode?: string | null): Promise<void>;
+  /** Optional stronger primitives required by recoverable temporary configuration sessions. */
+  writeFileExclusive?(path: string, content: Uint8Array): Promise<boolean>;
+  atomicWriteFile?(path: string, content: Uint8Array): Promise<void>;
   /**
    * Appends in one operation, creating the file and its parents as needed.
    *

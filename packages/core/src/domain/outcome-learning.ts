@@ -1,3 +1,4 @@
+import { sameQualityGateEvidence } from './benchmark-quality.js';
 /** RFC 0015. Pure project-local outcome learning, with no token-to-quota conversion. */
 import {
   isTaskBenchmarkId,
@@ -151,6 +152,8 @@ function compare(base: TaskBenchmarkReceipt, candidate: TaskBenchmarkReceipt): P
     value: PairVerdict['verdict'],
     basis: EffortLearningBasis | null = null,
   ): PairVerdict => ({ verdict: value, basis });
+  if (!sameQualityGateEvidence(base.outcome.qualityEvidence, candidate.outcome.qualityEvidence))
+    return verdict('unknown');
   if (base.outcome.errorCodes.length > 0 || candidate.outcome.errorCodes.length > 0)
     return verdict('unknown');
   if (candidate.outcome.qualityGate === 'failed') return verdict('loss');
@@ -265,6 +268,8 @@ export function refineEffortWithOutcomes(input: EffortLearningInput): EffortLear
     }
     const row = parsed.receipt;
     if (
+      row.experiment !== undefined ||
+      (row.variant !== 'baseline' && row.variant !== 'optimized') ||
       row.harnessId !== input.harnessId ||
       row.taskClass !== input.taskClass ||
       row.model !== input.model ||

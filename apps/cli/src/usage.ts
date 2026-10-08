@@ -50,6 +50,8 @@ Advanced commands
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
   benchmark, benchmark-start, benchmark-finish, benchmark-matrix
+  benchmark-factorial
+  benchmark-prepare, benchmark-restore
               Compare real task results for advanced evaluation
 
 Useful flags
@@ -92,13 +94,57 @@ Run the suggested token-harness setup --yes only after reviewing the short plan.
 It applies that stored plan transactionally, verifies the result, reads allowance
 when available, and points to the local dashboard. Token Harness never installs
 Claude Code or Codex and never spends model quota during setup.`,
+  'benchmark-prepare': `token-harness benchmark-prepare — prepare a temporary factorial arm
+
+Usage
+  token-harness benchmark-prepare --benchmark-id <id> --variant <arm>
+    --starting-state <id> --task <class> --harness claude|codex
+    [--check-command '["npm","run","verify"]'] [--check-timeout <ms>]
+    [--plan <id>] [--yes] [--json] [--project <dir>]
+
+Arms: baseline, compression-only, routing-only, combined. Default: read-only
+preview. --yes approves local configuration changes, capture and restoration at
+finish. Only already-installed supported RTK/HarnessTrim and owned removals are
+admitted. No package installation, coding task, Git reset or hook trust approval.
+Start a fresh agent session after preparation. Verification is config-only;
+actual routing callbacks are still required. Restore a cancelled/interrupted arm
+with benchmark-restore. Concurrent user edits block destructive restoration.`,
+  'benchmark-restore': `token-harness benchmark-restore — recover a prepared factorial arm
+
+Usage
+  token-harness benchmark-restore --benchmark-id <id> --variant <arm>
+    [--yes] [--json] [--project <dir>]
+
+Default: preview the guarded restoration. --yes restores the original snapshots
+and verifies files and original absence. Use after cancellation/interruption.
+Drift or corrupt backups retain the configuration lease and name recovery paths.`,
+  'benchmark-factorial': `token-harness benchmark-factorial — report an exploratory 2×2 experiment
+
+Usage
+  token-harness benchmark-factorial --benchmark-id <id> [--json] [--project <dir>]
+
+Reads baseline, compression-only, routing-only and combined captures/receipts from
+this project's local state. Use the same --starting-state at benchmark-start for
+all four arms. It never changes configuration or runs coding tasks. Effects retain
+quality and callback gates; tokens and independent quota windows stay separate.
+Arm settings and starting state are user-declared. One set is exploratory and is
+not proof of a stable causal interaction or verified compression activation.`,
   'benchmark-start': `token-harness benchmark-start — snapshot one task before it runs
 
 Usage
   token-harness benchmark-start --benchmark-id <id> [--candidate <id>]
-                                --variant <baseline|optimized>
+                                --variant <arm>
                                 --task <class> --harness <claude|codex>
-                                [--project <dir>] [--json]
+                                [--check-command '<JSON argv>'] [--check-timeout <ms>]
+                                [--starting-state <id>] [--project <dir>] [--json]
+
+--check-command is an executable/arguments JSON array, for example
+'["npm","run","verify"]' in Bash or PowerShell. It is saved and previewed,
+never evaluated as a shell expression. Finish previews it again; --yes runs it.
+--check-timeout is milliseconds (default 300000, maximum 3600000).
+--starting-state opts into the factorial design: baseline, compression-only,
+routing-only, combined. Otherwise use baseline or optimized. Restore the same
+starting tree and use fresh coding sessions after hook changes.
 
 --candidate accepts headroom, mcptoon, or gitnexus and labels the intended
 experiment target. It does not install, enable, disable, or prove that candidate
@@ -118,13 +164,17 @@ is recorded as an empty window list rather than inferred from local tokens.`,
   'benchmark-finish': `token-harness benchmark-finish — close a started task receipt
 
 Usage
-  token-harness benchmark-finish --benchmark-id <id> --variant <baseline|optimized>
-                                 --quality <passed|failed> --attempts <n>
-                                 --failed-attempts <n> [--project <dir>] [--json]
+  token-harness benchmark-finish --benchmark-id <id> --variant <arm>
+                                 [--quality <passed|failed>] --attempts <n>
+                                 --failed-attempts <n> [--yes] [--project <dir>] [--json]
 
 Run this after the benchmark task. It requires the capture from benchmark-start,
 verifies it belongs to the same project, observes quota and configured policy
-again, and writes an immutable schema-1 receipt under Token Harness state.
+again, and writes an immutable schema-2 receipt under Token Harness state.
+An automated saved check uses its exit code, independently of agent output.
+Without --yes it is previewed without execution; otherwise it overrides a
+contradictory --quality value. Timeout/start failure/signal means unknown.
+Captures without a check still require --quality.
 Matching start/end policy is config-only evidence, not active-session proof.
 Controlled recent pairs can refine optimize advice; legacy receipts remain valid
 for reports but cannot steer outcome-based effort learning.
@@ -141,7 +191,7 @@ Usage
   token-harness benchmark --baseline <receipt.json> --optimized <receipt.json>
                           [--json] [--project <dir>]
 
-Read-only. The command reads two schema-1 task receipts and applies the deterministic
+Read-only. The command reads schema-1 or schema-2 paired task receipts and applies the deterministic
 RFC 0011 comparator. Both receipts must carry explicit quality gates. Quality is
 evaluated before efficiency; only matching authoritative/reported backend windows
 that do not cross a reset are compared as subscription quota.

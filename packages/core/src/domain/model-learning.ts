@@ -1,3 +1,4 @@
+import { sameQualityGateEvidence } from './benchmark-quality.js';
 import {
   comparableQuotaDeltas,
   isTaskBenchmarkId,
@@ -122,6 +123,8 @@ function compare(base: TaskBenchmarkReceipt, candidate: TaskBenchmarkReceipt): P
     basis: ModelLearningBasis | null = null,
   ): PairVerdict => ({ verdict: value, basis });
 
+  if (!sameQualityGateEvidence(base.outcome.qualityEvidence, candidate.outcome.qualityEvidence))
+    return verdict('unknown');
   if (base.outcome.errorCodes.length > 0 || candidate.outcome.errorCodes.length > 0) {
     return verdict('unknown');
   }
@@ -246,6 +249,8 @@ export function refineModelWithOutcomes(input: ModelLearningInput): ModelLearnin
     }
     const row = parsed.receipt;
     if (
+      row.experiment !== undefined ||
+      (row.variant !== 'baseline' && row.variant !== 'optimized') ||
       row.harnessId !== input.harnessId ||
       row.taskClass !== input.taskClass ||
       row.reasoningEffort !== input.reasoningEffort ||

@@ -28,6 +28,33 @@ const capture = {
 };
 
 describe('benchmark capture rendering', () => {
+  it('wraps long check preview identities, argv and paths within the terminal budget', () => {
+    const rendered = renderBenchmarkFinishReport(
+      {
+        status: 'check-planned',
+        benchmarkId: 'a'.repeat(64),
+        variant: 'compression-only',
+        check: {
+          executable: 'node',
+          args: ['-e', 'console.log("' + 'x'.repeat(200) + '")'],
+          timeoutMs: 300000,
+        },
+        cwd: '/home/dev/' + 'project-directory/'.repeat(12),
+        checkExecuted: false,
+        receiptFinalized: false,
+        nextCommand:
+          'token-harness benchmark-finish --benchmark-id ' +
+          'a'.repeat(64) +
+          ' --variant compression-only --attempts 1 --failed-attempts 0 --yes',
+      },
+      { toolVersion: 'test', home: '/home/dev', decorate: false },
+    );
+    assert.match(rendered, /No check was executed and no receipt was finalized/);
+    assert.match(rendered, /NEXT STEP/);
+    for (const line of rendered.trimEnd().split('\n'))
+      assert.ok(line.length <= 78, `line is ${String(line.length)} chars: ${line}`);
+  });
+
   it('shows the exact finish command after start', () => {
     const report: TaskBenchmarkCaptureStartReport = {
       capture,

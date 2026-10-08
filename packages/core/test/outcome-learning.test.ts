@@ -460,3 +460,41 @@ describe('additive benchmark end-policy contract', () => {
     });
   }
 });
+
+describe('benchmark quality/design isolation in effort learning', () => {
+  it('does not learn savings from mismatched automated/manual gates', () => {
+    const rows = pairs();
+    for (const row of rows) {
+      row.schemaVersion = 2;
+      if (row.variant === 'optimized')
+        row.outcome.qualityEvidence = {
+          source: 'check-command',
+          check: { executable: 'npm', args: ['test'], timeoutMs: 300000 },
+          exitCode: 0,
+          signal: null,
+          failureReason: null,
+          durationMs: 1,
+          output: null,
+          userRecordedQuality: null,
+        };
+    }
+    const decision = refineEffortWithOutcomes(input(rows));
+    assert.equal(decision.recommendedEffort, 'high');
+    assert.equal(decision.candidates.find((c) => c.effort === 'medium')!.wins, 0);
+  });
+  it('keeps factorial baseline receipts outside paired learning', () => {
+    const rows = pairs().filter((row) => row.variant === 'baseline');
+    for (const row of rows) {
+      row.schemaVersion = 2;
+      row.experiment = {
+        design: 'factorial-2x2',
+        startingState: 'initial',
+        compression: false,
+        routing: false,
+      };
+    }
+    const decision = refineEffortWithOutcomes(input(rows));
+    assert.equal(decision.matchedReceipts, 0);
+    assert.equal(decision.recommendedEffort, 'high');
+  });
+});

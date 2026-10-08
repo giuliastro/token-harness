@@ -13,10 +13,12 @@ import type {
   TaskBenchmarkContextMatrixSummary,
   TaskBenchmarkMatrixEntry,
   TaskBenchmarkMatrixReport,
+  TaskBenchmarkFactorialReport,
   TaskBenchmarkMatrixSummary,
   TaskClass,
 } from '@token-harness/core';
 
+import { renderBenchmarkFactorialReport } from './benchmark-factorial.js';
 import type { CandidateEvidenceAssessment } from '../commands/candidate-evidence-assessment.js';
 import { document, formatCount, wrap, type RenderContext } from './layout.js';
 
@@ -71,6 +73,8 @@ interface CandidateCampaignSummary {
 type CandidateAwareReport = (TaskBenchmarkMatrixReport | TaskBenchmarkContextMatrixReport) & {
   candidateEvidence?: readonly CandidateEvidenceSummary[];
   campaign?: CandidateCampaignSummary;
+  factorial?: TaskBenchmarkFactorialReport[];
+  pendingConfiguration?: TaskBenchmarkContextMatrixReport['pendingConfiguration'];
 };
 
 function percent(value: number | null): string {
@@ -274,6 +278,24 @@ export function renderBenchmarkMatrixReport(
 
   if (report.campaign !== undefined) renderCampaign(lines, report.campaign);
 
+  if (report.pendingConfiguration !== undefined) {
+    const pending = report.pendingConfiguration;
+    lines.push(
+      '',
+      ...wrap(
+        pending.state === 'active'
+          ? `Temporary configuration active: ${pending.benchmarkId} / ${pending.variant}. Finish or restore before another managed change.`
+          : 'Temporary configuration lease unreadable; preserve checkpoints and backups.',
+        0,
+      ),
+    );
+    if (pending.recoveryCommand !== null)
+      lines.push(...wrap(`Recovery: ${pending.recoveryCommand}`, 0));
+  }
+
+  for (const experiment of report.factorial ?? [])
+    lines.push('', ...renderBenchmarkFactorialReport(experiment).trimEnd().split('\n'));
+
   if (report.entries.length === 0) {
     lines.push(
       '',
@@ -325,7 +347,11 @@ export function renderBenchmarkMatrixReport(
   }
 
   lines.push('', 'Pairs');
-  for (const entry of report.entries) lines.push(...wrap(entryLine(entry), 2));
+  for (const entry of report.entries) {
+    lines.push(...wrap(entryLine(entry), 2));
+    for (const mismatch of entry.qualityMismatches ?? [])
+      lines.push(...wrap(`Check overrides recorded quality: ${mismatch}`, 4));
+  }
 
   lines.push(
     '',

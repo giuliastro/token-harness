@@ -8,6 +8,17 @@
 
 import type { UsageConfidence, UsageWindowSnapshot } from './budget.js';
 import {
+  parseTaskBenchmarkCheck,
+  parseTaskBenchmarkQualityEvidence,
+  parseTaskBenchmarkFactorialExperiment,
+  qualityFromCheckEvidence,
+  sameQualityGateEvidence,
+  sameTaskBenchmarkCheck,
+  type TaskBenchmarkCheck,
+  type TaskBenchmarkQualityEvidence,
+  type TaskBenchmarkFactorialExperiment,
+} from './benchmark-quality.js';
+import {
   parseTaskBenchmarkContextSnapshot,
   type TaskBenchmarkContextSnapshot,
 } from './benchmark-context.js';
@@ -16,10 +27,15 @@ import type { SessionHistoryRow } from './history.js';
 import { isHarnessId, type HarnessId } from './ids.js';
 import { isTaskClass, type TaskClass } from './optimizer.js';
 
-export const TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION = 1;
-export const TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION = 1;
+export const TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION = 2;
+export const TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION = 2;
 
-export type TaskBenchmarkVariant = 'baseline' | 'optimized';
+export type TaskBenchmarkVariant =
+  | 'baseline'
+  | 'optimized'
+  | 'compression-only'
+  | 'routing-only'
+  | 'combined';
 export type TaskQualityGate = 'passed' | 'failed' | 'unknown';
 
 const BENCHMARK_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
@@ -29,7 +45,13 @@ export function isTaskBenchmarkId(value: string): boolean {
 }
 
 export function isTaskBenchmarkVariant(value: string): value is TaskBenchmarkVariant {
-  return value === 'baseline' || value === 'optimized';
+  return (
+    value === 'baseline' ||
+    value === 'optimized' ||
+    value === 'compression-only' ||
+    value === 'routing-only' ||
+    value === 'combined'
+  );
 }
 
 export function isTaskQualityGate(value: string): value is TaskQualityGate {
@@ -60,6 +82,7 @@ export interface TaskBenchmarkLocalSessionSnapshot extends TaskLocalUsage {
 export interface TaskBenchmarkOutcome {
   /** The benchmark's explicit task-quality gate; never inferred from token counts. */
   qualityGate: TaskQualityGate;
+  qualityEvidence?: TaskBenchmarkQualityEvidence;
   /** Number of attempts made to reach the final outcome. */
   attempts: number;
   /** Attempts that failed before the final outcome. */
@@ -78,7 +101,8 @@ export interface TaskBenchmarkNativeRoutingObservation {
 }
 
 export interface TaskBenchmarkReceipt {
-  schemaVersion: typeof TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION;
+  schemaVersion: 1 | typeof TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION;
+  experiment?: TaskBenchmarkFactorialExperiment;
   benchmarkId: string;
   variant: TaskBenchmarkVariant;
   taskClass: TaskClass;
@@ -106,7 +130,9 @@ export interface TaskBenchmarkReceipt {
 }
 
 export interface TaskBenchmarkCapture {
-  schemaVersion: typeof TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION;
+  schemaVersion: 1 | typeof TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION;
+  qualityCheck?: TaskBenchmarkCheck;
+  experiment?: TaskBenchmarkFactorialExperiment;
   benchmarkId: string;
   variant: TaskBenchmarkVariant;
   taskClass: TaskClass;
@@ -140,6 +166,21 @@ export interface TaskBenchmarkCaptureFinishReport {
   capturePath: string;
   receiptPath: string;
 }
+
+export interface TaskBenchmarkCaptureCheckPlanReport {
+  status: 'check-planned';
+  benchmarkId: string;
+  variant: TaskBenchmarkVariant;
+  check: TaskBenchmarkCheck;
+  cwd: string;
+  checkExecuted: false;
+  receiptFinalized: false;
+  nextCommand: string;
+}
+
+export type TaskBenchmarkCaptureFinishResult =
+  | TaskBenchmarkCaptureFinishReport
+  | TaskBenchmarkCaptureCheckPlanReport;
 
 export type TaskBenchmarkCaptureParseResult =
   | { ok: true; capture: TaskBenchmarkCapture }
@@ -381,6 +422,10 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
   const attempts = row['attempts'];
   const failedAttempts = row['failedAttempts'];
   const errorCodes = row['errorCodes'];
+  const hasQualityEvidence = Object.hasOwn(row, 'qualityEvidence');
+  const qualityEvidence = hasQualityEvidence
+    ? parseTaskBenchmarkQualityEvidence(row['qualityEvidence'])
+    : undefined;
   if (
     typeof qualityGate !== 'string' ||
     !isTaskQualityGate(qualityGate) ||
@@ -392,7 +437,10 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
     failedAttempts < 0 ||
     failedAttempts > attempts ||
     !Array.isArray(errorCodes) ||
-    !errorCodes.every((code) => typeof code === 'string')
+    !errorCodes.every((code) => typeof code === 'string') ||
+    (hasQualityEvidence && qualityEvidence === null) ||
+    (qualityEvidence?.source === 'check-command' &&
+      qualityFromCheckEvidence(qualityEvidence) !== qualityGate)
   ) {
     return null;
   }
@@ -401,6 +449,7 @@ function parseOutcome(value: unknown): TaskBenchmarkOutcome | null {
     attempts,
     failedAttempts,
     errorCodes: [...errorCodes] as string[],
+    ...(qualityEvidence != null ? { qualityEvidence } : {}),
   };
 }
 
@@ -457,7 +506,10 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
   if (row === null) {
     return { ok: false, reason: 'invalid-shape', message: 'capture must be a JSON object' };
   }
-  if (row['schemaVersion'] !== TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION) {
+  if (
+    row['schemaVersion'] !== 1 &&
+    row['schemaVersion'] !== TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION
+  ) {
     return {
       ok: false,
       reason: 'unsupported-schema',
@@ -467,9 +519,26 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
 
   const benchmarkId = row['benchmarkId'];
   const variant = row['variant'];
+  const hasExperiment = Object.hasOwn(row, 'experiment');
+  const experiment =
+    hasExperiment && typeof variant === 'string'
+      ? parseTaskBenchmarkFactorialExperiment(row['experiment'], variant)
+      : undefined;
+  const invalidVersionFields =
+    row['schemaVersion'] === 1 &&
+    (hasExperiment ||
+      (variant !== 'baseline' && variant !== 'optimized') ||
+      Object.hasOwn(row, 'qualityCheck') ||
+      (record(row['outcome']) !== null &&
+        Object.hasOwn(record(row['outcome'])!, 'qualityEvidence')));
+  const invalidExperiment =
+    (hasExperiment && experiment == null) ||
+    (variant !== 'baseline' && variant !== 'optimized' && !hasExperiment);
   const taskClass = row['taskClass'];
   const harnessId = row['harnessId'];
   const projectId = row['projectId'];
+  const hasQualityCheck = Object.hasOwn(row, 'qualityCheck');
+  const qualityCheck = hasQualityCheck ? parseTaskBenchmarkCheck(row['qualityCheck']) : undefined;
   const model = optionalText(row['model']);
   const reasoningEffort = optionalText(row['reasoningEffort']);
   const verbosity = optionalText(row['verbosity']);
@@ -487,6 +556,8 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
     : undefined;
 
   if (
+    invalidVersionFields ||
+    invalidExperiment ||
     typeof benchmarkId !== 'string' ||
     !isTaskBenchmarkId(benchmarkId) ||
     typeof variant !== 'string' ||
@@ -497,6 +568,7 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
     !isHarnessId(harnessId) ||
     typeof projectId !== 'string' ||
     projectId === '' ||
+    (hasQualityCheck && qualityCheck === null) ||
     model === undefined ||
     reasoningEffort === undefined ||
     verbosity === undefined ||
@@ -516,7 +588,9 @@ export function parseTaskBenchmarkCapture(value: unknown): TaskBenchmarkCaptureP
   return {
     ok: true,
     capture: {
-      schemaVersion: TASK_BENCHMARK_CAPTURE_SCHEMA_VERSION,
+      schemaVersion: row['schemaVersion'],
+      ...(qualityCheck != null ? { qualityCheck } : {}),
+      ...(experiment != null ? { experiment } : {}),
       benchmarkId,
       variant,
       taskClass,
@@ -540,7 +614,10 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   if (row === null) {
     return { ok: false, reason: 'invalid-shape', message: 'receipt must be a JSON object' };
   }
-  if (row['schemaVersion'] !== TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION) {
+  if (
+    row['schemaVersion'] !== 1 &&
+    row['schemaVersion'] !== TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION
+  ) {
     return {
       ok: false,
       reason: 'unsupported-schema',
@@ -550,6 +627,21 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
 
   const benchmarkId = row['benchmarkId'];
   const variant = row['variant'];
+  const hasExperiment = Object.hasOwn(row, 'experiment');
+  const experiment =
+    hasExperiment && typeof variant === 'string'
+      ? parseTaskBenchmarkFactorialExperiment(row['experiment'], variant)
+      : undefined;
+  const invalidVersionFields =
+    row['schemaVersion'] === 1 &&
+    (hasExperiment ||
+      (variant !== 'baseline' && variant !== 'optimized') ||
+      Object.hasOwn(row, 'qualityCheck') ||
+      (record(row['outcome']) !== null &&
+        Object.hasOwn(record(row['outcome'])!, 'qualityEvidence')));
+  const invalidExperiment =
+    (hasExperiment && experiment == null) ||
+    (variant !== 'baseline' && variant !== 'optimized' && !hasExperiment);
   const taskClass = row['taskClass'];
   const harnessId = row['harnessId'];
   const model = optionalText(row['model']);
@@ -581,6 +673,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
     : undefined;
 
   if (
+    invalidVersionFields ||
+    invalidExperiment ||
     typeof benchmarkId !== 'string' ||
     benchmarkId === '' ||
     typeof variant !== 'string' ||
@@ -615,7 +709,8 @@ export function parseTaskBenchmarkReceipt(value: unknown): TaskBenchmarkReceiptP
   return {
     ok: true,
     receipt: {
-      schemaVersion: TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION,
+      schemaVersion: row['schemaVersion'],
+      ...(experiment != null ? { experiment } : {}),
       benchmarkId,
       variant,
       taskClass,
@@ -642,6 +737,7 @@ export interface CompleteTaskBenchmarkCaptureInput {
   completedAt: string;
   usageAfter: UsageWindowSnapshot[];
   qualityGate: TaskQualityGate;
+  qualityEvidence?: TaskBenchmarkQualityEvidence;
   attempts: number;
   failedAttempts: number;
   errorCodes?: string[];
@@ -655,9 +751,23 @@ export function completeTaskBenchmarkCapture(
   capture: TaskBenchmarkCapture,
   input: CompleteTaskBenchmarkCaptureInput,
 ): TaskBenchmarkReceiptParseResult {
+  const automated = input.qualityEvidence?.source === 'check-command';
+  if (
+    (capture.qualityCheck !== undefined) !== automated ||
+    (capture.qualityCheck !== undefined &&
+      input.qualityEvidence?.source === 'check-command' &&
+      !sameTaskBenchmarkCheck(capture.qualityCheck, input.qualityEvidence.check))
+  ) {
+    return {
+      ok: false,
+      reason: 'invalid-shape',
+      message: 'completion quality provenance must match the saved capture check',
+    };
+  }
   return parseTaskBenchmarkReceipt({
     schemaVersion: TASK_BENCHMARK_RECEIPT_SCHEMA_VERSION,
     benchmarkId: capture.benchmarkId,
+    ...(capture.experiment !== undefined ? { experiment: capture.experiment } : {}),
     variant: capture.variant,
     taskClass: capture.taskClass,
     harnessId: capture.harnessId,
@@ -680,6 +790,7 @@ export function completeTaskBenchmarkCapture(
     ...(input.policyAtFinish !== undefined ? { policyAtFinish: input.policyAtFinish } : {}),
     outcome: {
       qualityGate: input.qualityGate,
+      qualityEvidence: input.qualityEvidence ?? { source: 'user-recorded' },
       attempts: input.attempts,
       failedAttempts: input.failedAttempts,
       errorCodes: input.errorCodes ?? [],
@@ -918,10 +1029,13 @@ function compareTaskBenchmarkReceiptsCore(
     baseline.taskClass !== optimized.taskClass ||
     baseline.harnessId !== optimized.harnessId ||
     baseline.variant !== 'baseline' ||
-    optimized.variant !== 'optimized'
+    optimized.variant !== 'optimized' ||
+    baseline.experiment !== undefined ||
+    optimized.experiment !== undefined ||
+    !sameQualityGateEvidence(baseline.outcome.qualityEvidence, optimized.outcome.qualityEvidence)
   ) {
     return result(baseline.benchmarkId, 'incomparable', 'none', 'none', null, [
-      'receipts do not describe the same benchmark task/class and baseline/optimized roles',
+      'receipts do not describe the same benchmark task/class, paired roles and quality-check identity',
     ]);
   }
 
@@ -1077,6 +1191,11 @@ export interface TaskBenchmarkMatrixEntry {
   quota: TaskBenchmarkQuotaComparison | null;
   quotaComparisons?: TaskBenchmarkQuotaComparison[];
   quality?: { baseline: TaskQualityGate; optimized: TaskQualityGate };
+  qualitySources?: {
+    baseline: 'user-recorded' | 'check-command';
+    optimized: 'user-recorded' | 'check-command';
+  };
+  qualityMismatches?: string[];
   nativeRouting?: TaskBenchmarkNativeRoutingComparison;
 }
 
@@ -1193,7 +1312,14 @@ export function buildTaskBenchmarkMatrix(
       const baselineLocalTokens = baseline.localUsage?.totalTokens ?? null;
       const optimizedLocalTokens = optimized.localUsage?.totalTokens ?? null;
       const bothQualityPassed =
-        baseline.outcome.qualityGate === 'passed' && optimized.outcome.qualityGate === 'passed';
+        baseline.outcome.qualityGate === 'passed' &&
+        optimized.outcome.qualityGate === 'passed' &&
+        sameQualityGateEvidence(
+          baseline.outcome.qualityEvidence,
+          optimized.outcome.qualityEvidence,
+        ) &&
+        baseline.experiment === undefined &&
+        optimized.experiment === undefined;
       return {
         benchmarkId: baseline.benchmarkId,
         taskClass: baseline.taskClass,
@@ -1204,12 +1330,29 @@ export function buildTaskBenchmarkMatrix(
         baselineLocalTokens,
         optimizedLocalTokens,
         localTokenSavingPercent:
-          !bothQualityPassed || baselineLocalTokens === null || optimizedLocalTokens === null
+          comparison.verdict === 'incomparable' ||
+          !bothQualityPassed ||
+          baselineLocalTokens === null ||
+          optimizedLocalTokens === null
             ? null
             : roundedPercent(baselineLocalTokens - optimizedLocalTokens, baselineLocalTokens),
         quota: comparison.quota,
         quotaComparisons:
           comparison.verdict === 'incomparable' ? [] : pairedQuotas(baseline, optimized),
+        qualitySources: {
+          baseline: baseline.outcome.qualityEvidence?.source ?? 'user-recorded',
+          optimized: optimized.outcome.qualityEvidence?.source ?? 'user-recorded',
+        },
+        qualityMismatches: [baseline, optimized].flatMap((receipt) => {
+          const e = receipt.outcome.qualityEvidence;
+          return e?.source === 'check-command' &&
+            e.userRecordedQuality !== null &&
+            e.userRecordedQuality !== receipt.outcome.qualityGate
+            ? [
+                `${receipt.variant}: user recorded ${e.userRecordedQuality}; check ${receipt.outcome.qualityGate}`,
+              ]
+            : [];
+        }),
         quality: {
           baseline: baseline.outcome.qualityGate,
           optimized: optimized.outcome.qualityGate,
@@ -1254,7 +1397,11 @@ function nativeRoutingComparison(
   )
     return {};
   const qualityGatesPassed =
-    baseline.outcome.qualityGate === 'passed' && optimized.outcome.qualityGate === 'passed';
+    baseline.outcome.qualityGate === 'passed' &&
+    optimized.outcome.qualityGate === 'passed' &&
+    sameQualityGateEvidence(baseline.outcome.qualityEvidence, optimized.outcome.qualityEvidence) &&
+    baseline.experiment === undefined &&
+    optimized.experiment === undefined;
   if (
     bStart == null ||
     bFinish == null ||

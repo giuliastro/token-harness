@@ -11,7 +11,7 @@ import {
   type HarnessId,
   type OptimizationCandidateId,
   type TaskBenchmarkCapture,
-  type TaskBenchmarkCaptureFinishReport,
+  type TaskBenchmarkCaptureFinishResult,
   type TaskBenchmarkCaptureStartReport,
   type TaskBenchmarkContextMatrixReport,
   type TaskBenchmarkMatrixEntry,
@@ -972,9 +972,10 @@ export async function runCandidateBenchmarkStart(
 /** Finish the ordinary receipt, then seal mcptoon activation evidence beside it when applicable. */
 export async function runCandidateBenchmarkFinish(
   context: CommandContext,
-): Promise<CommandResult<TaskBenchmarkCaptureFinishReport | null>> {
+): Promise<CommandResult<TaskBenchmarkCaptureFinishResult | null>> {
   const result = await runBenchmarkFinish(context);
-  if (result.data === null || result.exitCode !== EXIT_CODES.ok) return result;
+  if (result.data === null || !('receipt' in result.data) || result.exitCode !== EXIT_CODES.ok)
+    return result;
   if (result.data.receipt.variant !== 'optimized') return result;
 
   const attribution = await readCandidateBenchmarkAttribution(
