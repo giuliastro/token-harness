@@ -41,6 +41,15 @@ Preparation uses already-installed RTK/HarnessTrim and native routing adapters,
 records config-only evidence, and restores after finish. Coding tasks, Git resets,
 hook trust and repeated/randomized campaigns remain outside automatic preparation.
 
+### Desktop distribution workstream — issue #379
+
+RFC 0032 proposes a first desktop milestone: an Electron shell around the existing
+guided application, with a dedicated Node runtime and native release artifacts for
+Windows x64, Linux x64, and macOS x64/arm64. The existing release workflow gates
+publication on all native builds and attaches packages plus checksums to the same tag.
+This does not supersede real-platform provider/routing and paired-measurement gates,
+or claim full CLI workflow parity, notarized builds or automatic desktop updates.
+
 ## 2. Definition of the first useful release
 
 Version `0.1.0` is useful when a user can:

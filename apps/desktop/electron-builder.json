@@ -1,0 +1,44 @@
+{
+  "appId": "io.github.giuliastro.token-harness",
+  "productName": "Token Harness",
+  "directories": {
+    "app": "dist/desktop/app",
+    "output": "dist/desktop/artifacts"
+  },
+  "files": ["main.cjs", "package.json", "LICENSE"],
+  "extraResources": [
+    {
+      "from": "dist/desktop/resources",
+      "to": ".",
+      "filter": ["**/*"]
+    }
+  ],
+  "asar": true,
+  "npmRebuild": false,
+  "publish": null,
+  "win": {
+    "target": "nsis",
+    "artifactName": "token-harness-${version}-windows-${arch}-setup.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false
+  },
+  "linux": {
+    "target": ["deb", "tar.gz"],
+    "category": "Development",
+    "executableName": "token-harness-desktop",
+    "artifactName": "token-harness-${version}-linux-${arch}.${ext}",
+    "maintainer": "Token Harness contributors",
+    "syncDesktopName": true
+  },
+  "mac": {
+    "target": ["dmg", "zip"],
+    "category": "public.app-category.developer-tools",
+    "identity": "-",
+    "hardenedRuntime": false,
+    "artifactName": "token-harness-${version}-macos-${arch}.${ext}"
+  }
+}

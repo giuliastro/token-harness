@@ -22,7 +22,7 @@
  * constantly, so `failure` stays null whenever the child ran to completion.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { win32 } from 'node:path';
 import process from 'node:process';
 import { outputEvidenceCapture } from './output-evidence.js';
@@ -66,6 +66,116 @@ export interface NodeProcessRunnerOptions {
 }
 
 const DEFAULT_KILL_GRACE_MS = 2_000;
+
+/** A readiness message is a capability for one exact local listener, not an arbitrary URL. */
+export function guidedApplicationUrl(message: unknown): string | null {
+  if (message === null || typeof message !== 'object') return null;
+  const value = message as Record<string, unknown>;
+  if (value['type'] !== 'token-harness-guide-ready' || typeof value['url'] !== 'string')
+    return null;
+  try {
+    const url = new URL(value['url']);
+    if (
+      url.protocol === 'http:' &&
+      url.hostname === '127.0.0.1' &&
+      url.port !== '' &&
+      url.pathname === '/' &&
+      url.search === '' &&
+      url.hash === '' &&
+      url.username === '' &&
+      url.password === ''
+    )
+      return url.href;
+  } catch {
+    /* Invalid readiness messages never navigate a window. */
+  }
+  return null;
+}
+
+export interface ManagedGuidedApplication {
+  url: string;
+  closed: Promise<void>;
+  /** Waits for the backend to drain active requests and exit. */
+  stop(): Promise<void>;
+}
+
+export interface ManagedGuidedApplicationInput {
+  executable: string;
+  entryScript: string;
+  cwd: string;
+  env: Readonly<Record<string, string | undefined>>;
+  facts: PlatformFacts;
+  timeoutMs?: number;
+}
+
+/** Desktop owns this child; npm's detached restart launcher below retains its existing lifecycle. */
+export function startManagedGuidedApplication(
+  input: ManagedGuidedApplicationInput,
+  spawnChild: typeof spawn = spawn,
+): Promise<ManagedGuidedApplication> {
+  return new Promise((resolve, reject) => {
+    const child: ChildProcess = spawnChild(
+      input.executable,
+      [input.entryScript, 'ui', '--no-open'],
+      {
+        cwd: input.cwd,
+        env: minimalChildEnvironment({
+          facts: input.facts,
+          ambient: input.env,
+          additions: { TOKEN_HARNESS_GUIDE_LIFECYCLE: 'managed' },
+        }),
+        shell: false,
+        windowsHide: true,
+        detached: false,
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      },
+    );
+    let ready = false;
+    let failed = false;
+    let stopping = false;
+    let exited = false;
+    let finishClosed: () => void;
+    const closed = new Promise<void>((done) => {
+      finishClosed = done;
+    });
+    const fail = (): void => {
+      if (ready || failed) return;
+      failed = true;
+      clearTimeout(timer);
+      child.kill();
+      reject(
+        new Error(
+          'The local Token Harness backend could not start. Check the desktop installation.',
+        ),
+      );
+    };
+    const timer = setTimeout(fail, input.timeoutMs ?? 20_000);
+    child.once('error', fail);
+    child.once('exit', () => {
+      exited = true;
+      finishClosed();
+      fail();
+    });
+    child.on('message', (message: unknown) => {
+      if (ready || failed) return;
+      const url = guidedApplicationUrl(message);
+      if (url === null) return;
+      ready = true;
+      clearTimeout(timer);
+      resolve({
+        url,
+        closed,
+        stop: () => {
+          if (!stopping && !exited) {
+            stopping = true;
+            if (child.connected) child.send({ type: 'token-harness-guide-stop' }, () => undefined);
+          }
+          return closed;
+        },
+      });
+    });
+  });
+}
 
 /** Start a reviewed replacement UI, retaining the old UI until the new loopback listener is ready. */
 export function launchGuidedApplication(input: {

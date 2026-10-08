@@ -10,6 +10,7 @@ const targets = [
   join(repoRoot, 'packages', 'platform', 'dist'),
   join(repoRoot, 'packages', 'adapters', 'dist'),
   join(repoRoot, 'apps', 'cli', 'dist'),
+  join(repoRoot, 'apps', 'desktop', 'dist'),
   join(repoRoot, 'tests', 'dist'),
 ];
 
