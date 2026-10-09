@@ -5,6 +5,7 @@ import { Script } from 'node:vm';
 import { GUIDE_HTML } from '../src/guided-assets.js';
 import { GUIDE_PRODUCT_JS } from '../src/guided-product-client.js';
 import type { GuideOperationHistory } from '../src/guided-operation-history.js';
+import type { GuideComparisons } from '../src/guided-comparisons.js';
 
 /** Small DOM double: execute the shipped controller against fake reads, without a browser dependency. */
 class Element {
@@ -147,7 +148,11 @@ function observation() {
   };
 }
 
-async function browser(data = observation(), history?: GuideOperationHistory) {
+async function browser(
+  data = observation(),
+  history?: GuideOperationHistory,
+  comparisons?: GuideComparisons,
+) {
   const elements = new Map<string, Element>();
   for (const match of GUIDE_HTML.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g))
     elements.set(match[2]!, new Element(match[1]!));
@@ -178,19 +183,26 @@ async function browser(data = observation(), history?: GuideOperationHistory) {
               ? { activity: [] }
               : path === '/api/operations'
                 ? (history ?? { state: 'ready', operations: [], note: 'No retained changes.' })
-                : path === '/api/preview'
-                  ? {
-                      ticket: 'restore-ticket',
-                      changes: [
-                        {
-                          title: 'Restore configuration',
-                          description: 'Manual edits will also be undone.',
-                          files: 1,
-                        },
-                      ],
-                      notices: [],
-                    }
-                  : {},
+                : path === '/api/comparisons'
+                  ? (comparisons ?? {
+                      available: true,
+                      blocked: false,
+                      items: [],
+                      note: 'Checks are user-recorded.',
+                    })
+                  : path === '/api/preview'
+                    ? {
+                        ticket: 'restore-ticket',
+                        changes: [
+                          {
+                            title: 'Restore configuration',
+                            description: 'Manual edits will also be undone.',
+                            files: 1,
+                          },
+                        ],
+                        notices: [],
+                      }
+                    : {},
     };
   };
   new Script(GUIDE_PRODUCT_JS).runInNewContext({
@@ -228,6 +240,80 @@ async function browser(data = observation(), history?: GuideOperationHistory) {
 }
 
 describe('guided evidence interactions', () => {
+  it('starts a paired capture only through a separate preview and approval', async () => {
+    const { get, writes, settle } = await browser();
+    get('manage-comparisons').fire('click');
+    await settle();
+    assert.match(get('modal-content').textContent, /Baseline → task and checks → optimized/);
+    assert.ok(writes.every((item) => !['/api/preview', '/api/apply'].includes(item.path)));
+    get('modal-content')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Review new baseline')!
+      .fire('click');
+    await settle();
+    assert.deepEqual(writes.find((item) => item.path === '/api/preview')?.body, {
+      action: 'comparison-new',
+      harness: 'codex',
+      task: 'standard',
+    });
+    assert.ok(writes.every((item) => item.path !== '/api/apply'));
+    assert.ok(
+      get('modal-actions')
+        .querySelectorAll('button')
+        .some((button) => button.textContent === 'Record reviewed step'),
+    );
+  });
+
+  it('requires an explicit quality result and coherent counts before reviewing a retained capture', async () => {
+    const { get, writes, settle } = await browser(observation(), undefined, {
+      available: true,
+      blocked: false,
+      note: 'Checks are user-recorded.',
+      items: [
+        {
+          key: 'guided-pair-example',
+          harness: 'codex',
+          task: 'mechanical',
+          startedAt: '2026-10-09T16:00:00Z',
+          state: 'baseline-running',
+          next: 'finish-baseline',
+          baselineQuality: null,
+          optimizedQuality: null,
+        },
+      ],
+    });
+    get('manage-comparisons').fire('click');
+    await settle();
+    get('modal-content')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Record baseline outcome')!
+      .fire('click');
+    const review = get('modal-actions')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Review recorded outcome')!;
+    assert.equal(review.disabled, true);
+    const quality = get('modal-content').querySelectorAll('select')[0]!;
+    const [attempts, failed] = get('modal-content').querySelectorAll('input');
+    quality.value = 'passed';
+    attempts!.value = '2';
+    failed!.value = '2';
+    quality.fire('change');
+    assert.equal(review.disabled, true);
+    failed!.value = '1';
+    failed!.fire('input');
+    assert.equal(review.disabled, false);
+    review.fire('click');
+    await settle();
+    assert.deepEqual(writes.find((item) => item.path === '/api/preview')?.body, {
+      action: 'comparison-step',
+      key: 'guided-pair-example',
+      expected: 'finish-baseline',
+      quality: 'passed',
+      attempts: 2,
+      failedAttempts: 1,
+    });
+    assert.ok(writes.every((item) => item.path !== '/api/apply'));
+  });
   it('shows retained history after reopen and reviews recovery without selecting an id or applying on read', async () => {
     const { get, writes, settle } = await browser(observation(), {
       state: 'ready',

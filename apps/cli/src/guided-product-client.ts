@@ -1700,6 +1700,121 @@ export const GUIDE_PRODUCT_JS = String.raw`
     $('modal-actions').append(modalClose('Done'));
   }
 
+  function labelledField(label, element, id) {
+    element.id = id;
+    const heading = node('label', label);
+    heading.setAttribute('for', id);
+    const wrap = node('div', undefined, 'evidence-field');
+    wrap.append(heading, element);
+    return wrap;
+  }
+
+  async function reviewComparison(body) {
+    if (busy) return;
+    const run = modal('Review comparison step');
+    $('modal-content').append(progress('Preparing the measurement preview', 'No evidence is recorded until you approve this step.'));
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    try {
+      await ensureSession();
+      const preview = await request('/api/preview', body);
+      if (run !== modalRun) return;
+      $('modal-title').textContent = preview.title;
+      $('modal-content').replaceChildren();
+      for (const change of preview.changes || []) {
+        const row = node('article', undefined, 'preview-change');
+        row.append(node('h3', change.title), node('p', change.description));
+        $('modal-content').append(row);
+      }
+      for (const notice of preview.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
+      $('modal-actions').replaceChildren(modalClose('Cancel'));
+      if (preview.ticket) $('modal-actions').append(actionButton('Record reviewed step', () => applyTicket(preview.ticket)));
+    } catch (error) {
+      if (run !== modalRun) return;
+      $('modal-error').textContent = error.message;
+      $('modal-error').hidden = false;
+    } finally { if (run === modalRun) setBusy(false, false); }
+  }
+
+  function comparisonOutcome(item) {
+    modal('Record checks and attempts');
+    $('modal-content').append(messageBox('Your recorded checks', 'Run the same tests or acceptance checks yourself before choosing an outcome. Token Harness does not execute a check or infer quality from the assistant response. Failed outcomes are retained.'));
+    const quality = node('select');
+    for (const [value, label] of [['', 'Choose the actual outcome'], ['passed', 'Checks passed'], ['failed', 'Checks failed']]) {
+      const option = node('option', label); option.value = value; quality.append(option);
+    }
+    quality.value = '';
+    const attempts = node('input'), failed = node('input');
+    attempts.type = failed.type = 'number'; attempts.min = '1'; failed.min = '0'; attempts.step = failed.step = '1';
+    attempts.value = '1'; failed.value = '0';
+    $('modal-content').append(labelledField('Check outcome (user-recorded)', quality, 'paired-quality'), labelledField('Total coding attempts', attempts, 'paired-attempts'), labelledField('Failed coding attempts', failed, 'paired-failed'));
+    const hint = node('p', 'Choose an outcome and enter the actual attempt counts. Passed needs at least one successful attempt.', 'caption');
+    hint.setAttribute('role', 'status'); $('modal-content').append(hint);
+    const review = actionButton('Review recorded outcome', () => reviewComparison({ action: 'comparison-step', key: item.key, expected: item.next, quality: quality.value, attempts: Number(attempts.value), failedAttempts: Number(failed.value) }));
+    const validate = () => {
+      const total = Number(attempts.value), errors = Number(failed.value);
+      const counts = Number.isSafeInteger(total) && total >= 1 && Number.isSafeInteger(errors) && errors >= 0 && errors <= total && (quality.value !== 'passed' || errors < total);
+      review.disabled = !['passed', 'failed'].includes(quality.value) || !counts;
+      attempts.setAttribute('aria-invalid', String(!counts)); failed.setAttribute('aria-invalid', String(!counts));
+    };
+    for (const input of [quality, attempts, failed]) input.addEventListener('input', validate);
+    quality.addEventListener('change', validate);
+    $('modal-actions').append(modalClose('Cancel'), review); validate();
+  }
+
+  function optimizedComparison(item) {
+    modal('Prepare the optimized run');
+    $('modal-content').append(messageBox('Repeat the same task', 'Restore the same starting tree and acceptance checks. Enable the optimization under evaluation through Overview, then start a fresh coding session when hooks change. This acknowledgement does not prove provider execution, child models or savings.'));
+    const checkbox = node('input'); checkbox.type = 'checkbox';
+    const label = node('label', undefined, 'setup-choice');
+    label.append(checkbox, node('span', 'I restored the same task/tree/checks and enabled the optimization to evaluate.'));
+    $('modal-content').append(label);
+    const review = actionButton('Review optimized capture', () => reviewComparison({ action: 'comparison-step', key: item.key, expected: 'start-optimized', acknowledged: checkbox.checked === true }));
+    review.disabled = true; checkbox.addEventListener('change', () => { review.disabled = !checkbox.checked; });
+    $('modal-actions').append(modalClose('Cancel'), review);
+  }
+
+  async function openComparisons() {
+    if (busy) return;
+    const run = modal('Record a paired comparison');
+    $('modal-content').append(progress('Reading retained comparisons', 'Measurements for the project where this app was opened.'));
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    try {
+      await ensureSession();
+      const report = await request('/api/comparisons');
+      if (run !== modalRun) return;
+      $('modal-content').replaceChildren(messageBox('Baseline → task and checks → optimized → task and checks', report.note));
+      const agents = activeAgents();
+      let newForm = null;
+      if (report.available && !report.blocked && agents.length) {
+        const harness = node('select'), task = node('select');
+        for (const agent of agents) { const option = node('option', agent.name); option.value = agent.id; harness.append(option); }
+        harness.value = agents[0].id;
+        for (const value of ['mechanical', 'standard', 'hard', 'critical']) { const option = node('option', value); option.value = value; task.append(option); }
+        task.value = 'standard';
+        const form = node('section');
+        form.append(node('h3', 'Start a new baseline'), labelledField('Coding app for both runs', harness, 'paired-harness'), labelledField('Task class for both runs', task, 'paired-task'), node('p', 'Run one comparison at a time. Starting records observations; run the coding task yourself, including from Harness Remote, then return to finish it.'), actionButton('Review new baseline', () => reviewComparison({ action: 'comparison-new', harness: harness.value, task: task.value })));
+        newForm = form;
+      } else if (!agents.length) $('modal-content').append(sectionEmpty('Expose a supported coding app in Overview before starting a comparison.'));
+      const states = { 'baseline-running': '1 / 4 · Baseline capture started', 'optimized-ready': '2 / 4 · Baseline outcome recorded', 'optimized-running': '3 / 4 · Optimized capture started', complete: '4 / 4 · Pair complete', invalid: 'Retained evidence needs inspection' };
+      for (const item of report.items || []) {
+        const row = node('article', undefined, 'preview-change');
+        row.append(node('h3', states[item.state] || 'Comparison state unavailable'), node('p', (item.harness === 'claude' ? 'Claude Code' : 'Codex') + ' · ' + item.task + ' · ' + date(item.startedAt)));
+        if (item.baselineQuality) row.append(node('p', 'Baseline checks: ' + item.baselineQuality + ' (user-recorded).'));
+        if (item.optimizedQuality) row.append(node('p', 'Optimized checks: ' + item.optimizedQuality + ' (user-recorded). Inspect Results for comparable measurements and missing evidence.'));
+        if (!report.blocked && item.next) row.append(actionButton(item.next === 'start-optimized' ? 'Prepare optimized run' : 'Record ' + (item.next === 'finish-baseline' ? 'baseline' : 'optimized') + ' outcome', () => item.next === 'start-optimized' ? optimizedComparison(item) : comparisonOutcome(item), 'secondary'));
+        $('modal-content').append(row);
+      }
+      if (!report.items?.length) $('modal-content').append(sectionEmpty('No comparisons created through this app are retained for the current project. Advanced CLI comparisons remain visible in Results.'));
+      if (newForm) $('modal-content').append(newForm);
+      $('modal-actions').replaceChildren(modalClose('Done'), actionButton('Refresh comparisons', openComparisons, 'secondary'), actionButton('Advanced comparison guide', () => measurementGuide(), 'secondary'));
+    } catch (error) {
+      if (run !== modalRun) return;
+      $('modal-error').textContent = error.message; $('modal-error').hidden = false;
+    } finally { if (run === modalRun) setBusy(false, false); }
+  }
+
   function renderEvidence() {
     const body = $('result-evidence');
     const openKeys = new Set([...body.querySelectorAll('details[open]')].map(item => item.dataset.key));
@@ -2102,6 +2217,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   });
   $('measurement-help').addEventListener('click', measurementHelp);
   $('record-comparison').addEventListener('click', () => measurementGuide());
+  $('manage-comparisons').addEventListener('click', openComparisons);
   $('operations-refresh').addEventListener('click', () => { if (!busy) loadOperations(); });
   $('theme').addEventListener('change', () => {
     const value = $('theme').value;

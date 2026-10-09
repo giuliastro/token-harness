@@ -58,6 +58,13 @@ the existing rollback engine. Package and benchmark restoration remain CLI workf
 See [the coverage matrix](docs/desktop-workflow-coverage.md) and
 [the open-issue audit](docs/evaluation/2026-10-09-open-issues.md).
 
+The guided paired-comparison follow-up adds reviewed manual baseline/optimized
+start/finish controls with project-scoped retained state and immutable quality
+receipts. It runs neither coding tasks nor check executables and prepares no temporary
+configuration. General factorial preparation/recovery and direct checks remain advanced
+workflows. Candidate PRs stay unmerged for user testing; see the
+[Harness Remote test guide](docs/testing-prs-with-harness-remote.md).
+
 ## 2. Definition of the first useful release
 
 Version `0.1.0` is useful when a user can:

@@ -270,6 +270,15 @@ export function createGuideHandler(input: {
           send(200, JSON.stringify(await input.service.operations()));
           return;
         }
+        if (url.pathname === '/api/comparisons') {
+          if ([...url.searchParams].length > 0)
+            throw new GuideError(
+              400,
+              'Comparison state accepts no project, command or path selection.',
+            );
+          send(200, JSON.stringify(await input.service.comparisons()));
+          return;
+        }
         if (url.pathname === '/api/routing') {
           send(200, JSON.stringify(await input.service.routing()));
           return;

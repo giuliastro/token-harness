@@ -82,6 +82,27 @@ Quota windows are separate observations, never evidence that the same percentage
 
 ## UI specification
 
+### October 9 guided paired capture
+
+The private guided surface can preview and record a manual baseline/optimized pair
+through the existing benchmark-start/finish commands. A new pair gets a server-generated
+identifier; subsequent steps select only a validated, project-scoped retained pair.
+Exact single-use approval tickets bind the step and its retained-state fingerprint.
+The browser supplies only a supported agent/task selection or a passed/failed manual
+quality result with safe integer attempt counts. No command, executable, path, automated
+check, temporary configuration preparation or coding/model invocation is accepted.
+
+The app reopens unfinished captures and labels quality as user-recorded. Capture/receipt
+schemas and comparison arithmetic are unchanged. Evidence is immutable; cancelled reviews
+write nothing, and an interrupted capture is retained rather than deleted or treated as
+successful. Managed configuration continues to use its separate setup/recovery workflows.
+Users run the same task/tree/checks themselves, change the tested optimization explicitly,
+and avoid concurrent account consumption. Missing measurements and callback/model evidence
+remain unknown; a completed pair is not proof of attributable savings or repeatability.
+
+Factorial preparation/restoration, direct executable checks and candidate campaigns keep
+their existing advanced flows. RFC 0010's external read-only seam is unchanged.
+
 Dependency-free browser UI using semantic HTML, existing Node server and embedded assets.
 No new frontend runtime dependency. One main heading, responsive single-column mobile layout,
 native confirmation dialog, visible keyboard focus, live progress/errors, and empty states.
