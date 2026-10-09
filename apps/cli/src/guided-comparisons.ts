@@ -160,6 +160,7 @@ export function createGuideComparisonReader(input: {
     try {
       const lease = await readMutationLease(fs, input.stateRoot);
       const records: GuideComparisonObservation['records'] = [];
+      let unreadable = false;
       for (const key of await fs.readDirectory(root)) {
         if (!key.startsWith(PREFIX) || !isTaskBenchmarkId(key)) continue;
         const directory = fs.join(root, key);
@@ -182,6 +183,10 @@ export function createGuideComparisonReader(input: {
             ].map(read),
           );
           const baseline = parseTaskBenchmarkCapture(raw[0]);
+          if (!baseline.ok) {
+            unreadable = true;
+            continue;
+          }
           if (
             !baseline.ok ||
             baseline.capture.projectId !== input.projectId ||
@@ -238,6 +243,7 @@ export function createGuideComparisonReader(input: {
           };
           records.push({ item, fingerprint: digestText(JSON.stringify(raw)) });
         } catch {
+          unreadable = true;
           /* Corrupt evidence is retained; it never becomes an actionable pair. */
         }
       }
@@ -251,7 +257,10 @@ export function createGuideComparisonReader(input: {
           note:
             lease !== null
               ? 'A prepared benchmark holds temporary configuration. Finish or restore it through its existing workflow first.'
-              : 'Latest 20 comparisons created in this app for the current project. Checks are user-recorded. Run one task at a time and avoid other account consumption; completion alone does not prove attributable savings.',
+              : (unreadable
+                  ? 'Some local comparison records are unreadable or unsupported. They remain retained and need inspection through the advanced workflow. '
+                  : '') +
+                'Latest 20 supported comparisons created in this app for the current project. Checks are user-recorded. Run one task at a time and avoid other account consumption; completion alone does not prove attributable savings.',
         },
         records: visible,
       };

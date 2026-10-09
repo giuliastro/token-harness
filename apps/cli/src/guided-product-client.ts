@@ -1806,7 +1806,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
         if (!report.blocked && item.next) row.append(actionButton(item.next === 'start-optimized' ? 'Prepare optimized run' : 'Record ' + (item.next === 'finish-baseline' ? 'baseline' : 'optimized') + ' outcome', () => item.next === 'start-optimized' ? optimizedComparison(item) : comparisonOutcome(item), 'secondary'));
         $('modal-content').append(row);
       }
-      if (!report.items?.length) $('modal-content').append(sectionEmpty('No comparisons created through this app are retained for the current project. Advanced CLI comparisons remain visible in Results.'));
+      if (!report.items?.length) $('modal-content').append(sectionEmpty('No supported app comparisons are available for the current project. Advanced CLI comparisons remain visible in Results.'));
       if (newForm) $('modal-content').append(newForm);
       $('modal-actions').replaceChildren(modalClose('Done'), actionButton('Refresh comparisons', openComparisons, 'secondary'), actionButton('Advanced comparison guide', () => measurementGuide(), 'secondary'));
     } catch (error) {

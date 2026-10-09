@@ -230,7 +230,9 @@ describe('guided paired captures', () => {
       { ...raw, experiment: { design: 'factorial-2x2' } },
     ]) {
       writeFileSync(path, JSON.stringify(value));
-      assert.deepEqual((await f.read()).report.items, []);
+      const unsupported = await f.read();
+      assert.deepEqual(unsupported.report.items, []);
+      assert.match(unsupported.report.note, /unreadable or unsupported/);
     }
     assert.ok(f.requests.every((request) => request.executable !== 'test-check'));
   });
