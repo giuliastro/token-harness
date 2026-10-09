@@ -50,6 +50,14 @@ publication on all native builds and attaches packages plus checksums to the sam
 This does not supersede real-platform provider/routing and paired-measurement gates,
 or claim full CLI workflow parity, notarized builds or automatic desktop updates.
 
+October 9 issue audit: #255/#359 retain native Windows published-artifact evidence
+gaps, #360 retains repeated/isolated paired measurements, and #379 retains workflow
+and packaged-platform lifecycle gaps. The guided app now implements retained project
+operation history and reviewed latest-configuration recovery after reopen through
+the existing rollback engine. Package and benchmark restoration remain CLI workflows.
+See [the coverage matrix](docs/desktop-workflow-coverage.md) and
+[the open-issue audit](docs/evaluation/2026-10-09-open-issues.md).
+
 ## 2. Definition of the first useful release
 
 Version `0.1.0` is useful when a user can:

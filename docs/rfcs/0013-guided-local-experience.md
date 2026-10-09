@@ -128,6 +128,25 @@ unrelated transaction instead of undoing it. No historical arbitrary transaction
 from the browser. Multi-agent application remains separate transactions; one undo reverses
 only the last successful one. Closing the dashboard clears this in-memory shortcut, not backups.
 
+### October 9 retained operation history and recovery
+
+Results reads the latest 20 retained transactions for the current project, including
+earlier app and CLI sessions. The private guided projection exposes dates, outcomes,
+fixed action labels and path counts, without journal contents, configuration values,
+paths or transaction selectors. RFC 0010 and existing CLI contracts are unchanged.
+
+Recovery previews only the machine's latest committed configuration transaction,
+when it belongs to the current project. Session Undo remains separate. Older or
+package operations are not selectable. Unfinished/dirty, unreadable/future journals
+and active benchmark leases block recovery. Package and benchmark restoration keep
+their CLI workflows and are not approved by reading history.
+
+A fresh preview creates the existing single-use ticket, identifying the transaction
+date, actions and affected-path count. It warns that complete snapshots restore later
+manual edits too. Apply rereads history and passes the server-held exact transaction
+guard to the existing rollback engine. A changed target is refused. Restoration and
+verification stay in that engine; no automatic retry or historical selection is added.
+
 
 ## September 6 clarity revision
 

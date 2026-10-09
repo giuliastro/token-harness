@@ -67,6 +67,7 @@ import { observeAgentSkill } from './agent-skill.js';
 import { observeNativePromptRouting } from './prompt-router.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
+import { createGuideOperationReader } from './guided-operation-history.js';
 import { runAttributedRtkCommand, runRtkHookProxy } from './commands/rtk-hook-proxy.js';
 import { recordNativePromptRoutingHook, type PromptRouterEventType } from './prompt-router.js';
 import { hookRootModel, routingContext } from './routing-policy.js';
@@ -686,6 +687,11 @@ async function runGuidedUi(
       setTimeout(() => server.close(), 1_000);
       return url;
     },
+    createGuideOperationReader({
+      fs: base.adapters?.fs ?? null,
+      stateRoot: base.stateRoot ?? null,
+      projectRoot: base.cwd,
+    }),
   );
   const token = randomBytes(32).toString('hex');
   let authority = '';

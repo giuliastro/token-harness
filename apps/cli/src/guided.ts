@@ -28,6 +28,11 @@ import { runUpdateCheck } from './commands/update.js';
 import { savingsImpact, type GuideImpact } from './guided-impact.js';
 import { guidedValueEvidence, type GuideValueEvidence } from './guided-value.js';
 import { SHIPPED_STACK_COMBINATION_REVIEWS } from './stack-combination-reviews.js';
+import {
+  unavailableGuideOperations,
+  type GuideOperationReader,
+  type GuideOperationHistory,
+} from './guided-operation-history.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -194,6 +199,7 @@ interface Approval {
     | 'candidate-apply'
     | 'candidate-uninstall';
   network: boolean;
+  recovery?: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
   updateTargets?: GuideUpdateTarget[];
@@ -981,6 +987,7 @@ export class GuideService {
   private backgroundUpdates: Promise<GuideResult> | null = null;
   private restartVersion: string | null = null;
   private readonly restartApplication: (() => Promise<string>) | null;
+  private readonly observeOperations: GuideOperationReader | null;
   private lastApplied: GuideUndoTarget | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
@@ -1004,6 +1011,7 @@ export class GuideService {
     observeGuidance: ((harness: GuideHarness) => Promise<AgentSkillObservation>) | null = null,
     observeRouting: ((harness: GuideHarness) => Promise<PromptRouterObservation>) | null = null,
     restartApplication: (() => Promise<string>) | null = null,
+    observeOperations: GuideOperationReader | null = null,
   ) {
     this.call = call;
     this.now = now;
@@ -1011,6 +1019,19 @@ export class GuideService {
     this.observeGuidance = observeGuidance;
     this.observeRouting = observeRouting;
     this.restartApplication = restartApplication;
+    this.observeOperations = observeOperations;
+  }
+  async operations(): Promise<GuideOperationHistory> {
+    return (await this.readOperations()).history;
+  }
+  private async readOperations() {
+    try {
+      return this.observeOperations === null
+        ? unavailableGuideOperations()
+        : await this.observeOperations();
+    } catch {
+      return unavailableGuideOperations();
+    }
   }
   status(): {
     busy: boolean;
@@ -1361,6 +1382,7 @@ export class GuideService {
         'routing-enable',
         'routing-disable',
         'undo',
+        'restore-latest',
         'remove',
         'candidate-setup',
         'candidate-remove',
@@ -1471,6 +1493,43 @@ export class GuideService {
           ],
           expiresAt: new Date(expires).toISOString(),
           network,
+          restart: true,
+        };
+      }
+      if (data['action'] === 'restore-latest') {
+        if (Object.keys(data).some((key) => key !== 'action'))
+          throw new GuideError(400, 'Recovery accepts no transaction, agent or path selection.');
+        const observation = await this.readOperations();
+        const target = observation.target;
+        if (target === null) throw new GuideError(409, observation.history.note);
+        const ticket = this.random(),
+          expires = this.now() + 10 * 60_000;
+        this.approval = {
+          id: ticket,
+          expires,
+          plans: [],
+          transactionId: target.transactionId,
+          provider: null,
+          description: 'Retained configuration recovery',
+          operation: 'rollback',
+          network: false,
+          recovery: true,
+        };
+        return {
+          ticket,
+          title: 'Restore the latest configuration change?',
+          changes: [
+            {
+              title: target.operation.actions.join(', '),
+              description: `Restores complete configuration files from backups of the transaction started at ${target.operation.startedAt}. Any manual edits made to those files afterward will also be undone.`,
+              files: target.operation.files,
+            },
+          ],
+          notices: [
+            'This restores only one transaction for the current project. Earlier transactions remain in place. A newer transaction or pending recovery refuses this approval; review again if the history changes.',
+          ],
+          expiresAt: new Date(expires).toISOString(),
+          network: false,
           restart: true,
         };
       }
@@ -2168,6 +2227,14 @@ export class GuideService {
       );
       const messages: string[] = [];
       let appliedPlans = 0;
+      if (approval.recovery === true) {
+        const current = await this.readOperations();
+        if (current.target?.transactionId !== approval.transactionId)
+          throw new GuideError(
+            409,
+            'Operation history changed. Review recovery again before restoring.',
+          );
+      }
       const steps =
         approval.operation === 'rollback' && approval.transactionId !== null
           ? [
