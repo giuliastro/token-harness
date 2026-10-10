@@ -1,4 +1,20 @@
-# Release checkpoint — 2026-10-04
+# Release checkpoint — 2026-10-10
+
+Token Harness `0.1.31` includes the native desktop distribution (#380), deterministic
+checks and managed factorial benchmarks (#378), retained guided configuration history
+(#381), manual paired captures (#382), and guarded prepared-benchmark recovery (#383).
+The three guided follow-ups are merged into main. Version preparation uses its own
+reviewable PR, then the release bridge creates the immutable tag and dispatches the
+existing exact-tag publication workflow after candidate CI passes.
+
+The latest feature candidate passed all native CI and desktop package targets. Local
+validation passed 2,525 tests with nine expected skips. The release candidate repeats
+version/packaging, native CI and publication gates; artifact installation and npm/latest
+checks follow publication. See [0.1.31 release notes](releases/0.1.31.md) for the scope.
+Published Windows execution, repeated quality-gated savings, broader desktop lifecycle
+and promotion remain separate gates.
+
+## Previous checkpoint — 2026-10-04
 
 Token Harness `0.1.30` includes the reviewed app-evidence and paired-comparison repair from #371,
 merged as `560492ae45b865d3b62dbc91e29909bc8e59da02`. It retains the 0.1.29 native model ladder and
