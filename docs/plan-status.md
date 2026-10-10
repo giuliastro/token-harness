@@ -1,6 +1,11 @@
-# Delivery status — 2026-10-04
+# Delivery status — 2026-10-10
 
-**Release: Token Harness 0.1.30.** The management, transaction, measurement and advisory foundations
+**Release candidate: Token Harness 0.1.31.** Desktop distribution, deterministic checks,
+managed exploratory benchmarks and guided history/capture/recovery are merged. Exact-tag
+publication gates and published-artifact checks remain required. See
+[0.1.31 notes](releases/0.1.31.md) and the [desktop coverage matrix](desktop-workflow-coverage.md).
+
+The 0.1.30 management, transaction, measurement and advisory foundations
 are shipped. App evidence separates explicitly attributed output, runtime callbacks and current quota.
 Paired comparisons retain independent five-hour/weekly readings and explicit quality gates, with
 read-only capture guidance for missing comparisons (#371). Automatic native prompt-hook installation supplies a per-harness model ladder with
@@ -61,7 +66,10 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The current release is [0.1.30](releases/0.1.30.md), including the reviewed evidence repair in #371.
+The next release is [0.1.31](releases/0.1.31.md), including desktop distribution,
+benchmark checks/preparation and guided history, paired captures and recovery. Its
+publication evidence will retain the exact source tag and artifact checks. The
+previous [0.1.30 release](releases/0.1.30.md) includes the evidence repair in #371.
 Local review validation passed 2,418 tests with nine expected skips, plus typecheck, lint, formatting,
 build and bundle smoke. PR and merged-main CI passed on Windows, macOS and Linux.
 The inherited routing policy in #368 has synthetic coverage for Sol/Astra ladders, the Luna no-op,

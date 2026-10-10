@@ -1,5 +1,10 @@
 # Testing unmerged PRs with Harness Remote
 
+The features from #381–#383 are merged and included in 0.1.31. For that version,
+use the [published release packages](https://github.com/giuliastro/token-harness/releases/tag/v0.1.31)
+after publication completes. The candidate instructions below retain their build
+identities; the same project/session and recovery procedures apply to the release.
+
 PRs stay unmerged until review. Packaging/UI checks and native harness execution are
 different gates; a green build means the candidate is available for your PC test,
 not that Windows hooks or savings have been proved.
