@@ -261,6 +261,15 @@ export function createGuideHandler(input: {
           send(200, JSON.stringify(input.service.status()));
           return;
         }
+        if (url.pathname === '/api/operations') {
+          if ([...url.searchParams].length > 0)
+            throw new GuideError(
+              400,
+              'Operation history accepts no transaction or path selection.',
+            );
+          send(200, JSON.stringify(await input.service.operations()));
+          return;
+        }
         if (url.pathname === '/api/routing') {
           send(200, JSON.stringify(await input.service.routing()));
           return;

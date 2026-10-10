@@ -76,6 +76,8 @@ export const GUIDE_HTML = `<!doctype html>
 <ul id="result-evidence" class="result-evidence" aria-label="Evidence by source"><li class="empty">Checking recorded results…</li></ul>
 <div id="evidence-empty" class="evidence-empty" hidden><strong>No matching sources</strong><p>Try a different search or clear the filters.</p></div>
 </section>
+<div class="section-title"><div><h2>Operation history &amp; recovery</h2><p>Retained changes for the current project, including previous app sessions.</p></div><button id="operations-refresh" class="secondary" type="button" data-action="history">Refresh history</button></div>
+<section class="panel" aria-label="Operation history"><p id="operations-note" class="caption" role="status">Open Results to read retained operations.</p><div id="operations" class="activity-scroll"><p class="empty">No history loaded yet.</p></div></section>
 <div class="section-title"><div><h2>Recent activity</h2><p>Latest checks and changes from this app session.</p></div></div><section class="panel"><div id="activity" class="activity-scroll"><p class="empty">No activity yet.</p></div></section>
 </section>
 

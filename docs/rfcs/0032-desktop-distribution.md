@@ -86,12 +86,17 @@ the unit suite and isolate HOME, configuration, state and project directories.
 | Preview, approval, setup, maintenance and guarded undo | Existing guided UI |
 | Supported preferences, skills and native routing | Existing guided UI |
 | Recorded results and provenance | Existing guided UI |
+| Retained project operation history and latest configuration recovery | Guided UI, including after reopen; RFC 0013 October 9 amendment |
 | Project selection | Native folder chooser |
 | App installation/distribution | Native release artifacts |
 | Packaged app updates | Manual replacement from GitHub Releases |
 | Advanced benchmark campaigns, scheduling, handoff and arbitrary history | Existing CLI; broader parity remains #379 work |
 
 ## Validation
+
+The [workflow coverage matrix](../desktop-workflow-coverage.md) distinguishes complete
+interface flows from generated commands and remaining platform validation gaps. This
+RFC remains proposed; merged packaging alone did not close all of #379.
 
 Test readiness URL rejection, startup failure/timeout, environment filtering, graceful
 stop and parent-disconnect cleanup. Verify runtime and CLI bytes/version/architecture,

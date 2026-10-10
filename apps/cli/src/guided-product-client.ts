@@ -12,6 +12,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     return element;
   };
   const count = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+  const paths = value => count(value) + ' configuration ' + (value === 1 ? 'path' : 'paths');
   const date = value => value ? new Date(value).toLocaleString() : 'not recorded';
   const VIEWS = {
     dashboard: ['Overview', 'Your setup, results and next steps.'],
@@ -30,6 +31,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   let csrf = '';
   let current = null;
   let activityState = null;
+  let operationsRun = 0;
   let busy = false;
   let reading = false;
   let selectedView = 'dashboard';
@@ -88,7 +90,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     }
     $('view-title').textContent = VIEWS[view][0];
     $('view-description').textContent = VIEWS[view][1];
-    if (view === 'results') loadActivity();
+    if (view === 'results') { loadActivity(); loadOperations(); }
     if (focus) {
       $('tab-' + view).focus();
       $('main').scrollIntoView({ block: 'start' });
@@ -846,6 +848,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     periodCache.set(period, current);
     render();
     await loadActivity();
+    if (selectedView === 'results') await loadOperations();
     setStatus('Updated at ' + new Date(current.generatedAt).toLocaleTimeString() + '.', false);
   }
 
@@ -1349,20 +1352,24 @@ export const GUIDE_PRODUCT_JS = String.raw`
       });
   }
 
-  function undoLastChange() {
+  function undoLastChange(action = 'undo') {
     if (busy) return;
     const run = modal('Review undo');
-    $('modal-content').append(progress('Preparing the exact restore', 'Only the last change made by this dashboard session can be targeted.'));
+    $('modal-content').append(progress('Preparing the exact restore', action === 'restore-latest'
+      ? 'Reading the latest retained configuration transaction for this project. Nothing is being changed.'
+      : 'Only the last change made by this dashboard session can be targeted.'));
     $('modal-actions').append(modalClose('Cancel'));
     setBusy(true, false);
     ensureSession()
-      .then(() => request('/api/preview', { action: 'undo' }))
+      .then(() => request('/api/preview', { action }))
       .then(data => {
         if (run !== modalRun) return;
+        $('modal-title').textContent = data.title || 'Review restore';
         $('modal-content').replaceChildren();
         for (const change of data.changes || []) {
           const item = node('article', undefined, 'preview-change');
           item.append(node('h3', change.title), node('p', change.description));
+          if (change.files) item.append(node('p', paths(change.files) + ' will be restored.', 'caption'));
           $('modal-content').append(item);
         }
         for (const notice of data.notices || []) $('modal-content').append(node('p', notice, 'notice-row'));
@@ -1434,9 +1441,14 @@ export const GUIDE_PRODUCT_JS = String.raw`
         node('strong', 'Undo last change'),
         node('p', 'Review and restore the exact last configuration transaction from this app session.', 'caption'),
       );
-      undo.append(undoText, actionButton('Review undo', undoLastChange, 'secondary'));
+      undo.append(undoText, actionButton('Review undo', () => undoLastChange(), 'secondary'));
       root.append(undo);
     }
+    const history = node('article', undefined, 'maintenance-row');
+    const historyText = node('div');
+    historyText.append(node('strong', 'Operation history & recovery'), node('p', 'Review retained project changes and available configuration backups after reopening the app.', 'caption'));
+    history.append(historyText, navigateButton('View history', 'results'));
+    root.append(history);
   }
 
   function renderSetup() {
@@ -1884,6 +1896,35 @@ export const GUIDE_PRODUCT_JS = String.raw`
     if (rows.length > visible.length) root.prepend(node('p', 'Showing the latest ' + visible.length + ' of ' + rows.length + ' entries.', 'caption'));
   }
 
+  async function loadOperations() {
+    const run = ++operationsRun;
+    const root = $('operations');
+    $('operations-note').textContent = 'Reading retained operation history…';
+    root.replaceChildren(sectionEmpty('Reading operations…'));
+    try {
+      const history = await request('/api/operations');
+      if (run !== operationsRun) return;
+      root.replaceChildren();
+      $('operations-note').textContent = history.note;
+      for (const item of history.operations || []) {
+        const row = node('article', undefined, 'maintenance-row');
+        const detail = node('div');
+        const outcomes = { committed: 'Applied', 'rolled-back': 'Restored', dirty: 'Recovery needed', 'in-progress': 'Unfinished' };
+        detail.append(node('strong', outcomes[item.outcome] || 'Unknown operation'), node('p', item.actions.join(', ')), node('p', date(item.startedAt) + ' · ' + paths(item.files), 'caption'));
+        row.append(detail);
+        if (item.canRestore) row.append(actionButton('Review restore', () => undoLastChange('restore-latest'), 'secondary'));
+        root.append(row);
+      }
+      if (!history.operations?.length) root.append(sectionEmpty(history.state === 'ready'
+        ? 'No retained operations for this project. Manually configured integrations do not create Token Harness transactions.'
+        : 'History is unavailable. No recovery target was selected.'));
+    } catch (error) {
+      if (run !== operationsRun) return;
+      $('operations-note').textContent = error.message || 'Operation history could not be read. Choose Refresh history to retry.';
+      root.replaceChildren(sectionEmpty('History is unavailable. No recovery target was selected.'));
+    }
+  }
+
   async function loadActivity() {
     try {
       activityState = await request('/api/activity');
@@ -1989,6 +2030,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
       $('stale-state').textContent = '';
       render();
       await loadActivity();
+      if (selectedView === 'results') await loadOperations();
       setStatus('Updated at ' + new Date(current.generatedAt).toLocaleTimeString(), false);
     } catch (error) {
       setError(error.name === 'TimeoutError' ? 'The check took too long. Existing results were kept; choose Refresh to try again.' : error.message);
@@ -2060,6 +2102,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
   });
   $('measurement-help').addEventListener('click', measurementHelp);
   $('record-comparison').addEventListener('click', () => measurementGuide());
+  $('operations-refresh').addEventListener('click', () => { if (!busy) loadOperations(); });
   $('theme').addEventListener('change', () => {
     const value = $('theme').value;
     localStorage.setItem('token-harness-theme', value);

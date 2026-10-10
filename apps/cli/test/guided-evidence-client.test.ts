@@ -4,6 +4,7 @@ import { Script } from 'node:vm';
 
 import { GUIDE_HTML } from '../src/guided-assets.js';
 import { GUIDE_PRODUCT_JS } from '../src/guided-product-client.js';
+import type { GuideOperationHistory } from '../src/guided-operation-history.js';
 
 /** Small DOM double: execute the shipped controller against fake reads, without a browser dependency. */
 class Element {
@@ -146,7 +147,7 @@ function observation() {
   };
 }
 
-async function browser(data = observation()) {
+async function browser(data = observation(), history?: GuideOperationHistory) {
   const elements = new Map<string, Element>();
   for (const match of GUIDE_HTML.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g))
     elements.set(match[2]!, new Element(match[1]!));
@@ -162,8 +163,10 @@ async function browser(data = observation()) {
   get('tab-results').dataset['view'] = 'results';
   const tabs = new Element('nav');
   const reads: string[] = [];
-  const fetch = async (path: string) => {
+  const writes: Array<{ path: string; body: unknown }> = [];
+  const fetch = async (path: string, options?: { method?: string; body?: string }) => {
     reads.push(path);
+    if (options?.method === 'POST') writes.push({ path, body: JSON.parse(options.body!) });
     return {
       ok: true,
       json: async () =>
@@ -173,7 +176,21 @@ async function browser(data = observation()) {
             ? data
             : path === '/api/activity'
               ? { activity: [] }
-              : {},
+              : path === '/api/operations'
+                ? (history ?? { state: 'ready', operations: [], note: 'No retained changes.' })
+                : path === '/api/preview'
+                  ? {
+                      ticket: 'restore-ticket',
+                      changes: [
+                        {
+                          title: 'Restore configuration',
+                          description: 'Manual edits will also be undone.',
+                          files: 1,
+                        },
+                      ],
+                      notices: [],
+                    }
+                  : {},
     };
   };
   new Script(GUIDE_PRODUCT_JS).runInNewContext({
@@ -207,10 +224,49 @@ async function browser(data = observation()) {
   };
   await settle();
   assert.match(get('updated').textContent, /Updated at/);
-  return { get, tabs, reads, settle };
+  return { get, tabs, reads, writes, settle };
 }
 
 describe('guided evidence interactions', () => {
+  it('shows retained history after reopen and reviews recovery without selecting an id or applying on read', async () => {
+    const { get, writes, settle } = await browser(observation(), {
+      state: 'ready',
+      note: 'Latest retained project operations.',
+      operations: [
+        {
+          startedAt: '2026-10-09T12:00:00Z',
+          finishedAt: '2026-10-09T12:00:01Z',
+          outcome: 'committed',
+          actions: ['Update JSON configuration'],
+          files: 1,
+          canRestore: true,
+        },
+      ],
+    });
+    get('tab-results').fire('click');
+    await settle();
+    assert.match(
+      get('operations').textContent,
+      /Applied.*Update JSON configuration.*1 configuration path/,
+    );
+    assert.equal(get('operations-note').textContent, 'Latest retained project operations.');
+    assert.ok(writes.every((item) => !['/api/preview', '/api/apply'].includes(item.path)));
+    const restore = get('operations').querySelectorAll('button')[0]!;
+    assert.equal(restore.textContent, 'Review restore');
+    restore.fire('click');
+    await settle();
+    assert.equal(get('modal').open, true);
+    assert.match(get('modal-content').textContent, /Manual edits/);
+    assert.deepEqual(writes.find((item) => item.path === '/api/preview')?.body, {
+      action: 'restore-latest',
+    });
+    assert.ok(writes.every((item) => item.path !== '/api/apply'));
+    assert.ok(
+      get('modal-actions')
+        .querySelectorAll('button')
+        .some((button) => button.textContent === 'Restore reviewed backup'),
+    );
+  });
   it('keeps project claims scoped to setup and links the live source projects', async () => {
     const { get, reads } = await browser();
     const setup = get('connection-overview');
