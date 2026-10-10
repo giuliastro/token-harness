@@ -33,6 +33,14 @@ import {
   type GuideOperationReader,
   type GuideOperationHistory,
 } from './guided-operation-history.js';
+import {
+  unavailableGuideComparisons,
+  parseGuideComparisonRequest,
+  newGuideComparisonId,
+  type GuideComparisonReader,
+  type GuideComparisons,
+  type GuideComparisonApproval,
+} from './guided-comparisons.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -197,8 +205,10 @@ interface Approval {
     | 'uninstall'
     | 'update'
     | 'candidate-apply'
-    | 'candidate-uninstall';
+    | 'candidate-uninstall'
+    | 'comparison';
   network: boolean;
+  comparison?: GuideComparisonApproval;
   recovery?: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
@@ -988,6 +998,7 @@ export class GuideService {
   private restartVersion: string | null = null;
   private readonly restartApplication: (() => Promise<string>) | null;
   private readonly observeOperations: GuideOperationReader | null;
+  private readonly observeComparisons: GuideComparisonReader | null;
   private lastApplied: GuideUndoTarget | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
@@ -1012,6 +1023,7 @@ export class GuideService {
     observeRouting: ((harness: GuideHarness) => Promise<PromptRouterObservation>) | null = null,
     restartApplication: (() => Promise<string>) | null = null,
     observeOperations: GuideOperationReader | null = null,
+    observeComparisons: GuideComparisonReader | null = null,
   ) {
     this.call = call;
     this.now = now;
@@ -1020,6 +1032,147 @@ export class GuideService {
     this.observeRouting = observeRouting;
     this.restartApplication = restartApplication;
     this.observeOperations = observeOperations;
+    this.observeComparisons = observeComparisons;
+  }
+  async comparisons(): Promise<GuideComparisons> {
+    return (await this.readComparisons()).report;
+  }
+  private async readComparisons() {
+    try {
+      return this.observeComparisons === null
+        ? unavailableGuideComparisons()
+        : await this.observeComparisons();
+    } catch {
+      return unavailableGuideComparisons();
+    }
+  }
+  private async previewComparison(input: unknown): Promise<GuidePreview> {
+    const request = parseGuideComparisonRequest(input);
+    if (request === null)
+      throw new GuideError(
+        400,
+        'Choose a supported comparison step and record valid check results and attempt counts. No commands or paths are accepted.',
+      );
+    return this.exclusive(async () => {
+      this.approval = null;
+      const observation = await this.readComparisons();
+      if (!observation.report.available || observation.report.blocked)
+        throw new GuideError(409, observation.report.note);
+      let id: string,
+        fingerprint: string | null = null,
+        args: string[],
+        description: string;
+      if (request.action === 'comparison-new') {
+        id = newGuideComparisonId(this.random());
+        args = [
+          'benchmark-start',
+          '--benchmark-id',
+          id,
+          '--variant',
+          'baseline',
+          '--task',
+          request.task!,
+          '--harness',
+          request.harness!,
+        ];
+        description = `Start a ${request.task} baseline with ${name(request.harness!)}. Records current allowance, policy and available local usage before you run the task.`;
+      } else {
+        const record = observation.records.find((item) => item.item.key === request.key);
+        if (
+          record === undefined ||
+          record.item.next !== request.expected ||
+          record.item.next === null
+        )
+          throw new GuideError(
+            409,
+            'Comparison state changed. Refresh before reviewing the next step.',
+          );
+        id = record.item.key;
+        fingerprint = record.fingerprint;
+        const variant = request.expected === 'finish-baseline' ? 'baseline' : 'optimized';
+        if (request.expected === 'start-optimized') {
+          args = [
+            'benchmark-start',
+            '--benchmark-id',
+            id,
+            '--variant',
+            variant,
+            '--task',
+            record.item.task,
+            '--harness',
+            record.item.harness,
+          ];
+          description =
+            'Start the optimized capture with the same coding app and task class. Your acknowledgement of the starting tree and enabled optimization is not runtime proof.';
+        } else {
+          args = [
+            'benchmark-finish',
+            '--benchmark-id',
+            id,
+            '--variant',
+            variant,
+            '--quality',
+            request.quality!,
+            '--attempts',
+            String(request.attempts),
+            '--failed-attempts',
+            String(request.failedAttempts),
+          ];
+          description = `Finish the ${variant} capture. Save your recorded checks as ${request.quality}. Total coding attempts: ${request.attempts}; failed attempts: ${request.failedAttempts}. No check executable is run.`;
+        }
+      }
+      const ticket = this.random(),
+        expires = this.now() + 10 * 60_000;
+      this.approval = {
+        id: ticket,
+        expires,
+        plans: [],
+        transactionId: null,
+        provider: null,
+        description: 'Comparison capture',
+        operation: 'comparison',
+        network: false,
+        comparison: {
+          id,
+          fingerprint,
+          args,
+          resultState:
+            request.action === 'comparison-new'
+              ? 'baseline-running'
+              : request.expected === 'start-optimized'
+                ? 'optimized-running'
+                : request.expected === 'finish-baseline'
+                  ? 'optimized-ready'
+                  : 'complete',
+          quality: request.quality ?? null,
+        },
+      };
+      return {
+        ticket,
+        title: 'Record this comparison step?',
+        changes: [
+          {
+            title:
+              request.action === 'comparison-new'
+                ? 'Start baseline capture'
+                : request.expected === 'start-optimized'
+                  ? 'Start optimized capture'
+                  : request.expected === 'finish-baseline'
+                    ? 'Record baseline outcome'
+                    : 'Record optimized outcome',
+            description,
+            files: 0,
+          },
+        ],
+        notices: [
+          'Only local measurement evidence is recorded. Agent settings, coding tasks, automated checks and model calls are not changed or launched.',
+          'Use the same task, starting tree, coding app and checks for both runs. Avoid concurrent consumption on the account. Measurements or routing evidence may remain unavailable. Evidence is retained, including failed outcomes; closing this review writes nothing.',
+        ],
+        expiresAt: new Date(expires).toISOString(),
+        network: false,
+        restart: false,
+      };
+    });
   }
   async operations(): Promise<GuideOperationHistory> {
     return (await this.readOperations()).history;
@@ -1361,6 +1514,8 @@ export class GuideService {
       throw new GuideError(400, 'Choose an available action.');
     const data = input as Record<string, unknown>;
     const action = String(data['action']);
+    if (action === 'comparison-new' || action === 'comparison-step')
+      return this.previewComparison(input);
     const candidateAction = action === 'candidate-setup' || action === 'candidate-remove';
     const requestedHarnesses = data['harnesses'];
     const validHarnesses =
@@ -1826,6 +1981,58 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
+      if (approval.operation === 'comparison') {
+        const step = approval.comparison;
+        if (step === undefined) throw new GuideError(409, 'Review a fresh comparison step.');
+        const before = await this.readComparisons();
+        const previous = before.records.find((record) => record.item.key === step.id);
+        if (
+          !before.report.available ||
+          before.report.blocked ||
+          (step.fingerprint === null
+            ? previous !== undefined
+            : previous?.fingerprint !== step.fingerprint)
+        ) {
+          throw new GuideError(
+            409,
+            'Comparison state changed. Refresh and review this step again.',
+          );
+        }
+        this.record('Recording only the approved comparison step.', 'working');
+        let success = false;
+        try {
+          success = (await this.call<unknown>(step.args)).exitCode === 0;
+        } catch {
+          /* Preserve evidence and require a new read rather than retrying a write. */
+        }
+        this.invalidateObservedState();
+        const after = await this.readComparisons();
+        const recorded = after.records.find((record) => record.item.key === step.id)?.item;
+        const start = step.quality === null;
+        const verified =
+          success &&
+          recorded?.state === step.resultState &&
+          (start ||
+            (step.resultState === 'optimized-ready'
+              ? recorded.baselineQuality
+              : recorded.optimizedQuality) === step.quality);
+        const message = verified
+          ? start
+            ? 'Capture started. Run the selected task in your coding app, then return here to record its checks and attempts.'
+            : 'Your recorded outcome and available measurements were saved. Complete the paired run or inspect Results; missing evidence remains unmeasured.'
+          : 'This step could not be verified. Refresh comparisons and inspect retained evidence before retrying. No automated check or model was run.';
+        this.record(message, verified ? 'success' : 'attention');
+        return {
+          ok: verified,
+          title: verified
+            ? start
+              ? 'Comparison capture started'
+              : 'Comparison outcome recorded'
+            : 'Comparison needs checking',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
       if (approval.operation === 'update') {
         const approvedUpdates = approval.updateTargets ?? [];
         if (approvedUpdates.length === 0)
