@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Script } from 'node:vm';
+import { harnessId } from '@token-harness/core';
 
 import { GUIDE_HTML } from '../src/guided-assets.js';
 import { GUIDE_PRODUCT_JS } from '../src/guided-product-client.js';
 import type { GuideOperationHistory } from '../src/guided-operation-history.js';
 import type { GuideComparisons } from '../src/guided-comparisons.js';
+import type { GuideBenchmarkRecovery } from '../src/guided-benchmark-recovery.js';
 
 /** Small DOM double: execute the shipped controller against fake reads, without a browser dependency. */
 class Element {
@@ -152,6 +154,7 @@ async function browser(
   data = observation(),
   history?: GuideOperationHistory,
   comparisons?: GuideComparisons,
+  recovery?: GuideBenchmarkRecovery,
 ) {
   const elements = new Map<string, Element>();
   for (const match of GUIDE_HTML.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g))
@@ -183,26 +186,28 @@ async function browser(
               ? { activity: [] }
               : path === '/api/operations'
                 ? (history ?? { state: 'ready', operations: [], note: 'No retained changes.' })
-                : path === '/api/comparisons'
-                  ? (comparisons ?? {
-                      available: true,
-                      blocked: false,
-                      items: [],
-                      note: 'Checks are user-recorded.',
-                    })
-                  : path === '/api/preview'
-                    ? {
-                        ticket: 'restore-ticket',
-                        changes: [
-                          {
-                            title: 'Restore configuration',
-                            description: 'Manual edits will also be undone.',
-                            files: 1,
-                          },
-                        ],
-                        notices: [],
-                      }
-                    : {},
+                : path === '/api/benchmark-recovery'
+                  ? (recovery ?? { state: 'none', note: 'No benchmark recovery needed.' })
+                  : path === '/api/comparisons'
+                    ? (comparisons ?? {
+                        available: true,
+                        blocked: false,
+                        items: [],
+                        note: 'Checks are user-recorded.',
+                      })
+                    : path === '/api/preview'
+                      ? {
+                          ticket: 'restore-ticket',
+                          changes: [
+                            {
+                              title: 'Restore configuration',
+                              description: 'Manual edits will also be undone.',
+                              files: 1,
+                            },
+                          ],
+                          notices: [],
+                        }
+                      : {},
     };
   };
   new Script(GUIDE_PRODUCT_JS).runInNewContext({
@@ -614,7 +619,7 @@ describe('guided evidence interactions', () => {
     assert.match(guide.textContent, /same project where this dashboard was opened/);
     assert.equal(reads.length, before, 'Opening guidance must not execute captures or tasks');
   });
-  it('shows the pending configuration recovery command without executing it', async () => {
+  it('requires a server-selected recovery preview and separate approval instead of executing copied commands', async () => {
     const data = observation();
     Object.assign(data.value, {
       pendingConfiguration: {
@@ -625,11 +630,69 @@ describe('guided evidence interactions', () => {
           'token-harness benchmark-restore --benchmark-id active-four --variant combined --yes',
       },
     });
-    const { get, reads } = await browser(data);
+    const { get, reads, writes, settle } = await browser(data, undefined, undefined, {
+      state: 'pending',
+      benchmarkId: 'active-four',
+      variant: 'combined',
+      harness: harnessId('codex'),
+      files: 1,
+      note: 'Review saved original configuration. Recovery does not finish the capture.',
+    });
     const content = get('result-evidence').textContent;
     assert.match(content, /Temporary configuration needs completion or recovery/);
-    assert.match(content, /benchmark-restore.*active-four.*combined/);
+    assert.match(content, /Prepared arm: active-four \/ combined/);
+    assert.doesNotMatch(content, /benchmark-restore/);
     assert.ok(!reads.some((r) => r.includes('benchmark-restore')));
+    get('result-evidence')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Review benchmark recovery')!
+      .fire('click');
+    await settle();
+    assert.ok(reads.includes('/api/benchmark-recovery'));
+    assert.match(get('modal-content').textContent, /active-four.*combined/);
+    assert.ok(writes.every((write) => !['/api/preview', '/api/apply'].includes(write.path)));
+    get('modal-actions')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Review benchmark recovery')!
+      .fire('click');
+    await settle();
+    assert.deepEqual(
+      writes.filter((write) => ['/api/preview', '/api/apply'].includes(write.path)),
+      [{ path: '/api/preview', body: { action: 'benchmark-recover' } }],
+    );
+    get('modal-actions')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Cancel')!
+      .fire('click');
+    await settle();
+    assert.ok(
+      !writes.some((write) => write.path === '/api/apply'),
+      'closing the preview never applies recovery',
+    );
+  });
+
+  it('offers no recovery approval when the retained lease belongs to another project', async () => {
+    const { get, writes, settle } = await browser(observation(), undefined, undefined, {
+      state: 'other-project',
+      benchmarkId: null,
+      variant: null,
+      harness: null,
+      files: 0,
+      note: 'Open the project that owns this temporary configuration.',
+    });
+    get('maintenance-actions')
+      .querySelectorAll('button')
+      .find((button) => button.textContent === 'Review benchmark recovery')!
+      .fire('click');
+    await settle();
+    assert.match(get('modal-content').textContent, /Open the project/);
+    assert.deepEqual(
+      get('modal-actions')
+        .querySelectorAll('button')
+        .map((button) => button.textContent),
+      ['Done', 'Refresh recovery'],
+    );
+    assert.ok(writes.every((write) => !['/api/preview', '/api/apply'].includes(write.path)));
   });
 
   it('offers a saved direct check and four arms without executing anything from the guide', async () => {

@@ -69,6 +69,7 @@ import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-
 import { createGuideHandler } from './guided-http.js';
 import { createGuideOperationReader } from './guided-operation-history.js';
 import { createGuideComparisonReader } from './guided-comparisons.js';
+import { createGuideBenchmarkRecoveryReader } from './guided-benchmark-recovery.js';
 import { runAttributedRtkCommand, runRtkHookProxy } from './commands/rtk-hook-proxy.js';
 import { recordNativePromptRoutingHook, type PromptRouterEventType } from './prompt-router.js';
 import { hookRootModel, routingContext } from './routing-policy.js';
@@ -697,6 +698,13 @@ async function runGuidedUi(
       fs: base.adapters?.fs ?? null,
       stateRoot: base.stateRoot ?? null,
       projectId: base.adapters?.projectIdFor(base.cwd) ?? null,
+    }),
+    createGuideBenchmarkRecoveryReader({
+      fs: base.adapters?.fs ?? null,
+      stateRoot: base.stateRoot ?? null,
+      projectId: base.adapters?.projectIdFor(base.cwd) ?? null,
+      projectRoot: base.cwd,
+      home: base.home ?? null,
     }),
   );
   const token = randomBytes(32).toString('hex');

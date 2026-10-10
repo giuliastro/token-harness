@@ -54,16 +54,22 @@ October 9 issue audit: #255/#359 retain native Windows published-artifact eviden
 gaps, #360 retains repeated/isolated paired measurements, and #379 retains workflow
 and packaged-platform lifecycle gaps. The guided app now implements retained project
 operation history and reviewed latest-configuration recovery after reopen through
-the existing rollback engine. Package and benchmark restoration remain CLI workflows.
+the existing rollback engine. Package restoration remains a CLI workflow; the
+October 10 follow-up below adds guided prepared-benchmark recovery.
 See [the coverage matrix](docs/desktop-workflow-coverage.md) and
 [the open-issue audit](docs/evaluation/2026-10-09-open-issues.md).
 
 The guided paired-comparison follow-up adds reviewed manual baseline/optimized
 start/finish controls with project-scoped retained state and immutable quality
 receipts. It runs neither coding tasks nor check executables and prepares no temporary
-configuration. General factorial preparation/recovery and direct checks remain advanced
+configuration. General factorial preparation and direct checks remain advanced
 workflows. Candidate PRs stay unmerged for user testing; see the
 [Harness Remote test guide](docs/testing-prs-with-harness-remote.md).
+
+The October 10 guided recovery follow-up reviews only the current project's active
+prepared benchmark lease through the existing dry-run/restore engine, with retained
+checkpoint guards and config-only verification. It preserves measurement evidence
+without finishing a capture or recording quality; factorial preparation remains CLI.
 
 ## 2. Definition of the first useful release
 

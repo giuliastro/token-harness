@@ -41,6 +41,14 @@ import {
   type GuideComparisons,
   type GuideComparisonApproval,
 } from './guided-comparisons.js';
+import {
+  benchmarkRecoveryArgs,
+  unavailableGuideBenchmarkRecovery,
+  type GuideBenchmarkRecovery,
+  type GuideBenchmarkRecoveryReader,
+  type GuideBenchmarkRecoveryTarget,
+} from './guided-benchmark-recovery.js';
+import type { BenchmarkRestoreReport } from './commands/benchmark-session.js';
 
 export type GuidePeriod = 'all' | '7d' | '30d';
 export type GuideHarness = 'claude' | 'codex';
@@ -206,9 +214,11 @@ interface Approval {
     | 'update'
     | 'candidate-apply'
     | 'candidate-uninstall'
-    | 'comparison';
+    | 'comparison'
+    | 'benchmark-recovery';
   network: boolean;
   comparison?: GuideComparisonApproval;
+  benchmarkRecovery?: GuideBenchmarkRecoveryTarget;
   recovery?: boolean;
   candidate?: 'mcptoon' | 'gitnexus';
   candidateHarness?: GuideHarness;
@@ -999,6 +1009,7 @@ export class GuideService {
   private readonly restartApplication: (() => Promise<string>) | null;
   private readonly observeOperations: GuideOperationReader | null;
   private readonly observeComparisons: GuideComparisonReader | null;
+  private readonly observeBenchmarkRecovery: GuideBenchmarkRecoveryReader | null;
   private lastApplied: GuideUndoTarget | null = null;
   private reading: Promise<GuideOverview> | null = null;
   private cached: { at: number; period: GuidePeriod; value: GuideOverview } | null = null;
@@ -1024,6 +1035,7 @@ export class GuideService {
     restartApplication: (() => Promise<string>) | null = null,
     observeOperations: GuideOperationReader | null = null,
     observeComparisons: GuideComparisonReader | null = null,
+    observeBenchmarkRecovery: GuideBenchmarkRecoveryReader | null = null,
   ) {
     this.call = call;
     this.now = now;
@@ -1033,6 +1045,82 @@ export class GuideService {
     this.restartApplication = restartApplication;
     this.observeOperations = observeOperations;
     this.observeComparisons = observeComparisons;
+    this.observeBenchmarkRecovery = observeBenchmarkRecovery;
+  }
+  async benchmarkRecovery(): Promise<GuideBenchmarkRecovery> {
+    return (await this.readBenchmarkRecovery()).report;
+  }
+  private async readBenchmarkRecovery() {
+    try {
+      return this.observeBenchmarkRecovery === null
+        ? unavailableGuideBenchmarkRecovery()
+        : await this.observeBenchmarkRecovery();
+    } catch {
+      return unavailableGuideBenchmarkRecovery();
+    }
+  }
+  private async previewBenchmarkRecovery(data: Record<string, unknown>): Promise<GuidePreview> {
+    if (Object.keys(data).length !== 1 || data['action'] !== 'benchmark-recover')
+      throw new GuideError(
+        400,
+        'Benchmark recovery accepts no benchmark, command or path selection.',
+      );
+    return this.exclusive(async () => {
+      this.approval = null;
+      const observation = await this.readBenchmarkRecovery(),
+        target = observation.target;
+      if (target === null) throw new GuideError(409, observation.report.note);
+      const preview = await this.call<BenchmarkRestoreReport>(benchmarkRecoveryArgs(target));
+      const after = await this.readBenchmarkRecovery();
+      if (after.target?.fingerprint !== target.fingerprint)
+        throw new GuideError(
+          409,
+          'The configuration lease or checkpoint changed. Refresh and review recovery again.',
+        );
+      if (
+        preview.exitCode !== 0 ||
+        preview.data?.status !== 'planned' ||
+        preview.data.benchmarkId !== target.benchmarkId ||
+        preview.data.variant !== target.variant
+      )
+        throw new GuideError(
+          409,
+          'Benchmark restoration could not be planned safely. A conflicting edit or recovery-state problem may need attention. Preserve the checkpoint and backups; inspect benchmark-restore diagnostics locally before retrying.',
+        );
+      const ticket = this.random(),
+        expires = this.now() + 10 * 60_000;
+      this.approval = {
+        id: ticket,
+        expires,
+        plans: [],
+        transactionId: null,
+        provider: null,
+        description: 'Temporary benchmark configuration',
+        operation: 'benchmark-recovery',
+        network: false,
+        benchmarkRecovery: target,
+      };
+      return {
+        ticket,
+        title: 'Restore temporary benchmark configuration?',
+        changes: [
+          {
+            title: `${target.benchmarkId} / ${target.variant}`,
+            description:
+              'Restore the saved original configuration, including original absence and newly created empty directories. Conflicting edits block restoration and preserve the backups.',
+            files: observation.report.files,
+          },
+        ],
+        notices: [
+          'This preview writes nothing. The lease and checkpoint are checked again before the approved restoration.',
+          'Recovery does not finish the capture or record quality. Existing measurement evidence is retained. No task, automated check or model is run.',
+          'Verification covers restored configuration only (config-only). Start a fresh coding session to observe the restored integration.',
+        ],
+        expiresAt: new Date(expires).toISOString(),
+        network: false,
+        restart: false,
+      };
+    });
   }
   async comparisons(): Promise<GuideComparisons> {
     return (await this.readComparisons()).report;
@@ -1514,6 +1602,7 @@ export class GuideService {
       throw new GuideError(400, 'Choose an available action.');
     const data = input as Record<string, unknown>;
     const action = String(data['action']);
+    if (action === 'benchmark-recover') return this.previewBenchmarkRecovery(data);
     if (action === 'comparison-new' || action === 'comparison-step')
       return this.previewComparison(input);
     const candidateAction = action === 'candidate-setup' || action === 'candidate-remove';
@@ -1981,6 +2070,45 @@ export class GuideService {
           'This preview expired or was already used. Review a fresh preview.',
         );
       this.approval = null;
+      if (approval.operation === 'benchmark-recovery') {
+        const target = approval.benchmarkRecovery,
+          before = await this.readBenchmarkRecovery();
+        if (target === undefined || before.target?.fingerprint !== target.fingerprint)
+          throw new GuideError(
+            409,
+            'The configuration lease or checkpoint changed. Refresh and review recovery again.',
+          );
+        this.record('Restoring only the approved temporary benchmark configuration.', 'working');
+        let restored = false;
+        try {
+          const result = await this.call<BenchmarkRestoreReport>([
+            ...benchmarkRecoveryArgs(target),
+            '--yes',
+          ]);
+          restored =
+            result.exitCode === 0 &&
+            result.data?.status === 'restored' &&
+            result.data.benchmarkId === target.benchmarkId &&
+            result.data.variant === target.variant;
+        } catch {
+          /* Recovery may have been interrupted; keep the lease and backups and never retry automatically. */
+        }
+        this.invalidateObservedState();
+        const after = await this.readBenchmarkRecovery();
+        const verified = restored && after.report.state === 'none';
+        const message = verified
+          ? 'Original configuration restored and verified (config-only). Measurement evidence is retained; the capture was not finished and no quality result was recorded. Start a fresh coding session.'
+          : 'Benchmark recovery could not be verified. Preserve the checkpoint and backups, inspect local benchmark-restore diagnostics and refresh before reviewing another recovery. No check or model was run.';
+        this.record(message, verified ? 'success' : 'attention');
+        return {
+          ok: verified,
+          title: verified
+            ? 'Benchmark configuration restored'
+            : 'Benchmark recovery needs attention',
+          messages: [message],
+          appliedPlans: 0,
+        };
+      }
       if (approval.operation === 'comparison') {
         const step = approval.comparison;
         if (step === undefined) throw new GuideError(409, 'Review a fresh comparison step.');

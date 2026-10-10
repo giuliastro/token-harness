@@ -48,7 +48,18 @@ export interface BenchmarkRestoreReport {
   paths: string[];
 }
 
-export function benchmarkSessionPath(context: CommandContext, id: string, variant: string): string {
+export type BenchmarkSessionReadContext = Pick<
+  CommandContext,
+  'stateRoot' | 'home' | 'projectRoot'
+> & {
+  adapters: { fs: FileSystemPort } | null;
+};
+
+export function benchmarkSessionPath(
+  context: BenchmarkSessionReadContext,
+  id: string,
+  variant: string,
+): string {
   if (
     context.adapters === null ||
     context.stateRoot === null ||
@@ -79,7 +90,7 @@ export function encodeBenchmarkSession(session: BenchmarkArmSession): Uint8Array
   return bytes;
 }
 export async function readBenchmarkSession(
-  context: CommandContext,
+  context: BenchmarkSessionReadContext,
   id: string,
   variant: string,
 ): Promise<BenchmarkArmSession | null> {

@@ -14,3 +14,9 @@ evidence. No open pull requests existed at the audit. None meets all closure cri
 This audit ran on native Linux. No new Windows execution or isolated benchmark
 campaign was performed; earlier recordings retain their original versions and
 scope. See the [desktop coverage matrix](../desktop-workflow-coverage.md).
+
+October 10 follow-up: the same four issues remain open. The unmerged guided
+candidate adds manual paired captures and current-project prepared-benchmark
+recovery, with dry-run/approval, checkpoint guards and config-only verification.
+Unit/UI fixtures and native package CI do not close the real Windows, repeated
+measurement or packaged lifecycle gates. No issue was closed and no PR was merged.
