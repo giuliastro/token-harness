@@ -1354,8 +1354,9 @@ export const GUIDE_PRODUCT_JS = String.raw`
 
   function undoLastChange(action = 'undo') {
     if (busy) return;
-    const run = modal('Review undo');
-    $('modal-content').append(progress('Preparing the exact restore', action === 'restore-latest'
+    const run = modal(action === 'benchmark-recover' ? 'Review benchmark recovery' : 'Review undo');
+    $('modal-content').append(progress('Preparing the exact restore', action === 'benchmark-recover'
+      ? 'Checking the saved configuration and current files. Nothing is being changed.' : action === 'restore-latest'
       ? 'Reading the latest retained configuration transaction for this project. Nothing is being changed.'
       : 'Only the last change made by this dashboard session can be targeted.'));
     $('modal-actions').append(modalClose('Cancel'));
@@ -1386,6 +1387,34 @@ export const GUIDE_PRODUCT_JS = String.raw`
       });
   }
 
+  async function openBenchmarkRecovery() {
+    if (busy) return;
+    const run = modal('Temporary benchmark configuration');
+    $('modal-content').append(progress('Reading saved recovery state', 'Checking the project where this app was opened.'));
+    $('modal-actions').append(modalClose('Cancel'));
+    setBusy(true, false);
+    try {
+      await ensureSession();
+      const report = await request('/api/benchmark-recovery');
+      if (run !== modalRun) return;
+      $('modal-content').replaceChildren(messageBox(report.state === 'pending' ? 'Temporary configuration is retained' : report.state === 'none' ? 'No benchmark recovery needed' : 'Recovery needs attention', report.note));
+      if (report.state === 'pending') {
+        $('modal-content').append(evidenceSection('Prepared benchmark arm', [
+          ['Benchmark', report.benchmarkId], ['Arm', report.variant], ['Coding app', report.harness],
+          ['Configuration paths', count(report.files)],
+        ], 'Recovery restores saved configuration only. It does not finish the capture or record its quality outcome.'));
+      }
+      $('modal-actions').replaceChildren(modalClose('Done'), actionButton('Refresh recovery', openBenchmarkRecovery, 'secondary'));
+      if (report.state === 'pending') $('modal-actions').append(actionButton('Review benchmark recovery', () => undoLastChange('benchmark-recover')));
+    } catch (error) {
+      if (run !== modalRun) return;
+      $('modal-error').textContent = error.message;
+      $('modal-error').hidden = false;
+      $('modal-actions').replaceChildren(modalClose('Done'));
+    } finally {
+      if (run === modalRun) setBusy(false, false);
+    }
+  }
 
   function renderMaintenance() {
     const root = $('maintenance-actions');
@@ -1449,6 +1478,11 @@ export const GUIDE_PRODUCT_JS = String.raw`
     historyText.append(node('strong', 'Operation history & recovery'), node('p', 'Review retained project changes and available configuration backups after reopening the app.', 'caption'));
     history.append(historyText, navigateButton('View history', 'results'));
     root.append(history);
+    const recovery = node('article', undefined, 'maintenance-row');
+    const recoveryText = node('div');
+    recoveryText.append(node('strong', 'Temporary benchmark configuration'), node('p', 'Review recovery of an unfinished prepared benchmark after reopening the app.', 'caption'));
+    recovery.append(recoveryText, actionButton('Review benchmark recovery', openBenchmarkRecovery, 'secondary'));
+    root.append(recovery);
   }
 
   function renderSetup() {
@@ -1595,7 +1629,7 @@ export const GUIDE_PRODUCT_JS = String.raw`
     const pending=current?.value?.pendingConfiguration;
     if(pending){
       section.append(messageBox('Temporary configuration needs completion or recovery',pending.state==='active'?'Prepared arm: '+pending.benchmarkId+' / '+pending.variant+'. Finish this arm or restore it before another managed change.':'The configuration lease is unreadable. Preserve the checkpoint and backups and inspect local state.'));
-      if(pending.recoveryCommand)section.append(copyRow(pending.recoveryCommand));
+      section.append(actionButton('Review benchmark recovery', openBenchmarkRecovery, 'secondary'));
     }
     return section;
   }

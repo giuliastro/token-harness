@@ -149,6 +149,23 @@ unrelated transaction instead of undoing it. No historical arbitrary transaction
 from the browser. Multi-agent application remains separate transactions; one undo reverses
 only the last successful one. Closing the dashboard clears this in-memory shortcut, not backups.
 
+### October 10 prepared benchmark recovery
+
+The private guided API exposes a summary of the active configuration lease. Only a
+validated checkpoint whose lease identity matches the current project is eligible.
+The browser supplies no benchmark id, variant, transaction, command or path for this
+operation. It reviews a fixed `benchmark-recover` action; the service invokes the
+existing `benchmark-restore` dry-run before issuing a short-lived, single-use ticket.
+Apply rereads the exact lease/checkpoint fingerprint and uses the existing guarded
+restoration engine. Concurrent edits, mismatched or unreadable state preserve the
+lease and backups. Raw checkpoints, configuration contents and file paths stay on
+the server. The summary alone is not proof that restoration is safe.
+
+Recovery restores configuration, including original absence and empty directories,
+without finishing a capture, changing quality evidence, running checks or invoking
+a coding model. Configuration verification remains config-only. Preparing factorial
+arms and completing their captures remain advanced CLI workflows.
+
 ### October 9 retained operation history and recovery
 
 Results reads the latest 20 retained transactions for the current project, including
@@ -159,8 +176,9 @@ paths or transaction selectors. RFC 0010 and existing CLI contracts are unchange
 Recovery previews only the machine's latest committed configuration transaction,
 when it belongs to the current project. Session Undo remains separate. Older or
 package operations are not selectable. Unfinished/dirty, unreadable/future journals
-and active benchmark leases block recovery. Package and benchmark restoration keep
-their CLI workflows and are not approved by reading history.
+and active benchmark leases block ordinary history recovery. Package restoration
+keeps its CLI workflow. Benchmark restoration follows the October 10 amendment
+above and is not approved by reading operation history.
 
 A fresh preview creates the existing single-use ticket, identifying the transaction
 date, actions and affected-path count. It warns that complete snapshots restore later

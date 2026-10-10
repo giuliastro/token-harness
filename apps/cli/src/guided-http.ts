@@ -270,6 +270,15 @@ export function createGuideHandler(input: {
           send(200, JSON.stringify(await input.service.operations()));
           return;
         }
+        if (url.pathname === '/api/benchmark-recovery') {
+          if ([...url.searchParams].length > 0)
+            throw new GuideError(
+              400,
+              'Benchmark recovery accepts no project, benchmark or path selection.',
+            );
+          send(200, JSON.stringify(await input.service.benchmarkRecovery()));
+          return;
+        }
         if (url.pathname === '/api/comparisons') {
           if ([...url.searchParams].length > 0)
             throw new GuideError(
