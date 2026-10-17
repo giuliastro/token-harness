@@ -41,6 +41,7 @@ import {
   SQLITE_CHILD_FLAG,
   readLocalDatabase,
   resolveAttributionSalt,
+  readAttributionSalt,
   resolveHostEnvironment,
   launchGuidedApplication,
 } from '@token-harness/platform';
@@ -199,9 +200,13 @@ export async function main(argv: readonly string[]): Promise<void> {
    * writing one.
    */
   const fs = resolution.ok ? new NodeFileSystem(resolution.environment.facts) : null;
+  const evidenceReadOnly =
+    argv[0] === 'observe' || (argv[0] === 'metrics' && argv.includes('--read-only'));
   const attribution =
     resolution.ok && fs !== null
-      ? await resolveAttributionSalt(fs, resolution.environment.paths.state)
+      ? await (evidenceReadOnly ? readAttributionSalt : resolveAttributionSalt)(
+          fs, resolution.environment.paths.state,
+        )
       : { salt: null, diagnostics: [] };
 
   const baseOptions: Omit<RunOptions, 'argv' | 'streams'> = {
@@ -213,6 +218,7 @@ export async function main(argv: readonly string[]): Promise<void> {
     applicationEntryScript: process.argv[1] ?? null,
     home: resolution.ok ? resolution.environment.paths.home : null,
     stateRoot: resolution.ok ? resolution.environment.paths.state : null,
+    metricsProjectIdentityAvailable: attribution.salt !== null,
     environmentDiagnostics: resolution.ok ? attribution.diagnostics : resolution.diagnostics,
     // The ports adapters need. Built here because this is the only file allowed to know
     // there is a real machine underneath.
@@ -259,8 +265,11 @@ export async function main(argv: readonly string[]): Promise<void> {
             stateRoot: resolution.environment.paths.state,
             now: () => new Date().toISOString(),
             onSkippedLine: (skipped) => {
-              const at = `${skipped.path}:${String(skipped.lineNumber)}`;
-              process.stderr.write(`warning  metrics-record-skipped: ${skipped.reason} at ${at}\n`);
+              // Machine-readable read-only snapshots must not emit out-of-band stderr.
+              if (!evidenceReadOnly) {
+                const at = `${skipped.path}:${String(skipped.lineNumber)}`;
+                process.stderr.write(`warning  metrics-record-skipped: ${skipped.reason} at ${at}\n`);
+              }
             },
           })
         : null,

@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/giuliastro/token-harness/blob/main/docs/integrations/observe-v1.schema.json",
+  "title": "Token Harness observe v1 CLI envelope",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "command",
+    "toolVersion",
+    "status",
+    "exitCode",
+    "data",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "command": {
+      "const": "observe"
+    },
+    "toolVersion": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "problems",
+        "blocked",
+        "error"
+      ]
+    },
+    "exitCode": {
+      "type": "integer"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "data": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "contractVersion",
+            "observedAt",
+            "readOnly",
+            "metricsFreshness",
+            "quotas",
+            "agents",
+            "metrics"
+          ],
+          "properties": {
+            "contractVersion": {
+              "const": 1
+            },
+            "observedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "readOnly": {
+              "const": true
+            },
+            "metricsFreshness": {
+              "const": "stored-only"
+            },
+            "quotas": {
+              "type": "object",
+              "required": [
+                "platform",
+                "observedAt",
+                "harnesses"
+              ],
+              "properties": {
+                "platform": {
+                  "type": "object"
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "harnesses": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "harnessId",
+                      "state",
+                      "windows",
+                      "planType",
+                      "rateLimitReachedType",
+                      "resetCreditsAvailable",
+                      "diagnostics"
+                    ],
+                    "properties": {
+                      "harnessId": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "enum": [
+                          "observed",
+                          "unavailable",
+                          "absent",
+                          "error"
+                        ]
+                      },
+                      "windows": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "harnessId",
+                            "scope",
+                            "usedPercent",
+                            "remainingPercent",
+                            "resetsAt",
+                            "observedAt",
+                            "source",
+                            "confidence"
+                          ],
+                          "properties": {
+                            "harnessId": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "usedPercent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "remainingPercent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "resetsAt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "observedAt": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "confidence": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "planType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "rateLimitReachedType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "resetCreditsAvailable": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "diagnostics": {
+                        "type": "array"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "harnessId",
+                  "name",
+                  "state",
+                  "version"
+                ],
+                "properties": {
+                  "harnessId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "absent",
+                      "detected",
+                      "configured",
+                      "broken",
+                      "error"
+                    ]
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "metrics": {
+              "type": "object",
+              "required": [
+                "windowStart",
+                "windowEnd",
+                "providers",
+                "classes"
+              ],
+              "properties": {
+                "windowStart": {
+                  "type": "string"
+                },
+                "windowEnd": {
+                  "type": "string"
+                },
+                "providers": {
+                  "type": "array"
+                },
+                "classes": {
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -44,6 +44,26 @@ export interface AttributionSaltResolution {
  * `core`: a short salt is worse than no salt, because it looks like one. Replacing it
  * changes every `projectId` on the machine, so it is reported rather than done silently.
  */
+/** Read existing attribution identity; do not create or repair any local state. */
+export async function readAttributionSalt(
+  fs: FileSystemPort,
+  stateRoot: string,
+): Promise<AttributionSaltResolution> {
+  const path = fs.join(stateRoot, SALT_FILE_NAME);
+  try {
+    if ((await fs.stat(path)) === null) return { salt: null, diagnostics: [] };
+    const existing = new TextDecoder().decode(await fs.readFile(path)).trim();
+    if (isUsableSalt(existing)) return { salt: existing, diagnostics: [] };
+  } catch {
+    // No repair on this observation path.
+  }
+  return { salt: null, diagnostics: [diagnostic({
+    severity: 'warning', code: 'attribution-salt-read-only-unavailable',
+    message: 'The stored attribution salt cannot be used; read-only observation will not replace it',
+    path, remediation: 'Use regular metrics if reinitialization is appropriate',
+  })] };
+}
+
 export async function resolveAttributionSalt(
   fs: FileSystemPort,
   stateRoot: string,

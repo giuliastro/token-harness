@@ -77,6 +77,10 @@ export interface CommandContext {
   /** Ownership-aware removal of native prompt-routing hooks. */
   disableAgentRouting?: boolean;
   /** The `--since` value as given, or null. Parsed by the command that needs a window. */
+  /** Read existing metrics evidence without import or cursor mutations. */
+  metricsReadOnly?: boolean;
+  /** True if a pre-existing attribution salt is readable. */
+  metricsProjectIdentityAvailable?: boolean;
   /** Guided all-project observation; the legacy metrics CLI remains project-scoped. */
   metricsAllProjects?: boolean;
   since: string | null;

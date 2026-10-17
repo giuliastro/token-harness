@@ -41,6 +41,7 @@ import { runContext } from './commands/context-cost.js';
 import { runDoctor } from './commands/doctor.js';
 import { runHistory } from './commands/history.js';
 import { runMetrics } from './commands/metrics.js';
+import { runObserve } from './commands/observe.js';
 import { runMcp } from './commands/mcp.js';
 import { runOptimize } from './commands/optimize.js';
 import { runPlan } from './commands/plan.js';
@@ -85,6 +86,7 @@ export const DEFAULT_COMMANDS: CommandTable = {
   doctor: runDoctor,
   history: runHistory,
   metrics: runMetrics,
+  observe: runObserve,
   mcp: runMcp,
   optimize: runOptimize,
   plan: runPlan,
@@ -136,6 +138,7 @@ export interface RunOptions {
   now?: () => string;
   /** The metrics store. Omitted by tests that assert the CLI contract without one. */
   metrics?: MetricsStore | null;
+  metricsProjectIdentityAvailable?: boolean;
   env?: Readonly<Record<string, string | undefined>>;
   stdoutIsTty?: boolean;
   toolVersion?: string;
@@ -451,6 +454,8 @@ export async function run(options: RunOptions): Promise<number> {
     transactionId: invocation.options.transaction,
     confirmed: invocation.options.yes,
     metrics: options.metrics ?? null,
+    metricsReadOnly: invocation.command === 'observe' || invocation.options.readOnly,
+    metricsProjectIdentityAvailable: options.metricsProjectIdentityAvailable ?? true,
     compatibilityRows: options.compatibilityRows ?? null,
   };
 

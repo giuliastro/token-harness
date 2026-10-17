@@ -106,6 +106,12 @@ export async function runMetrics(
         remediation: null,
       }),
     );
+  } else if (context.metricsReadOnly === true) {
+    diagnostics.push(diagnostic({
+      severity: 'info', code: 'metrics-stored-only',
+      message: 'Stored metrics only; no provider imports or cursor updates were performed',
+      remediation: null,
+    }));
   } else {
     const providerContext: ProviderContext = {
       fs: context.adapters.fs,
@@ -161,8 +167,18 @@ export async function runMetrics(
    * there is nothing to compare against without it, and the scope is reported as absent rather
    * than quietly reinstating the unscoped read.
    */
+  const allProjects =
+    context.metricsAllProjects === true ||
+    (context.metricsReadOnly === true && context.metricsProjectIdentityAvailable === false);
+  if (context.metricsReadOnly === true && context.metricsProjectIdentityAvailable === false) {
+    diagnostics.push(diagnostic({
+      severity: 'warning', code: 'metrics-attribution-unavailable',
+      message: 'No pre-existing attribution salt: stored metrics are reported across all projects',
+      remediation: 'Use ordinary metrics if you want to initialize project attribution',
+    }));
+  }
   const projectId =
-    context.metricsAllProjects === true || context.adapters === null
+    allProjects || context.adapters === null
       ? null
       : context.adapters.projectIdFor(context.projectRoot);
 
@@ -183,7 +199,7 @@ export async function runMetrics(
         severity: 'info',
         code: 'metrics-not-project-scoped',
         message:
-          context.metricsAllProjects === true
+          allProjects
             ? 'This report covers all locally recorded projects, including unattributed operations'
             : 'This report covers every project in the store: no project identity was available',
         remediation: null,
@@ -241,7 +257,7 @@ export async function runMetrics(
     // A provider-filtered stream is intentionally partial. Computing a raw-to-final pipeline total
     // from it would turn the missing stages created by the flag into an "incomparable pipeline".
     // Provider rows still render normally; channel totals are omitted under that filter.
-    if (context.provider === null && context.metricsAllProjects !== true) {
+    if (context.provider === null && !allProjects) {
       channelExpectations = pipelines.flatMap((pipeline) =>
         (pipeline.channels ?? []).map((channel) => ({
           pipelineId: pipeline.pipelineId,
@@ -263,7 +279,7 @@ export async function runMetrics(
     ...(channelExpectations === undefined ? {} : { channels: channelExpectations }),
   });
 
-  if (context.metricsAllProjects === true) {
+  if (allProjects) {
     report.scope = 'all-projects';
     const seen = new Set<string>();
     const unique = events.filter((event) => {
