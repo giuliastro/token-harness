@@ -15,7 +15,7 @@ export async function runObserve(context: CommandContext): Promise<CommandResult
   const observedAt = context.now();
   const metrics = await runMetrics({ ...context, metricsReadOnly: true, metricsAllProjects: true });
   if (metrics.exitCode !== EXIT_CODES.ok || metrics.data === null) {
-    return commandResult({
+    return commandResult<ObserveReport>({
       command: 'observe', exitCode: metrics.exitCode, data: null,
       diagnostics: metrics.diagnostics,
     });
