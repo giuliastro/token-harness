@@ -23,12 +23,7 @@
       "type": "string"
     },
     "status": {
-      "enum": [
-        "ok",
-        "problems",
-        "blocked",
-        "error"
-      ]
+      "enum": ["ok", "problems", "blocked", "error"]
     },
     "exitCode": {
       "type": "integer"
@@ -71,11 +66,7 @@
             },
             "quotas": {
               "type": "object",
-              "required": [
-                "platform",
-                "observedAt",
-                "harnesses"
-              ],
+              "required": ["platform", "observedAt", "harnesses"],
               "properties": {
                 "platform": {
                   "type": "object"
@@ -102,12 +93,7 @@
                         "type": "string"
                       },
                       "state": {
-                        "enum": [
-                          "observed",
-                          "unavailable",
-                          "absent",
-                          "error"
-                        ]
+                        "enum": ["observed", "unavailable", "absent", "error"]
                       },
                       "windows": {
                         "type": "array",
@@ -131,22 +117,13 @@
                               "type": "string"
                             },
                             "usedPercent": {
-                              "type": [
-                                "number",
-                                "null"
-                              ]
+                              "type": ["number", "null"]
                             },
                             "remainingPercent": {
-                              "type": [
-                                "number",
-                                "null"
-                              ]
+                              "type": ["number", "null"]
                             },
                             "resetsAt": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
+                              "type": ["string", "null"]
                             },
                             "observedAt": {
                               "type": "string"
@@ -161,22 +138,13 @@
                         }
                       },
                       "planType": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "rateLimitReachedType": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "resetCreditsAvailable": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
+                        "type": ["number", "null"]
                       },
                       "diagnostics": {
                         "type": "array"
@@ -191,12 +159,7 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "harnessId",
-                  "name",
-                  "state",
-                  "version"
-                ],
+                "required": ["harnessId", "name", "state", "version"],
                 "properties": {
                   "harnessId": {
                     "type": "string"
@@ -205,31 +168,17 @@
                     "type": "string"
                   },
                   "state": {
-                    "enum": [
-                      "absent",
-                      "detected",
-                      "configured",
-                      "broken",
-                      "error"
-                    ]
+                    "enum": ["absent", "detected", "configured", "broken", "error"]
                   },
                   "version": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
             },
             "metrics": {
               "type": "object",
-              "required": [
-                "windowStart",
-                "windowEnd",
-                "providers",
-                "classes"
-              ],
+              "required": ["windowStart", "windowEnd", "providers", "classes"],
               "properties": {
                 "windowStart": {
                   "type": "string"

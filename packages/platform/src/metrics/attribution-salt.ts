@@ -57,11 +57,19 @@ export async function readAttributionSalt(
   } catch {
     // No repair on this observation path.
   }
-  return { salt: null, diagnostics: [diagnostic({
-    severity: 'warning', code: 'attribution-salt-read-only-unavailable',
-    message: 'The stored attribution salt cannot be used; read-only observation will not replace it',
-    path, remediation: 'Use regular metrics if reinitialization is appropriate',
-  })] };
+  return {
+    salt: null,
+    diagnostics: [
+      diagnostic({
+        severity: 'warning',
+        code: 'attribution-salt-read-only-unavailable',
+        message:
+          'The stored attribution salt cannot be used; read-only observation will not replace it',
+        path,
+        remediation: 'Use regular metrics if reinitialization is appropriate',
+      }),
+    ],
+  };
 }
 
 export async function resolveAttributionSalt(

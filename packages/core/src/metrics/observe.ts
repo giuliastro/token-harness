@@ -1,8 +1,8 @@
 /** Versioned external observability contract, independent of the CLI envelope. */
-import type { BudgetReport } from './budget.js';
-import type { HarnessId } from './ids.js';
-import type { HarnessState } from './detection.js';
-import type { MetricsReport } from '../metrics/report.js';
+import type { BudgetReport } from '../domain/budget.js';
+import type { HarnessId } from '../domain/ids.js';
+import type { HarnessState } from '../domain/detection.js';
+import type { MetricsReport } from './report.js';
 
 export const OBSERVE_CONTRACT_VERSION = 1 as const;
 

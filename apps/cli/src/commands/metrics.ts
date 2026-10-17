@@ -107,11 +107,14 @@ export async function runMetrics(
       }),
     );
   } else if (context.metricsReadOnly === true) {
-    diagnostics.push(diagnostic({
-      severity: 'info', code: 'metrics-stored-only',
-      message: 'Stored metrics only; no provider imports or cursor updates were performed',
-      remediation: null,
-    }));
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'metrics-stored-only',
+        message: 'Stored metrics only; no provider imports or cursor updates were performed',
+        remediation: null,
+      }),
+    );
   } else {
     const providerContext: ProviderContext = {
       fs: context.adapters.fs,
@@ -171,11 +174,15 @@ export async function runMetrics(
     context.metricsAllProjects === true ||
     (context.metricsReadOnly === true && context.metricsProjectIdentityAvailable === false);
   if (context.metricsReadOnly === true && context.metricsProjectIdentityAvailable === false) {
-    diagnostics.push(diagnostic({
-      severity: 'warning', code: 'metrics-attribution-unavailable',
-      message: 'No pre-existing attribution salt: stored metrics are reported across all projects',
-      remediation: 'Use ordinary metrics if you want to initialize project attribution',
-    }));
+    diagnostics.push(
+      diagnostic({
+        severity: 'warning',
+        code: 'metrics-attribution-unavailable',
+        message:
+          'No pre-existing attribution salt: stored metrics are reported across all projects',
+        remediation: 'Use ordinary metrics if you want to initialize project attribution',
+      }),
+    );
   }
   const projectId =
     allProjects || context.adapters === null
@@ -198,10 +205,9 @@ export async function runMetrics(
       diagnostic({
         severity: 'info',
         code: 'metrics-not-project-scoped',
-        message:
-          allProjects
-            ? 'This report covers all locally recorded projects, including unattributed operations'
-            : 'This report covers every project in the store: no project identity was available',
+        message: allProjects
+          ? 'This report covers all locally recorded projects, including unattributed operations'
+          : 'This report covers every project in the store: no project identity was available',
         remediation: null,
       }),
     );

@@ -643,11 +643,14 @@ export function parseArgv(
   }
 
   if (options.readOnly && command !== 'metrics' && command !== 'observe') {
-    diagnostics.push(diagnostic({
-      severity: 'error', code: 'read-only-option-unsupported',
-      message: '--read-only is supported by metrics and observe only',
-      remediation: 'Use token-harness metrics --read-only or token-harness observe --json',
-    }));
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'read-only-option-unsupported',
+        message: '--read-only is supported by metrics and observe only',
+        remediation: 'Use token-harness metrics --read-only or token-harness observe --json',
+      }),
+    );
   }
 
   if (options.agentRouting && options.disableAgentRouting) {

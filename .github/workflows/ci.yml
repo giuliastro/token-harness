@@ -53,16 +53,6 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Print formatted observe changes (temporary)
-        if: runner.os == 'Linux'
-        run: |
-          pnpm exec prettier --write apps/cli/src/argv.ts apps/cli/src/commands/metrics.ts apps/cli/src/commands/observe.ts apps/cli/src/main.ts apps/cli/test/observe.test.ts docs/integrations/observe-v1.schema.json packages/platform/src/metrics/attribution-salt.ts packages/platform/test/attribution-read-only.test.ts
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const files = ["apps/cli/src/argv.ts","apps/cli/src/commands/metrics.ts","apps/cli/src/commands/observe.ts","apps/cli/src/main.ts","apps/cli/test/observe.test.ts","docs/integrations/observe-v1.schema.json","packages/platform/src/metrics/attribution-salt.ts","packages/platform/test/attribution-read-only.test.ts"];
-          process.stdout.write('OBSERVE_FORMAT_START\\n' + JSON.stringify(Object.fromEntries(files.map(p => [p, fs.readFileSync(p, 'utf8')]))) + '\\nOBSERVE_FORMAT_END\\n');
-          NODE
-
       - name: Typecheck
         run: pnpm typecheck
 

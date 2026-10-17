@@ -50,6 +50,7 @@ describe('stack-review CLI', () => {
         agentRouting: false,
         disableAgentRouting: false,
         verbose: false,
+        readOnly: false,
         yes: false,
       },
     });

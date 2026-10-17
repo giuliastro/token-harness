@@ -205,7 +205,8 @@ export async function main(argv: readonly string[]): Promise<void> {
   const attribution =
     resolution.ok && fs !== null
       ? await (evidenceReadOnly ? readAttributionSalt : resolveAttributionSalt)(
-          fs, resolution.environment.paths.state,
+          fs,
+          resolution.environment.paths.state,
         )
       : { salt: null, diagnostics: [] };
 
@@ -268,7 +269,9 @@ export async function main(argv: readonly string[]): Promise<void> {
               // Machine-readable read-only snapshots must not emit out-of-band stderr.
               if (!evidenceReadOnly) {
                 const at = `${skipped.path}:${String(skipped.lineNumber)}`;
-                process.stderr.write(`warning  metrics-record-skipped: ${skipped.reason} at ${at}\n`);
+                process.stderr.write(
+                  `warning  metrics-record-skipped: ${skipped.reason} at ${at}\n`,
+                );
               }
             },
           })

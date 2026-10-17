@@ -11,7 +11,10 @@ import { readAttributionSalt, SALT_FILE_NAME } from '../src/metrics/attribution-
 
 const facts: PlatformFacts = {
   os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
-  osDisplayName: 'test', arch: 'x64', nodeVersion: process.versions.node, isWsl: false,
+  osDisplayName: 'test',
+  arch: 'x64',
+  nodeVersion: process.versions.node,
+  isWsl: false,
 };
 
 describe('read-only attribution salt', () => {
@@ -22,7 +25,9 @@ describe('read-only attribution salt', () => {
       const result = await readAttributionSalt(new NodeFileSystem(facts), root);
       assert.equal(result.salt, null);
       assert.equal(existsSync(root), false);
-    } finally { rmSync(sandbox, {recursive:true,force:true}); }
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true });
+    }
   });
 
   it('does not overwrite an invalid salt', async () => {
@@ -33,7 +38,11 @@ describe('read-only attribution salt', () => {
       const result = await readAttributionSalt(new NodeFileSystem(facts), sandbox);
       assert.equal(result.salt, null);
       assert.equal(readFileSync(salt, 'utf8'), 'invalid-salt\n');
-      assert.ok(result.diagnostics.some(d => d.code === 'attribution-salt-read-only-unavailable'));
-    } finally { rmSync(sandbox, {recursive:true,force:true}); }
+      assert.ok(
+        result.diagnostics.some((d) => d.code === 'attribution-salt-read-only-unavailable'),
+      );
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true });
+    }
   });
 });
