@@ -240,7 +240,11 @@ const MANIFEST: ProviderManifest = {
   delegatedInstallReviews: null,
 };
 
-const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '0.51.0' };
+/**
+ * RTK 1.0.1 was re-checked on Windows against the contracts this adapter consumes: `--version`
+ * output, `rtk hook claude|codex` JSON, `RTK_DB_PATH`, and the `commands` history columns.
+ */
+const TESTED_VERSIONS = { minimum: '0.44.0', maximum: '1.0.1' };
 const VERSION_PATTERN = /(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/;
 
 /** The token that identifies an RTK hook command, per the shape the spike observed. */

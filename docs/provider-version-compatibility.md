@@ -6,9 +6,18 @@ layers for provider detection, provider package replacement and managed harness 
 
 ## Current upstream releases
 
-As reviewed on 2026-10-03:
+As reviewed on 2026-10-03, with RTK re-checked on 2026-10-18:
 
-- **RTK 0.51.0** is the current source-reviewed RTK release. RTK 0.50.0 introduced the native
+- **RTK 1.0.1** is the current reviewed RTK release. On 2026-10-18 the official
+  `rtk-x86_64-pc-windows-msvc.zip` was exercised on Windows against every contract the adapter
+  consumes: `rtk --version` still prints `rtk <version>`, `rtk hook claude` and `rtk hook codex`
+  return the same `hookSpecificOutput.updatedInput.command` JSON, `RTK_DB_PATH` still selects the
+  history database, and the `commands` table keeps the columns the importer selects. The release
+  ZIP still contains a single root `rtk.exe`. RTK 1.0 ships its default binary with a
+  BSL-1.1-licensed `rtk-engine` (free production use; Apache-2.0 on 2030-09-09) alongside
+  Apache-2.0 `rtk-oss-*` assets; Token Harness keeps selecting the default `rtk-*` asset that
+  WinGet and the upstream installer distribute.
+- **RTK 0.51.0** was the previous source-reviewed RTK release. RTK 0.50.0 introduced the native
   Codex command rewrite hook, and the v0.51.0 source retains the same `rtk hook codex` contract.
   Earlier releases such as 0.49.0 provide only prompt guidance for Codex. The latest live
   harness-mutation fixture on Windows remains 0.48.0. The direct GitHub release path keeps its
@@ -43,8 +52,9 @@ still allowed only when the installed build's declared write set remains inside 
 containment boundary and covers the reviewed artifacts.
 
 For **RTK**, there is currently no equivalent machine-readable capability contract. Token Harness
-therefore promotes explicitly source-reviewed releases beyond the historical live fixture ceiling.
-RTK 0.51.0 is source-reviewed for the Codex hook contract. The adapter recognizes Codex hooks on
+therefore promotes explicitly reviewed releases beyond the historical live fixture ceiling, and a
+newer release is still treated as compatible while it runs and exposes the assignable hook surface.
+RTK 1.0.1 is reviewed for the Claude Code and Codex hook contracts. The adapter recognizes Codex hooks on
 RTK 0.50.0 and later; the historical Windows mutation fixture and the Linux RTK/HarnessTrim chain
 fixture remain separately scoped evidence.
 
@@ -90,13 +100,18 @@ version as `0.48.0` while preserving the raw channel spelling for an exact WinGe
 The v-prefixed WinGet query/update path has been validated on a real Windows machine.
 
 The historical Windows exercise observed WinGet at **v0.48.0**. The updater queries current channel
-state rather than assuming that catalog observation remains current. On native Windows, when WinGet
-lags the current source-reviewed RTK **0.51.0** target, Token Harness can use the exact official GitHub release asset
-`rtk-x86_64-pc-windows-msvc.zip` instead of pretending the stale package catalog is current.
+state rather than assuming that catalog observation remains current. On 2026-10-18 WinGet still
+listed v0.50.0 while upstream had published 1.0.1. The update target is RTK's newest stable GitHub
+release, never below the reviewed **1.0.1**; on native Windows, when WinGet lags that target, Token
+Harness uses the exact official GitHub release asset `rtk-x86_64-pc-windows-msvc.zip` instead of
+pretending the stale package catalog is current.
 
 That direct-release path is intentionally narrower than a generic downloader:
 
-- it queries the exact stable reviewed tag from `api.github.com/repos/rtk-ai/rtk`;
+- it reads GitHub's `releases/latest` from `api.github.com/repos/rtk-ai/rtk`, accepts only a stable
+  `vX.Y.Z` tag (never the `dev-*-rc.*` prereleases), and falls back to the reviewed tag when that
+  lookup fails;
+- it then queries that exact stable tag from `api.github.com/repos/rtk-ai/rtk`;
 - it accepts only the exact Windows x64 ZIP from the official `rtk-ai/rtk` release path;
 - it requires GitHub's published SHA-256 and verifies the complete ZIP before extraction;
 - metadata, redirects, archive size, archive entry count and extracted executable size are bounded;

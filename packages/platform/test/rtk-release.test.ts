@@ -198,6 +198,41 @@ describe('verified RTK release artifact', () => {
     );
   });
 
+  it('reads only a stable vX.Y.Z tag as the newest RTK release', async () => {
+    const { fs } = await sandbox();
+    const latest = (body: Record<string, unknown>) =>
+      new NodeRtkReleaseRuntime({
+        fs,
+        runner: new FakeProcessRunner(),
+        fetchImpl: async (url) => {
+          assert.equal(url, 'https://api.github.com/repos/rtk-ai/rtk/releases/latest');
+          return response(new TextEncoder().encode(JSON.stringify(body)));
+        },
+      }).latestStable();
+
+    assert.deepEqual(await latest({ tag_name: 'v1.0.1', draft: false, prerelease: false }), {
+      status: 'found',
+      version: '1.0.1',
+    });
+    for (const body of [
+      { tag_name: 'dev-1.0.2-rc.552', draft: false, prerelease: false },
+      { tag_name: 'v1.0.2-rc.1', draft: false, prerelease: false },
+      { tag_name: 'v1.0.2', draft: false, prerelease: true },
+      { tag_name: 'v1.0.2', draft: true, prerelease: false },
+    ]) {
+      assert.equal((await latest(body)).status, 'invalid', JSON.stringify(body));
+    }
+
+    const offline = await new NodeRtkReleaseRuntime({
+      fs,
+      runner: new FakeProcessRunner(),
+      fetchImpl: async () => {
+        throw new Error('offline');
+      },
+    }).latestStable();
+    assert.equal(offline.status, 'unavailable');
+  });
+
   it('selects the exact stable reviewed release asset and its published SHA-256', async () => {
     const fixture = releaseFixture();
     const { fs } = await sandbox();
