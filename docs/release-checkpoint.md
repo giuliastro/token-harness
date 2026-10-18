@@ -1,4 +1,13 @@
-# Release checkpoint — 2026-10-10
+# Release checkpoint — 2026-10-18
+
+Token Harness `0.1.32` makes RTK updates latest-forward (#387). The direct GitHub release planner
+reads RTK's newest stable `vX.Y.Z` release instead of a hard-coded target, never offers less than
+the reviewed RTK 1.0.1, and falls back to it when GitHub cannot be read. The digest, post-install
+version and rollback checks are unchanged. #387 passed native Windows, macOS and Linux CI and all
+four desktop package targets. The release bridge creates the immutable tag and dispatches the
+exact-tag publication workflow after candidate CI passes. No new savings claim is made.
+
+## Previous checkpoint — 2026-10-10
 
 Token Harness `0.1.31` includes the native desktop distribution (#380), deterministic
 checks and managed factorial benchmarks (#378), retained guided configuration history
