@@ -230,7 +230,7 @@ See [the routing RFC](docs/rfcs/0030-automatic-native-prompt-routing.md) for pol
 | [Headroom](https://github.com/headroomlabs-ai/headroom) | MCP context compression/retrieval | Optional configuration-only integration for an already-installed reviewed package. |
 | [cclimits](https://github.com/cruzanstx/cclimits) / [ccusage](https://github.com/ccusage/ccusage) | Allowance / usage observations | Read-only evidence sources, rather than optimizers. Usage history is not remaining quota. |
 
-Current source-reviewed package targets are **RTK 0.51.0** and **HarnessTrim 0.3.1**. Package update
+Current reviewed package targets are **RTK 1.0.1** and **HarnessTrim 0.3.1**; RTK updates follow its newest stable release. Package update
 policy and exact agent-configuration compatibility are separate: a newer installed package does not
 automatically admit new config writes or a combined-stack review. RTK + HarnessTrim still need real
 combined workload evidence before broader promotion. Optional integrations do not count as proven
