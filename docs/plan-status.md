@@ -1,6 +1,9 @@
-# Delivery status — 2026-10-10
+# Delivery status — 2026-10-18
 
-**Release candidate: Token Harness 0.1.31.** Desktop distribution, deterministic checks,
+**Release candidate: Token Harness 0.1.32.** RTK updates now follow the newest stable upstream
+release, and RTK 1.0.1 is the reviewed version (#387). See [0.1.32 notes](releases/0.1.32.md).
+
+**Token Harness 0.1.31.** Desktop distribution, deterministic checks,
 managed exploratory benchmarks and guided history/capture/recovery are merged. Exact-tag
 publication gates and published-artifact checks remain required. See
 [0.1.31 notes](releases/0.1.31.md) and the [desktop coverage matrix](desktop-workflow-coverage.md).
@@ -66,7 +69,8 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The next release is [0.1.31](releases/0.1.31.md), including desktop distribution,
+The next release is [0.1.32](releases/0.1.32.md), with latest-forward RTK updates (#387).
+The previous release is [0.1.31](releases/0.1.31.md), including desktop distribution,
 benchmark checks/preparation and guided history, paired captures and recovery. Its
 publication evidence will retain the exact source tag and artifact checks. The
 previous [0.1.30 release](releases/0.1.30.md) includes the evidence repair in #371.
