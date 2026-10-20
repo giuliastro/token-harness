@@ -41,24 +41,26 @@ export function hookRootModel(hookInput: string | null): string | null {
 }
 
 const OPENING =
-  'Token Harness routing (enabled by the user): delegate eligible work to a cheaper native subagent; treat this as the user asking for that delegation.';
+  'Token Harness routing (enabled by the user): delegate by default to a cheaper native subagent; treat this as the user asking for that delegation. You stay in charge and review every result.';
 
 const ELIGIBILITY =
-  'Delegate: read-only search or codebase exploration, log/test-output triage, mechanical multi-file edits, tests or docs to a clear spec, a well-specified independent unit with a check. ' +
-  'Keep on root: trivial or quick work (briefing would cost more than it saves), ambiguous scope, architecture, security, releases/migrations, debugging an unclear cause, edits coupled to yours, integration and final review, or when the user declines delegation.';
+  'Delegate any piece you can brief in a few lines: search, reading or summarizing files and docs, codebase exploration, log/test-output triage, running builds or tests and reporting, mechanical or multi-file edits, tests or docs to a clear spec, a bounded unit with a check. ' +
+  'Keep on root: a single quick lookup, ambiguous scope, architecture, security, releases/migrations, debugging an unclear cause, edits coupled to yours, integration and final review, or when the user declines delegation.';
 
 const PROCEDURE =
-  'One routed worker at a time, with a self-contained brief: goal, files, constraints, done check, short report. ' +
-  'Review its result; if it fails the check, finish on the root rather than retrying cheaper. ' +
+  'Independent pieces may run in parallel; each brief is self-contained: goal, files, constraints, done check, short report. ' +
+  'If a result fails the check, finish on the root rather than retrying cheaper. ' +
   'If the model is unavailable or rejected, stay on the root. Claim savings only from paired, quality-gated measurements.';
 
 const CODEX_SPAWN =
   'Spawn with spawn_agent setting model, reasoning_effort and fork_turns "none"; full-history forks reject model overrides.';
 
+// Haiku is the default worker: Sonnet reads cached context at nearly Opus cost, so reading-heavy
+// work only saves allowance on Haiku. Sonnet is kept for code changes that need it.
 const CLAUDE_LADDER =
-  'Pick by your own model: Fable root: "opus" for a hard self-contained unit, "sonnet" for bounded implementation or tests, "haiku" for read-only or mechanical work. ' +
-  'Opus root: "sonnet" for bounded implementation or tests, "haiku" for read-only or mechanical work. ' +
-  'Sonnet root: "haiku" for read-only or mechanical work only. Haiku root: do not route. ' +
+  'Default to "haiku" for reading, search, exploration, triage, running checks and mechanical edits. ' +
+  'Use "sonnet" only for code changes or tests to a clear spec; a Fable root may also use "opus" for a hard self-contained unit. ' +
+  'Sonnet root: "haiku" only. Haiku root: do not route. ' +
   'Always set the Agent tool model parameter; built-in agents such as Explore may otherwise run on Opus.';
 
 function codexLadder(tier: Exclude<CodexTier, 'light'>): string {
