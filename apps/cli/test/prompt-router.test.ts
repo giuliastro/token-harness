@@ -287,6 +287,51 @@ describe('automatic native prompt routing', () => {
     assert.equal(new TextDecoder().decode(files.get('/home/dev/.claude/settings.json')), existing);
   });
 
+  it('advises a Claude Code update when `haiku` still resolves to Haiku 4.5, without changing the plan', async () => {
+    const path = '/home/dev/.claude/settings.json';
+    const configured = JSON.stringify({
+      hooks: Object.fromEntries(
+        nativePromptRoutingHookEntries(harnessId('claude')).map(({ eventName, value }) => [
+          eventName,
+          [value],
+        ]),
+      ),
+    });
+    const cases = [
+      { version: '2.1.285', advised: true },
+      { version: '2.1.293', advised: false },
+      { version: null, advised: false },
+      { version: 'unknown', advised: false },
+    ];
+    for (const { version, advised } of cases) {
+      const { fs, files } = memoryFs();
+      const plan = await planNativePromptRoutingInstall({ ...installInput(fs), version });
+      const advisory = plan.diagnostics.filter(
+        (entry) => entry.code === 'prompt-routing-haiku-alias-outdated',
+      );
+      assert.equal(advisory.length, advised ? 1 : 0, String(version));
+      if (advised) {
+        assert.equal(advisory[0]?.severity, 'info');
+        assert.match(advisory[0]?.message ?? '', /Haiku 4\.5/);
+        assert.match(advisory[0]?.message ?? '', /`claude update` \(2\.1\.293\+\)/);
+        assert.match(advisory[0]?.message ?? '', /Haiku 5\.5 on the Anthropic API/);
+        const baseline = await planNativePromptRoutingInstall(installInput(fs));
+        assert.equal(plan.actions.length, baseline.actions.length);
+        assert.equal(plan.actions.length, 1);
+      }
+      assert.equal(files.size, 0);
+
+      const observed = await observeNativePromptRouting({
+        ...installInput(memoryFs({ [path]: configured }).fs),
+        version,
+        stateRoot: null,
+        projectId: null,
+      });
+      assert.equal(observed.configured, true);
+      assert.equal(/Haiku 4\.5/.test(observed.detail), advised, String(version));
+    }
+  });
+
   it('fails closed when the hook runner is missing or too old', async () => {
     const { fs } = memoryFs();
     const plan = await planNativePromptRoutingInstall({
