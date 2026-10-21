@@ -119,6 +119,12 @@ jobs:
           subject-path: dist/release/*.tgz
           sbom-path: dist/package/sbom.json
 
+      - name: Attest native desktop packages and checksum provenance
+        if: needs.desktop.outputs.enabled == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/desktop-release/token-harness-*
+
       - name: Keep the attested tarball
         uses: actions/upload-artifact@v4
         with:
@@ -184,7 +190,7 @@ jobs:
           echo "::error::$name@$version did not become visible as npm latest after publish. observed version=${published:-missing}, latest=${latest:-missing}"
           exit 1
 
-      - name: Create or refresh GitHub release
+      - name: Prepare or recover GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -193,7 +199,7 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/release/*.tgz --clobber
           else
-            gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes
+            gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes --draft
           fi
 
       - name: Attach the complete desktop artifact set and checksums to this release
@@ -201,3 +207,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/desktop-release.mjs "$RELEASE_TAG"
+
+      - name: Verify uploaded assets and publish the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_DESKTOP: ${{ needs.desktop.outputs.enabled }}
+        shell: bash
+        run: |
+          gh release view "$RELEASE_TAG" --json assets > dist/release/uploaded-assets.json
+          if [ "$HAS_DESKTOP" = 'true' ] && [ -f scripts/release-assets.mjs ]; then
+            node scripts/release-assets.mjs "$RELEASE_TAG" dist/release/uploaded-assets.json --desktop
+          elif [ -f scripts/release-assets.mjs ]; then
+            node scripts/release-assets.mjs "$RELEASE_TAG" dist/release/uploaded-assets.json
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false

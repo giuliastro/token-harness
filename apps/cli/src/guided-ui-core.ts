@@ -599,6 +599,13 @@ export const GUIDE_CORE_JS = String.raw`
         if (result.ticket) $('modal-content').append(messageBox(t('Safe update'), t('The new version is installed and checked. If something goes wrong, the previous configuration can be restored.'), 'safe'));
         $('modal-actions').replaceChildren(modalClose(result.ticket ? t('Cancel') : t('Done')));
         if (result.ticket) $('modal-actions').append(actionButton(t('Install update'), () => applyTicket(result.ticket)));
+        if (result.desktopUpdateUrl === 'https://github.com/giuliastro/token-harness/releases/latest') {
+          const download = node('a', t('Download desktop update'), 'button secondary');
+          download.href = result.desktopUpdateUrl;
+          download.target = '_blank';
+          download.rel = 'noopener noreferrer';
+          $('modal-actions').append(download);
+        }
       })
       .catch(error => modalFailure(run, error))
       .finally(() => {

@@ -1,6 +1,6 @@
 # Desktop workflow coverage
 
-Issue #379 coverage as of October 10, 2026. A status or generated command alone does
+Issue #379 coverage as of October 21, 2026. A status or generated command alone does
 not count as a complete interface workflow. The desktop reuses the guided browser
 application and transaction engine; RFC 0032 remains proposed.
 
@@ -10,9 +10,11 @@ application and transaction engine; RFC 0032 remains proposed.
 | Setup and maintenance | Stored-plan preview, single-use approval, setup, owned removal and reviewed updates through `guided.ts`. Unsupported prerequisites are explained. | Platform/runtime admission controls availability; desktop updates use manual replacement. |
 | Policies, skills and routing | Supported preference, skill and prompt-routing lifecycle controls and observed callbacks. | Native trust/authentication steps and unsupported/advanced policy flows remain external or CLI-only. |
 | Measurements | Details filters sources, measurement classes/units and provenance; paired quality/quota stays distinct from current activity. | Comparable real measurements remain #360 work; activity does not create a baseline. |
-| Benchmarks | Reviewed manual baseline/optimized capture and outcome recording, retained across app reopen; advanced command guide and supported candidate controls. | Factorial preparation, direct executable checks, scheduling and handoff remain advanced/CLI workflows. |
+| Benchmarks | Reviewed manual paired captures; Details advanced tools also preview/apply four-arm preparation against the exact engine plan, record manual outcomes, restore configuration and read factorial reports. | Native tasks/checks and source-tree reset remain explicit outside the app. The GUI refuses saved executable checks even with approval. Candidate campaign progression and transfer receipt recording retain their CLI workflow. |
+| Planning and handoff | Advanced tools expose optimize reserve/profile/task count, explicit mixed-workload schedule advice and compact handoff formatting through bounded local operations. | Schedule stays advisory; missing quality/allowance stays unknown. Transfer evaluation/receipts and custom context snapshot input remain CLI-only. |
 | History and configuration recovery | Details → Change history shows 20 retained project operations, including earlier app/CLI sessions. Review restore targets only the machine's latest committed configuration transaction through guarded rollback. **Review benchmark recovery** discovers the active lease for the current project, then previews or applies restoration. | Package and arbitrary historical recovery remain CLI workflows. Benchmark restoration reuses `benchmark-restore`; drift or invalid/missing checkpoint blocks apply while preserving recovery data. |
-| Project selection and distribution | Native folder chooser; Windows x64, Linux x64, macOS x64/arm64 artifacts. Hooks reference the installed runtime. | Fresh-install/update/recovery and post-close native integration recordings remain. Windows signing and macOS notarization are deferred. |
+| Project selection and distribution | Native folder chooser and remembered project with safe home fallback; single desktop instance; macOS stable-installation prompt; desktop update download guidance; owned-connection removal checklist. Seven release assets plus checksum are verified before publishing a new draft; desktop provenance is attested. | Full native install/update/removal and post-close integration recordings remain. Windows signing and macOS notarization are deferred; the checklist does not intercept OS uninstall or certify external connections. |
+| Concurrent mutation | Updated installed CLI/UI entry points hold a platform reservation around managed mutations, verification and rollback. Reads and ordinary native hook callbacks stay independent. | Older clients do not participate. Conservative port collisions refuse a write; interrupted journals keep their existing recovery requirements. |
 
 History uses `guided-operation-history.ts`, `/api/operations`, the `restore-latest`
 preview and Details controls in `guided-product-client.ts`. The browser receives
@@ -25,7 +27,7 @@ the active lease for the selected project and the `benchmark-recover` preview/ap
 action. Apply delegates to the existing `benchmark-restore` engine, including its
 drift and checkpoint guards. It only restores the prepared arm: it does not finish a
 capture, record quality, run a task or check, or launch a model. Test on a disposable
-project after preparing an arm with the CLI, then reopen Desktop, preview and cancel,
+project after preparing an arm with the CLI or Advanced tools, then reopen Desktop, preview and cancel,
 and finally apply and verify the original files, modes and absent paths. A clean
 Desktop UI flow does not prove provider hook execution or runtime compression; the
 Windows `workspace-write` verification gap remains explicit.
@@ -38,7 +40,8 @@ savings. Linux Xvfb smoke does not cover all graphical/system-library combinatio
 Windows is native; WSL remains a separate CLI environment. The published Windows
 stack (#255), callbacks (#359) and paired measurements (#360) retain their own gates.
 
-See [testing unmerged PRs with Harness Remote](testing-prs-with-harness-remote.md)
-for candidate packages, project matching, manual capture, guided benchmark recovery
-and native evidence checks. Use the green **Desktop packages** run attached to the
-benchmark-recovery PR; builds from preceding PRs do not contain this recovery control.
+See the [interface-first desktop candidate guide](testing-desktop-interface-first.md)
+for the current PR artifacts and its manual checks. The older
+[Harness Remote guide](testing-prs-with-harness-remote.md) retains its historical
+project-matching, capture and native-evidence instructions; use the latest candidate
+run rather than a preceding PR's packages.

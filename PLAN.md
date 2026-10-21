@@ -43,6 +43,16 @@ hook trust and repeated/randomized campaigns remain outside automatic preparatio
 
 ### Desktop distribution workstream — issue #379
 
+October 21 interface-first follow-up: the shared Home/Methods/Details app gains bounded
+workload advice, mixed-workload scheduling, handoff text and reviewed four-arm preparation /
+manual outcomes. Updated installed entry points serialize managed mutations; older CLI
+builds do not participate. Desktop remembers its selected project, guards macOS installation
+location, and supplies desktop-specific update/removal guidance. New releases stay drafts
+until their complete asset inventory is uploaded; desktop provenance is attested. See the
+[candidate test guide](docs/testing-desktop-interface-first.md) and RFC 0032 amendment.
+Native installed lifecycle, signing/notarization, legacy-client compatibility and broader
+advanced campaign/transfer GUI coverage remain explicit #379 work.
+
 RFC 0032 proposes a first desktop milestone: an Electron shell around the existing
 guided application, with a dedicated Node runtime and native release artifacts for
 Windows x64, Linux x64, and macOS x64/arm64. The existing release workflow gates

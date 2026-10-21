@@ -3,6 +3,49 @@
 - Status: Proposed — implementation included for review in #379
 - Date: 2026-10-05
 
+## October 21 interface-first implementation amendment
+
+The Home / Methods / Details interface is shared by browser and desktop. Advanced
+advisory planning, scheduling and compact handoff are bounded local operations;
+they do not launch agents, apply policy, grant trust or broaden RFC 0010. Preview,
+approval and the existing transaction engine remain mandatory for configuration.
+
+The private experiment controller exposes four-arm preparation through the existing
+engine's exact plan-id guard, single-use expiring approval, manual outcome recording
+and finish-time restoration. No executable/path/check input is accepted. All GUI
+calls explicitly disable saved check execution, including a capture originally
+created with a check by the CLI. Such a refusal preserves the capture and prepared
+lease for separate guarded recovery. Candidate campaigns and transfer receipt
+workflows remain advanced CLI surfaces in this implementation.
+
+Published entry points in this implementation reserve one machine-local mutation
+slot per canonical state root before an approved configuration command starts.
+The platform owns a kernel-held loopback TCP reservation derived from that root;
+it serves no application protocol. Contention (including a conservative port
+collision) refuses the second mutation without writing configuration. The kernel
+releases the reservation on process exit; no stale lock file is deleted or aged
+out. Interrupted journals and backups retain their existing recovery semantics.
+This coordinates updated CLI and desktop processes, not older CLI versions that
+predate the protocol; those must be upgraded before concurrent use. Hook callbacks
+and read-only diagnostics do not take the mutation slot.
+
+Desktop remembers only folders selected with the native chooser, falls back to
+home if the last folder is absent, and exposes project choice prominently through
+its native menu. A macOS package must be moved to Applications before the backend
+can configure durable hooks. One desktop instance owns the window; that desktop
+instance guard is separate from the cross-process mutation guard.
+
+Release publication prepares a draft and makes it public only after the complete
+desktop set is uploaded and checked. Existing public-release recovery is
+idempotent and never unpublishes a release. Signing credentials remain a release
+environment concern, absent from PR builds. PR artifacts remain unsigned/ad-hoc
+until trusted signing is configured; this amendment does not close #379's native
+lifecycle, signing or legacy-client compatibility acceptance criteria.
+
+See the [candidate test guide](../testing-desktop-interface-first.md). The kernel
+reservation uses Node's [exclusive listener semantics](https://nodejs.org/api/net.html#serverlistenoptions-callback);
+draft-first publication follows the [GitHub release lifecycle](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+
 ## Scope
 
 Ship the existing RFC 0013 guided application in an Electron window, together with

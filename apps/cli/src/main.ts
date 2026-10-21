@@ -42,6 +42,7 @@ import {
   readLocalDatabase,
   resolveAttributionSalt,
   resolveHostEnvironment,
+  nodeStateMutationGuard,
   launchGuidedApplication,
 } from '@token-harness/platform';
 
@@ -67,6 +68,8 @@ import { observeAgentSkill } from './agent-skill.js';
 import { observeNativePromptRouting } from './prompt-router.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
+import { createGuideTools } from './guided-tools.js';
+import { createGuideExperiments } from './guided-experiments.js';
 import { observeDelegatedUsage } from './delegated-usage.js';
 import { createGuideOperationReader } from './guided-operation-history.js';
 import { createGuideComparisonReader } from './guided-comparisons.js';
@@ -206,6 +209,7 @@ export async function main(argv: readonly string[]): Promise<void> {
       : { salt: null, diagnostics: [] };
 
   const baseOptions: Omit<RunOptions, 'argv' | 'streams'> = {
+    mutationGuard: nodeStateMutationGuard,
     // On failure `facts` is null only when the operating system itself is
     // unsupported. An unresolvable state directory still has honest facts to
     // report, and `run` uses them for the runtime-floor check before refusing.
@@ -719,6 +723,8 @@ async function runGuidedUi(
       token,
       authority: () => authority,
       optimizationCandidates: () => optimizationCandidates,
+      tools: createGuideTools({ call: guideCall, cwd: base.cwd }),
+      experiments: createGuideExperiments(guideCall),
       candidateCampaign: createGuideCandidateCampaignReader(
         guideCall,
         (candidateId) => optimizationCandidates.find((item) => item.id === candidateId) ?? null,
