@@ -7,18 +7,14 @@ on:
       - 'site/**'
       - '.github/workflows/pages.yml'
       - 'scripts/download-stats.mjs'
-      - 'scripts/prepare-landing.mjs'
       - 'tests/tools/download-stats.test.mjs'
-      - 'tests/tools/landing-contact.test.mjs'
       - '.github/workflows/download-stats.yml'
   pull_request:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
       - 'scripts/download-stats.mjs'
-      - 'scripts/prepare-landing.mjs'
       - 'tests/tools/download-stats.test.mjs'
-      - 'tests/tools/landing-contact.test.mjs'
       - '.github/workflows/download-stats.yml'
   workflow_dispatch:
 
@@ -44,16 +40,11 @@ jobs:
           test -s site/index.html
           node --check site/site.js
           node --test tests/tools/download-stats.test.mjs
-          node --test tests/tools/landing-contact.test.mjs
-      - name: Prepare public contact configuration
-        env:
-          CONTACT_FORM_ENDPOINT: ${{ vars.CONTACT_FORM_ENDPOINT }}
-        run: node scripts/prepare-landing.mjs
       - name: Upload static site
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
-          path: dist/landing
+          path: site
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

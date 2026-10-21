@@ -46,112 +46,13 @@
   box-shadow: var(--frame-shadow);
 }
 
-.contact-form[hidden] {
-  display: none;
-}
-
-.contact-fields {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.contact-fields:disabled {
-  opacity: 0.65;
-}
-
-.contact-field-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.contact-field {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 19px;
-}
-
-.contact-field label {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 620;
-}
-
-.contact-field label span {
-  color: var(--muted);
-  font-weight: 450;
-}
-
-.contact-field input,
-.contact-field textarea {
-  width: 100%;
-  min-height: 48px;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--page);
-  color: var(--ink);
-  font: inherit;
-  font-size: 14px;
-}
-
-.contact-field textarea {
-  min-height: 168px;
-  resize: vertical;
-}
-
-.contact-field input:hover,
-.contact-field textarea:hover {
-  border-color: var(--muted);
-}
-
-.contact-field input:focus-visible,
-.contact-field textarea:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-  border-color: var(--accent);
-}
-
-.contact-fields:disabled .contact-field input,
-.contact-fields:disabled .contact-field textarea {
-  cursor: not-allowed;
-}
-
-.contact-submit {
-  min-height: 48px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 620;
-}
-
-.contact-submit:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.contact-privacy {
-  margin: 17px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.contact-privacy a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.contact-fallback h2 {
+.contact-panel h2 {
   margin-bottom: 11px;
   font-size: 25px;
   letter-spacing: -0.04em;
 }
 
-.contact-fallback p {
+.contact-panel-copy {
   max-width: 410px;
   margin-bottom: 21px;
   color: var(--muted);
@@ -159,8 +60,18 @@
   line-height: 1.7;
 }
 
-.contact-fallback .button {
-  min-height: 48px;
+.contact-provider-note {
+  margin: 13px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.contact-profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 12px;
 }
 
 @media (max-width: 900px) {
@@ -201,23 +112,5 @@
 
   .contact-panel {
     padding: 21px 18px;
-  }
-
-  .contact-field-grid {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-
-  .contact-field textarea {
-    min-height: 145px;
-  }
-
-  .contact-field input,
-  .contact-field textarea {
-    font-size: 16px;
-  }
-
-  .contact-submit {
-    width: 100%;
   }
 }
