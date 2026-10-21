@@ -31,14 +31,12 @@ launching a browser.
 
 ### Evaluation evidence (advanced / maintainers)
 
-Evaluation campaigns are an advanced maintainer workflow; managed setup stays in the unified **Optimization Stack**. The app
-keeps a resumable campaign ID for each candidate/harness pair and reads campaign progress, assessment
-and the exact **Next** step directly in the browser. Use **Start baseline capture** or **Start optimized
-capture**, run the requested task in the selected coding agent, then choose **Record outcome** and
-enter the quality/attempt values you actually observed. Normal use no longer requires copying
-`benchmark-start` or `benchmark-finish` commands into a terminal.
+Evaluation campaigns are an advanced maintainer workflow; managed setup stays in the browser
+application's **Methods** view. Campaigns run from the CLI: Token Harness keeps a resumable campaign
+ID for each candidate/harness pair, and `benchmark-matrix` prints campaign progress, the assessment
+and the exact **Next** step. Normal use never requires these commands.
 
-The equivalent advanced CLI flow starts by asking the campaign engine for its current state. This
+A campaign starts by asking the campaign engine for its current state. This
 GitNexus example intentionally uses the only currently reviewed campaign row:
 
 ```sh
@@ -50,8 +48,8 @@ token-harness benchmark-matrix \
 
 Follow only the **Next** command printed by that report, complete the task honestly, then rerun the
 same `benchmark-matrix` command. Before an optimized run, enable the candidate through its own
-documented workflow. Token Harness records the experiment target but does not treat attribution—or
-the browser acknowledgement—as proof that the candidate was active. For GitNexus on the reviewed
+documented workflow. Token Harness records the experiment target but does not treat attribution as
+proof that the candidate was active. For GitNexus on the reviewed
 Claude Code `2.1.269` × GitNexus `1.6.12` × native-Linux row, the harness-native MCP inventory can
 prove only that the GitNexus server was available at both task boundaries. That is not proof Claude
 actually called a GitNexus tool, so the activation-verification promotion gate remains blocked

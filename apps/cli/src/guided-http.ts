@@ -9,7 +9,7 @@ import {
 } from './guided-candidate-campaign-status.js';
 import { guidedCandidateObservation } from './guided-candidate-readiness.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
-import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
+import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS } from './guided-assets.js';
 
 export const GUIDE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'Cache-Control': 'no-store',
@@ -243,10 +243,6 @@ export function createGuideHandler(input: {
         }
         if (url.pathname === '/guide.css') {
           send(200, GUIDE_CSS, 'text/css; charset=utf-8');
-          return;
-        }
-        if (url.pathname === '/stack.js') {
-          send(200, GUIDE_STACK_JS, 'text/javascript; charset=utf-8');
           return;
         }
         if (url.pathname === '/guide.js') {
