@@ -297,15 +297,15 @@ export const GUIDE_METHODS_JS = String.raw`
     }
     root.append(filters);
     const visible = card => methodFilter === 'all' || (methodFilter === 'on') === isOn(card);
-    for (const [title, detail, cards] of [
-      [t('Recommended'), t('On for most people'), recommended],
-      [t('More methods'), t('Useful in specific situations'), more],
+    for (const [title, detail, cards, layout] of [
+      [t('Recommended'), t('On for most people'), recommended, 'even'],
+      [t('More methods'), t('Useful in specific situations'), more, 'masonry'],
     ]) {
       const shown = cards.filter(visible);
       if (!shown.length) continue;
       const heading = node('div', undefined, 'section-heading');
       heading.append(node('h2', title), node('span', detail, 'caption'));
-      const grid = node('div', undefined, 'method-grid');
+      const grid = node('div', undefined, 'method-grid ' + layout);
       grid.append(...shown);
       root.append(heading, grid);
     }

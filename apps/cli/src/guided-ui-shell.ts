@@ -21,7 +21,7 @@ export const GUIDE_SHELL_HTML = `<!doctype html>
 </div>
 </div></header>
 <main id="main" class="wrap">
-<div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption">Nothing changes without your approval</span></div>
+<div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption" hidden>Nothing changes without your approval</span></div>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
 <div id="update-notice" class="update-notice" role="status" hidden></div>
 
@@ -39,7 +39,6 @@ export const GUIDE_SHELL_HTML = `<!doctype html>
 <div id="details-root"></div>
 </section>
 
-<footer><span data-i18n="Local only. No account. Nothing changes without your approval.">Local only. No account. Nothing changes without your approval.</span></footer>
 </main>
 <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="modal-title"></h2></div><div id="modal-content"></div><div id="modal-error" class="error" role="alert" hidden></div><div id="modal-actions" class="dialog-actions"></div></div></dialog>
 <script src="/guide.js" defer></script></body></html>`;

@@ -7,6 +7,8 @@ export const GUIDE_APP_JS = String.raw`
     document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
     document.querySelectorAll('[data-i18n-aria]').forEach(element => { element.setAttribute('aria-label', t(element.dataset.i18nAria)); });
     document.querySelectorAll('[data-lang]').forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.lang === lang)); });
+    // The approval promise is shown once, after the first read, instead of while loading.
+    $('live-status').hidden = !current;
     if (!busy) $('live-status').textContent = t('Nothing changes without your approval');
     $('advanced-toggle').setAttribute('aria-checked', String(advanced));
     $('tab-details').hidden = !advanced;
@@ -248,8 +250,6 @@ export const GUIDE_APP_IT: Readonly<Record<string, string>> = {
     'Tutti i modi in cui Token Harness ti fa consumare meno. Attivali o spegnili, aggiornali o leggi quando aiutano.',
   'Every figure with its source and how it was measured.':
     'Ogni numero con la sua fonte e il modo in cui è stato misurato.',
-  'Local only. No account. Nothing changes without your approval.':
-    'Solo in locale. Nessun account. Niente cambia senza la tua approvazione.',
   'Main views': 'Viste principali',
   Review: 'Controlla',
 };

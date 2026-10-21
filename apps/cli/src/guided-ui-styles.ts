@@ -87,7 +87,6 @@ main{padding-block:18px 56px}
 .error{background:var(--bad-soft);color:var(--bad)}
 .stale-state,.notice-box{background:var(--warn-soft);color:var(--warn)}
 .update-notice{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 16px;border-radius:var(--r);background:var(--accent-soft);color:var(--ink);margin-bottom:14px}
-footer{margin-top:40px;color:var(--ink-3);font-size:12.5px;text-align:center}
 .page-head{margin:6px 0 18px}
 .page-head h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,3.4vw,34px);letter-spacing:-.02em}
 .page-head p{color:var(--ink-2);margin-top:4px;max-width:66ch}
@@ -170,8 +169,11 @@ footer{margin-top:40px;color:var(--ink-3);font-size:12.5px;text-align:center}
 .filter[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .section-heading{display:flex;align-items:baseline;gap:10px;margin:24px 0 12px;flex-wrap:wrap}
 .section-heading h2{font-size:17px;font-weight:650}
-.method-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;align-items:start}
-@media (max-width:420px){.method-grid{grid-template-columns:1fr}}
+/* Recommended: one row of equal cards with controls aligned at the bottom.
+   More methods: masonry columns, so each card sits right under the one above. */
+.method-grid.even{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.method-grid.masonry{columns:3 300px;column-gap:16px}
+.method-grid.masonry > .method{break-inside:avoid;margin-bottom:16px;width:100%}
 .method{display:flex;flex-direction:column;gap:12px;padding:18px 18px 12px;min-width:0}
 .method-head{display:flex;gap:12px;align-items:flex-start}
 .method-icon{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--accent-soft);color:var(--accent)}
@@ -190,9 +192,9 @@ footer{margin-top:40px;color:var(--ink-3);font-size:12.5px;text-align:center}
 .update-strip button{margin-left:auto}
 .agent-tags{display:flex;gap:6px;flex-wrap:wrap}
 .agent-tags span{font-size:12px;padding:2px 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2)}
-.agent-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
-.agent-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
-.agent-row:last-child{border-bottom:0}
+.agent-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.agent-row{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-sm);min-width:0}
+.agent-row > div{min-width:0}
 .agent-row strong{display:block;font-size:14px}
 .method-foot{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid var(--line);flex-wrap:wrap}
 .feature-explanation summary{cursor:pointer;color:var(--accent);font-size:13.5px;font-weight:550;padding:4px 0}
