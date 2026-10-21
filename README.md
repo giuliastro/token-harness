@@ -100,7 +100,9 @@ global npm installation.
    setup exists; “runtime observed” means a qualifying callback or operation was actually recorded.
 
 The app has three tabs: **Home**, **Methods** and, with **Advanced view** on, **Details**. The header
-also has an EN/IT language switch, a theme select and **Refresh**.
+also has an EN/IT language switch, a theme select and **Refresh**. While the first read runs, a
+loading screen lists each check as it finishes. Add `#methods` or `#details` to the app URL to open
+that view directly.
 
 - **Home** shows tokens agents did not have to read (measured RTK output reduction, with a daily
   chart), tokens handled by cheaper models in the last 30 days (read locally from Claude Code and
