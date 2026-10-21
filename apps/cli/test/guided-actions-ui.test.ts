@@ -13,34 +13,45 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /choice-grid/);
   });
 
-  it('uses one central connection action per optimizer with explicit harness selection', () => {
-    assert.match(GUIDE_JS, /Recommended baseline/);
-    assert.match(GUIDE_JS, /RTK \+ HarnessTrim/);
-    assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
-    assert.match(GUIDE_HTML, /id="connection-overview"/);
-    assert.match(GUIDE_JS, /renderConnectionOverview/);
-    assert.match(GUIDE_JS, /actionButton\('Set up recommended stack'/);
-    assert.match(GUIDE_JS, /reviewSetup\(id\)/);
-    assert.match(GUIDE_JS, /Choose coding agents/);
+  it('uses one central switch or install action per method with explicit coding-app selection', () => {
+    assert.match(GUIDE_JS, /Turn on the recommended methods/);
+    assert.match(GUIDE_JS, /Choose the coding apps for RTK and HarnessTrim\./);
+    assert.match(GUIDE_JS, /Choose the coding apps where \{name\} should work\./);
+    assert.match(GUIDE_JS, /function reviewSetup\(providerId = null\)/);
+    assert.match(GUIDE_JS, /reviewSetup\(method\.key\)/);
     assert.match(GUIDE_JS, /harnesses,/);
-    assert.doesNotMatch(GUIDE_HTML, /managed-setup-actions/);
+    assert.match(GUIDE_JS, /\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\)/);
+    assert.match(GUIDE_JS, /t\('Install'\)/);
+    assert.match(GUIDE_JS, /The next step shows exactly what changes\. Nothing changes yet\./);
+    assert.match(GUIDE_JS, /No supported coding app was found for it\./);
+    assert.match(GUIDE_JS, /Review changes/);
+    assert.doesNotMatch(
+      GUIDE_HTML,
+      /managed-setup-actions|<summary>Optional optimizers<\/summary>/,
+    );
     assert.doesNotMatch(GUIDE_JS, /Finish setup/);
     assert.doesNotMatch(GUIDE_JS, /Connect to ['"] \+ agent\.name/);
     assert.doesNotMatch(GUIDE_JS, /Set up for ['"] \+ agent\.name/);
-    assert.doesNotMatch(GUIDE_HTML, /<summary>Optional optimizers<\/summary>/);
-    assert.match(GUIDE_JS, /The next step is still read-only/);
-    assert.match(GUIDE_JS, /selected connections/);
-    assert.match(GUIDE_JS, /Apply recommended setup/);
-    assert.match(GUIDE_JS, /No automatic change is available/);
   });
 
-  it('keeps setup routed through the existing preview and apply transaction endpoints', () => {
-    assert.match(
-      GUIDE_JS,
-      /request\('\/api\/preview', \{\s*action: 'setup',\s*harnesses,\s*\.\.\.\(providerId \? \{ provider: providerId \} : \{\}\),\s*\}\)/,
-    );
+  it('keeps every configuration change routed through the preview and apply endpoints', () => {
+    // One reviewed flow carries every change: setup, removal, routing, guidance, effort, undo.
+    assert.match(GUIDE_JS, /function reviewPreview\(body, options\)/);
+    assert.match(GUIDE_JS, /request\('\/api\/preview', body\)/);
     assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
-    assert.match(GUIDE_JS, /transactional engine with backups, ownership checks and rollback/i);
+    for (const action of [
+      "action: 'setup'",
+      "action: 'remove'",
+      "action: enabled ? 'routing-enable' : 'routing-disable'",
+      "action: 'skill'",
+      "action: 'effort'",
+    ])
+      assert.ok(GUIDE_JS.includes(action), action);
+    assert.match(GUIDE_JS, /reviewPreview\(\{ action: 'setup', harnesses/);
+    assert.match(GUIDE_JS, /Only changes Token Harness owns are applied, with a backup first/);
+    // The controller never posts an apply without a preview ticket and has no other mutation path.
+    assert.equal(GUIDE_JS.match(/request\('\/api\/apply'/g)?.length, 1);
+    assert.doesNotMatch(GUIDE_JS, /request\('\/api\/(install|uninstall|setup|remove)/);
     assert.doesNotThrow(() => new Script(GUIDE_JS));
   });
 
@@ -48,12 +59,14 @@ describe('guided setup UX', () => {
     assert.match(GUIDE_JS, /querySelectorAll\('button:disabled'\)/);
     assert.match(GUIDE_JS, /event\.preventDefault\(\)/);
     assert.match(GUIDE_JS, /event\.stopImmediatePropagation\(\)/);
+    assert.match(GUIDE_JS, /modalClose\(t\('Applying…'\), true\)/);
+    assert.match(GUIDE_JS, /Applying only the approved change…/);
   });
 
   it('automatically re-reads the overview after an approved mutation', () => {
     assert.match(GUIDE_JS, /refreshOverviewAfterMutation/);
-    assert.match(GUIDE_JS, /Applying the new configuration and refreshing status/);
-    assert.match(GUIDE_JS, /Refreshing the current setup/);
+    assert.match(GUIDE_JS, /Applying the approved change/);
+    assert.match(GUIDE_JS, /Refreshing after the approved change…/);
     assert.match(GUIDE_JS, /\/api\/overview\?period=.*&refresh=1/);
     assert.doesNotMatch(
       GUIDE_JS,
@@ -61,9 +74,20 @@ describe('guided setup UX', () => {
     );
   });
 
-  it('keeps advanced evaluation installation explicitly external and manual', () => {
-    assert.match(GUIDE_JS, /Experimental, not managed/);
-    assert.match(GUIDE_JS, /Token Harness will not execute them for you/);
-    assert.match(GUIDE_JS, /Installation is not activation/);
+  it('keeps third-party installation behind reviewed plans and shows manual commands as text only', () => {
+    // Installing an optimizer is a provider-scoped plan reviewed in the dialog, never a direct call.
+    assert.doesNotMatch(
+      GUIDE_JS,
+      /request\([^\n]*(pip install|pipx install|npm install|uv tool install)/i,
+    );
+    // Commands the user must run themselves are displayed to copy, not executed.
+    assert.match(GUIDE_JS, /function copyRow\(command\)/);
+    assert.match(GUIDE_JS, /navigator\.clipboard\.writeText\(command\)/);
+    assert.match(GUIDE_JS, /Install the reviewed cclimits companion/);
+    assert.match(GUIDE_JS, /Token Harness can install mcptoon once pipx or uv is available/);
+    // Benchmark commands are guidance for the CLI; Details never runs them.
+    assert.match(GUIDE_JS, /token-harness benchmark-start/);
+    assert.match(GUIDE_JS, /Preview each temporary configuration with benchmark-prepare/);
+    assert.doesNotMatch(GUIDE_JS, /request\('\/api\/benchmark-(start|prepare|finish)/);
   });
 });

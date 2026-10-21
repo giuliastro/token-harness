@@ -9,12 +9,12 @@ existing users and testing well before it is the version we actively promote.
 
 ## Required before promotion
 
-- [x] Outcome-first **Overview / optimizer setup / Results** information architecture.
+- [x] Outcome-first **Home / Methods / Details** information architecture (Details behind the Advanced view switch).
 - [x] No periodic full app reload.
 - [x] Existing readings remain visible during refresh and after approved changes.
 - [x] Preview → approval → apply → verify → undo safety flow.
 - [x] Recorded reducer savings keep providers and measurement classes separate.
-- [x] Results display paired allowance and quality value when available and block unsupported claims.
+- [x] Details display paired allowance and quality value when available and block unsupported claims.
 - [x] The primary UI can present the active optimization setup, measured value, quality state and a
       useful next destination while keeping technical detail secondary to user outcomes.
 - [ ] RTK and HarnessTrim remain verified on current reviewed combinations.
@@ -44,8 +44,8 @@ existing users and testing well before it is the version we actively promote.
 - [ ] README onboarding verified against the exact published UI. The README is rewritten against
       0.1.26 behaviour; clean fresh-user runtime validation is still required.
 - [ ] One clean end-to-end fresh-user scenario passes:
-      install → open Overview → discover optimizer setup → review/apply → use agent → inspect
-      Results → verify → check/update state → undo/uninstall.
+      install → open Home → turn on the recommended setup or a method in Methods → review/apply → use agent → inspect
+      Home/Details → verify → check/update state → undo/uninstall.
 
 ## What counts as an integration
 

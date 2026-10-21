@@ -39,6 +39,7 @@ export * from './domain/action-conflicts.js';
 export * from './domain/capabilities.js';
 export * from './domain/compatibility-rows.js';
 export * from './domain/compatibility.js';
+export * from './domain/delegated-usage.js';
 export * from './domain/detection.js';
 export * from './domain/diagnostics.js';
 export * from './domain/digest.js';

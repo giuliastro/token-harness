@@ -158,15 +158,16 @@ it('rejects arbitrary providers and keeps per-optimizer removal inside the manag
     service.preview({ action: 'undo', transaction: 'attacker-selected-id' }),
     (error: unknown) => error instanceof GuideError && error.status === 400,
   );
+  // Removal is one switch per method in Methods, offered only for a connected method, and it
+  // goes through the same reviewed preview and approval as every other change.
   assert.doesNotMatch(GUIDE_HTML, /<summary>Remove Token Harness-managed configuration<\/summary>/);
-  assert.match(GUIDE_HTML, /id="connection-overview"/);
-  assert.match(GUIDE_JS, /component\?\.managedByTokenHarness \|\| component\?\.configured/);
-  assert.match(GUIDE_JS, /window\.tokenHarnessReviewRemoval/);
-  assert.match(GUIDE_JS, /action: 'remove', provider/);
-  assert.match(
-    GUIDE_JS,
-    /User-owned provider installations and unrelated configuration are left untouched/,
-  );
+  assert.match(GUIDE_HTML, /id="methods-root"/);
+  assert.match(GUIDE_JS, /const on = method\.connected\.length > 0/);
+  assert.match(GUIDE_JS, /on \? reviewRemoval\(method\.key\) : reviewSetup\(method\.key\)/);
+  assert.match(GUIDE_JS, /action: 'remove', provider: providerId/);
+  assert.doesNotMatch(GUIDE_JS, /window\.tokenHarnessReviewRemoval/);
+  assert.match(GUIDE_JS, /\{name\} stays installed, so you can turn it on again at any time/);
+  assert.match(GUIDE_JS, /Your own settings and installed programs stay untouched/);
   assert.match(GUIDE_JS, /request\('\/api\/preview', body\)/);
   assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
 });

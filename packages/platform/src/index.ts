@@ -48,6 +48,7 @@
 
 export * from './artifacts/rtk-release.js';
 export * from './fs/node-filesystem.js';
+export * from './fs/node-usage-log.js';
 
 export * from './metrics/attribution-salt.js';
 export * from './metrics/sqlite-child.js';

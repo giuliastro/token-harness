@@ -67,6 +67,7 @@ import { observeAgentSkill } from './agent-skill.js';
 import { observeNativePromptRouting } from './prompt-router.js';
 import { createGuideCandidateCampaignReader } from './guided-candidate-campaign-status.js';
 import { createGuideHandler } from './guided-http.js';
+import { observeDelegatedUsage } from './delegated-usage.js';
 import { createGuideOperationReader } from './guided-operation-history.js';
 import { createGuideComparisonReader } from './guided-comparisons.js';
 import { createGuideBenchmarkRecoveryReader } from './guided-benchmark-recovery.js';
@@ -706,6 +707,9 @@ async function runGuidedUi(
       projectRoot: base.cwd,
       home: base.home ?? null,
     }),
+    base.home === null || base.home === undefined
+      ? null
+      : () => observeDelegatedUsage({ home: base.home!, env: process.env }),
   );
   const token = randomBytes(32).toString('hex');
   let authority = '';
