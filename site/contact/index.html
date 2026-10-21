@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' https://api.github.com; form-action https://formspree.io; object-src 'none'; base-uri 'self'"
+    />
+    <title>Contact | Token Harness</title>
+    <meta
+      name="description"
+      content="Get in touch about AI, Token Harness, and practical ways to make AI workflows more token-efficient."
+    />
+    <link rel="canonical" href="https://giuliastro.github.io/token-harness/contact/" />
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="../contact.css" />
+    <script src="../site.js" defer></script>
+  </head>
+  <body class="contact-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner wrap">
+        <a class="brand" href="../" aria-label="Token Harness home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>Token Harness</span>
+        </a>
+        <nav class="primary-nav contact-nav" aria-label="Main navigation">
+          <a href="../">Back to Token Harness</a>
+          <a class="nav-github" href="https://github.com/giuliastro/token-harness"
+            >GitHub <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+        <button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark mode</button>
+      </div>
+    </header>
+
+    <main id="main" class="contact-main wrap" tabindex="-1">
+      <section class="contact-layout" aria-labelledby="contact-title">
+        <div class="contact-copy">
+          <p class="eyebrow">AI &amp; token efficiency</p>
+          <h1 id="contact-title">Let’s talk AI.</h1>
+          <p class="contact-lede">
+            I’m giuliastro, an AI and token-saving expert. Have a question about Token Harness or a
+            practical idea for making AI workflows more efficient? I’m open to thoughtful
+            conversations and collaborations.
+          </p>
+          <a class="text-link contact-back-link" href="../">
+            <span aria-hidden="true">←</span> Back to Token Harness
+          </a>
+        </div>
+
+        <div class="contact-panel">
+          <form id="contact-form" class="contact-form" method="post" hidden>
+            <fieldset class="contact-fields" disabled>
+              <input type="hidden" name="_subject" value="Token Harness contact" />
+              <div class="contact-field-grid">
+                <div class="contact-field">
+                  <label for="contact-name">Name <span>(optional)</span></label>
+                  <input
+                    id="contact-name"
+                    name="name"
+                    type="text"
+                    autocomplete="name"
+                    maxlength="100"
+                  />
+                </div>
+                <div class="contact-field">
+                  <label for="contact-email">Email</label>
+                  <input
+                    id="contact-email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    maxlength="254"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="contact-field">
+                <label for="contact-message">Message</label>
+                <textarea
+                  id="contact-message"
+                  name="message"
+                  rows="7"
+                  maxlength="5000"
+                  required
+                ></textarea>
+              </div>
+              <div class="contact-honeypot" hidden aria-hidden="true">
+                <label for="contact-gotcha">Leave this field empty</label>
+                <input
+                  id="contact-gotcha"
+                  name="_gotcha"
+                  type="text"
+                  tabindex="-1"
+                  autocomplete="off"
+                />
+              </div>
+              <button class="button button-primary contact-submit" type="submit">
+                Send message <span aria-hidden="true">→</span>
+              </button>
+            </fieldset>
+            <p class="contact-privacy">
+              Form messages are processed by Formspree. See the
+              <a href="https://formspree.io/legal/privacy-policy/">Formspree privacy policy</a>.
+            </p>
+          </form>
+
+          <div id="contact-fallback" class="contact-fallback">
+            <h2>Find me on GitHub</h2>
+            <p>Explore my open-source work and the projects behind these ideas.</p>
+            <a class="button button-primary" href="https://github.com/giuliastro">
+              Visit giuliastro on GitHub <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner wrap">
+        <a class="brand footer-brand" href="../" aria-label="Token Harness home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>Token Harness</span>
+        </a>
+        <p>A local toolkit for Claude Code and Codex.</p>
+        <nav class="footer-nav" aria-label="Footer navigation">
+          <a href="../">Back to product</a>
+          <a href="https://github.com/giuliastro/token-harness">Source</a>
+          <a href="https://github.com/giuliastro">Author</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

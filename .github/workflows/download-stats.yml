@@ -1,0 +1,24 @@
+name: Download statistics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Read GitHub release counters
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | node scripts/download-stats.mjs >> "$GITHUB_STEP_SUMMARY"

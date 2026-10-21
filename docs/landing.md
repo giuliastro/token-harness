@@ -3,7 +3,61 @@
 The English product landing lives in `site/` and is published at
 <https://giuliastro.github.io/token-harness/> by `.github/workflows/pages.yml`.
 It is static HTML, CSS and browser JavaScript, with no build dependencies,
-accounts, analytics or external font requests.
+visitor accounts, analytics or external font requests.
+
+## Download counts
+
+All desktop download buttons resolve to assets in this repository's GitHub
+Releases. When the release API is unavailable, they open the latest release page.
+Keep this route: GitHub's native `download_count` then includes downloads from
+both the landing and GitHub, without a separate tracker or a duplicate counter.
+These are download requests, not unique users or completed installations. GitHub
+does not separate landing referrals in this counter.
+
+To see totals and a breakdown by release and asset, open
+[Download statistics](https://github.com/giuliastro/token-harness/actions/workflows/download-stats.yml),
+choose **Run workflow** on `main`, then open the completed run's summary. The report
+reads the current counters; it neither downloads binaries nor increments them.
+It includes installers and portable desktop archives from published stable
+releases, excluding checksums, source archives and npm tarballs. npm registry
+installs are separate. Deleting an asset or release removes it from future reports.
+
+With GitHub CLI installed, the same read-only report is available locally:
+
+```sh
+gh api --paginate --slurp 'repos/giuliastro/token-harness/releases?per_page=100' | node scripts/download-stats.mjs
+```
+
+The counter comes from the official
+[GitHub release asset API](https://docs.github.com/en/rest/releases/assets).
+
+## Author and contact
+
+The author section identifies giuliastro as an AI and token saving expert, with a
+dedicated `contact/` page and a public GitHub profile link.
+
+Email delivery uses a Formspree form ID: configure and verify the recipient in
+the author's Formspree account, then set the repository Actions variable
+`CONTACT_FORM_ENDPOINT` to its `https://formspree.io/f/…` endpoint. Run **Landing
+page** on `main` after changing this variable (variable edits do not trigger a
+deployment). The recipient address belongs only in the service's private
+configuration, never in HTML, JavaScript, repository history, or an endpoint URL.
+No email credentials are shipped to the browser.
+
+`node scripts/prepare-landing.mjs` copies the static site into `dist/landing/` and
+writes only the validated public form endpoint into the contact page. The form
+works without browser JavaScript. If unconfigured, the page offers the GitHub
+profile instead of a non-working form. The native POST
+goes to Formspree, which processes the sender's fields and handles submission
+responses and spam challenges. The page links to its privacy policy. Check the
+service dashboard's domain and spam settings when activating the form.
+
+To disable email delivery, unset `CONTACT_FORM_ENDPOINT` and republish the landing.
+Fixture tests use a fake endpoint and never submit messages. After activation,
+have the owner verify a real message arrives; endpoint validation alone does not
+prove email delivery. Keep contact destinations explicitly approved by the author
+or already public on their profile; never copy a private Git configuration or
+account email into the page.
 
 ## Edit and preview
 
