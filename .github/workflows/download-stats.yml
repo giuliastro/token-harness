@@ -21,4 +21,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | node scripts/download-stats.mjs >> "$GITHUB_STEP_SUMMARY"
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | node scripts/download-stats.mjs | tee -a "$GITHUB_STEP_SUMMARY"

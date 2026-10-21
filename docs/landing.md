@@ -36,28 +36,22 @@ The counter comes from the official
 The author section identifies giuliastro as an AI and token saving expert, with a
 dedicated `contact/` page and a public GitHub profile link.
 
-Email delivery uses a Formspree form ID: configure and verify the recipient in
-the author's Formspree account, then set the repository Actions variable
-`CONTACT_FORM_ENDPOINT` to its `https://formspree.io/f/…` endpoint. Run **Landing
-page** on `main` after changing this variable (variable edits do not trigger a
-deployment). The recipient address belongs only in the service's private
-configuration, never in HTML, JavaScript, repository history, or an endpoint URL.
-No email credentials are shipped to the browser.
+The contact page opens the author's published Google Form and also links to X
+and GitHub. The site remains static: no email credentials, recipient address,
+third-party embed, or form backend configuration is shipped with Pages. The
+form's questions, access settings, responses and notification recipient stay in
+Google Forms. Verify the responder URL in a signed-out browser when changing it.
 
-`node scripts/prepare-landing.mjs` copies the static site into `dist/landing/` and
-writes only the validated public form endpoint into the contact page. The form
-works without browser JavaScript. If unconfigured, the page offers the GitHub
-profile instead of a non-working form. The native POST
-goes to Formspree, which processes the sender's fields and handles submission
-responses and spam challenges. The page links to its privacy policy. Check the
-service dashboard's domain and spam settings when activating the form.
+For a form open to everyone, use **Anyone with the link** responder access and
+check settings that require sign-in, including **Limit to 1 response** and verified
+email collection. Keep response summaries private when collecting contact messages.
+Google documents [publishing and responder access](https://support.google.com/docs/answer/2839588).
 
-To disable email delivery, unset `CONTACT_FORM_ENDPOINT` and republish the landing.
-Fixture tests use a fake endpoint and never submit messages. After activation,
-have the owner verify a real message arrives; endpoint validation alone does not
-prove email delivery. Keep contact destinations explicitly approved by the author
-or already public on their profile; never copy a private Git configuration or
-account email into the page.
+To receive emails, the owner must enable **Responses → More → Get email
+notifications for new responses** in Google Forms. A published form alone does
+not prove notifications are enabled or that email arrives. The owner should
+verify delivery with a real submission; automated checks never send messages.
+See Google's [response notification instructions](https://support.google.com/docs/answer/139706).
 
 ## Edit and preview
 
