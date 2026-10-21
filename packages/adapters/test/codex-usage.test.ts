@@ -119,7 +119,11 @@ describe('readCodexUsage', () => {
   it('honours CODEX_HOME over the home directory', async () => {
     const h = home();
     const elsewhere = home();
-    writeJsonl(join(h, '.codex', 'sessions', 'ignored.jsonl'), [meta({}), turn('a'), tokens(USAGE)]);
+    writeJsonl(join(h, '.codex', 'sessions', 'ignored.jsonl'), [
+      meta({}),
+      turn('a'),
+      tokens(USAGE),
+    ]);
     writeJsonl(join(elsewhere, 'sessions', 'used.jsonl'), [meta({}), turn('b'), tokens(USAGE)]);
     const result = await read(h, { CODEX_HOME: elsewhere });
     assert.deepEqual(

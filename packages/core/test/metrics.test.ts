@@ -171,7 +171,11 @@ describe('measurement classes', () => {
 });
 
 describe('dailySavings', () => {
-  function at(id: string, timestamp: string, extra: Parameters<typeof event>[0]): OptimizationEvent {
+  function at(
+    id: string,
+    timestamp: string,
+    extra: Parameters<typeof event>[0],
+  ): OptimizationEvent {
     return { ...event({ ...extra, id }), timestamp };
   }
 

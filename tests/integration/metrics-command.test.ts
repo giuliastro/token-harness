@@ -564,7 +564,10 @@ describe('the daily series', () => {
       ],
     );
     const dailyTotal = report.daily.reduce((sum, row) => sum + row.saved, 0);
-    assert.equal(dailyTotal, report.providers.reduce((sum, row) => sum + row.saved, 0));
+    assert.equal(
+      dailyTotal,
+      report.providers.reduce((sum, row) => sum + row.saved, 0),
+    );
     assert.equal(dailyTotal, report.classes[0]?.saved);
   });
 
