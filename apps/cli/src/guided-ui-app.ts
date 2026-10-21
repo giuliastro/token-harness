@@ -18,11 +18,14 @@ export const GUIDE_APP_JS = String.raw`
     if (!VIEWS.includes(view)) return;
     if (view === 'details' && !advanced) view = 'home';
     selectedView = view;
+    const loading = !current;
     const onboarding = !!current && onboardingActive();
+    $('view-loading').hidden = !loading;
+    $('status-line').hidden = loading;
     $('view-onboarding').hidden = !onboarding;
     $('main-tabs').hidden = onboarding;
     for (const key of VIEWS) {
-      const active = key === view && !onboarding;
+      const active = key === view && !onboarding && !loading;
       $('view-' + key).hidden = !active;
       $('tab-' + key).setAttribute('aria-selected', String(key === view));
       $('tab-' + key).tabIndex = key === view ? 0 : -1;
@@ -32,6 +35,72 @@ export const GUIDE_APP_JS = String.raw`
       if (!onboarding) $('tab-' + view).focus();
       $('main').scrollIntoView({ block: 'start' });
     }
+  }
+
+  // Friendly names for the server's read stages; unknown stages keep the server label.
+  const LOADING_STAGES = [
+    ['agents', () => t('Finding Claude Code and Codex')],
+    ['allowance', () => t('Reading your plan usage')],
+    ['rules', () => t('Reading preferences and connected tools')],
+    ['savings', () => t('Adding up what you saved')],
+    ['checks', () => t('Checking connections')],
+    ['value', () => t('Reading comparisons and quality')],
+  ];
+
+  function loadingMark() {
+    const mark = node('div', undefined, 'loading-mark');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.append(node('i'), node('i'), node('i'));
+    return mark;
+  }
+
+  /** The first read can take a while: show what is happening instead of an empty page. */
+  function renderLoading(failure = null) {
+    const root = $('loading-root');
+    if (!root) return;
+    root.replaceChildren();
+    const card = node('div', undefined, 'loading-card' + (failure ? ' failed' : ''));
+    card.append(loadingMark());
+    if (failure) {
+      card.append(
+        node('h2', t('The check could not finish')),
+        node('p', failure, 'loading-sub'),
+        actionButton(t('Try again'), () => refresh(true)),
+      );
+      root.append(card);
+      return;
+    }
+    const reported = Array.isArray(activityState?.loading?.stages) ? activityState.loading.stages : [];
+    const stages = LOADING_STAGES.map(([id, label]) => {
+      const stage = reported.find(item => item.id === id);
+      return { label: label(), state: stage ? stage.state : 'working' };
+    });
+    for (const stage of reported)
+      if (!LOADING_STAGES.some(([id]) => id === stage.id)) stages.push({ label: stage.label, state: stage.state });
+    const done = stages.filter(stage => stage.state !== 'working').length;
+    card.append(
+      node('h2', t('Checking your computer…')),
+      node('p', t('Token Harness is looking at your agents and what they saved. Nothing changes.'), 'loading-sub'),
+    );
+    const bar = node('div', undefined, 'loading-bar');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(stages.length));
+    bar.setAttribute('aria-valuenow', String(done));
+    bar.setAttribute('aria-label', t('{done} of {total} checks done', { done, total: stages.length }));
+    const fill = node('i');
+    fill.style.width = Math.max(6, done / stages.length * 100) + '%';
+    bar.append(fill);
+    const list = node('ul', undefined, 'loading-steps');
+    for (const stage of stages) {
+      const item = node('li', undefined, stage.state === 'working' ? 'working' : 'done');
+      const icon = node('span', stage.state === 'working' ? '' : '✓', 'step-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      item.append(icon, node('span', stage.label));
+      list.append(item);
+    }
+    card.append(bar, node('p', t('{done} of {total} checks done', { done, total: stages.length }), 'loading-count'), list);
+    root.append(card);
   }
 
   function renderNotices() {
@@ -69,6 +138,10 @@ export const GUIDE_APP_JS = String.raw`
       if (selectedView === 'details') await loadOperations();
       setStatus(t('Updated at {time}', { time: new Date(current.generatedAt).toLocaleTimeString(locale()) }), false);
     } catch (error) {
+      if (!current) {
+        renderLoading(error.name === 'TimeoutError' ? t('The check took too long.') : error.message);
+        return;
+      }
       setError(error.name === 'TimeoutError' ? t('The check took too long. Your last results are still shown; choose Refresh to try again.') : error.message);
       setStatus(t('The check needs attention.'), false);
     } finally {
@@ -214,6 +287,7 @@ export const GUIDE_APP_JS = String.raw`
   applyStaticText();
   setStatus(t('Checking your setup…'), true);
   setBusy(false);
+  renderLoading();
   renderHome();
   renderMethods();
   selectView(linkedView || 'home');
@@ -230,6 +304,18 @@ export const GUIDE_APP_IT: Readonly<Record<string, string>> = {
     'Il controllo è durato troppo. Restano visibili gli ultimi risultati; scegli Aggiorna per riprovare.',
   'The check needs attention.': 'Il controllo richiede attenzione.',
   'Loading this period…': 'Carico questo periodo…',
+  'The check took too long.': 'Il controllo è durato troppo.',
+  'Finding Claude Code and Codex': 'Cerco Claude Code e Codex',
+  'Reading your plan usage': 'Leggo i consumi del piano',
+  'Reading preferences and connected tools': 'Leggo preferenze e strumenti collegati',
+  'Adding up what you saved': 'Calcolo quanto hai risparmiato',
+  'Checking connections': 'Controllo i collegamenti',
+  'Reading comparisons and quality': 'Leggo confronti e qualità',
+  'The check could not finish': 'Il controllo non è terminato',
+  'Try again': 'Riprova',
+  'Token Harness is looking at your agents and what they saved. Nothing changes.':
+    'Token Harness sta guardando i tuoi agenti e quanto hanno risparmiato. Non cambia niente.',
+  '{done} of {total} checks done': '{done} di {total} controlli fatti',
   'An update is available': 'È disponibile un aggiornamento',
   'Review update': "Controlla l'aggiornamento",
   // Static page text (data-i18n attributes in the HTML shell).

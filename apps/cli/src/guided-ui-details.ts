@@ -944,7 +944,8 @@ export const GUIDE_DETAILS_JS = String.raw`
       activityState = await request('/api/activity');
       renderActivity();
       renderMaintenance();
-      if (reading && activityState?.loading?.running && Array.isArray(activityState.loading.stages)) {
+      if (!current) renderLoading();
+      else if (reading && activityState?.loading?.running && Array.isArray(activityState.loading.stages)) {
         const stages = activityState.loading.stages;
         const done = stages.filter(stage => stage.state !== 'working').length;
         const working = stages.filter(stage => stage.state === 'working').slice(0, 2).map(stage => String(stage.label).toLowerCase());

@@ -206,6 +206,29 @@ main{padding-block:18px 56px}
 .explain-box.warn{background:var(--warn-soft)}
 .project-link{display:inline-flex;gap:4px;align-items:center;font-size:13px;margin-top:6px;font-weight:550}
 
+/* First-read loading screen */
+.loading-screen{min-height:calc(100vh - 140px);display:grid;place-items:center;padding-block:24px}
+.loading-card{width:min(440px,100%);display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.loading-card h2{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:10px}
+.loading-sub{color:var(--ink-2);max-width:36ch}
+.loading-mark{width:72px;height:72px;border-radius:20px;background:var(--ink);display:grid;align-content:center;gap:7px;padding:0 17px;box-shadow:var(--shadow)}
+.loading-mark i{display:block;height:7px;border-radius:4px;background:var(--bg);transform-origin:left;animation:trim 1.8s ease-in-out infinite}
+.loading-mark i:nth-child(1){width:100%}
+.loading-mark i:nth-child(2){width:66%;opacity:.8;animation-delay:.15s}
+.loading-mark i:nth-child(3){width:36%;opacity:.6;animation-delay:.3s}
+@keyframes trim{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.45)}}
+.loading-card.failed .loading-mark i{animation:none;opacity:.35}
+.loading-bar{width:100%;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:12px}
+.loading-bar i{display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .5s ease}
+.loading-count{font-size:13px;color:var(--ink-3)}
+.loading-steps{list-style:none;margin:6px 0 0;padding:0;width:100%;display:flex;flex-direction:column;gap:2px;text-align:left}
+.loading-steps li{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:var(--r-sm);font-size:14px;color:var(--ink-3)}
+.loading-steps li.done{color:var(--ink)}
+.loading-steps .step-icon{width:18px;height:18px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700}
+.loading-steps li.working .step-icon{border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}
+.loading-steps li.done .step-icon{background:var(--good);color:#fff}
+@media (prefers-reduced-motion:reduce){.loading-mark i,.loading-steps li.working .step-icon{animation:none}}
+
 /* Onboarding */
 .onboarding{max-width:760px;margin:18px auto 0;display:flex;flex-direction:column;gap:12px}
 .onboarding h1{font-family:var(--f-display);font-weight:700;font-size:clamp(30px,4.6vw,44px);letter-spacing:-.03em;line-height:1.08}

@@ -21,9 +21,11 @@ export const GUIDE_SHELL_HTML = `<!doctype html>
 </div>
 </div></header>
 <main id="main" class="wrap">
-<div class="status-line"><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption" hidden>Nothing changes without your approval</span></div>
+<div id="status-line" class="status-line" hidden><span class="read-status" role="status"><span id="reading-spinner" class="spinner" aria-hidden="true"></span><span id="updated">Checking your setup…</span></span><span id="live-status" class="caption" hidden>Nothing changes without your approval</span></div>
 <div id="stale-state" class="stale-state" hidden></div><div id="error" class="error" role="alert" hidden></div><div id="notices"></div>
 <div id="update-notice" class="update-notice" role="status" hidden></div>
+
+<section id="view-loading" class="loading-screen" aria-live="polite"><div id="loading-root"></div></section>
 
 <section id="view-onboarding" hidden><div id="onboarding-root"></div></section>
 
