@@ -13,6 +13,7 @@ import {
 } from '@token-harness/core';
 import { GuideService, type GuideCall, type GuideOverview } from '../src/guided.js';
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
+import { observation, startGuidedBrowser } from './guided-browser-double.js';
 import { createGuideHandler } from '../src/guided-http.js';
 
 const platform = {
@@ -479,11 +480,156 @@ it('surfaces an RTK direct-release warning instead of claiming everything is up 
 });
 
 it('presents updates as one complete check then install flow', () => {
-  assert.match(GUIDE_HTML, /Health and updates/);
+  assert.match(GUIDE_HTML, /id="update-notice"/);
   assert.match(GUIDE_JS, /Check for updates/);
-  assert.match(GUIDE_JS, /Install updates/);
+  assert.match(GUIDE_JS, /Install update/);
   assert.match(GUIDE_JS, /\/api\/update-check/);
   assert.match(GUIDE_JS, /request\('\/api\/apply', \{ ticket \}\)/);
   assert.match(GUIDE_JS, /Nothing changes during this check/);
+  assert.match(GUIDE_JS, /Token Harness checks every update together/);
   assert.doesNotMatch(GUIDE_JS, /Check optimizer updates/);
+});
+
+const updateTicket = {
+  ok: true,
+  title: 'Updates ready',
+  messages: ['RTK 0.44.0 can update to 0.45.0.'],
+  updatesAvailable: true,
+  ticket: 'update-ticket',
+};
+
+function withUpdates() {
+  const data = observation();
+  data.stack.components = [
+    {
+      providerId: 'rtk',
+      configured: true,
+      configuredHarnesses: ['codex'],
+      installed: true,
+      version: '0.44.0',
+      update: 'available',
+      updateAvailableVersion: '0.45.0',
+    },
+  ];
+  return data;
+}
+
+it('checks once after the first overview and installs only after an explicit review and approval', async () => {
+  const browser = await startGuidedBrowser({
+    data: withUpdates(),
+    respond: (path, body) =>
+      path === '/api/update-check'
+        ? (body as { background?: boolean }).background
+          ? { ...updateTicket, ticket: null, stack: undefined }
+          : updateTicket
+        : undefined,
+  });
+  const { get, writes, reads, settle, button } = browser;
+  // The background check ran once, after the overview, and only announces the update.
+  const checks = writes.filter((write) => write.path === '/api/update-check');
+  assert.deepEqual(
+    checks.map((write) => write.body),
+    [{ period: 'all', background: true }],
+  );
+  assert.ok(
+    reads.indexOf('/api/update-check') >
+      reads.findIndex((path) => path.startsWith('/api/overview')),
+  );
+  assert.equal(get('update-notice').hidden, false);
+  assert.match(get('update-notice').textContent, /An update is available/);
+  assert.ok(writes.every((write) => write.path !== '/api/apply'));
+  assert.equal(get('modal').open, false, 'an available update never opens a dialog by itself');
+
+  button(get('update-notice'), 'Review update').fire('click');
+  await settle();
+  assert.deepEqual(writes.filter((write) => write.path === '/api/update-check').at(-1)?.body, {
+    period: 'all',
+  });
+  assert.match(get('modal-content').textContent, /RTK 0\.44\.0 can update to 0\.45\.0\./);
+  assert.match(get('modal-content').textContent, /previous configuration can be restored/);
+  assert.ok(
+    writes.every((write) => write.path !== '/api/apply'),
+    'reviewing is not installing',
+  );
+  assert.deepEqual(
+    get('modal-actions')
+      .querySelectorAll('button')
+      .map((item) => item.textContent),
+    ['Cancel', 'Install update'],
+  );
+  button(get('modal-actions'), 'Cancel').fire('click');
+  assert.ok(writes.every((write) => write.path !== '/api/apply'));
+
+  button(get('update-notice'), 'Review update').fire('click');
+  await settle();
+  button(get('modal-actions'), 'Install update').fire('click');
+  await settle();
+  assert.deepEqual(
+    writes.filter((write) => write.path === '/api/apply'),
+    [{ path: '/api/apply', body: { ticket: 'update-ticket' } }],
+  );
+});
+
+it('reviews a single method update together with every other update, never one provider alone', async () => {
+  const { get, writes, settle, button } = await startGuidedBrowser({
+    data: withUpdates(),
+    storage: {},
+    respond: (path, body) =>
+      path === '/api/update-check' && !(body as { background?: boolean }).background
+        ? updateTicket
+        : undefined,
+  });
+  get('tab-methods').fire('click');
+  const rtk = get('methods-root')
+    .querySelectorAll('article.method')
+    .find((item) => item.dataset['method'] === 'rtk')!;
+  assert.match(rtk.textContent, /Update available: v0\.44\.0 → v0\.45\.0/);
+  button(rtk, 'Update').fire('click');
+  await settle();
+  assert.match(get('modal-title').textContent, /Update RTK/);
+  const request = writes.filter((write) => write.path === '/api/update-check').at(-1)!;
+  assert.deepEqual(request.body, { period: 'all' }, 'no provider selector is sent');
+  assert.ok(writes.every((write) => write.path !== '/api/apply'));
+});
+
+it('keeps an update that needs a restart pending until the user chooses to restart', async () => {
+  const { get, writes, settle, button } = await startGuidedBrowser({
+    data: withUpdates(),
+    respond: (path, body) => {
+      if (path === '/api/update-check')
+        return (body as { background?: boolean }).background ? undefined : updateTicket;
+      if (path === '/api/apply')
+        return {
+          ok: true,
+          restartRequired: true,
+          title: 'Update installed',
+          messages: ['Restart to use 0.45.0.'],
+        };
+      if (path === '/api/restart') return { ok: true, messages: [] };
+      return undefined;
+    },
+  });
+  get('tab-methods').fire('click');
+  const rtk = get('methods-root')
+    .querySelectorAll('article.method')
+    .find((item) => item.dataset['method'] === 'rtk')!;
+  button(rtk, 'Update').fire('click');
+  await settle();
+  button(get('modal-actions'), 'Install update').fire('click');
+  await settle();
+  assert.equal(get('modal-title').textContent, 'Update installed');
+  assert.match(get('modal-content').textContent, /Restart to finish.*Restart to use 0\.45\.0\./);
+  assert.deepEqual(
+    get('modal-actions')
+      .querySelectorAll('button')
+      .map((item) => item.textContent),
+    ['Later', 'Restart and re-check'],
+  );
+  assert.ok(
+    writes.every((write) => write.path !== '/api/restart'),
+    'the restart is never automatic',
+  );
+  button(get('modal-actions'), 'Restart and re-check').fire('click');
+  await settle();
+  assert.equal(writes.filter((write) => write.path === '/api/restart').length, 1);
 });

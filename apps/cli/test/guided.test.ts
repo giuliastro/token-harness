@@ -862,7 +862,8 @@ describe('guided browser security and assets', () => {
     assert.ok(GUIDE_HTML.includes('<dialog'));
     assert.ok(GUIDE_HTML.includes('id="modal-actions"'));
     assert.ok(GUIDE_HTML.includes('Nothing changes without your approval'));
-    assert.ok(GUIDE_JS.includes('Apply recommended setup'));
+    assert.ok(GUIDE_JS.includes('Turn on the recommended setup'));
+    assert.ok(GUIDE_JS.includes('Review before turning on'));
     assert.ok(GUIDE_JS.includes("request('/api/apply', { ticket })"));
     assert.ok(!GUIDE_HTML.includes('onclick='));
   });
@@ -932,18 +933,23 @@ describe('reasoning explanations and contextual actions', () => {
     }
   });
   it('keeps the UI grouped, keyboard-navigable, neutral and explicitly approved', () => {
-    assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 2);
-    assert.ok(GUIDE_HTML.includes('aria-controls="view-dashboard"'));
-    assert.ok(GUIDE_HTML.includes('aria-controls="view-results"'));
+    assert.equal((GUIDE_HTML.match(/data-view=/g) ?? []).length, 3);
+    for (const view of ['home', 'methods', 'details'])
+      assert.ok(GUIDE_HTML.includes(`aria-controls="view-${view}"`));
     assert.ok(!GUIDE_HTML.includes('aria-controls="view-setup"'));
+    assert.ok(!GUIDE_HTML.includes('aria-controls="view-dashboard"'));
+    assert.ok(GUIDE_HTML.includes('role="tablist"'));
     assert.ok(GUIDE_HTML.includes('aria-label="Appearance"'));
     assert.ok(!GUIDE_HTML.includes('Less setup. More useful work.'));
     assert.ok(!GUIDE_CSS.includes('radial-gradient'));
     assert.ok(!GUIDE_CSS.includes('--qe-'));
     assert.ok(GUIDE_CSS.includes('prefers-color-scheme:dark'));
-    assert.ok(GUIDE_HTML.includes('<h2>Coding agents</h2>'));
-    assert.ok(GUIDE_HTML.includes('<h2>Optimizer setup</h2>'));
-    assert.ok(GUIDE_HTML.includes('id="connection-overview"'));
+    assert.ok(GUIDE_CSS.includes(':focus-visible'));
+    assert.ok(GUIDE_HTML.includes('<h1 data-i18n="Methods">Methods</h1>'));
+    assert.ok(GUIDE_HTML.includes('<h1 data-i18n="Details">Details</h1>'));
+    assert.ok(GUIDE_HTML.includes('class="skip"'));
+    assert.ok(GUIDE_JS.includes("event.key === 'ArrowRight'"));
+    assert.ok(GUIDE_JS.includes("event.key === 'Home'"));
     assert.ok(GUIDE_JS.includes('Inside Claude Code'));
     assert.ok(!GUIDE_JS.includes("['Evidence'"));
     assert.doesNotThrow(() => new Script(GUIDE_JS));
