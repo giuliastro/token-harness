@@ -306,7 +306,8 @@ void app.whenReady().then(async () => {
       const result: unknown = await window.webContents.executeJavaScript(`(async () => {
         const session = await fetch('/api/session');
         const html = document.documentElement.outerHTML;
-        return { session: session.status, dashboard: html.includes('Token Harness'), privileged: typeof window.require !== 'undefined' };
+        const displayedVersion = document.querySelector('.app-footer')?.textContent?.trim().split(/\\s+/).at(-1);
+        return { session: session.status, dashboard: html.includes('Token Harness'), privileged: typeof window.require !== 'undefined', displayedVersion };
       })()`);
       console.log(JSON.stringify({ desktopSmoke: result, version: app.getVersion() }));
       app.quit();
