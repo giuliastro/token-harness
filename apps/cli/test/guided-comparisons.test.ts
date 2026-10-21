@@ -96,6 +96,7 @@ function fixture() {
   };
   const path = (key: string, file: string) => join(stateRoot, 'benchmarks', key, file);
   return {
+    base,
     read,
     reopen,
     start,
@@ -119,6 +120,33 @@ const outcome = (
 ) => ({ action: 'comparison-step', key, expected, quality, attempts, failedAttempts });
 
 describe('guided paired captures', () => {
+  it('refuses a saved executable check even if a GUI finish request carries --yes', async () => {
+    const f = fixture();
+    const { key } = await f.start();
+    const path = f.path(key, 'baseline.capture.json');
+    const capture = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    capture['qualityCheck'] = { executable: 'never-run-from-gui', args: [], timeoutMs: 1000 };
+    writeFileSync(path, JSON.stringify(capture));
+    const result = await createGuideCall(f.base)([
+      'benchmark-finish',
+      '--benchmark-id',
+      key,
+      '--variant',
+      'baseline',
+      '--quality',
+      'passed',
+      '--attempts',
+      '1',
+      '--failed-attempts',
+      '0',
+      '--yes',
+    ]);
+    assert.equal(result.exitCode, 8);
+    assert.ok(result.diagnostics.some((item) => item.code === 'benchmark-check-unavailable-in-ui'));
+    assert.ok(f.requests.every((request) => request.executable !== 'never-run-from-gui'));
+    assert.equal(existsSync(f.path(key, 'baseline.json')), false);
+    assert.ok(existsSync(path));
+  });
   it('previews without writes, reopens all four steps and retains failed quality through the existing CLI', async () => {
     const f = fixture(),
       initial = f.reopen();

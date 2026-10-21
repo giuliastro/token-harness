@@ -29,6 +29,8 @@ import type {
 import type { ReleaseFetch } from '@token-harness/platform';
 
 export interface CommandContext {
+  /** Private GUI calls may record manual outcomes, never execute saved check commands. */
+  allowBenchmarkChecks?: boolean;
   platform: PlatformFacts;
   /** Absolute project root: `--project <dir>` when given, otherwise the cwd. */
   projectRoot: string;

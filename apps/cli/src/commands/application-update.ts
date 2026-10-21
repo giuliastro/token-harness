@@ -120,11 +120,13 @@ export async function inspectApplicationUpdate(
   const installed = manifest['version'] as string;
 
   if (manifest['tokenHarnessDistribution'] === 'desktop') {
-    return unsupported(
+    const desktop = unsupported(
       'This desktop installation is updated through GitHub Releases, separately from npm',
       'Download the matching desktop package from https://github.com/giuliastro/token-harness/releases and replace the application at the same installation path',
       installed,
     );
+    desktop.row.distribution = 'desktop';
+    return desktop;
   }
 
   const globalRootResult = await adapters.runner.run({

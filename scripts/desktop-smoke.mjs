@@ -75,7 +75,7 @@ try {
     })
     .find((value) => value?.desktopSmoke !== undefined);
   assert.deepEqual(receipt, {
-    desktopSmoke: { session: 200, dashboard: true, privileged: false },
+    desktopSmoke: { session: 200, dashboard: true, privileged: false, displayedVersion: version },
     version,
   });
   console.log(

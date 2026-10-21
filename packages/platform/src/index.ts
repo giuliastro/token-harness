@@ -67,5 +67,6 @@ export * from './process/windows-command-line.js';
 
 export * from './state/sddl.js';
 export * from './state/state-root.js';
+export * from './state/mutation-guard.js';
 
 export * from './host.js';

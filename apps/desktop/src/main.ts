@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import {
   detectPlatform,
+  NodeFileSystem,
   nodeSystemProbe,
   startManagedGuidedApplication,
   type ManagedGuidedApplication,
@@ -14,6 +15,7 @@ import {
   isDesktopNavigationAllowed,
   isExternalDesktopLink,
 } from './policy.js';
+import { lastDesktopProject, rememberDesktopProject } from './project.js';
 
 const smokeRoot = process.argv.includes('--desktop-smoke')
   ? process.env['TOKEN_HARNESS_DESKTOP_SMOKE_ROOT']
@@ -33,6 +35,16 @@ let launching: Promise<void> | null = null;
 let choosingProject = false;
 const backends = new Set<ManagedGuidedApplication>();
 
+// This is a window/lifecycle guard; the backend independently excludes CLI mutations.
+const ownsInstance = smokeRoot !== undefined || app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
+app.on('second-instance', () => {
+  if (window !== null) {
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  }
+});
+
 function fail(error: unknown): void {
   const message =
     error instanceof Error ? error.message : 'The desktop application could not start.';
@@ -43,6 +55,13 @@ function fail(error: unknown): void {
 async function startProject(project: string): Promise<void> {
   const detection = detectPlatform(nodeSystemProbe());
   if (!detection.ok) throw new Error('This desktop platform is not supported.');
+  const projectFs = new NodeFileSystem(detection.facts);
+  const canonicalProject = await projectFs.canonicalPath(project);
+  if (canonicalProject === null || (await projectFs.stat(canonicalProject))?.kind !== 'directory')
+    throw new Error(
+      'The selected project folder is no longer available. Choose an existing folder.',
+    );
+  project = canonicalProject;
   const resources = app.isPackaged
     ? process.resourcesPath
     : join(app.getAppPath(), '..', 'resources');
@@ -140,6 +159,15 @@ async function startProject(project: string): Promise<void> {
     await previous.stop();
     backends.delete(previous);
   }
+  if (smokeRoot === undefined) {
+    await rememberDesktopProject(
+      new NodeFileSystem(detection.facts),
+      app.getPath('userData'),
+      project,
+    ).catch(() =>
+      fail(new Error('The project is open, but its folder could not be remembered for next time.')),
+    );
+  }
   void backend.closed.then(() => {
     backends.delete(backend);
     if (!quitting && active === backend) {
@@ -185,6 +213,31 @@ app.on('before-quit', (event) => {
 });
 
 void app.whenReady().then(async () => {
+  if (!ownsInstance) return;
+  if (
+    smokeRoot === undefined &&
+    process.platform === 'darwin' &&
+    app.isPackaged &&
+    !app.isInApplicationsFolder()
+  ) {
+    const choice = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Install Token Harness',
+      message: 'Move Token Harness to Applications before setting up integrations.',
+      detail:
+        'Your coding agents need a stable path to the bundled runtime, including after this window closes.',
+      buttons: ['Move to Applications', 'Quit'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    try {
+      if (choice.response !== 0 || !app.moveToApplicationsFolder()) app.quit();
+    } catch (error) {
+      fail(error);
+      app.quit();
+    }
+    return;
+  }
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
@@ -215,6 +268,21 @@ void app.whenReady().then(async () => {
         label: 'Help',
         submenu: [
           {
+            label: 'About Token Harness',
+            click: () => {
+              const options = {
+                type: 'info' as const,
+                title: 'About Token Harness',
+                message: 'Token Harness',
+                detail: `Version ${app.getVersion()}`,
+                buttons: ['OK'],
+              };
+              void (window === null
+                ? dialog.showMessageBox(options)
+                : dialog.showMessageBox(window, options));
+            },
+          },
+          {
             label: 'Download desktop updates',
             click: () => {
               void shell.openExternal(DESKTOP_RELEASES_URL);
@@ -225,7 +293,12 @@ void app.whenReady().then(async () => {
     ]),
   );
   const home = smokeRoot === undefined ? app.getPath('home') : join(smokeRoot, 'home');
-  launching = startProject(home);
+  const detection = detectPlatform(nodeSystemProbe());
+  const project =
+    smokeRoot === undefined && detection.ok
+      ? await lastDesktopProject(new NodeFileSystem(detection.facts), app.getPath('userData'), home)
+      : home;
+  launching = startProject(project);
   try {
     await launching;
     launching = null;
@@ -233,7 +306,8 @@ void app.whenReady().then(async () => {
       const result: unknown = await window.webContents.executeJavaScript(`(async () => {
         const session = await fetch('/api/session');
         const html = document.documentElement.outerHTML;
-        return { session: session.status, dashboard: html.includes('Token Harness'), privileged: typeof window.require !== 'undefined' };
+        const displayedVersion = document.querySelector('.app-footer')?.textContent?.trim().split(/\\s+/).at(-1);
+        return { session: session.status, dashboard: html.includes('Token Harness'), privileged: typeof window.require !== 'undefined', displayedVersion };
       })()`);
       console.log(JSON.stringify({ desktopSmoke: result, version: app.getVersion() }));
       app.quit();

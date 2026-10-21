@@ -25,6 +25,7 @@ p{margin:0}
 a{color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.app-footer{padding:24px 0 18px;color:var(--ink-3);font-size:12px;text-align:right}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .skip{position:absolute;left:-999px;top:8px;background:var(--surface);padding:8px 12px;border-radius:8px;z-index:30}.skip:focus{left:12px}
 [hidden]{display:none!important}
@@ -321,4 +322,10 @@ dialog::backdrop{background:rgba(10,12,18,.45)}
 .tool-facts span{color:var(--ink-3)}
 .agent-details summary{cursor:pointer;color:var(--accent);font-size:13.5px;font-weight:550}
 .status-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.tool-form{display:grid;gap:12px;margin:16px 0}
+.tool-field{display:grid;gap:6px;margin-bottom:10px}
+.tool-field label{font-size:13.5px;font-weight:600}
+.tool-field input,.tool-field select,.tool-field textarea{width:100%;min-width:0;padding:10px 12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);font:inherit}
+.tool-output{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;padding:12px;font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm)}
+.dialog-actions a.button{display:inline-flex;align-items:center;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r-sm);text-decoration:none}
 `;

@@ -44,15 +44,28 @@ package and a desktop SHA-256 checksum file:
 The application includes its own Node runtime and the existing local dashboard. Coding
 agents and optimizers remain separate installations. Use **File → Open project** to
 choose the project for configuration and project-scoped evidence. Global recorded results
-retain their existing scope. The app starts in your home directory.
+retain their existing scope. The app reopens the last folder selected through the native
+chooser, falling back to your home directory if it is unavailable. On macOS it offers
+to move a packaged app into Applications before configuring durable integrations.
 
 Initial desktop packages are unsigned on Windows and ad-hoc signed on macOS, without
 notarization; the operating system may require a manual security review. Update through
 **Help → Download desktop updates**, replacing the app at the same installation path.
 Installed hooks continue to run after the app closes. Before moving/uninstalling the app,
-review and remove its owned integrations through Token Harness. The Windows desktop
+use **Details → Advanced tools → Prepare to remove the app** to review its owned
+connections, then re-check health and review external integrations before removal. The Windows desktop
 app manages native Windows; use the CLI inside WSL for that separate environment.
 Advanced CLI workflows remain available through the npm installation.
+
+**Details → Advanced tools** also offers workload advice with an explicit reserve and
+task count, evidence-based agent comparison, compact handoff summaries, and reviewed
+four-arm configuration preparation / outcome recording. These flows reuse the CLI
+engines. They do not launch agents, reset source trees or execute saved check commands.
+Interrupted experiments use the existing **Review benchmark recovery** control.
+Updated CLI and desktop builds serialize approved managed changes against the same
+state root; older CLI builds must be upgraded before concurrent use.
+
+For pre-merge installer testing, follow the [desktop candidate test guide](docs/testing-desktop-interface-first.md).
 
 For contributors, `pnpm desktop:package` builds native packages for the current platform;
 `pnpm desktop:smoke` checks the packaged runtime and hidden renderer in an isolated profile

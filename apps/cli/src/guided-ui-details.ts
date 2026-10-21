@@ -1055,11 +1055,16 @@ export const GUIDE_DETAILS_JS = String.raw`
     activity.id = 'activity';
     const activityPanel = node('section', undefined, 'panel');
     activityPanel.append(activity);
+    const tools = node('div', undefined, 'tool-grid');
+    for (const [mode, label] of [['plan', t('Plan my workload')], ['schedule', t('Compare coding agents')], ['handoff', t('Prepare a handoff')]])
+      tools.append(actionButton(label, () => openAdvancedTool(mode), 'secondary'));
+    tools.append(actionButton(t('Four-arm comparison'), openFactorialExperiment, 'secondary'), actionButton(t('Prepare to remove the app'), prepareAppRemoval, 'secondary'));
 
     root.append(
       detailsSection(t('Evidence'), t('Every number keeps its source and how it was measured.'), toolbar, summary, panel, periodNote),
       detailsSection(t('Coding agents'), t('What each agent reports, without changing any settings.'), agents),
       detailsSection(t('Checks and maintenance'), t('Re-check health, look for updates and undo changes.'), maintenance),
+      detailsSection(t('Advanced tools'), t('Plan work and prepare a summary without command-line parameters.'), tools),
       detailsSection(t('Change history'), t('Changes Token Harness made to this project, kept across sessions.'), historyPanel, refreshHistory),
       detailsSection(t('Recent activity'), t('Latest checks and changes from this app session.'), activityPanel),
     );

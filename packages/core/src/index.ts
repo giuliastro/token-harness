@@ -84,6 +84,7 @@ export * from './state/filesystem.js';
 export * from './state/install.js';
 export * from './state/journal.js';
 export * from './state/mutation-lease.js';
+export * from './domain/mutation-guard.js';
 export * from './state/file-plan-preview.js';
 export * from './state/jsonl-store.js';
 export * from './state/json-merge.js';

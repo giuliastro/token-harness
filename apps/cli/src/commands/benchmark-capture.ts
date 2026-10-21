@@ -612,6 +612,23 @@ async function recordBenchmarkFinish(
     });
   }
   const check = parsed.capture.qualityCheck;
+  if (check !== undefined && context.allowBenchmarkChecks === false) {
+    return commandResult({
+      command: 'benchmark-finish',
+      exitCode: EXIT_CODES['confirmation-required'],
+      data: null,
+      diagnostics: [
+        diagnostic({
+          severity: 'error',
+          code: 'benchmark-check-unavailable-in-ui',
+          message:
+            'This capture contains an executable check. The interface cannot approve or run that command',
+          remediation:
+            'Review the saved check through the CLI, or use the separate benchmark recovery control to restore configuration without executing it',
+        }),
+      ],
+    });
+  }
   if (check === undefined && qualityGate === null) {
     return commandResult({
       command: 'benchmark-finish',
@@ -963,7 +980,12 @@ export async function runBenchmarkFinish(
       ],
     });
   }
-  if (session === null || result.diagnostics.some((d) => d.code === 'benchmark-check-plan'))
+  if (
+    session === null ||
+    result.diagnostics.some(
+      (d) => d.code === 'benchmark-check-plan' || d.code === 'benchmark-check-unavailable-in-ui',
+    )
+  )
     return result;
   // Only the invocation that creates the immutable receipt owns finish-time cleanup. A concurrent
   // loser must not race its configuration restoration; interrupted cleanup has an explicit command.

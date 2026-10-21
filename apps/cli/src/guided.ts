@@ -189,6 +189,7 @@ export interface GuidePreview {
   restart: boolean;
 }
 export interface GuideResult {
+  desktopUpdateUrl?: string;
   ok: boolean;
   title: string;
   messages: string[];
@@ -533,6 +534,7 @@ export function createGuideCall(base: Omit<RunOptions, 'argv' | 'streams'>): Gui
     let stdout = '';
     await run({
       ...base,
+      allowBenchmarkChecks: false,
       argv: [...translated, '--json'],
       ...(savings || updateCheck
         ? {
@@ -1616,6 +1618,17 @@ export class GuideService {
           'Allowance cannot currently be read. Optimization can still work; this is not a zero balance.',
         ),
       };
+    });
+  }
+  /** Fixed experiment controllers share the UI mutation slot and invalidate cached observations. */
+  async experimentOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return this.exclusive(async () => {
+      this.approval = null;
+      try {
+        return await operation();
+      } finally {
+        this.invalidateObservedState();
+      }
     });
   }
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -2830,6 +2843,10 @@ export class GuideService {
         messages.push(
           `Token Harness: ${application.installed ?? 'installed version'} → ${application.available ?? 'new version'} is available through npm. After installation, restart this app to load the updated version.`,
         );
+      } else if (application?.distribution === 'desktop') {
+        messages.push(
+          'This desktop app includes its own runtime. Download the matching desktop update from GitHub Releases and replace the app at the same installation path. Close the app before replacing it; keep your managed integrations and data.',
+        );
       } else if (application?.verdict === 'unsupported-installation') {
         messages.push(
           'This Token Harness copy is not installed globally through npm, so it cannot update itself here. Update it with its original install method; the global npm command is `npm install --global token-harness@latest`.',
@@ -2946,6 +2963,9 @@ export class GuideService {
         stack,
         ticket,
         ...(background ? { updatesAvailable: updateTargets.length > 0 } : {}),
+        ...(application?.distribution === 'desktop'
+          ? { desktopUpdateUrl: 'https://github.com/giuliastro/token-harness/releases/latest' }
+          : {}),
       };
     };
     if (!background) return this.exclusive(operation);
