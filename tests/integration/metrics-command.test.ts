@@ -542,3 +542,39 @@ describe('guided all-project savings', () => {
     assert.equal(all.report.inflatedOperations, 1);
   });
 });
+
+describe('the daily series', () => {
+  it('appears in the JSON envelope, sums to the totals, and respects dedupe', async () => {
+    const result = await runMetrics(
+      ['metrics', '--since', '7d', '--json'],
+      [
+        event({ id: 'a', timestamp: '2026-07-29T10:00:00.000Z' }),
+        event({ id: 'a', timestamp: '2026-07-29T10:00:00.000Z' }),
+        event({ id: 'b', timestamp: '2026-07-30T23:30:00.000Z' }),
+        event({ id: 'c', timestamp: '2026-07-30T01:00:00.000Z', afterTokens: 70 }),
+      ],
+    );
+    const report = (JSON.parse(result.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.ok(report?.daily);
+    assert.deepEqual(
+      report.daily.map((row) => [row.date, row.providerId, row.class, row.unit, row.saved]),
+      [
+        ['2026-07-29', 'rtk', 'exact-local', 'tokens', 60],
+        ['2026-07-30', 'rtk', 'exact-local', 'tokens', 90],
+      ],
+    );
+    const dailyTotal = report.daily.reduce((sum, row) => sum + row.saved, 0);
+    assert.equal(dailyTotal, report.providers.reduce((sum, row) => sum + row.saved, 0));
+    assert.equal(dailyTotal, report.classes[0]?.saved);
+  });
+
+  it('is omitted when there are no events, and never reaches the human rendering', async () => {
+    const empty = await runMetrics(['metrics', '--json'], []);
+    const report = (JSON.parse(empty.stdout) as CliEnvelope<MetricsReport>).data;
+    assert.equal(report?.daily, undefined);
+
+    const seed = [event({ id: 'a', timestamp: '2026-07-30T10:00:00.000Z' })];
+    const human = await runMetrics(['metrics', '--verbose'], seed);
+    assert.doesNotMatch(human.stdout, /daily|2026-07-30/i);
+  });
+});

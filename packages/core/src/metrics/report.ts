@@ -55,6 +55,25 @@ export interface ProviderSavingsRow {
   adapterMode: string | null;
 }
 
+/**
+ * One day of one provider's saving, in one class and one unit.
+ *
+ * Mirrors `ProviderSavingsRow`: only changed, non-counterfactual events contribute, so the rows
+ * for a window sum to the provider rows for the same window. A row never mixes classes or units.
+ */
+export interface MetricsDailyRow {
+  /** UTC calendar date, YYYY-MM-DD. */
+  date: string;
+  providerId: string;
+  class: Exclude<MeasurementClass, 'counterfactual'>;
+  unit: SavingsUnit;
+  saved: number;
+  operations: number;
+}
+
+/** Days of per-day series kept, counted back from the window end inclusive. */
+export const DAILY_SERIES_MAX_DAYS = 90;
+
 export interface MetricsReport {
   /** Explicit scope for the guided all-project report. */
   scope?: 'all-projects';
@@ -68,6 +87,11 @@ export interface MetricsReport {
   /** One row per measurement class, always all four, in RFC order. */
   classes: MeasurementClassRow[];
   providers: ProviderSavingsRow[];
+  /**
+   * Per-day series for the last {@link DAILY_SERIES_MAX_DAYS} days of the window, one row per
+   * date, provider, class and unit. Absent when there is nothing to chart.
+   */
+  daily?: readonly MetricsDailyRow[];
   /** All-project evidence may expose independently aggregated, explicitly attributed app rows. */
   byHarness?: Array<{ harnessId: HarnessId; providers: ProviderSavingsRow[] }>;
   /**
@@ -126,6 +150,55 @@ export function measurementUnit(event: OptimizationEvent): SavingsUnit | null {
     return 'chars';
   }
   return null;
+}
+
+/**
+ * Per-day savings from the same events a report aggregates, deduplicated by event id.
+ *
+ * Days are UTC. Days earlier than the last 90 of the window (ending at `windowEnd`) are omitted.
+ */
+export function dailySavings(
+  events: readonly OptimizationEvent[],
+  windowEnd: string,
+): MetricsDailyRow[] {
+  const end = Date.parse(`${windowEnd}T00:00:00.000Z`);
+  const earliest = Number.isNaN(end)
+    ? ''
+    : new Date(end - (DAILY_SERIES_MAX_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const rows = new Map<string, MetricsDailyRow>();
+  const seen = new Set<string>();
+  for (const event of events) {
+    if (seen.has(event.eventId)) continue;
+    seen.add(event.eventId);
+    const measurementClass = event.measurement.class;
+    if (measurementClass === 'counterfactual' || !event.outcome.changed) continue;
+    const unit = measurementUnit(event);
+    if (unit === null) continue;
+    const instant = Date.parse(event.timestamp);
+    if (Number.isNaN(instant)) continue;
+    const date = new Date(instant).toISOString().slice(0, 10);
+    if (date < earliest) continue;
+    const { before, after } = figures(event, unit);
+    const key = `${date} ${event.provider.id} ${measurementClass} ${unit}`;
+    const row = rows.get(key) ?? {
+      date,
+      providerId: event.provider.id,
+      class: measurementClass,
+      unit,
+      saved: 0,
+      operations: 0,
+    };
+    row.saved += before - after;
+    row.operations += 1;
+    rows.set(key, row);
+  }
+  return [...rows.values()].sort(
+    (left, right) =>
+      left.date.localeCompare(right.date) ||
+      left.providerId.localeCompare(right.providerId) ||
+      left.class.localeCompare(right.class) ||
+      left.unit.localeCompare(right.unit),
+  );
 }
 
 function figures(event: OptimizationEvent, unit: SavingsUnit): { before: number; after: number } {
