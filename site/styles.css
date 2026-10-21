@@ -4,7 +4,7 @@
   --surface: #fff;
   --surface-soft: #f0f2f5;
   --ink: #17191e;
-  --muted: #626875;
+  --muted: #565f6d;
   --line: #dfe2e8;
   --accent: #315fd2;
   --on-accent: #fff;
@@ -12,6 +12,9 @@
   --brand-square: #17191e;
   --brand-stroke: #fff;
   --frame-shadow: 0 18px 55px rgb(24 31 47 / 10%), 0 2px 8px rgb(24 31 47 / 6%);
+  --ambient-aqua: rgb(71 204 200 / 13%);
+  --ambient-blue: rgb(49 95 210 / 12%);
+  --ambient-wash: rgb(49 95 210 / 3%);
   font-family:
     ui-sans-serif,
     system-ui,
@@ -40,6 +43,9 @@
     --brand-square: #f1f3f6;
     --brand-stroke: #17191e;
     --frame-shadow: 0 18px 55px rgb(0 0 0 / 24%), 0 2px 8px rgb(0 0 0 / 18%);
+    --ambient-aqua: rgb(69 204 200 / 17%);
+    --ambient-blue: rgb(71 111 226 / 20%);
+    --ambient-wash: rgb(71 111 226 / 6%);
   }
 }
 
@@ -57,6 +63,9 @@
   --brand-square: #f1f3f6;
   --brand-stroke: #17191e;
   --frame-shadow: 0 18px 55px rgb(0 0 0 / 24%), 0 2px 8px rgb(0 0 0 / 18%);
+  --ambient-aqua: rgb(69 204 200 / 17%);
+  --ambient-blue: rgb(71 111 226 / 20%);
+  --ambient-wash: rgb(71 111 226 / 6%);
 }
 
 :root[data-theme='light'] {
@@ -71,7 +80,13 @@ html {
 }
 body {
   margin: 0;
-  background: var(--page);
+  background-color: var(--page);
+  background-image:
+    radial-gradient(ellipse 72% 560px at 26% 0%, var(--ambient-aqua), transparent 100%),
+    radial-gradient(ellipse 68% 620px at 80% 0%, var(--ambient-blue), transparent 100%),
+    linear-gradient(180deg, var(--ambient-wash), transparent 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 860px;
   color: var(--ink);
   font-size: 16px;
   line-height: 1.6;

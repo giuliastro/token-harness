@@ -33,11 +33,10 @@ The counter comes from the official
 
 ## Author and contact
 
-The author section identifies giuliastro as an AI and token saving expert, with a
-dedicated `contact/` page and a public GitHub profile link.
-
-The contact page opens the author's published Google Form and also links to X
-and GitHub. The site remains static: no email credentials, recipient address,
+The author section identifies giuliastro as an AI and token saving expert.
+**Get in touch** opens the author's published Google Form directly; X and GitHub
+profile links remain alongside it. There is no intermediate contact page.
+The site remains static: no email credentials, recipient address,
 third-party embed, or form backend configuration is shipped with Pages. The
 form's questions, access settings, responses and notification recipient stay in
 Google Forms. Verify the responder URL in a signed-out browser when changing it.
@@ -62,6 +61,12 @@ links usable when JavaScript or the GitHub release API is unavailable.
 The screenshots originate in `docs/images/`. Keep their example caption and the
 distinction between measured output reduction, estimates and allowance balances.
 Do not turn screenshot figures into general savings claims.
+
+The hero describes token efficiency within the subscription's existing limits.
+Usage windows vary by plan; keep that qualification when mentioning five-hour or
+weekly allowances. Token Harness does not increase the provider's hard limits.
+Sources: [OpenAI pricing and usage](https://learn.chatgpt.com/docs/pricing) and
+[Claude Code plan limits](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan).
 
 ## Publication and rollback
 
