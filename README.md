@@ -2,6 +2,10 @@
 
 **Make your Claude Code and Codex allowance go further. Measure what actually helps.**
 
+[Website](https://giuliastro.github.io/token-harness/) ·
+[Download the desktop app](https://github.com/giuliastro/token-harness/releases/latest) ·
+[Getting started](#your-first-five-minutes)
+
 [![npm version](https://img.shields.io/npm/v/token-harness)](https://www.npmjs.com/package/token-harness)
 [![CI](https://github.com/giuliastro/token-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/giuliastro/token-harness/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
