@@ -55,6 +55,13 @@ function fail(error: unknown): void {
 async function startProject(project: string): Promise<void> {
   const detection = detectPlatform(nodeSystemProbe());
   if (!detection.ok) throw new Error('This desktop platform is not supported.');
+  const projectFs = new NodeFileSystem(detection.facts);
+  const canonicalProject = await projectFs.canonicalPath(project);
+  if (canonicalProject === null || (await projectFs.stat(canonicalProject))?.kind !== 'directory')
+    throw new Error(
+      'The selected project folder is no longer available. Choose an existing folder.',
+    );
+  project = canonicalProject;
   const resources = app.isPackaged
     ? process.resourcesPath
     : join(app.getAppPath(), '..', 'resources');
