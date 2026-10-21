@@ -62,6 +62,12 @@ The screenshots originate in `docs/images/`. Keep their example caption and the
 distinction between measured output reduction, estimates and allowance balances.
 Do not turn screenshot figures into general savings claims.
 
+The hero describes token efficiency within the subscription's existing limits.
+Usage windows vary by plan; keep that qualification when mentioning five-hour or
+weekly allowances. Token Harness does not increase the provider's hard limits.
+Sources: [OpenAI pricing and usage](https://learn.chatgpt.com/docs/pricing) and
+[Claude Code plan limits](https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan).
+
 ## Publication and rollback
 
 Pull requests syntax-check the browser script. Only a push to `main` or a manual
