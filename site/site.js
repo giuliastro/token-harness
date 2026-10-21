@@ -101,4 +101,4 @@ async function updateReleaseLinks() {
   }
 }
 
-updateReleaseLinks();
+if (document.querySelector('[data-asset]')) updateReleaseLinks();

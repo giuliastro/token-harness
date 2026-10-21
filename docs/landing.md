@@ -3,7 +3,7 @@
 The English product landing lives in `site/` and is published at
 <https://giuliastro.github.io/token-harness/> by `.github/workflows/pages.yml`.
 It is static HTML, CSS and browser JavaScript, with no build dependencies,
-accounts, analytics or external font requests.
+visitor accounts, analytics or external font requests.
 
 ## Download counts
 
@@ -33,10 +33,31 @@ The counter comes from the official
 
 ## Author and contact
 
-The author section identifies giuliastro as an AI and token saving expert and
-links to the public X and GitHub profiles. Keep contact destinations explicitly
-approved by the author or already public on their profile; never copy a private
-Git configuration or account email into the page.
+The author section identifies giuliastro as an AI and token saving expert, with a
+dedicated `contact/` page and a public GitHub profile link.
+
+Email delivery uses a Formspree form ID: configure and verify the recipient in
+the author's Formspree account, then set the repository Actions variable
+`CONTACT_FORM_ENDPOINT` to its `https://formspree.io/f/…` endpoint. Run **Landing
+page** on `main` after changing this variable (variable edits do not trigger a
+deployment). The recipient address belongs only in the service's private
+configuration, never in HTML, JavaScript, repository history, or an endpoint URL.
+No email credentials are shipped to the browser.
+
+`node scripts/prepare-landing.mjs` copies the static site into `dist/landing/` and
+writes only the validated public form endpoint into the contact page. The form
+works without browser JavaScript. If unconfigured, the page offers the GitHub
+profile instead of a non-working form. The native POST
+goes to Formspree, which processes the sender's fields and handles submission
+responses and spam challenges. The page links to its privacy policy. Check the
+service dashboard's domain and spam settings when activating the form.
+
+To disable email delivery, unset `CONTACT_FORM_ENDPOINT` and republish the landing.
+Fixture tests use a fake endpoint and never submit messages. After activation,
+have the owner verify a real message arrives; endpoint validation alone does not
+prove email delivery. Keep contact destinations explicitly approved by the author
+or already public on their profile; never copy a private Git configuration or
+account email into the page.
 
 ## Edit and preview
 
