@@ -1,8 +1,10 @@
 import {
   FileJournalStore,
+  compareVersions,
   diagnostic,
   harnessId,
   jsonValueDigest,
+  parseSemanticVersion,
   type Diagnostic,
   type FileSystemPort,
   type HarnessId,
@@ -28,6 +30,10 @@ const ROUTE_MARKER = '__internal-prompt-router';
 const MAX_EVENT_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_EVENT_SCAN_BYTES = 16 * 1024 * 1024;
 const PROMPT_ROUTER_CHECK_MARKER = 'token-harness-prompt-router-v1';
+// Claude Code changelog: from 2.1.293 the `haiku` alias resolves to Haiku 5.5 on the Anthropic API.
+const CLAUDE_HAIKU_55_ALIAS_VERSION = parseSemanticVersion('2.1.293')!;
+const CLAUDE_HAIKU_ALIAS_ADVISORY =
+  'Routed `haiku` subagents run Haiku 4.5 on this Claude Code version. Run `claude update` (2.1.293+) so `haiku` resolves to Haiku 5.5 on the Anthropic API.';
 
 export type PromptRouterState = 'managed' | 'external' | 'absent' | 'conflict' | 'unavailable';
 export type PromptRouterEventType = 'prompt-submit' | 'subagent-start' | 'subagent-stop';
@@ -117,6 +123,13 @@ function configTarget(input: {
     version: input.version,
     fileContext,
   };
+}
+
+/** Advisory only: unknown versions say nothing, and settings are never pinned to a model id. */
+function claudeHaikuAliasOutdated(harness: 'claude' | 'codex', version: string | null): boolean {
+  if (harness !== 'claude' || version === null) return false;
+  const parsed = parseSemanticVersion(version);
+  return parsed !== null && compareVersions(parsed, CLAUDE_HAIKU_55_ALIAS_VERSION) < 0;
 }
 
 function hookEntries(harness: 'claude' | 'codex', platform: PlatformFacts['os'] = 'linux') {
@@ -289,6 +302,16 @@ export async function planNativePromptRoutingInstall(input: {
     );
     return { target: target.path, actions: [], diagnostics };
   }
+  if (claudeHaikuAliasOutdated(target.harness, target.version))
+    diagnostics.push(
+      diagnostic({
+        severity: 'info',
+        code: 'prompt-routing-haiku-alias-outdated',
+        subject: target.harness,
+        message: CLAUDE_HAIKU_ALIAS_ADVISORY,
+        remediation: 'Run `claude update` to reach Claude Code 2.1.293 or later',
+      }),
+    );
 
   const runtimeCheck = await input.runner.run({
     executable: 'token-harness',
@@ -845,7 +868,9 @@ export async function observeNativePromptRouting(input: {
     ...base,
     state,
     label,
-    detail,
+    detail: claudeHaikuAliasOutdated(harness, input.version)
+      ? `${detail} ${CLAUDE_HAIKU_ALIAS_ADVISORY}`
+      : detail,
     enablement,
     verificationTier: hasRuntimeReceipt && !blocked ? 'runtime-observed' : 'config-only',
     configPath: target.path,
