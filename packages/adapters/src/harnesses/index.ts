@@ -60,3 +60,6 @@ export function listHarnessAdapters(): readonly HarnessAdapter[] {
 export function findHarnessAdapter(id: HarnessId): HarnessAdapter | null {
   return HARNESS_ADAPTERS.find((adapter) => adapter.manifest.id === id) ?? null;
 }
+export { readClaudeUsage } from './claude-usage.js';
+export { readCodexUsage } from './codex-usage.js';
+export type { DelegatedUsageInput } from './usage-aggregate.js';
