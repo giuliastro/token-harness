@@ -6,10 +6,16 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
+      - 'scripts/download-stats.mjs'
+      - 'tests/tools/download-stats.test.mjs'
+      - '.github/workflows/download-stats.yml'
   pull_request:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
+      - 'scripts/download-stats.mjs'
+      - 'tests/tools/download-stats.test.mjs'
+      - '.github/workflows/download-stats.yml'
   workflow_dispatch:
 
 permissions:
@@ -33,6 +39,7 @@ jobs:
         run: |
           test -s site/index.html
           node --check site/site.js
+          node --test tests/tools/download-stats.test.mjs
       - name: Upload static site
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
