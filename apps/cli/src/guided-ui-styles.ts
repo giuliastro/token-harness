@@ -170,7 +170,7 @@ footer{margin-top:40px;color:var(--ink-3);font-size:12.5px;text-align:center}
 .filter[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .section-heading{display:flex;align-items:baseline;gap:10px;margin:24px 0 12px;flex-wrap:wrap}
 .section-heading h2{font-size:17px;font-weight:650}
-.method-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.method-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;align-items:start}
 @media (max-width:420px){.method-grid{grid-template-columns:1fr}}
 .method{display:flex;flex-direction:column;gap:12px;padding:18px 18px 12px;min-width:0}
 .method-head{display:flex;gap:12px;align-items:flex-start}

@@ -31,14 +31,14 @@ describe('README onboarding contract', () => {
     ] as const)
       assert.match(GUIDE_HTML, new RegExp(`id="${id}"[^>]*>${label}</button>`));
     assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
-    // TODO(docs): the README still describes the retired Overview and Results tabs. Once it
-    // documents Home, Methods and Details, replace these two README-only checks with those names.
-    for (const label of ['Overview', 'Results'])
-      assert.match(readme, new RegExp(`\\*\\*${label}\\*\\*|### ${label}`));
+    for (const label of ['Home', 'Methods', 'Details'])
+      assert.ok(readme.includes(`**${label}**`), `README names the ${label} tab`);
+    assert.doesNotMatch(readme, /\*\*(?:Overview|Results)\*\*/);
     assert.doesNotMatch(readme, /^#{1,3} Setup$/im);
-    assert.match(readme, /Optimizer setup/i);
-    assert.doesNotMatch(readme, /Finish setup/);
-    assert.match(readme, /Install updates/);
+    assert.match(readme, /Turn on the recommended\s+setup/);
+    assert.match(readme, /Advanced\s+view/);
+    assert.doesNotMatch(readme, /Optimizer setup|Finish setup|Remove managed setup/);
+    assert.match(readme, /update\s+strip/);
 
     assert.match(GUIDE_HTML, /Nothing changes without your approval/);
     assert.match(readme, /requires an explicit review and approval/i);

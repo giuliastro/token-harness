@@ -204,14 +204,17 @@ export const GUIDE_APP_JS = String.raw`
     else closeModal();
   });
 
+  // #welcome reopens the first-run screen; #methods and #details open a view directly.
+  const linkedView = { '#methods': 'methods', '#details': 'details' }[window.location?.hash];
   if (window.location?.hash === '#welcome') onboardingForced = true;
+  if (linkedView === 'details') advanced = true;
   applyTheme(storage.get('token-harness-theme') || 'system');
   applyStaticText();
   setStatus(t('Checking your setup…'), true);
   setBusy(false);
   renderHome();
   renderMethods();
-  selectView('home');
+  selectView(linkedView || 'home');
   refresh(false);
   setInterval(() => { if (!document.hidden && selectedView === 'details') loadActivity(); }, 4000);
   setInterval(pollRouting, 15000);
