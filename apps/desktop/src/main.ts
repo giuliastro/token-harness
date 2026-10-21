@@ -268,6 +268,21 @@ void app.whenReady().then(async () => {
         label: 'Help',
         submenu: [
           {
+            label: 'About Token Harness',
+            click: () => {
+              const options = {
+                type: 'info' as const,
+                title: 'About Token Harness',
+                message: 'Token Harness',
+                detail: `Version ${app.getVersion()}`,
+                buttons: ['OK'],
+              };
+              void (window === null
+                ? dialog.showMessageBox(options)
+                : dialog.showMessageBox(window, options));
+            },
+          },
+          {
             label: 'Download desktop updates',
             click: () => {
               void shell.openExternal(DESKTOP_RELEASES_URL);

@@ -2,6 +2,8 @@
  * Static page shell. Visible text carries data-i18n keys (English source text) and is replaced
  * with the selected language on load; the English text in the markup is the no-script fallback.
  */
+import { TOOL_VERSION } from './version.js';
+
 export const GUIDE_SHELL_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Token Harness</title><link rel="stylesheet" href="/guide.css"></head>
@@ -40,7 +42,7 @@ export const GUIDE_SHELL_HTML = `<!doctype html>
 <div class="page-head"><h1 data-i18n="Details">Details</h1><p data-i18n="Every figure with its source and how it was measured.">Every figure with its source and how it was measured.</p></div>
 <div id="details-root"></div>
 </section>
-
+<footer class="app-footer"><span data-i18n="Version">Version</span> ${TOOL_VERSION}</footer>
 </main>
 <dialog id="modal" aria-labelledby="modal-title"><div class="dialog-body"><div class="dialog-heading"><h2 id="modal-title"></h2></div><div id="modal-content"></div><div id="modal-error" class="error" role="alert" hidden></div><div id="modal-actions" class="dialog-actions"></div></div></dialog>
 <script src="/guide.js" defer></script></body></html>`;

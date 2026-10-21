@@ -337,5 +337,6 @@ export const GUIDE_APP_IT: Readonly<Record<string, string>> = {
   'Every figure with its source and how it was measured.':
     'Ogni numero con la sua fonte e il modo in cui è stato misurato.',
   'Main views': 'Viste principali',
+  Version: 'Versione',
   Review: 'Controlla',
 };

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { GUIDE_HTML, GUIDE_JS } from '../src/guided-assets.js';
 import { GUIDE_PRODUCT_JS, GUIDE_TRANSLATIONS } from '../src/guided-product-client.js';
+import { TOOL_VERSION } from '../src/version.js';
 
 /** English source text passed to t() is the translation key. */
 function translatedKeys(source: string): string[] {
@@ -17,6 +18,14 @@ const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) 
 describe('guided app translations', () => {
   it('ships a parseable controller', () => {
     assert.doesNotThrow(() => new Function(GUIDE_JS));
+  });
+
+  it('renders the authoritative application version in the shared page shell', () => {
+    assert.ok(
+      GUIDE_HTML.includes(
+        `<footer class="app-footer"><span data-i18n="Version">Version</span> ${TOOL_VERSION}</footer>`,
+      ),
+    );
   });
 
   it('only translates literal English text', () => {

@@ -199,7 +199,12 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/release/*.tgz --clobber
           else
-            gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes --draft
+            notes="docs/releases/${tag#v}.md"
+            if [ -f "$notes" ]; then
+              gh release create "$tag" dist/release/*.tgz --verify-tag --notes-file "$notes" --title "Token Harness ${tag#v}" --draft
+            else
+              gh release create "$tag" dist/release/*.tgz --verify-tag --generate-notes --draft
+            fi
           fi
 
       - name: Attach the complete desktop artifact set and checksums to this release

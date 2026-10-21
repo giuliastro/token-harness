@@ -11,8 +11,8 @@ four native package jobs to be green, then download the artifact for your comput
 | Linux x64 | token-harness-desktop-linux-x64 | Install DEB or extract TAR.GZ into a permanent directory |
 
 GitHub sign-in may be required for Actions artifacts. Record the PR commit and run
-URL: candidate packages keep the current 0.1.32 version number and are not a new
-release. These test installers remain unsigned on Windows and ad-hoc signed on
+URL: candidate packages use the source commit's version, which may not yet have a
+published release. These test installers remain unsigned on Windows and ad-hoc signed on
 macOS; no new signing/notarization claim is made. Keep the existing application
 path while installed hooks depend on it. Do not uninstall an existing working
 installation just to try a candidate; use the same path for a reviewed replacement
@@ -23,6 +23,8 @@ or a separate user/test environment with its own agent configuration.
 1. Launch from the OS menu. Home, Methods and Details should retain the new design.
    **File → Open project** selects a disposable project. Close and reopen: it should
    reopen that folder. If that folder has been removed, it should use home.
+   The page footer and **Help → About Token Harness** should show the same version
+   as the installed release. The packaged runtime smoke checks this version too.
 2. Launch the app a second time: focus should return to the existing window.
 3. On macOS, starting outside Applications should offer a move before starting the
    configuration backend. Cancelling must leave agent configuration untouched.
