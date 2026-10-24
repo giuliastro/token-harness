@@ -1,7 +1,9 @@
-# Delivery status — 2026-10-18
+# Delivery status — 2026-10-24
 
-**Release candidate: Token Harness 0.1.32.** RTK updates now follow the newest stable upstream
-release, and RTK 1.0.1 is the reviewed version (#387). See [0.1.32 notes](releases/0.1.32.md).
+**Release candidate: Token Harness 0.1.34.** The versioned read-only observe snapshot
+(#386) adds `token-harness observe --json` — the observe-v1 data contract and the
+stored-only `metrics --read-only` path that perform no local evidence writes. See
+[0.1.34 notes](releases/0.1.34.md).
 
 **Token Harness 0.1.31.** Desktop distribution, deterministic checks,
 managed exploratory benchmarks and guided history/capture/recovery are merged. Exact-tag
@@ -69,8 +71,12 @@ The reconciliation changes no guard or evidence registry.
 
 ## Release evidence
 
-The next release is [0.1.32](releases/0.1.32.md), with latest-forward RTK updates (#387).
-The previous release is [0.1.31](releases/0.1.31.md), including desktop distribution,
+The next release is [0.1.34](releases/0.1.34.md), with the versioned read-only
+observe snapshot (#386) and the GitHub Pages landing with contact links
+(#393, #395, #396). The previous release is [0.1.33](releases/0.1.33.md), the
+interface-first desktop release with the daily savings series. Before it,
+[0.1.32](releases/0.1.32.md) made RTK updates latest-forward (#387), and
+[0.1.31](releases/0.1.31.md) merged desktop distribution,
 benchmark checks/preparation and guided history, paired captures and recovery. Its
 publication evidence will retain the exact source tag and artifact checks. The
 previous [0.1.30 release](releases/0.1.30.md) includes the evidence repair in #371.
