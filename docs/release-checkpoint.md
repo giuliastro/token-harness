@@ -1,4 +1,25 @@
-# Release checkpoint — 2026-10-21
+# Release checkpoint — 2026-10-24
+
+Token Harness `0.1.34` ships the versioned read-only observe snapshot (#386):
+`token-harness observe --json` returns the schema-1 CLI envelope with the separate
+observe-v1 data contract — native quota windows, detected agents and stored metrics
+in one invocation that performs no evidence imports, appends, cursor, receipt or
+attribution-salt writes. `metrics --read-only` shares the same non-importing read
+path; the observe tests pass on Windows, macOS and Linux CI, while WSL remains a
+separate CLI environment. The build also
+includes the GitHub Pages landing with author contact links (#393, #395, #396).
+No new savings claim is made; the observe contract labels stored metrics as
+delayed, all-project evidence that is not the current project's usage.
+
+#386 passed the full CI matrix, 2,590 local tests with nine expected
+platform-conditional skips, typecheck, lint, formatting, bundle smoke, the
+observe-v1 end-to-end read and the updated CLI goldens. After candidate CI
+passes, the release bridge creates immutable tag `v0.1.34` from the reviewed main
+commit and dispatches the exact-tag publication workflow. Its existing tests,
+live-runtime, packaging, provenance and npm/latest gates still apply. See
+[0.1.34 release notes](releases/0.1.34.md).
+
+## Previous checkpoint — 2026-10-21
 
 Token Harness `0.1.33` brings the Home/Methods/Details redesign, broader bounded
 routing guidance and the interface-first desktop workflows into one release.
