@@ -7,6 +7,7 @@ import {
   type BudgetReport,
   type CliEnvelope,
   type ContextReport,
+  type DelegatedUsageReport,
   type HarnessContextObservation,
   type Diagnostic,
   type DoctorReport,
@@ -161,6 +162,8 @@ export interface GuideSavings {
     impact: GuideImpact;
   }>;
   byHarness?: Array<{ harnessId: string; rows: GuideSavings['rows'] }>;
+  /** Measured local token reductions per UTC day (exact-local class only), oldest first. */
+  daily?: Array<{ date: string; saved: number }>;
   errors: number;
   inflated: number;
   note: string;
@@ -173,6 +176,8 @@ export interface GuideOverview {
   value: GuideValueEvidence;
   rules: GuideRule[];
   notices: string[];
+  /** Tokens per model in the last 30 days, main conversation vs subagents; null when unreadable. */
+  usage?: DelegatedUsageReport | null;
 }
 export interface GuidePreview {
   ticket: string | null;
@@ -184,6 +189,7 @@ export interface GuidePreview {
   restart: boolean;
 }
 export interface GuideResult {
+  desktopUpdateUrl?: string;
   ok: boolean;
   title: string;
   messages: string[];
@@ -528,6 +534,7 @@ export function createGuideCall(base: Omit<RunOptions, 'argv' | 'streams'>): Gui
     let stdout = '';
     await run({
       ...base,
+      allowBenchmarkChecks: false,
       argv: [...translated, '--json'],
       ...(savings || updateCheck
         ? {
@@ -595,10 +602,33 @@ export function savingsView(report: MetricsReport | null, period: GuidePeriod): 
       harnessId: group.harnessId,
       rows: rows(group.providers),
     })),
+    ...dailyView(report),
     errors: report?.errors ?? 0,
     inflated: report?.inflatedOperations ?? 0,
     note: 'These are recorded output reductions, not money saved or extra subscription allowance. Provider results are kept separate. Simulations are excluded. Available history may predate Token Harness.',
   };
+}
+
+/** Up to 30 days of measured token reductions, with empty days filled so the chart is to scale. */
+function dailyView(report: MetricsReport | null): {
+  daily?: NonNullable<GuideSavings['daily']>;
+} {
+  const rows = (report?.daily ?? []).filter(
+    (row) => row.class === 'exact-local' && row.unit === 'tokens',
+  );
+  if (!rows.length || !report?.windowEnd) return {};
+  const byDate = new Map<string, number>();
+  for (const row of rows) byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.saved);
+  const end = new Date(report.windowEnd);
+  if (Number.isNaN(end.getTime())) return {};
+  const first = rows[0]!.date;
+  const daily: NonNullable<GuideSavings['daily']> = [];
+  for (let offset = 29; offset >= 0; offset -= 1) {
+    const date = new Date(end.getTime() - offset * 86_400_000).toISOString().slice(0, 10);
+    if (date < first) continue;
+    daily.push({ date, saved: byDate.get(date) ?? 0 });
+  }
+  return daily.length ? { daily } : {};
 }
 
 const EFFORT_LABELS: Readonly<Record<string, string>> = {
@@ -1026,6 +1056,7 @@ export class GuideService {
   private readonly observeRouting:
     | ((harness: GuideHarness) => Promise<PromptRouterObservation>)
     | null;
+  private readonly observeUsage: (() => Promise<DelegatedUsageReport>) | null;
   constructor(
     call: GuideCall,
     now: () => number,
@@ -1036,7 +1067,9 @@ export class GuideService {
     observeOperations: GuideOperationReader | null = null,
     observeComparisons: GuideComparisonReader | null = null,
     observeBenchmarkRecovery: GuideBenchmarkRecoveryReader | null = null,
+    observeUsage: (() => Promise<DelegatedUsageReport>) | null = null,
   ) {
+    this.observeUsage = observeUsage;
     this.call = call;
     this.now = now;
     this.random = random;
@@ -1386,6 +1419,8 @@ export class GuideService {
         promptRouting,
       );
     };
+    const usage =
+      this.observeUsage === null ? Promise.resolve(null) : this.observeUsage().catch(() => null);
     const [, , , metrics, status, benchmark] = await Promise.all([
       observe<DoctorReport>('agents', ['doctor']).then((result) => {
         doctor = result;
@@ -1505,6 +1540,7 @@ export class GuideService {
       value: guidedValueEvidence(benchmark.data),
       rules: [...SAFETY_RULES, ...TASK_RULES],
       notices,
+      usage: await usage,
     };
   }
   private agentView(
@@ -1582,6 +1618,17 @@ export class GuideService {
           'Allowance cannot currently be read. Optimization can still work; this is not a zero balance.',
         ),
       };
+    });
+  }
+  /** Fixed experiment controllers share the UI mutation slot and invalidate cached observations. */
+  async experimentOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return this.exclusive(async () => {
+      this.approval = null;
+      try {
+        return await operation();
+      } finally {
+        this.invalidateObservedState();
+      }
     });
   }
   private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -2796,6 +2843,10 @@ export class GuideService {
         messages.push(
           `Token Harness: ${application.installed ?? 'installed version'} → ${application.available ?? 'new version'} is available through npm. After installation, restart this app to load the updated version.`,
         );
+      } else if (application?.distribution === 'desktop') {
+        messages.push(
+          'This desktop app includes its own runtime. Download the matching desktop update from GitHub Releases and replace the app at the same installation path. Close the app before replacing it; keep your managed integrations and data.',
+        );
       } else if (application?.verdict === 'unsupported-installation') {
         messages.push(
           'This Token Harness copy is not installed globally through npm, so it cannot update itself here. Update it with its original install method; the global npm command is `npm install --global token-harness@latest`.',
@@ -2912,6 +2963,9 @@ export class GuideService {
         stack,
         ticket,
         ...(background ? { updatesAvailable: updateTargets.length > 0 } : {}),
+        ...(application?.distribution === 'desktop'
+          ? { desktopUpdateUrl: 'https://github.com/giuliastro/token-harness/releases/latest' }
+          : {}),
       };
     };
     if (!background) return this.exclusive(operation);

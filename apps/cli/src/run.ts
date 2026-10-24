@@ -22,6 +22,7 @@ import {
   type ExitCode,
   type MetricsStore,
   type PlatformFacts,
+  type StateMutationGuard,
 } from '@token-harness/core';
 
 import { detectJsonMode, parseArgv, type AvailableCommand, type Invocation } from './argv.js';
@@ -100,6 +101,9 @@ export const DEFAULT_COMMANDS: CommandTable = {
 };
 
 export interface RunOptions {
+  allowBenchmarkChecks?: boolean;
+  /** Installed entry points inject the shared platform reservation; test ports can stay isolated. */
+  mutationGuard?: StateMutationGuard;
   /** Optional existing scheduler decision to compose with the same optimize observations. */
   efficiencyScheduler?: CrossHarnessSchedulerDecision | null;
   argv: readonly string[];
@@ -416,6 +420,9 @@ export async function run(options: RunOptions): Promise<number> {
   }
 
   const context: CommandContext = {
+    ...(options.allowBenchmarkChecks === undefined
+      ? {}
+      : { allowBenchmarkChecks: options.allowBenchmarkChecks }),
     adapters: options.adapters ?? null,
     now: options.now ?? (() => new Date().toISOString()),
     platform: options.platform,
@@ -485,7 +492,32 @@ export async function run(options: RunOptions): Promise<number> {
   const table = options.commands ?? DEFAULT_COMMANDS;
   let result: CommandResult<unknown>;
   try {
-    result = await table[invocation.command](context);
+    const mutating =
+      (context.confirmed &&
+        [
+          'apply',
+          'setup',
+          'uninstall',
+          'update',
+          'rollback',
+          'benchmark-prepare',
+          'benchmark-restore',
+        ].includes(invocation.command)) ||
+      invocation.command === 'benchmark-finish';
+    if (mutating && options.mutationGuard !== undefined && context.stateRoot !== null) {
+      const guarded = await options.mutationGuard.run(context.stateRoot, () =>
+        table[invocation.command](context),
+      );
+      result = guarded.acquired
+        ? guarded.value
+        : commandResult({
+            command: invocation.command,
+            exitCode: guarded.exitCode,
+            diagnostics: guarded.diagnostics,
+          });
+    } else {
+      result = await table[invocation.command](context);
+    }
   } catch (error) {
     // RFC 0006 §Exit codes 1: "Unexpected failure; a bug in Token Harness".
     result = commandResult({

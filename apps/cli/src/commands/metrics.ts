@@ -23,6 +23,7 @@ import {
   TOKEN_HARNESS_OWNER,
   UNATTRIBUTED_PROJECT_ID,
   aggregateEvents,
+  dailySavings,
   measurementUnit,
   commandResult,
   diagnostic,
@@ -284,6 +285,9 @@ export async function runMetrics(
     adapterModes,
     ...(channelExpectations === undefined ? {} : { channels: channelExpectations }),
   });
+
+  const daily = dailySavings(events, window.windowEnd);
+  if (daily.length > 0) report.daily = daily;
 
   if (allProjects) {
     report.scope = 'all-projects';

@@ -39,10 +39,15 @@ describe('npm trusted publishing runtime', () => {
 
     const publish = RELEASE.indexOf('Publish to npm with trusted publishing');
     const verify = RELEASE.indexOf('Verify npm release is visible as latest');
-    const githubRelease = RELEASE.indexOf('Create or refresh GitHub release');
+    const githubRelease = RELEASE.indexOf('Prepare or recover GitHub release');
     assert.ok(
       publish >= 0 && verify > publish && githubRelease > verify,
       'npm visibility must be verified after publish and before GitHub Release creation',
     );
+    const upload = RELEASE.indexOf('Attach the complete desktop artifact set');
+    const verifyAssets = RELEASE.indexOf('Verify uploaded assets and publish the complete release');
+    assert.ok(upload > githubRelease && verifyAssets > upload);
+    assert.match(RELEASE, /gh release create .*--draft/);
+    assert.ok(RELEASE.indexOf('gh release edit') > verifyAssets);
   });
 });

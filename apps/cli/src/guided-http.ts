@@ -9,7 +9,7 @@ import {
 } from './guided-candidate-campaign-status.js';
 import { guidedCandidateObservation } from './guided-candidate-readiness.js';
 import { GuideError, type GuideOverview, type GuideService, type GuidePeriod } from './guided.js';
-import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS, GUIDE_STACK_JS } from './guided-assets.js';
+import { GUIDE_CSS, GUIDE_HTML, GUIDE_JS } from './guided-assets.js';
 
 export const GUIDE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'Cache-Control': 'no-store',
@@ -214,6 +214,8 @@ export function createGuideHandler(input: {
   authority: () => string;
   optimizationCandidates?: () => readonly OptimizationCandidateObservation[];
   candidateCampaign?: GuideCandidateCampaignController;
+  tools?: (input: unknown) => Promise<unknown>;
+  experiments?: (input: unknown) => Promise<unknown>;
 }): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   const overviewCache = new Map<GuidePeriod, { at: number; body: string }>();
 
@@ -243,10 +245,6 @@ export function createGuideHandler(input: {
         }
         if (url.pathname === '/guide.css') {
           send(200, GUIDE_CSS, 'text/css; charset=utf-8');
-          return;
-        }
-        if (url.pathname === '/stack.js') {
-          send(200, GUIDE_STACK_JS, 'text/javascript; charset=utf-8');
           return;
         }
         if (url.pathname === '/guide.js') {
@@ -341,6 +339,27 @@ export function createGuideHandler(input: {
           throw new GuideError(400, 'Choose the current guided campaign step from this dashboard.');
         const result = await input.candidateCampaign.action(action);
         send(result.ok ? 200 : result.statusCode, JSON.stringify(result));
+        return;
+      }
+      if (url.pathname === '/api/experiments') {
+        if (input.experiments === undefined)
+          throw new GuideError(404, 'Experiment controls are unavailable.');
+        if ([...url.searchParams].length || input.service.status().busy)
+          throw new GuideError(409, 'Wait for the current change and review the experiment again.');
+        send(
+          200,
+          JSON.stringify(await input.service.experimentOperation(() => input.experiments!(body))),
+        );
+        overviewCache.clear();
+        return;
+      }
+      if (url.pathname === '/api/tools') {
+        if (input.tools === undefined) throw new GuideError(404, 'Advanced tools are unavailable.');
+        if ([...url.searchParams].length > 0)
+          throw new GuideError(400, 'Choose options inside the tool.');
+        if (input.service.status().busy)
+          throw new GuideError(409, 'Wait for the current change to finish.');
+        send(200, JSON.stringify(await input.tools(body)));
         return;
       }
       if (url.pathname === '/api/preview') {

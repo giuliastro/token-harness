@@ -10,6 +10,7 @@ import {
   collectDesktopArtifacts,
   desktopArtifactNames,
 } from '../../../scripts/desktop-release.mjs';
+import { verifyReleaseAssets } from '../../../scripts/release-assets.mjs';
 
 const repo = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
 const version = '0.1.30';
@@ -107,6 +108,36 @@ describe('desktop staging', () => {
 });
 
 describe('complete desktop release set', () => {
+  it('refuses publication until npm, all desktop packages and checksum are actually uploaded', () => {
+    const names = [
+      `token-harness-${version}.tgz`,
+      ...desktopArtifactNames(version),
+      `token-harness-${version}-desktop-SHA256SUMS.txt`,
+    ];
+    const assets = names.map((name) => ({ name, state: 'uploaded', size: 100 }));
+    assert.deepEqual(verifyReleaseAssets(`v${version}`, { assets }, true), names);
+    for (const name of names)
+      assert.throws(
+        () =>
+          verifyReleaseAssets(
+            `v${version}`,
+            { assets: assets.filter((asset) => asset.name !== name) },
+            true,
+          ),
+        /incomplete/,
+      );
+    assert.deepEqual(verifyReleaseAssets(`v${version}`, { assets: [assets[0]] }), [names[0]]);
+    assert.throws(() => verifyReleaseAssets('main', { assets }, true), /exact/);
+    assert.throws(
+      () =>
+        verifyReleaseAssets(
+          `v${version}`,
+          { assets: assets.map((asset, index) => (index === 0 ? { ...asset, size: 0 } : asset)) },
+          true,
+        ),
+      /incomplete/,
+    );
+  });
   it('publishes exactly seven native packages plus deterministic SHA-256 checksums', () => {
     const root = mkdtempSync(join(tmpdir(), 'th-desktop-assets-'));
     try {

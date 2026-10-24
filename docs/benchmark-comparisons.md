@@ -27,7 +27,7 @@ requires its own escaping for the JSON argument; the examples use Bash/PowerShel
 
 Restore the initial tree and repeat with `--variant optimized`, the same check
 arguments and timeout, and the optimization under evaluation enabled. Refresh
-Results or run `token-harness benchmark-matrix` from the same project.
+Details (turn on **Advanced view**) or run `token-harness benchmark-matrix` from the same project.
 
 The check’s exit zero means passed; a completed nonzero exit means failed. A timeout, signal,
 or failure to start means unknown and cannot support a savings claim. Attempt
@@ -35,7 +35,7 @@ counts describe coding attempts, not the number of check invocations. A successf
 `benchmark-finish` exits zero when recording the receipt, including a failed or
 unknown task; inspect `receipt.outcome.qualityGate` for the task result. An optional
 `--quality` at finish records your own verdict; the direct check takes precedence
-and disagreements appear in Results.
+and disagreements appear in Details.
 
 Receipts contain command identity, duration, exit/failure information and SHA-256
 digests/byte counts for full stdout and stderr. Bounded, redacted tails remain in
@@ -112,8 +112,8 @@ Inspect the set with:
 token-harness benchmark-factorial --benchmark-id four-1
 ```
 
-The dashboard's **Record a comparison** offers the four-arm guide and Results
-shows its evidence separately from paired history and policy learning. Missing
+The app's **Record a comparison** (in **Details**, with **Advanced view** on) offers the
+four-arm guide and Details shows its evidence separately from paired history and policy learning. Missing
 arms remain incomplete; mismatched identities remain incomparable. A combined
 quality failure blocks combined savings and interaction, even when the two
 single mechanisms passed.

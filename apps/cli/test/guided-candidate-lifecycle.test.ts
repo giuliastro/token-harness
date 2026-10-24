@@ -153,14 +153,17 @@ it('keeps Headroom and arbitrary selectors outside the managed candidate UI boun
   assert.equal(calls, 0, 'invalid candidate UI input must not reach the CLI');
 });
 
-it('keeps historical candidate lifecycle bounded after the tools move into optional optimizer setup', () => {
-  assert.match(GUIDE_HTML, /<h2>Optimizer setup<\/h2>/);
-  assert.match(GUIDE_HTML, /id="connection-overview"/);
-  assert.match(GUIDE_JS, /Select the coding apps where/);
-  assert.doesNotMatch(GUIDE_HTML, /<h2>Experimental tools<\/h2>/);
-  assert.match(GUIDE_JS, /const EXPERIMENTAL = \[\];/);
-  assert.match(GUIDE_JS, /candidate-setup/);
-  assert.match(GUIDE_JS, /candidate-remove/);
-  assert.match(GUIDE_JS, /does not install Python, pipx, uv or administrator prerequisites/);
-  assert.match(GUIDE_JS, /never creates or refreshes the repository index/);
+it('keeps historical candidate lifecycle out of the browser app after the tools moved into Methods', () => {
+  // The service still bounds the legacy candidate-setup/remove actions (tests above), but the
+  // app no longer issues them: reviewed tools are ordinary provider-scoped methods.
+  assert.match(GUIDE_HTML, /id="methods-root"/);
+  assert.match(GUIDE_JS, /Choose the coding apps where \{name\} should work\./);
+  assert.doesNotMatch(GUIDE_HTML, /Experimental tools/);
+  assert.doesNotMatch(GUIDE_JS, /const EXPERIMENTAL|Experimental tools/);
+  assert.doesNotMatch(GUIDE_JS, /candidate-setup|candidate-remove/);
+  assert.match(GUIDE_JS, /provider: providerId/);
+  // Prerequisites and index ownership stay explicit instead of being installed implicitly.
+  assert.match(GUIDE_JS, /Token Harness can install mcptoon once pipx or uv is available/);
+  assert.match(GUIDE_JS, /does not create or refresh that index/);
+  assert.match(GUIDE_JS, /Token Harness never builds its repository index/);
 });

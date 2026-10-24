@@ -65,6 +65,14 @@ describe('native routing policy', () => {
     assert.doesNotMatch(context, /spawn_agent/);
   });
 
+  it('defaults Claude delegation to Haiku and keeps Sonnet for code changes', () => {
+    const context = routingContext('claude', null);
+    assert.ok(context !== null);
+    assert.match(context, /Default to "haiku" for reading, search/);
+    assert.match(context, /Use "sonnet" only for code changes/);
+    assert.match(context, /delegate by default/);
+  });
+
   it('keeps the safety boundaries and savings rule in every variant', () => {
     for (const context of [
       routingContext('claude', null),
@@ -75,7 +83,8 @@ describe('native routing policy', () => {
       assert.ok(context !== null);
       for (const boundary of ['architecture', 'security', 'releases', 'final review'])
         assert.ok(context.includes(boundary), boundary);
-      assert.match(context, /One routed worker at a time/);
+      assert.match(context, /Independent pieces may run in parallel/);
+      assert.match(context, /review every result/);
       assert.match(context, /finish on the root rather than retrying cheaper/);
       assert.match(context, /paired, quality-gated measurements/);
       assert.ok(context.length <= MAX_CONTEXT_CHARACTERS, String(context.length));

@@ -48,6 +48,7 @@
 
 export * from './artifacts/rtk-release.js';
 export * from './fs/node-filesystem.js';
+export * from './fs/node-usage-log.js';
 
 export * from './metrics/attribution-salt.js';
 export * from './metrics/sqlite-child.js';
@@ -66,5 +67,6 @@ export * from './process/windows-command-line.js';
 
 export * from './state/sddl.js';
 export * from './state/state-root.js';
+export * from './state/mutation-guard.js';
 
 export * from './host.js';

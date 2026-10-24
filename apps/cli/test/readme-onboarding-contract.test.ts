@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import { GUIDE_HTML } from '../src/guided-assets.js';
-import { GUIDE_CANDIDATE_CAMPAIGN_JS } from '../src/guided-candidate-campaign-client.js';
 
 const ROOT = new URL('../../../../', import.meta.url);
 
@@ -24,59 +23,38 @@ describe('README onboarding contract', () => {
     assert.match(readme, /Node\.js 22\.13(?:\+| or newer)/);
     assert.equal(packageJson.engines?.node, '>=22.13.0');
 
+    // The shipped app is organised as Home, Methods and an advanced Details view.
     for (const [id, label] of [
-      ['tab-dashboard', 'Overview'],
-      ['tab-results', 'Results'],
-    ] as const) {
+      ['tab-home', 'Home'],
+      ['tab-methods', 'Methods'],
+      ['tab-details', 'Details'],
+    ] as const)
       assert.match(GUIDE_HTML, new RegExp(`id="${id}"[^>]*>${label}</button>`));
-      assert.match(readme, new RegExp(`\\*\\*${label}\\*\\*|### ${label}`));
-    }
     assert.doesNotMatch(GUIDE_HTML, /id="tab-setup"/);
+    for (const label of ['Home', 'Methods', 'Details'])
+      assert.ok(readme.includes(`**${label}**`), `README names the ${label} tab`);
+    assert.doesNotMatch(readme, /\*\*(?:Overview|Results)\*\*/);
     assert.doesNotMatch(readme, /^#{1,3} Setup$/im);
-    assert.match(readme, /Optimizer setup/i);
-    assert.doesNotMatch(readme, /Finish setup/);
-    assert.match(readme, /Install updates/);
+    assert.match(readme, /Turn on the recommended\s+setup/);
+    assert.match(readme, /Advanced\s+view/);
+    assert.doesNotMatch(readme, /Optimizer setup|Finish setup|Remove managed setup/);
+    assert.match(readme, /update\s+strip/);
 
     assert.match(GUIDE_HTML, /Nothing changes without your approval/);
     assert.match(readme, /requires an explicit review and approval/i);
   });
 
-  it('documents candidate campaigns as advanced evidence outside novice managed setup', async () => {
+  it('documents candidate campaigns as an advanced CLI workflow outside novice setup', async () => {
     const onboarding = await repositoryFile('README.md');
     assert.match(onboarding, /\[CLI and evaluation guide\]\(docs\/cli-guide\.md\)/);
     const readme = await repositoryFile('docs/cli-guide.md');
 
-    assert.doesNotMatch(readme, /Run standard evaluation/);
     assert.match(readme, /Evaluation campaigns are an advanced maintainer workflow/i);
-    assert.match(readme, /managed setup stays in the unified \*\*Optimization Stack\*\*/i);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Run standard evaluation/);
-    assert.match(readme, /Start baseline capture/);
-    assert.match(readme, /Start optimized\s+capture/);
-    assert.match(readme, /Record outcome/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Start baseline capture/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Start optimized capture/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /Record outcome/);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /\/api\/candidate-campaign\/action/);
-    assert.match(
-      readme,
-      /Normal use no longer requires copying\s+`benchmark-start` or `benchmark-finish`/i,
-    );
+    assert.match(readme, /Normal use never requires these commands/i);
     assert.match(readme, /benchmark-matrix/);
-    for (const flag of ['--benchmark-id', '--candidate', '--harness']) {
+    for (const flag of ['--benchmark-id', '--candidate', '--harness'])
       assert.match(readme, new RegExp(flag));
-      assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, new RegExp(flag));
-    }
-
     assert.match(readme, /decision-ready[^]*cannot promote a candidate by itself/i);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /not promotion approval/);
-    assert.match(readme, /browser acknowledgement[^]*proof that the candidate was active/i);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not treat it as activation verification/);
-    assert.match(readme, /does not treat attribution.*proof that the candidate was active/is);
-    assert.match(GUIDE_CANDIDATE_CAMPAIGN_JS, /does not prove the candidate was active/);
-    assert.doesNotMatch(GUIDE_CANDIDATE_CAMPAIGN_JS, /argv\s*:/);
-    assert.doesNotMatch(
-      GUIDE_CANDIDATE_CAMPAIGN_JS,
-      /headroom wrap|pip install|npm install|gitnexus analyze/,
-    );
+    assert.match(readme, /does not treat attribution as\s+proof that the candidate was active/i);
   });
 });

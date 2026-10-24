@@ -1,4 +1,29 @@
-# Release checkpoint — 2026-10-10
+# Release checkpoint — 2026-10-21
+
+Token Harness `0.1.33` brings the Home/Methods/Details redesign, broader bounded
+routing guidance and the interface-first desktop workflows into one release.
+The app displays the release version, remembers its project and exposes reviewed
+planning, scheduling, handoff and four-arm configuration workflows. New releases
+remain drafts until the complete desktop/CLI asset inventory passes verification,
+and use the versioned repository notes automatically. Signing remains deferred.
+
+The candidate must pass fresh native CI and desktop package checks before merging.
+After merge, the release bridge creates immutable tag `v0.1.33` from the reviewed
+main commit and dispatches the exact-tag publication workflow. Its existing tests,
+live-runtime, packaging, provenance and npm/latest gates still apply. See
+[0.1.33 release notes](releases/0.1.33.md). Native installed lifecycle and measured
+savings retain separate evidence gates; issue #379 is not closed by this release.
+
+## Previous checkpoint — 2026-10-18
+
+Token Harness `0.1.32` makes RTK updates latest-forward (#387). The direct GitHub release planner
+reads RTK's newest stable `vX.Y.Z` release instead of a hard-coded target, never offers less than
+the reviewed RTK 1.0.1, and falls back to it when GitHub cannot be read. The digest, post-install
+version and rollback checks are unchanged. #387 passed native Windows, macOS and Linux CI and all
+four desktop package targets. The release bridge creates the immutable tag and dispatches the
+exact-tag publication workflow after candidate CI passes. No new savings claim is made.
+
+## Previous checkpoint — 2026-10-10
 
 Token Harness `0.1.31` includes the native desktop distribution (#380), deterministic
 checks and managed factorial benchmarks (#378), retained guided configuration history

@@ -78,7 +78,7 @@ it or forward its mutation API through the remote gateway.
 
 ## Test retained history and recovery
 
-Open **Results → Operation history & recovery**. Earlier retained operations for the
+Turn on **Advanced view**, then open **Details → Change history**. Earlier retained operations for the
 selected project should appear after closing/reopening Token Harness. Reviewing a
 restore and choosing **Cancel** should leave configuration unchanged. Only the latest
 eligible configuration transaction on the machine can be selected; a newer operation
@@ -91,17 +91,17 @@ separate recovery workflows. User-owned integrations have no invented transactio
 
 ## Test guided manual comparisons
 
-1. In Token Harness select **Results → Start or finish a comparison**, choose **Codex**
+1. In Token Harness turn on **Advanced view** and select **Details → Record a comparison**, choose **Codex**
    and the actual task class, then **Review new baseline → Record reviewed step**.
    Configuration and models must remain unchanged.
 2. Run the bounded baseline task from Harness Remote. Run its acceptance checks
-   yourself, then return to **Start or finish a comparison → Record baseline outcome**.
+   yourself, then return to **Record a comparison → Record baseline outcome**.
    Choose the actual passed/failed result and coding attempt counts; review and approve.
 3. Restore the same task/tree/checks yourself. Explicitly enable the optimization you
    intend to compare through its existing reviewed setup. Choose **Prepare optimized
    run**, acknowledge the conditions, review and record the optimized capture.
 4. Run the same task and checks through Harness Remote, then record its actual optimized
-   outcome. **Pair complete** should appear even for failed quality; Results must keep
+   outcome. **Pair complete** should appear even for failed quality; Details must keep
    quality, local output, five-hour quota and weekly quota separate. Missing evidence
    remains unmeasured. Close/reopen the app between steps to test retained-state recovery.
 
@@ -110,9 +110,9 @@ measurement. Current account balances can include unrelated activity. A single p
 manual quality declaration or successful UI flow does not prove attributable or
 repeatable savings.
 
-For routing execution, inspect **Results → Automatic prompt routing** for new genuine
+For routing execution, inspect **Home** (tokens handled by cheaper models) and **Details → Coding agents** for new genuine
 prompt/child callbacks. Follow the native hook enablement/trust instructions shown by
-Overview and create a fresh session after hook changes; do not bypass sandbox or trust
+Methods and create a fresh session after hook changes; do not bypass sandbox or trust
 controls. ACP behavior must be observed rather than inferred from global CLI setup.
 Luna deliberately keeps work on the root, so it is suitable for the basic flow test,
 not for proving delegation's marginal value. An unreported actual child model stays
@@ -138,7 +138,7 @@ the command with `--plan <returned-plan-id> --yes`. That creates an active prepa
 lease and backup/checkpoint; it is setup for the recovery test, not proof that hooks
 ran. The configuration may include user-level files, so finish recovery before using
 other coding sessions. Do not run the task or check. Reopen the candidate Desktop app
-on the same PC and project, open **Overview → Health and updates → Review benchmark
+on the same PC and project, turn on **Advanced view** and open **Details → Checks and maintenance → Review benchmark
 recovery**, and confirm the listed arm belongs to that project. Preview the
 recovery, then cancel and verify the project configuration is unchanged. Preview again,
 apply recovery, and verify the original files, supported mode metadata and absent

@@ -48,6 +48,7 @@ it('keeps a desktop installation outside npm self-update and identifies its own 
     const inspection = await inspectApplicationUpdate(context);
     assert.equal(inspection?.row.installed, '0.1.30');
     assert.equal(inspection?.row.verdict, 'unsupported-installation');
+    assert.equal(inspection?.row.distribution, 'desktop');
     assert.equal(inspection?.installationRoot, null);
     assert.equal(inspection?.destination, null);
     assert.match(inspection?.diagnostics[0]?.message ?? '', /desktop.*GitHub Releases/);

@@ -35,7 +35,7 @@ export interface DirectRtkReleasePlan {
 
 export interface DirectRtkReleasePlanningResult {
   plan: DirectRtkReleasePlan | null;
-  /** The reviewed RTK version when it can be reported without ambiguity. */
+  /** The RTK update target (newest stable release, never below the reviewed one) when known. */
   availableVersion: string | null;
   verdict: 'defer' | 'current' | 'upgradable' | 'unavailable' | 'unsupported';
   diagnostics: Diagnostic[];
@@ -45,7 +45,9 @@ export interface DirectRtkReleasePlanningResult {
 /**
  * Resolve RTK's official GitHub release on Linux/macOS, where Cargo's `rtk` registry name is a
  * different project. Native Windows keeps WinGet when it is current and falls back to the same
- * verified release artifact when WinGet lags.
+ * verified release artifact when WinGet lags. The target is GitHub's newest stable release; the
+ * reviewed version is used only when that lookup fails, and post-install verification still
+ * rolls back a build that does not report the target version.
  */
 export async function planDirectRtkRelease(input: {
   providerId: ProviderId;
@@ -69,8 +71,8 @@ export async function planDirectRtkRelease(input: {
   });
 
   if (input.providerId !== 'rtk') return empty();
-  const targetText = reviewedProviderPackageMaximum(input.providerId);
-  if (targetText === null) return empty();
+  const reviewedText = reviewedProviderPackageMaximum(input.providerId);
+  if (reviewedText === null) return empty();
   const windows = input.platform.os === 'windows' && !input.platform.isWsl;
   if (rtkReleaseAssetForPlatform(input.platform) === null) {
     return windows
@@ -89,8 +91,40 @@ export async function planDirectRtkRelease(input: {
   const installedText = input.installedVersion;
   if (installedText === null) return empty('unavailable');
   const installed = parseSemanticVersion(installedText);
-  const target = parseSemanticVersion(targetText);
-  if (installed === null || target === null) return empty('unavailable');
+  const reviewed = parseSemanticVersion(reviewedText);
+  if (installed === null || reviewed === null) return empty('unavailable');
+
+  // Updates are latest-forward: the reviewed version is only the floor of the offered target.
+  // Ask GitHub for its newest stable tag only when a real executable could be replaced, so
+  // hosts without a resolvable RTK (and fake-filesystem tests) never reach the network.
+  const runtime =
+    input.executables.length > 0
+      ? rtkReleaseRuntimeFor(input.fs, input.runner, input.releaseFetch)
+      : null;
+  const latestDiagnostics: Diagnostic[] = [];
+  let targetText = reviewedText;
+  let target = reviewed;
+  if (runtime !== null) {
+    const latest = await runtime.latestStable();
+    const latestVersion = latest.status === 'found' ? parseSemanticVersion(latest.version) : null;
+    if (latest.status === 'found' && latestVersion !== null) {
+      if (compareVersions(latestVersion, reviewed) > 0) {
+        targetText = latest.version;
+        target = latestVersion;
+      }
+    } else {
+      latestDiagnostics.push(
+        diagnostic({
+          severity: 'info',
+          code: 'rtk-release-latest-unavailable',
+          subject: input.providerId,
+          message: `The newest RTK release could not be read, so the reviewed ${reviewedText} is the update target: ${latest.status === 'found' ? latest.version : latest.message}`,
+          remediation: null,
+        }),
+      );
+    }
+  }
+  const destinations = runtime === null ? [] : [RTK_RELEASE_METADATA_DESTINATION];
 
   if (windows) {
     const channel =
@@ -102,13 +136,16 @@ export async function planDirectRtkRelease(input: {
 
   if (compareVersions(target, installed) <= 0) {
     return {
-      ...empty('current'),
+      ...empty('current', latestDiagnostics),
       availableVersion: targetText,
+      destinations,
     };
   }
 
   const admission = admitProviderPackageUpdate(input.providerId, targetText);
-  if (admission.state !== 'admitted') return empty('unavailable');
+  if (admission.state !== 'admitted') {
+    return { ...empty('unavailable', latestDiagnostics), destinations };
+  }
 
   if (input.executables.length === 0) {
     return empty('unavailable', [
@@ -129,8 +166,9 @@ export async function planDirectRtkRelease(input: {
   // the first resolved path and verifying that same path is safer and more useful than refusing
   // every real machine that happens to retain an older Cargo or ~/.local/bin copy.
   const executable = input.executables[0];
-  const shadowedDiagnostics =
-    input.executables.length > 1
+  const shadowedDiagnostics = [
+    ...latestDiagnostics,
+    ...(input.executables.length > 1
       ? [
           diagnostic({
             severity: 'info',
@@ -144,7 +182,8 @@ export async function planDirectRtkRelease(input: {
             remediation: null,
           }),
         ]
-      : [];
+      : []),
+  ];
   if (executable === undefined || executable.kind !== 'native') {
     return empty('unavailable', [
       ...shadowedDiagnostics,
@@ -176,7 +215,6 @@ export async function planDirectRtkRelease(input: {
     ]);
   }
 
-  const runtime = rtkReleaseRuntimeFor(input.fs, input.runner, input.releaseFetch);
   if (runtime === null) return empty('unavailable');
   const queried = await runtime.query(targetText, input.platform);
   if (queried.status !== 'found') {
@@ -187,7 +225,7 @@ export async function planDirectRtkRelease(input: {
           severity: 'warning',
           code: 'rtk-release-fallback-unavailable',
           subject: input.providerId,
-          message: `RTK ${targetText} is reviewed but its official GitHub release could not be selected: ${queried.message}`,
+          message: `RTK ${targetText}'s official GitHub release could not be selected: ${queried.message}`,
           remediation:
             'Retry after checking GitHub connectivity and confirm that the RTK release includes an asset for this platform',
         }),

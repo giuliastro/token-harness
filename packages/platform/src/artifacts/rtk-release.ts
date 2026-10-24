@@ -18,6 +18,8 @@ export const RTK_RELEASE_METADATA_DESTINATION = 'api.github.com (rtk-ai/rtk rele
 export const RTK_RELEASE_ASSET_DESTINATION = 'github.com (rtk-ai/rtk release asset)';
 
 const RELEASE_API_PREFIX = 'https://api.github.com/repos/rtk-ai/rtk/releases/tags/';
+const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/rtk-ai/rtk/releases/latest';
+const STABLE_TAG_PATTERN = /^v(\d+\.\d+\.\d+)$/;
 const RELEASE_DOWNLOAD_PREFIX = 'https://github.com/rtk-ai/rtk/releases/download/';
 const MAX_METADATA_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
@@ -116,6 +118,10 @@ export interface RtkReleaseAsset extends RtkReleaseAssetSelection {
 
 export type RtkReleaseQuery =
   | { status: 'found'; asset: RtkReleaseAsset }
+  | { status: 'unavailable' | 'invalid'; message: string };
+
+export type RtkLatestReleaseQuery =
+  | { status: 'found'; version: string }
   | { status: 'unavailable' | 'invalid'; message: string };
 
 export interface RtkReleaseRollbackHandle {
@@ -354,6 +360,31 @@ function parseReleaseMetadata(
   };
 }
 
+/**
+ * GitHub's `latest` release is the newest non-draft, non-prerelease tag. RTK also publishes
+ * `dev-*-rc.*` prereleases; those never satisfy the stable `vX.Y.Z` tag shape required here.
+ */
+function parseLatestReleaseMetadata(value: unknown): RtkLatestReleaseQuery {
+  if (!isRecord(value)) return { status: 'invalid', message: 'release metadata is not an object' };
+  const tag = value['tag_name'];
+  if (typeof tag !== 'string') {
+    return { status: 'invalid', message: 'latest release metadata has no tag' };
+  }
+  const version = STABLE_TAG_PATTERN.exec(tag)?.[1];
+  if (
+    version === undefined ||
+    parseSemanticVersion(version) === null ||
+    value['draft'] !== false ||
+    value['prerelease'] !== false
+  ) {
+    return {
+      status: 'invalid',
+      message: `latest release ${JSON.stringify(tag)} is not a stable vX.Y.Z RTK release`,
+    };
+  }
+  return { status: 'found', version };
+}
+
 function u16(buffer: Buffer, offset: number): number {
   if (offset < 0 || offset + 2 > buffer.length) throw new Error('ZIP structure is truncated');
   return buffer.readUInt16LE(offset);
@@ -542,6 +573,32 @@ export class NodeRtkReleaseRuntime {
     this.fs = input.fs;
     this.runner = input.runner;
     this.fetchImpl = input.fetchImpl ?? nativeFetch;
+  }
+
+  /** Read the newest stable upstream tag; the asset itself is still selected by `query`. */
+  async latestStable(): Promise<RtkLatestReleaseQuery> {
+    let bytes: Uint8Array;
+    try {
+      bytes = await fetchBounded({
+        fetchImpl: this.fetchImpl,
+        url: LATEST_RELEASE_API_URL,
+        maximumBytes: MAX_METADATA_BYTES,
+        kind: 'metadata',
+      });
+    } catch (error) {
+      return {
+        status: 'unavailable',
+        message: `RTK latest release metadata could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    try {
+      return parseLatestReleaseMetadata(JSON.parse(new TextDecoder().decode(bytes)) as unknown);
+    } catch (error) {
+      return {
+        status: 'invalid',
+        message: `RTK latest release metadata is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
   async query(version: string, platform: PlatformFacts): Promise<RtkReleaseQuery> {

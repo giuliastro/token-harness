@@ -2,6 +2,10 @@
 
 **Make your Claude Code and Codex allowance go further. Measure what actually helps.**
 
+[Website](https://giuliastro.github.io/token-harness/) ·
+[Download the desktop app](https://github.com/giuliastro/token-harness/releases/latest) ·
+[Getting started](#your-first-five-minutes)
+
 [![npm version](https://img.shields.io/npm/v/token-harness)](https://www.npmjs.com/package/token-harness)
 [![CI](https://github.com/giuliastro/token-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/giuliastro/token-harness/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -18,12 +22,12 @@ Harness keeps them separate.
 <table>
   <tr>
     <td align="center" width="50%">
-      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/dashboard-overview.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/dashboard-overview.jpeg" alt="Token Harness Overview: setup status, measured impact, coding agents with automatic routing, and optimizer setup" width="360"></a>
-      <br><sub><b>Overview</b> · agents, routing and optimizers in one place</sub>
+      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/app-home.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/app-home.jpeg" alt="Token Harness Home: whether it is working, tokens agents did not have to read, tokens handled by cheaper models and live plan balance" width="360"></a>
+      <br><sub><b>Home</b> · is it working and what it saved</sub>
     </td>
     <td align="center" width="50%">
-      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/dashboard-results.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/dashboard-results.jpeg" alt="Token Harness Results: measured output reduction, routing activity and allowance balances per source" width="360"></a>
-      <br><sub><b>Results</b> · measured impact and the evidence behind it</sub>
+      <a href="https://github.com/giuliastro/token-harness/blob/main/docs/images/app-methods.jpeg"><img src="https://raw.githubusercontent.com/giuliastro/token-harness/main/docs/images/app-methods.jpeg" alt="Token Harness Methods: RTK, HarnessTrim, model routing and more methods, each with its own on/off switch" width="360"></a>
+      <br><sub><b>Methods</b> · every method, one switch each</sub>
     </td>
   </tr>
 </table>
@@ -44,15 +48,28 @@ package and a desktop SHA-256 checksum file:
 The application includes its own Node runtime and the existing local dashboard. Coding
 agents and optimizers remain separate installations. Use **File → Open project** to
 choose the project for configuration and project-scoped evidence. Global recorded results
-retain their existing scope. The app starts in your home directory.
+retain their existing scope. The app reopens the last folder selected through the native
+chooser, falling back to your home directory if it is unavailable. On macOS it offers
+to move a packaged app into Applications before configuring durable integrations.
 
 Initial desktop packages are unsigned on Windows and ad-hoc signed on macOS, without
 notarization; the operating system may require a manual security review. Update through
 **Help → Download desktop updates**, replacing the app at the same installation path.
 Installed hooks continue to run after the app closes. Before moving/uninstalling the app,
-review and remove its owned integrations through Token Harness. The Windows desktop
+use **Details → Advanced tools → Prepare to remove the app** to review its owned
+connections, then re-check health and review external integrations before removal. The Windows desktop
 app manages native Windows; use the CLI inside WSL for that separate environment.
 Advanced CLI workflows remain available through the npm installation.
+
+**Details → Advanced tools** also offers workload advice with an explicit reserve and
+task count, evidence-based agent comparison, compact handoff summaries, and reviewed
+four-arm configuration preparation / outcome recording. These flows reuse the CLI
+engines. They do not launch agents, reset source trees or execute saved check commands.
+Interrupted experiments use the existing **Review benchmark recovery** control.
+Updated CLI and desktop builds serialize approved managed changes against the same
+state root; older CLI builds must be upgraded before concurrent use.
+
+For pre-merge installer testing, follow the [desktop candidate test guide](docs/testing-desktop-interface-first.md).
 
 For contributors, `pnpm desktop:package` builds native packages for the current platform;
 `pnpm desktop:smoke` checks the packaged runtime and hidden renderer in an isolated profile
@@ -86,15 +103,40 @@ global npm installation.
 
 ## Your first five minutes
 
-1. Open **Overview**. Token Harness detects your agents, installed optimizers and integration health.
-2. **Review optimizer setup.** Start with RTK + HarnessTrim where the exact combination is supported.
-   Each optimizer has its setup, verification and removal controls together.
-3. **Preview and apply.** Check the proposed changes, then approve. Opening the dashboard alone does
+1. Open the app with `token-harness`. On first run a single screen offers **Turn on the recommended
+   setup**: RTK + HarnessTrim + model routing for each detected agent. Add `#welcome` to the app
+   URL to see that screen again.
+2. **Review and approve.** Every change is previewed first and requires approval. Each later step is
+   re-planned before it is applied, and the run stops if the plan changed. Opening the app alone does
    not change agent configuration.
-4. **Authorize native hooks once.** In Codex, use `/hooks` to enable and trust the installed hooks.
+3. **Authorize native hooks once.** In Codex, use `/hooks` to enable and trust the installed hooks.
    In Claude Code, ensure hooks are enabled and start a fresh session after changing them.
-5. **Use your agent normally.** Return to **Results** to inspect observed evidence. “Configured” means
+4. **Use your agent normally.** **Home** shows whether Token Harness is working (or the one step
+   left) and what it saved; **Methods** shows each method with an on/off switch. Turn on **Advanced
+   view** in the header for **Details** and the evidence behind the numbers. “Configured” means
    setup exists; “runtime observed” means a qualifying callback or operation was actually recorded.
+
+The app has three tabs: **Home**, **Methods** and, with **Advanced view** on, **Details**. The header
+also has an EN/IT language switch, a theme select and **Refresh**. While the first read runs, a
+loading screen lists each check as it finishes. Add `#methods` or `#details` to the app URL to open
+that view directly.
+
+- **Home** shows tokens agents did not have to read (measured RTK output reduction, with a daily
+  chart), tokens handled by cheaper models in the last 30 days (read locally from Claude Code and
+  Codex transcripts: per-model token counts only, split main conversation vs subagents), your live
+  5-hour and weekly plan balance, and tasks delegated, commands shortened and shorter output %.
+  The dollar figure is an estimate at Claude Opus 5.5 API list prices ($5/M cache write once; the
+  high end adds about 20 re-reads at $0.20/M). Measured savings, estimates and activity stay separate.
+- **Methods** lists Recommended (RTK, HarnessTrim, Model routing) and More methods (Reasoning level,
+  In-session guidance, mcptoon, GitNexus, Headroom). Each card shows a state (On, On · waiting for
+  first use, Needs a step, Off, Not installed) with an on/off switch, **Install**, **Add to more
+  apps**, an update strip that opens the update review (all available updates are reviewed
+  together) and **When is it useful?**. Turning a tool off removes only the connection Token Harness
+  added; the program stays installed.
+- **Details** has the evidence list with search and filters, comparisons (**Record a comparison**,
+  Comparison guide, How results are measured), Coding agents details, Checks and maintenance
+  (**Re-check health**, **Check for updates**, Undo, benchmark recovery), Change history and Recent
+  activity.
 
 You do not need to keep the dashboard open for installed native hooks to run. Evidence appears after
 qualifying activity; an idle installation cannot prove execution. Use the action beside an affected
@@ -104,7 +146,7 @@ agent or optimizer when a version or prerequisite needs attention.
 
 | Feature | How it helps |
 | --- | --- |
-| **One optimization dashboard** | Inspect agents, optimizers, health and updates together. |
+| **One optimization dashboard** | See status, savings, methods, health and updates in one app. |
 | **Less noisy tool output** | Connect RTK and HarnessTrim on reviewed integration rows. |
 | **Automatic prompt guidance** | Opt into native hooks that supply a bounded delegation policy on each prompt. |
 | **Allowance-aware advice** | Inspect five-hour/weekly windows and native model/effort recommendations when evidence is available. |
@@ -145,9 +187,8 @@ The practical benefits are:
 ### Install and authorize for each harness
 
 After [installing Token Harness](#install-and-start), ensure `token-harness` is on the `PATH` used
-by your coding agent. Open the dashboard, go to **Overview → Coding agents**, and select
-**Enable routing** under the agent's **Automatic prompt routing** card. Review and apply the
-preview. Setup merges user-scope hooks and preserves unrelated configuration.
+by your coding agent. Open the app and, in **Methods**, turn on **Model routing** for the agent (or accept it in
+the recommended setup). Review and apply the preview. Setup merges user-scope hooks and preserves unrelated configuration.
 
 | Harness | Reviewed routing configuration versions | Native activation after apply |
 | --- | --- | --- |
@@ -183,13 +224,14 @@ dashboard can be closed afterward; the agent invokes the installed hooks itself.
 
 ### Verify, measure and disable
 
-Submit an ordinary prompt in a fresh agent session, then inspect its routing card in **Overview**.
+Submit an ordinary prompt in a fresh agent session, then inspect routing in **Home** (tokens handled by cheaper models) and the agent's routing
+status in **Details → Coding agents**.
 **Configured** / `config-only` means the definitions exist; **Trust required** means Codex still
 needs authorization; **Active · callback seen** / `runtime-observed` means a real callback arrived.
 Prompt callbacks prove the hook ran; child start/stop callbacks prove a native child lifecycle.
 Neither proves the child used the requested model or saved allowance.
 
-To disable, use **Disable routing** on the same card and review/apply the preview. The CLI
+To disable, turn off the **Model routing** switch in **Methods** and review/apply the preview. The CLI
 equivalent is below; replace `<harness>` with `claude` or `codex`:
 
 ```sh
@@ -230,7 +272,7 @@ See [the routing RFC](docs/rfcs/0030-automatic-native-prompt-routing.md) for pol
 | [Headroom](https://github.com/headroomlabs-ai/headroom) | MCP context compression/retrieval | Optional configuration-only integration for an already-installed reviewed package. |
 | [cclimits](https://github.com/cruzanstx/cclimits) / [ccusage](https://github.com/ccusage/ccusage) | Allowance / usage observations | Read-only evidence sources, rather than optimizers. Usage history is not remaining quota. |
 
-Current source-reviewed package targets are **RTK 0.51.0** and **HarnessTrim 0.3.1**. Package update
+Current reviewed package targets are **RTK 1.0.1** and **HarnessTrim 0.3.1**; RTK updates follow its newest stable release. Package update
 policy and exact agent-configuration compatibility are separate: a newer installed package does not
 automatically admit new config writes or a combined-stack review. RTK + HarnessTrim still need real
 combined workload evidence before broader promotion. Optional integrations do not count as proven
@@ -242,8 +284,9 @@ See [version policy](docs/provider-version-compatibility.md),
 
 ## Update, disconnect or undo
 
-The dashboard checks for updates on opening. When an update is available, review its exact version
-and choose **Install updates** to approve installation. It re-checks health automatically afterward.
+The app checks for updates on opening. When an update is available, the method card shows an update
+strip; open it to review the exact versions (all available updates are reviewed together) and
+approve installation. **Details → Checks and maintenance → Check for updates** does the same on demand. It re-checks health automatically afterward.
 A supported application update offers **Restart and re-check** to load the new version; if replacement startup fails, the
 current dashboard stays available.
 
@@ -254,8 +297,8 @@ npm install --global token-harness@latest
 token-harness
 ```
 
-To disconnect an optimizer, use **Remove managed setup** beside that optimizer.
-It removes only entries Token Harness owns. The CLI equivalent for owned integrations is:
+To disconnect an optimizer, turn its switch off in **Methods**. It removes only the connection
+Token Harness added; the program stays installed. The CLI equivalent for owned integrations is:
 
 ```sh
 token-harness uninstall --yes

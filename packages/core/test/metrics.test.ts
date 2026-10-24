@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   MEASUREMENT_CLASSES,
   aggregateEvents,
+  dailySavings,
   isMeasurementClass,
   isRealizedSaving,
   isSummableWith,
@@ -166,5 +167,71 @@ describe('measurement classes', () => {
     assert.equal(isRealizedSaving(event({ class: 'counterfactual', changed: false })), false);
     assert.equal(isRealizedSaving(event({ class: 'estimated-local', changed: true })), true);
     assert.equal(isRealizedSaving(event({ class: 'estimated-local', changed: false })), false);
+  });
+});
+
+describe('dailySavings', () => {
+  function at(
+    id: string,
+    timestamp: string,
+    extra: Parameters<typeof event>[0],
+  ): OptimizationEvent {
+    return { ...event({ ...extra, id }), timestamp };
+  }
+
+  it('groups by UTC date and keeps classes and units apart', () => {
+    const events = [
+      at('a', '2026-07-29T23:59:59Z', { class: 'exact-local', tokens: true }),
+      at('b', '2026-07-30T00:00:00Z', { class: 'exact-local', tokens: true }),
+      at('c', '2026-07-30T05:00:00Z', { class: 'exact-local', tokens: false }),
+      at('d', '2026-07-30T06:00:00Z', { class: 'estimated-local' }),
+      at('e', '2026-07-30T07:00:00Z', { class: 'counterfactual' }),
+      at('f', '2026-07-30T08:00:00Z', { class: 'exact-local', tokens: true, changed: false }),
+    ];
+    const rows = dailySavings(events, '2026-07-31');
+    assert.deepEqual(
+      rows.map((r) => [r.date, r.class, r.unit, r.saved, r.operations]),
+      [
+        ['2026-07-29', 'exact-local', 'tokens', 150, 1],
+        ['2026-07-30', 'estimated-local', 'chars', 600, 1],
+        ['2026-07-30', 'exact-local', 'chars', 600, 1],
+        ['2026-07-30', 'exact-local', 'tokens', 150, 1],
+      ],
+    );
+  });
+
+  it('counts a duplicated event id once and sums to the provider rows', () => {
+    const events = [
+      at('a', '2026-07-29T10:00:00Z', { class: 'exact-local', tokens: true }),
+      at('a', '2026-07-29T10:00:00Z', { class: 'exact-local', tokens: true }),
+      at('b', '2026-07-30T10:00:00Z', { class: 'exact-local', tokens: true }),
+    ];
+    const rows = dailySavings(events, '2026-07-31');
+    const report = aggregateEvents({
+      events,
+      windowStart: '2026-07-24',
+      windowEnd: '2026-07-31',
+    });
+    assert.equal(
+      rows.reduce((sum, r) => sum + r.saved, 0),
+      report.providers.reduce((sum, r) => sum + r.saved, 0),
+    );
+    assert.equal(rows.length, 2);
+  });
+
+  it('keeps only the last 90 days of the window', () => {
+    const events = [
+      at('old', '2026-05-03T10:00:00Z', { class: 'exact-local', tokens: true }),
+      at('edge', '2026-05-04T10:00:00Z', { class: 'exact-local', tokens: true }),
+    ];
+    // 90 days ending 2026-08-01 begin on 2026-05-04.
+    assert.deepEqual(
+      dailySavings(events, '2026-08-01').map((r) => r.date),
+      ['2026-05-04'],
+    );
+  });
+
+  it('returns nothing for no events', () => {
+    assert.deepEqual(dailySavings([], '2026-07-31'), []);
   });
 });
