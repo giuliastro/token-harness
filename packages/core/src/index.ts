@@ -74,6 +74,7 @@ export * from './metrics/local-database.js';
 export * from './metrics/optimization-stack.js';
 export * from './metrics/stack-combination-review.js';
 export * from './metrics/report.js';
+export * from './metrics/observe.js';
 export * from './metrics/pipeline.js';
 export * from './metrics/channels.js';
 export * from './metrics/store.js';

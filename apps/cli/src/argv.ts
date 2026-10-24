@@ -52,6 +52,7 @@ export const AVAILABLE_COMMANDS = [
   'doctor',
   'history',
   'metrics',
+  'observe',
   'mcp',
   'optimize',
   'plan',
@@ -121,6 +122,8 @@ export interface CommandOptions {
   /** Install or remove the always-on native per-prompt routing hook. */
   agentRouting: boolean;
   disableAgentRouting: boolean;
+  /** Read without importing or updating metrics evidence. */
+  readOnly: boolean;
   /** Show the full technical human report. JSON is already complete. */
   verbose: boolean;
   /** `--yes`: the confirmation RFC 0006 requires of a mutating command. */
@@ -169,6 +172,7 @@ const VALUE_FLAGS = new Set([
  */
 const BOOLEAN_FLAGS = new Set([
   '--json',
+  '--read-only',
   '--native-policy',
   '--agent-skill',
   '--agent-routing',
@@ -255,6 +259,7 @@ export function parseArgv(
     agentRouting: false,
     disableAgentRouting: false,
     verbose: false,
+    readOnly: false,
     yes: false,
   };
   let command: string | null = null;
@@ -301,6 +306,7 @@ export function parseArgv(
       if (name === '--agent-routing') options.agentRouting = true;
       if (name === '--disable-agent-routing') options.disableAgentRouting = true;
       if (name === '--verbose') options.verbose = true;
+      if (name === '--read-only') options.readOnly = true;
       continue;
     }
 
@@ -634,6 +640,17 @@ export function parseArgv(
       }),
     );
     return usageError(json, diagnostics);
+  }
+
+  if (options.readOnly && command !== 'metrics' && command !== 'observe') {
+    diagnostics.push(
+      diagnostic({
+        severity: 'error',
+        code: 'read-only-option-unsupported',
+        message: '--read-only is supported by metrics and observe only',
+        remediation: 'Use token-harness metrics --read-only or token-harness observe --json',
+      }),
+    );
   }
 
   if (options.agentRouting && options.disableAgentRouting) {

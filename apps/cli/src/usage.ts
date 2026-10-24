@@ -46,6 +46,7 @@ Advanced commands
   apply       Apply a reviewed plan
   verify      Check that configured integrations work
   metrics     Show measured savings
+  observe     Read quotas, agents and recorded metrics for integrations
   update      Check or update installed providers
   rollback    Restore the previous configuration
   uninstall   Remove only configuration Token Harness owns
@@ -356,15 +357,32 @@ Read-only. Exits 0 when nothing is broken, and 3 when an integration is broken,
 an exclusive scope carries an unowned entry, a version is outside its tested
 range, or a verification fell below its declared tier. An empty environment is a
 state, not a problem.`,
+  observe: `token-harness observe — versioned read-only integration snapshot
+
+Usage
+  token-harness observe --json [--since <window>] [--until <window>]
+                        [--harness <id>] [--provider <id>]
+
+Returns quotas, detected coding agents and stored metrics in one schema-1 CLI
+envelope with the observe-v1 data contract. Never imports metrics, initializes
+attribution, appends events, or advances local import cursors. Native usage
+windows are observed live; stored metrics can lag their provider records.
+Unknown quotas or savings are never represented as zero.
+
+See docs/integrations/observe-v1.md. The default metric window is 7d.`,
   metrics: `token-harness metrics — report savings by measurement class
 
 Usage
-  token-harness metrics [--json] [--since <window>] [--until <window>]
+  token-harness metrics [--json] [--read-only] [--since <window>] [--until <window>]
                         [--provider <id>] [--project <dir>]
 
 Imports each provider's own records into the Token Harness state directory, then
 reports the window. Providers' records are opened read-only, so measuring cannot
 alter what it measures; nothing outside the state directory is written.
+
+--read-only disables imports and changes to local evidence, including import
+cursors and attribution salt. With no usable existing salt it reports all
+stored projects rather than attributing them to a fictitious project.
 
 --since and --until take a duration (7d, 12h, 2w) or a date (2026-07-22). A date
 bound is midnight UTC, so a report is reproducible regardless of the reader's

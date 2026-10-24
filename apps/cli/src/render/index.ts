@@ -132,6 +132,8 @@ export function renderHuman(
         return plain(renderSimpleMcp(data as McpReport));
       case 'metrics':
         return plain(renderSimpleMetrics(data as MetricsReport));
+      case 'observe':
+        return plain('Use token-harness observe --json to read the versioned snapshot.\n');
       case 'optimize':
         return plain(renderSimpleOptimize(data as OptimizeReport));
       case 'plan':
@@ -194,6 +196,8 @@ export function renderHuman(
       return plain(renderVerifyReport(data as VerifyReport, context));
     case 'metrics':
       return plain(renderMetricsReport(data as MetricsReport, context));
+    case 'observe':
+      return plain('Use token-harness observe --json to read the versioned snapshot.\n');
     case 'update':
       return plain(renderUpdateReport(data as UpdateReport, context));
     default:
