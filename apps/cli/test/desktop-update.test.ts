@@ -57,12 +57,16 @@ it('keeps a desktop installation outside npm self-update and identifies its own 
   }
 });
 
-
 it('reports a running npx cache copy separately from an existing global npm CLI', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'th-npx-provenance-'));
   try {
     const facts: PlatformFacts = {
-      os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux',
+      os:
+        process.platform === 'win32'
+          ? 'windows'
+          : process.platform === 'darwin'
+            ? 'macos'
+            : 'linux',
       osDisplayName: 'test',
       arch: 'x64',
       nodeVersion: '24.13.0',
@@ -74,12 +78,20 @@ it('reports a running npx cache copy separately from an existing global npm CLI'
     mkdirSync(join(globalRoot, 'token-harness'), { recursive: true });
     const entry = join(npxPackage, 'index.mjs');
     writeFileSync(entry, '// fake running package');
-    writeFileSync(join(npxPackage, 'package.json'), JSON.stringify({
-      name: 'token-harness', version: '0.1.34',
-    }));
-    writeFileSync(join(globalRoot, 'token-harness', 'package.json'), JSON.stringify({
-      name: 'token-harness', version: '0.1.32',
-    }));
+    writeFileSync(
+      join(npxPackage, 'package.json'),
+      JSON.stringify({
+        name: 'token-harness',
+        version: '0.1.34',
+      }),
+    );
+    writeFileSync(
+      join(globalRoot, 'token-harness', 'package.json'),
+      JSON.stringify({
+        name: 'token-harness',
+        version: '0.1.32',
+      }),
+    );
     let calls = 0;
     const context = {
       applicationEntryScript: entry,
