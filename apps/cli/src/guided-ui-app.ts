@@ -198,20 +198,7 @@ export const GUIDE_APP_JS = String.raw`
         else setTimeout(checkUpdatesOnStartup, 1000);
         return;
       }
-      if (result.stack && current) {
-        current = { ...current, stack: result.stack };
-        render();
-      }
-      const root = $('update-notice');
-      root.replaceChildren();
-      if (!result.updatesAvailable) {
-        root.hidden = true;
-        return;
-      }
-      const copy = node('div');
-      copy.append(node('strong', t('An update is available')), node('p', (result.messages || []).join(' '), 'caption'));
-      root.append(copy, actionButton(t('Review update'), () => readOnlyOperation('update'), 'secondary'));
-      root.hidden = false;
+      displayUpdateNotice(result);
     } catch {
       // The startup version check is supplementary; Details keeps a manual update check.
     }
