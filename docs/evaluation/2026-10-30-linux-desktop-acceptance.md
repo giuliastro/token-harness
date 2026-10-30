@@ -19,7 +19,13 @@ isolated profile's `.hermes` directory. That test-owned directory was removed,
 and the later desktop run used a minimal `PATH` without Hermes. This side effect
 needs separate review before calling fresh-profile detection passive.
 
-The v0.1.34 release UI showed a stale update banner after success. Main's later
-#403 fix was not packaged or tested here. Full brownfield, undo/recovery and
-after-close native integration checks remain untested, as do Windows, macOS and
-Claude. This is partial Linux evidence and does not pass or close #379.
+The v0.1.34 release UI showed a stale update banner after success. A separate
+Linux unpacked desktop build from main `6c50a099` (including #403) passed
+`pnpm desktop:smoke`. Repeating the isolated RTK update in that build verified
+`1.1.0` and cleared the stale banner without a page refresh. The complete
+`pnpm desktop:package` archive build stopped with `ENOSPC` after assembling
+the unpacked app; no distributable archive was validated from this build.
+
+Full brownfield, undo/recovery and after-close native integration checks remain
+untested, as do Windows, macOS and Claude. This is partial Linux evidence and
+does not pass or close #379.
