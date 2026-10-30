@@ -675,8 +675,8 @@ it('clears a stale startup update notice and rechecks all provider releases with
       if (path === '/api/apply') {
         installed = true;
         for (const component of data.stack.components) {
-          component.update = 'current';
-          component.updateAvailableVersion = null;
+          component['update'] = 'current';
+          component['updateAvailableVersion'] = null;
         }
         return { ok: true, messages: ['All provider updates applied.'] };
       }
