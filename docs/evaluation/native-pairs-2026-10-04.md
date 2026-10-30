@@ -108,3 +108,61 @@ No persistent sandbox policy or trust setting was changed to obtain the positive
 Issue #360 remains open for isolated task-attributable allowance measurements, successful matched
 Codex stack activation, repetition and marginal routing value. Issue #359's native Linux follow-up
 is explicitly deferred by the user. These are evidence gates, not a reason to relabel failed trials.
+
+## Local Codex follow-up acceptance protocol for issue #360
+
+This is a **new run**, not a reinterpretation of the 2026-10-04 pilot.
+Collect pairs before marking any of the four outstanding acceptance items as complete.
+
+1. Freeze repository commit, task instructions, fixtures, tests, runtime versions,
+   provider/harness/platform fingerprint and account/session conditions. Preserve
+   the task acceptance test suite byte-for-byte across compared variants.
+2. On **both Claude Code and Codex**, repeat each mechanical/standard/hard
+   workload in baseline and recommended stack at least twice each. Counterbalance
+   execution order (AB / BA) and record warm/cold cache conditions. Do not reuse
+   a previous optimized attempt whose RTK command failed as successful activation.
+3. Record for every trial: trial ID, timestamp, harness version, OS, exact RTK and
+   HarnessTrim versions, routing policy, full command failures and retry count,
+   test acceptance, local tokens/characters, wall-clock latency, read-only
+   authoritative quota snapshots when observable, and any concurrent account usage.
+4. To isolate routing, keep RTK + HarnessTrim fixed for both variants. Compare
+   **routing disabled** against **routing enabled**, with actual eligible native
+   callback/execution evidence in the enabled variant. Configuration-only status
+   is insufficient. Do not infer subagent model names when not observed.
+5. Run the existing offline auditing command against the retained receipts:
+   `node scripts/evaluation/audit-native-pairs.mjs`. Store the exact invocation,
+   audit output and raw/derived evidence together, without replacing pilot data.
+6. Report negative or null outcomes. Quality regression, failed provider command
+   or contaminated account quota vetoes a positive task-level savings claim,
+   even if the final harness exit code is zero.
+
+### Per-trial evidence fields (local recording contract)
+
+```json
+{
+  "trialId": "local-001",
+  "taskClass": "standard",
+  "taskFingerprint": "git-commit-and-frozen-tests",
+  "harness": "codex",
+  "os": "windows",
+  "variant": "baseline",
+  "routing": "disabled",
+  "rtkVersion": null,
+  "harnesstrimVersion": null,
+  "acceptancePassed": null,
+  "providerCommandsSucceeded": null,
+  "providerRetries": null,
+  "elapsedMs": null,
+  "localTokenCount": null,
+  "localCharacterCount": null,
+  "accountQuota": { "fiveHour": null, "sevenDay": null, "contaminated": null },
+  "routingExecutionEvidence": null,
+  "notes": "Record actual evidence sources and unknowns."
+}
+```
+
+Treat null as **not measured**, never zero. A real run must fill the relevant
+values and attach raw observations or auditable provenance. A pilot with only
+one trial per condition, shared account activity, or no routed execution cannot
+close #360. Keep the PR open until local Codex/Claude Code receipts and a
+reviewed audit are attached.
