@@ -31,6 +31,8 @@ function unsupported(
       installed,
       available: null,
       channel: null,
+      installationSource: 'unknown',
+      installationPath: null,
       verdict: 'unsupported-installation',
     },
     installationRoot: null,
@@ -126,6 +128,8 @@ export async function inspectApplicationUpdate(
       installed,
     );
     desktop.row.distribution = 'desktop';
+    desktop.row.installationSource = 'desktop';
+    desktop.row.installationPath = packageRoot;
     return desktop;
   }
 
@@ -142,6 +146,8 @@ export async function inspectApplicationUpdate(
         installed,
         available: null,
         channel: 'npm',
+        installationSource: 'unknown',
+        installationPath: packageRoot,
         verdict: 'unavailable',
       },
       installationRoot: packageRoot,
@@ -175,6 +181,8 @@ export async function inspectApplicationUpdate(
         installed,
         available: null,
         channel: null,
+        installationSource: 'other',
+        installationPath: packageRoot,
         verdict: 'unsupported-installation',
       },
       installationRoot: null,
@@ -206,6 +214,8 @@ export async function inspectApplicationUpdate(
         installed,
         available: null,
         channel: 'npm',
+        installationSource: 'unknown',
+        installationPath: packageRoot,
         verdict: inventory.status === 'failed' ? 'unavailable' : 'unknown',
       },
       installationRoot: packageRoot,
@@ -236,6 +246,8 @@ export async function inspectApplicationUpdate(
     installed,
     available: query.version,
     channel: 'npm',
+    installationSource: 'npm-global',
+    installationPath: packageRoot,
     verdict:
       query.status !== 'found' || query.version === null
         ? query.status === 'failed'

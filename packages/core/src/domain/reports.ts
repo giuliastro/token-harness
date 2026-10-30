@@ -133,6 +133,10 @@ export interface ProviderUpdateRow {
 
 /** Update state for the Token Harness CLI package itself, kept separate from optimizer rows. */
 export interface ApplicationUpdateRow {
+  /** The observed running installation, not an update destination or proof about other CLIs. */
+  installationPath?: string | null;
+  /** 'other' includes npx caches, local checkouts and other non-global copies. */
+  installationSource?: 'npm-global' | 'other' | 'desktop' | 'unknown';
   /** Present for packaged desktop copies; npm self-update is not their update channel. */
   distribution?: 'desktop';
   applicationId: 'token-harness';

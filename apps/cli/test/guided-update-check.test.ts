@@ -633,3 +633,165 @@ it('keeps an update that needs a restart pending until the user chooses to resta
   await settle();
   assert.equal(writes.filter((write) => write.path === '/api/restart').length, 1);
 });
+
+it('clears a stale startup update notice and rechecks all provider releases without a page refresh', async () => {
+  const data = withUpdates();
+  data.stack.components.push({
+    providerId: 'harnesstrim',
+    configured: true,
+    configuredHarnesses: ['codex'],
+    installed: true,
+    version: '0.3.0',
+    update: 'available',
+    updateAvailableVersion: '0.3.1',
+  });
+  let installed = false;
+  const { get, writes, settle, button } = await startGuidedBrowser({
+    data,
+    respond: (path, body) => {
+      if (path === '/api/update-check') {
+        if (!installed) {
+          return {
+            ...updateTicket,
+            application: {
+              applicationId: 'token-harness',
+              installed: '0.1.34',
+              available: null,
+              channel: 'npm',
+              verdict: 'current',
+              installationSource: 'npm-global',
+              installationPath: '/fixture/global/node_modules/token-harness',
+            },
+            ...((body as { background?: boolean }).background ? { ticket: null } : {}),
+          };
+        }
+        return {
+          ok: true,
+          title: 'Up to date',
+          messages: ['Everything is current.'],
+          updatesAvailable: false,
+          ticket: null,
+          stack: data.stack,
+          application: {
+            applicationId: 'token-harness',
+            installed: '0.1.34',
+            available: null,
+            channel: 'npm',
+            verdict: 'current',
+            installationSource: 'npm-global',
+            installationPath: '/fixture/global/node_modules/token-harness',
+          },
+        };
+      }
+      if (path === '/api/apply') {
+        installed = true;
+        for (const component of data.stack.components) {
+          component['update'] = 'current';
+          component['updateAvailableVersion'] = null;
+        }
+        return { ok: true, messages: ['All provider updates applied.'] };
+      }
+      return undefined;
+    },
+  });
+  assert.equal(get('update-notice').hidden, false);
+  button(get('update-notice'), 'Review update').fire('click');
+  await settle();
+  button(get('modal-actions'), 'Install update').fire('click');
+  await settle();
+  assert.equal(
+    get('update-notice').hidden,
+    true,
+    'the startup warning must disappear without a browser refresh',
+  );
+  assert.deepEqual(
+    writes.filter((write) => write.path === '/api/update-check').map((write) => write.body),
+    [{ period: 'all', background: true }, { period: 'all' }, { period: 'all', background: true }],
+    'post-install check covers RTK, HarnessTrim and every other configured provider',
+  );
+  assert.equal(get('modal').open, true, 'no full-page reload is necessary');
+});
+
+it('replaces the stale Token Harness version banner with an explicit pending-restart notice', async () => {
+  const { get, settle, button } = await startGuidedBrowser({
+    data: withUpdates(),
+    respond: (path, body) => {
+      if (path === '/api/update-check')
+        return (body as { background?: boolean }).background
+          ? { ...updateTicket, ticket: null }
+          : updateTicket;
+      if (path === '/api/apply')
+        return {
+          ok: true,
+          restartRequired: true,
+          title: 'Token Harness updated',
+          messages: ['Restart to load the installed build.'],
+        };
+      return undefined;
+    },
+  });
+  button(get('update-notice'), 'Review update').fire('click');
+  await settle();
+  button(get('modal-actions'), 'Install update').fire('click');
+  await settle();
+  assert.match(get('update-notice').textContent, /Restart required/);
+  assert.doesNotMatch(get('update-notice').textContent, /An update is available/);
+  assert.equal(get('modal-title').textContent, 'Token Harness updated');
+});
+
+it('distinguishes npx and global npm installations without touching either installation', async () => {
+  for (const installation of [
+    {
+      source: 'other',
+      verdict: 'unsupported-installation',
+      path: '/fixture/_npx/123/node_modules/token-harness',
+      version: '0.1.34',
+      expected: /Non-global \(for example npx\)/,
+    },
+    {
+      source: 'npm-global',
+      verdict: 'current',
+      path: '/fixture/global/node_modules/token-harness',
+      version: '0.1.32',
+      expected: /Verified global npm/,
+    },
+  ]) {
+    const { get, writes, turn, button, settle } = await startGuidedBrowser({
+      data: withUpdates(),
+      respond: (path, _body) =>
+        path === '/api/update-check'
+          ? {
+              ok: true,
+              title: 'Checked',
+              messages: [],
+              ticket: null,
+              updatesAvailable: false,
+              application: {
+                applicationId: 'token-harness',
+                installed: installation.version,
+                available: null,
+                channel: installation.source === 'npm-global' ? 'npm' : null,
+                verdict: installation.verdict,
+                installationSource: installation.source,
+                installationPath: installation.path,
+              },
+            }
+          : undefined,
+    });
+    await turn('details');
+    assert.match(get('details-root').textContent, installation.expected);
+    assert.ok(get('details-root').textContent.includes(installation.path));
+    assert.ok(get('details-root').textContent.includes(installation.version));
+    assert.match(
+      get('details-root').textContent,
+      /separate global CLI installation has not been checked/,
+    );
+    button(get('details-root'), 'Review updates').fire('click');
+    await settle();
+    assert.match(get('modal-content').textContent, installation.expected);
+    assert.ok(
+      writes.every((write) => write.path !== '/api/apply'),
+      'provenance checks are read-only and must not install any packages',
+    );
+  }
+});

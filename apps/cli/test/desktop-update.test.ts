@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -52,6 +52,74 @@ it('keeps a desktop installation outside npm self-update and identifies its own 
     assert.equal(inspection?.installationRoot, null);
     assert.equal(inspection?.destination, null);
     assert.match(inspection?.diagnostics[0]?.message ?? '', /desktop.*GitHub Releases/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+it('reports a running npx cache copy separately from an existing global npm CLI', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'th-npx-provenance-'));
+  try {
+    const facts: PlatformFacts = {
+      os:
+        process.platform === 'win32'
+          ? 'windows'
+          : process.platform === 'darwin'
+            ? 'macos'
+            : 'linux',
+      osDisplayName: 'test',
+      arch: 'x64',
+      nodeVersion: '24.13.0',
+      isWsl: false,
+    };
+    const npxPackage = join(directory, '_npx', 'abc', 'node_modules', 'token-harness');
+    const globalRoot = join(directory, 'global', 'node_modules');
+    mkdirSync(npxPackage, { recursive: true });
+    mkdirSync(join(globalRoot, 'token-harness'), { recursive: true });
+    const entry = join(npxPackage, 'index.mjs');
+    writeFileSync(entry, '// fake running package');
+    writeFileSync(
+      join(npxPackage, 'package.json'),
+      JSON.stringify({
+        name: 'token-harness',
+        version: '0.1.34',
+      }),
+    );
+    writeFileSync(
+      join(globalRoot, 'token-harness', 'package.json'),
+      JSON.stringify({
+        name: 'token-harness',
+        version: '0.1.32',
+      }),
+    );
+    let calls = 0;
+    const context = {
+      applicationEntryScript: entry,
+      projectRoot: directory,
+      adapters: {
+        fs: new NodeFileSystem(facts),
+        runner: {
+          run: async ({ executable, args }: { executable: string; args: string[] }) => {
+            calls++;
+            assert.equal(executable, 'npm');
+            assert.deepEqual(args, ['root', '--global']);
+            return { stdout: globalRoot, stderr: '', exitCode: 0, failure: null };
+          },
+        },
+      },
+    } as unknown as CommandContext;
+    const inspection = await inspectApplicationUpdate(context);
+    assert.equal(inspection?.row.installed, '0.1.34');
+    assert.equal(inspection?.row.installationSource, 'other');
+    assert.ok(
+      inspection?.row.installationPath?.endsWith(
+        join('_npx', 'abc', 'node_modules', 'token-harness'),
+      ),
+      'resolved entry still belongs to the npx package, regardless of Windows 8.3 path aliases',
+    );
+    assert.equal(inspection?.row.verdict, 'unsupported-installation');
+    assert.equal(inspection?.installationRoot, null, 'npx must never become an update target');
+    assert.equal(calls, 1, 'only the npm root is read; no npm update or global inventory mutation');
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
