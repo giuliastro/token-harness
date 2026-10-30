@@ -13,6 +13,12 @@ preview safely refused RTK, HarnessTrim and routing integration for the Codex
 alpha. In the isolated copy, a UI-reviewed RTK update from `1.0.1` to `1.1.0`
 re-read the active executable; `/home/giulio/.local/bin/rtk` remained `1.0.1`.
 
+With the host's full `PATH`, a passive inventory run invoked the installed Hermes
+bootstrapper through its `--version` probe; it populated about 319 MB under the
+isolated profile's `.hermes` directory. That test-owned directory was removed,
+and the later desktop run used a minimal `PATH` without Hermes. This side effect
+needs separate review before calling fresh-profile detection passive.
+
 The v0.1.34 release UI showed a stale update banner after success. Main's later
 #403 fix was not packaged or tested here. Full brownfield, undo/recovery and
 after-close native integration checks remain untested, as do Windows, macOS and
