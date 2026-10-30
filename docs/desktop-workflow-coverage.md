@@ -45,3 +45,33 @@ for the current PR artifacts and its manual checks. The older
 [Harness Remote guide](testing-prs-with-harness-remote.md) retains its historical
 project-matching, capture and native-evidence instructions; use the latest candidate
 run rather than a preceding PR's packages.
+
+## Local Codex acceptance gate before closing #379
+
+The CI desktop builds and isolated smoke tests establish packaging feasibility, not full
+end-user acceptance. Keep this issue and PR open until the following evidence is attached.
+
+Run against a **fresh installed desktop package** for each of Windows x64, macOS
+(available x64/arm64) and Linux x64; do not substitute `pnpm start` or the local
+browser preview. Record platform, OS version, package artifact SHA-256, app version,
+installation path, CLI version, optimizer versions and whether a separate global npm
+CLI or WSL installation exists.
+
+| Case | Manual procedure | Evidence and pass condition |
+| --- | --- | --- |
+| First run | Launch app with a new OS user/profile; inspect detection and missing-prerequisite guidance | Can reach dashboard without terminal; no unapproved changes |
+| Setup + brownfield | Start with one manually configured harness; preview, approve and apply one supported optimizer | Only reviewed owned writes; manual configuration stays intact |
+| Verify + observe | Re-check health, inspect measurement provenance and actual routing callback details | Configuration-only is not labeled runtime evidence; unknown measures stay unknown |
+| Maintenance | Update a provider from the UI, then inspect notification and installed version | Stale banner disappears without page refresh; exact active executable verified |
+| Undo | Undo a managed configuration mutation after deliberately editing an unrelated setting | Saved owned state restored; unrelated edit preserved or safe conflict shown |
+| Close and reopen | Quit desktop app after setup; exercise installed agent integration in a separate terminal; reopen | Native integration survives app shutdown |
+| Coexistence | Install a different-version global npm CLI and (where relevant) WSL copy | Desktop version/path are explicit; no cross-install silent upgrade or race |
+| Interrupted operation | Interrupt a staged operation on a disposable test profile, then relaunch and review recovery | No untracked partially applied state; usable guarded recovery |
+| Desktop update | Replace the package at the documented path and relaunch | State preserved; desktop does not mutate an npm global install |
+
+Use `pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm desktop:smoke`
+for repository-level validation. These commands complement, not replace, installed-package
+validation. Attach a per-platform log with successes, failures and reproduction steps.
+
+**Release blockers:** signing/notarization and release distribution decisions must be recorded
+separately. Do not mark the desktop issue complete based solely on unsigned CI artifacts.
