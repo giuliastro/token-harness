@@ -4,6 +4,7 @@ import {
   providerId,
   selectStackCombinationReview,
   type ApplyReport,
+  type ApplicationUpdateRow,
   type BudgetReport,
   type CliEnvelope,
   type ContextReport,
@@ -200,6 +201,8 @@ export interface GuideResult {
   /** Background checks report availability without creating or replacing an approval. */
   updatesAvailable?: boolean;
   restartRequired?: boolean;
+  /** Installation provenance of this running dashboard process, never another CLI on PATH. */
+  application?: ApplicationUpdateRow;
 }
 export interface GuideActivity {
   at: string;
@@ -2962,6 +2965,7 @@ export class GuideService {
         appliedPlans: 0,
         stack,
         ticket,
+        ...(application === undefined ? {} : { application }),
         ...(background ? { updatesAvailable: updateTargets.length > 0 } : {}),
         ...(application?.distribution === 'desktop'
           ? { desktopUpdateUrl: 'https://github.com/giuliastro/token-harness/releases/latest' }
