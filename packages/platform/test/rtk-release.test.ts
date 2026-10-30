@@ -210,9 +210,9 @@ describe('verified RTK release artifact', () => {
         },
       }).latestStable();
 
-    assert.deepEqual(await latest({ tag_name: 'v1.0.1', draft: false, prerelease: false }), {
+    assert.deepEqual(await latest({ tag_name: 'v1.1.0', draft: false, prerelease: false }), {
       status: 'found',
-      version: '1.0.1',
+      version: '1.1.0',
     });
     for (const body of [
       { tag_name: 'dev-1.0.2-rc.552', draft: false, prerelease: false },
