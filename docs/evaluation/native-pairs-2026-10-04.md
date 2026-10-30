@@ -129,9 +129,15 @@ Collect pairs before marking any of the four outstanding acceptance items as com
    **routing disabled** against **routing enabled**, with actual eligible native
    callback/execution evidence in the enabled variant. Configuration-only status
    is insufficient. Do not infer subagent model names when not observed.
-5. Run the existing offline auditing command against the retained receipts:
-   `node scripts/evaluation/audit-native-pairs.mjs`. Store the exact invocation,
-   audit output and raw/derived evidence together, without replacing pilot data.
+5. Preserve each trial's raw native stream, receipt, protocol, independent check output,
+   and provenance alongside its derived assessment; keep unknown values null. The existing
+   `scripts/evaluation/audit-native-pairs.mjs` is limited to the six Windows 2026-10-04
+   fixture pairs and their `claude|codex-{mechanical|standard|hard}/{baseline|optimized}`
+   layout. It requires `--input` and `--fingerprint` and does not read this repeated Linux
+   follow-up protocol. Do not run or present it as an audit of these new receipts. Until a
+   versioned auditor supports the new trial schema, assess each trial and matched pair against
+   the fields above, retaining the assessment and its evidence together. Support for repeated
+   Linux/Codex trials remains a tooling gap.
 6. Report negative or null outcomes. Quality regression, failed provider command
    or contaminated account quota vetoes a positive task-level savings claim,
    even if the final harness exit code is zero.
@@ -144,7 +150,7 @@ Collect pairs before marking any of the four outstanding acceptance items as com
   "taskClass": "standard",
   "taskFingerprint": "git-commit-and-frozen-tests",
   "harness": "codex",
-  "os": "windows",
+  "os": "linux",
   "variant": "baseline",
   "routing": "disabled",
   "rtkVersion": null,
