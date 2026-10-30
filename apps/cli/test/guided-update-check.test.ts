@@ -732,7 +732,7 @@ it('distinguishes npx and global npm installations without touching either insta
   ]) {
     const { get, writes, turn, button, settle } = await startGuidedBrowser({
       data: withUpdates(),
-      respond: (path, body) => path === '/api/update-check'
+      respond: (path, _body) => path === '/api/update-check'
         ? {
             ok: true, title: 'Checked', messages: [], ticket: null, updatesAvailable: false,
             application: {
