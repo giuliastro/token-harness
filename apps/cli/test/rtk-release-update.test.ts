@@ -117,13 +117,13 @@ describe('direct RTK release planning', () => {
 
   it('never targets below the reviewed version', async () => {
     const { result } = await plan('0.51.0', '0.50.0');
-    assert.equal(result.plan?.target, '1.0.1');
+    assert.equal(result.plan?.target, '1.1.0');
   });
 
   it('falls back to the reviewed version when the newest release cannot be read', async () => {
     const { result } = await plan('0.51.0', null);
     assert.equal(result.verdict, 'upgradable');
-    assert.equal(result.plan?.target, '1.0.1');
+    assert.equal(result.plan?.target, '1.1.0');
     assert.ok(result.diagnostics.some((entry) => entry.code === 'rtk-release-latest-unavailable'));
   });
 
