@@ -62,13 +62,6 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      - name: Diagnose formatting on PR branch
-        if: failure()
-        shell: bash
-        run: |
-          pnpm exec prettier --write apps/cli/src/guided-ui-core.ts
-          git diff -- apps/cli/src/guided-ui-core.ts
-
       - name: Test
         run: pnpm test
 
