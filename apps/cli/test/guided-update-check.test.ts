@@ -657,7 +657,7 @@ it('clears a stale startup update notice and rechecks all provider releases with
             application: { applicationId: 'token-harness', installed: '0.1.34', available: null,
               channel: 'npm', verdict: 'current', installationSource: 'npm-global',
               installationPath: '/fixture/global/node_modules/token-harness' },
-            ...(body as { background?: boolean }).background ? { ticket: null } : {},
+            ...((body as { background?: boolean }).background ? { ticket: null } : {}),
           };
         }
         return {
