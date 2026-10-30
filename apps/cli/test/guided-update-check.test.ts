@@ -786,7 +786,7 @@ it('distinguishes npx and global npm installations without touching either insta
       get('details-root').textContent,
       /separate global CLI installation has not been checked/,
     );
-    button(get('details-root'), 'Check for updates').fire('click');
+    button(get('details-root'), 'Review updates').fire('click');
     await settle();
     assert.match(get('modal-content').textContent, installation.expected);
     assert.ok(
