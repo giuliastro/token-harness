@@ -1,6 +1,8 @@
 # Observe JSON contract v1
 
-The intended Harness Remote polling command is:
+`observe --json` is available starting with **Token Harness 0.1.34**. Older installations do not expose this command; an `unknown-command` response on 0.1.32 does not mean the existing quota or savings dashboard is broken. On those releases, use `token-harness budget --json` for native quotas and `token-harness savings --json --since 7d` for recorded savings until the CLI is upgraded.
+
+The supported Harness Remote polling command is:
 
 ```sh
 token-harness observe --json --since 7d
@@ -24,7 +26,7 @@ Example of the envelope (abbreviated; `metrics` here is not a full schema-valid 
 {
   "schemaVersion": 1,
   "command": "observe",
-  "toolVersion": "0.1.31",
+  "toolVersion": "0.1.34",
   "status": "ok",
   "exitCode": 0,
   "data": {
