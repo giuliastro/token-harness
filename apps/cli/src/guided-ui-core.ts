@@ -90,6 +90,71 @@ export const GUIDE_CORE_JS = String.raw`
   let modalRun = 0;
   let pendingTicket = null;
   let updateCheckStarted = false;
+
+  // Update state applies to the running process, not every CLI installation on the machine.
+  let runningApplication = null;
+  function installationDescription() {
+    if (!runningApplication)
+      return t('Running installation not yet verified. Check for updates to see its version and path; the global CLI status is unknown.');
+    const source = runningApplication.installationSource === 'npm-global'
+      ? t('Verified global npm')
+      : runningApplication.installationSource === 'desktop'
+        ? t('Desktop')
+        : runningApplication.installationSource === 'other'
+          ? t('Non-global (for example npx)')
+          : t('Unverified');
+    return t('Running copy: {source}; version {version}; path {path}. Updates shown here apply to this copy only. A separate global CLI installation has not been checked.', {
+      source,
+      version: runningApplication.installed || t('unknown'),
+      path: runningApplication.installationPath || t('unavailable'),
+    });
+  }
+
+  function displayUpdateNotice(result) {
+    if (result.application) runningApplication = result.application;
+    if (result.stack && current) {
+      current = { ...current, stack: result.stack };
+      render();
+    }
+    const root = $('update-notice');
+    root.replaceChildren();
+    if (!result.ok || !result.updatesAvailable) {
+      root.hidden = true;
+      if (selectedView === 'details' && current) renderDetails();
+      return;
+    }
+    const copy = node('div');
+    copy.append(node('strong', t('An update is available')), node('p', (result.messages || []).join(' '), 'caption'));
+    root.append(copy, actionButton(t('Review update'), () => readOnlyOperation('update'), 'secondary'));
+    root.hidden = false;
+    if (selectedView === 'details' && current) renderDetails();
+  }
+
+  function restartUpdateNotice() {
+    const root = $('update-notice');
+    root.replaceChildren();
+    root.append(
+      node('strong', t('Restart required to finish the Token Harness update')),
+      actionButton(t('Restart and re-check'), restartAndRecheck, 'secondary'),
+    );
+    root.hidden = false;
+  }
+
+  async function recheckUpdateNoticeAfterInstall() {
+    try {
+      const result = await request('/api/update-check', { period, background: true });
+      displayUpdateNotice(result);
+    } catch {
+      // Never leave the old "update available" banner after an applied update.
+      const root = $('update-notice');
+      root.replaceChildren();
+      root.append(
+        node('strong', t('Update status needs a new check')),
+        actionButton(t('Check for updates'), () => readOnlyOperation('updates'), 'secondary'),
+      );
+      root.hidden = false;
+    }
+  }
   let period = 'all';
   let advanced = storage.get('token-harness-advanced') === 'on';
   const periodCache = new Map();
@@ -352,12 +417,14 @@ export const GUIDE_CORE_JS = String.raw`
       const result = await request('/api/apply', { ticket });
       if (run !== modalRun) return result;
       if (options.quiet) return result;
+      if (options.update && result.ok && result.restartRequired) restartUpdateNotice();
       if (result.restartRequired) {
         $('modal-title').textContent = result.title || t('Token Harness update installed');
         $('modal-content').replaceChildren(messageBox(t('Restart to finish'), (result.messages || []).join(' ') || t('Token Harness must restart before it can check the updated installation.'), 'safe'));
         $('modal-actions').replaceChildren(modalClose(t('Later')), actionButton(t('Restart and re-check'), restartAndRecheck));
         return result;
       }
+      if (options.update && result.ok) { $('update-notice').replaceChildren(); $('update-notice').hidden = true; }
       $('modal-title').textContent = result.ok ? t('Done') : t('Needs attention');
       $('modal-content').replaceChildren(
         messageBox(result.ok ? t('Applied') : t('Needs attention'), (result.messages || []).join(' '), result.ok ? 'safe' : 'warn'),
@@ -366,6 +433,7 @@ export const GUIDE_CORE_JS = String.raw`
       $('modal-actions').replaceChildren(modalClose(t('Refreshing…'), true));
       try {
         await refreshOverviewAfterMutation();
+        if (options.update) await recheckUpdateNoticeAfterInstall();
         if (run !== modalRun) return result;
         $('modal-content').replaceChildren(messageBox(
           result.ok ? t('Completed') : t('Finished with notes'),
@@ -587,19 +655,18 @@ export const GUIDE_CORE_JS = String.raw`
       .then(() => request(isVerify ? '/api/verify' : '/api/update-check', { period }))
       .then(result => {
         if (run !== modalRun || !$('modal').open) return;
-        if (result.stack && current) {
-          current = { ...current, stack: result.stack };
-          render();
-        }
+        if (!isVerify) displayUpdateNotice({ ...result, updatesAvailable: !!result.ticket });
+        else if (result.stack && current) { current = { ...current, stack: result.stack }; render(); }
         $('modal-content').replaceChildren(messageBox(
           result.title || (result.ok ? t('Completed') : t('Needs attention')),
           (result.messages || []).join(' ') || t('Check completed.'),
           result.ok ? 'safe' : 'warn',
         ));
         if (!isVerify) $('modal-content').append(messageBox(t('Which installation was checked?'), t('This update check applies to the Token Harness copy running this dashboard. If launched through npx, the globally installed CLI is separate and its update status is unknown. To update the global CLI, run npm install --global token-harness@latest, then restart the dashboard.'), 'warn'));
+        if (!isVerify) $('modal-content').append(messageBox(t('Running Token Harness installation'), installationDescription(), 'safe'));
         if (result.ticket) $('modal-content').append(messageBox(t('Safe update'), t('The new version is installed and checked. If something goes wrong, the previous configuration can be restored.'), 'safe'));
         $('modal-actions').replaceChildren(modalClose(result.ticket ? t('Cancel') : t('Done')));
-        if (result.ticket) $('modal-actions').append(actionButton(t('Install update'), () => applyTicket(result.ticket)));
+        if (result.ticket) $('modal-actions').append(actionButton(t('Install update'), () => applyTicket(result.ticket, { update: true })));
         if (result.desktopUpdateUrl === 'https://github.com/giuliastro/token-harness/releases/latest') {
           const download = node('a', t('Download desktop update'), 'button secondary');
           download.href = result.desktopUpdateUrl;
@@ -833,6 +900,19 @@ export const GUIDE_CORE_IT: Readonly<Record<string, string>> = {
   'Which installation was checked?': 'Quale installazione è stata controllata?',
   'This update check applies to the Token Harness copy running this dashboard. If launched through npx, the globally installed CLI is separate and its update status is unknown. To update the global CLI, run npm install --global token-harness@latest, then restart the dashboard.':
     'Questo controllo riguarda la copia di Token Harness che esegue la dashboard. Se avviata tramite npx, la CLI globale è separata e il suo stato di aggiornamento è sconosciuto. Per aggiornare la CLI globale esegui npm install --global token-harness@latest, poi riavvia la dashboard.',
+  'Running installation not yet verified. Check for updates to see its version and path; the global CLI status is unknown.':
+    'Installazione in esecuzione non ancora verificata. Controlla gli aggiornamenti per visualizzarne versione e percorso; lo stato della CLI globale è sconosciuto.',
+  'Verified global npm': 'npm globale verificato',
+  'Desktop': 'Desktop',
+  'Non-global (for example npx)': 'Non globale (per esempio npx)',
+  'Unverified': 'Non verificato',
+  'Running copy: {source}; version {version}; path {path}. Updates shown here apply to this copy only. A separate global CLI installation has not been checked.':
+    'Copia in esecuzione: {source}; versione {version}; percorso {path}. Gli aggiornamenti mostrati riguardano solo questa copia. Una eventuale CLI globale separata non è stata verificata.',
+  'unknown': 'sconosciuta',
+  'unavailable': 'non disponibile',
+  'Restart required to finish the Token Harness update': 'Riavvio necessario per completare l’aggiornamento di Token Harness',
+  'Update status needs a new check': 'Serve un nuovo controllo dello stato degli aggiornamenti',
+  'Running Token Harness installation': 'Installazione Token Harness in esecuzione',
   'Safe update': 'Aggiornamento sicuro',
   'The new version is installed and checked. If something goes wrong, the previous configuration can be restored.':
     'La nuova versione viene installata e verificata. Se qualcosa va storto, si può ripristinare la configurazione precedente.',
