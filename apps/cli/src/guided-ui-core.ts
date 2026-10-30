@@ -596,6 +596,7 @@ export const GUIDE_CORE_JS = String.raw`
           (result.messages || []).join(' ') || t('Check completed.'),
           result.ok ? 'safe' : 'warn',
         ));
+        if (!isVerify) $('modal-content').append(messageBox(t('Which installation was checked?'), t('This update check applies to the Token Harness copy running this dashboard. If launched through npx, the globally installed CLI is separate and its update status is unknown. To update the global CLI, run npm install --global token-harness@latest, then restart the dashboard.'), 'warn'));
         if (result.ticket) $('modal-content').append(messageBox(t('Safe update'), t('The new version is installed and checked. If something goes wrong, the previous configuration can be restored.'), 'safe'));
         $('modal-actions').replaceChildren(modalClose(result.ticket ? t('Cancel') : t('Done')));
         if (result.ticket) $('modal-actions').append(actionButton(t('Install update'), () => applyTicket(result.ticket)));
@@ -829,6 +830,9 @@ export const GUIDE_CORE_IT: Readonly<Record<string, string>> = {
   'Checking for updates': 'Cerco aggiornamenti',
   'Nothing changes during this check.': 'Durante questo controllo non cambia niente.',
   'Check completed.': 'Controllo completato.',
+  'Which installation was checked?': 'Quale installazione è stata controllata?',
+  'This update check applies to the Token Harness copy running this dashboard. If launched through npx, the globally installed CLI is separate and its update status is unknown. To update the global CLI, run npm install --global token-harness@latest, then restart the dashboard.':
+    'Questo controllo riguarda la copia di Token Harness che esegue la dashboard. Se avviata tramite npx, la CLI globale è separata e il suo stato di aggiornamento è sconosciuto. Per aggiornare la CLI globale esegui npm install --global token-harness@latest, poi riavvia la dashboard.',
   'Safe update': 'Aggiornamento sicuro',
   'The new version is installed and checked. If something goes wrong, the previous configuration can be restored.':
     'La nuova versione viene installata e verificata. Se qualcosa va storto, si può ripristinare la configurazione precedente.',
