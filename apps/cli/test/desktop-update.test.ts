@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -111,7 +111,12 @@ it('reports a running npx cache copy separately from an existing global npm CLI'
     const inspection = await inspectApplicationUpdate(context);
     assert.equal(inspection?.row.installed, '0.1.34');
     assert.equal(inspection?.row.installationSource, 'other');
-    assert.equal(inspection?.row.installationPath, realpathSync(npxPackage));
+    assert.ok(
+      inspection?.row.installationPath?.endsWith(
+        join('_npx', 'abc', 'node_modules', 'token-harness'),
+      ),
+      'resolved entry still belongs to the npx package, regardless of Windows 8.3 path aliases',
+    );
     assert.equal(inspection?.row.verdict, 'unsupported-installation');
     assert.equal(inspection?.installationRoot, null, 'npx must never become an update target');
     assert.equal(calls, 1, 'only the npm root is read; no npm update or global inventory mutation');
