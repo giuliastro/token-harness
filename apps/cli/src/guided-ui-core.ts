@@ -910,7 +910,8 @@ export const GUIDE_CORE_IT: Readonly<Record<string, string>> = {
     'Copia in esecuzione: {source}; versione {version}; percorso {path}. Gli aggiornamenti mostrati riguardano solo questa copia. Una eventuale CLI globale separata non è stata verificata.',
   'unknown': 'sconosciuta',
   'unavailable': 'non disponibile',
-  'Restart required to finish the Token Harness update': 'Riavvio necessario per completare l’aggiornamento di Token Harness',
+  'Restart required to finish the Token Harness update':
+    'Riavvio necessario per completare l’aggiornamento di Token Harness',
   'Update status needs a new check': 'Serve un nuovo controllo dello stato degli aggiornamenti',
   'Running Token Harness installation': 'Installazione Token Harness in esecuzione',
   'Safe update': 'Aggiornamento sicuro',
