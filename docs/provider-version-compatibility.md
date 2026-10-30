@@ -6,9 +6,10 @@ layers for provider detection, provider package replacement and managed harness 
 
 ## Current upstream releases
 
-As reviewed on 2026-10-03, with RTK re-checked on 2026-10-18:
+As reviewed on 2026-10-03, with RTK 1.0.1 re-checked on 2026-10-18 and RTK 1.1.0 release changes reviewed on 2026-10-30:
 
-- **RTK 1.0.1** is the current reviewed RTK release. On 2026-10-18 the official
+- **RTK 1.1.0** (released 2026-10-25) is the latest release-notes-reviewed target. Its changes include opt-in fish shell rewriting, command hook background-check and integrity fixes, managed worktree guardrails, and unrelated analytics/command filtering fixes. This source/release-note review does **not** claim an exercised 1.1.0 native binary, hook JSON witness, historical benchmark tuple, or validated harness mutation row. CI and real runtime compatibility evidence are still separate gates. See https://github.com/rtk-ai/rtk/releases/tag/v1.1.0.
+- **RTK 1.0.1** is the previous exercised RTK release. On 2026-10-18 the official
   `rtk-x86_64-pc-windows-msvc.zip` was exercised on Windows against every contract the adapter
   consumes: `rtk --version` still prints `rtk <version>`, `rtk hook claude` and `rtk hook codex`
   return the same `hookSpecificOutput.updatedInput.command` JSON, `RTK_DB_PATH` still selects the
@@ -102,7 +103,7 @@ The v-prefixed WinGet query/update path has been validated on a real Windows mac
 The historical Windows exercise observed WinGet at **v0.48.0**. The updater queries current channel
 state rather than assuming that catalog observation remains current. On 2026-10-18 WinGet still
 listed v0.50.0 while upstream had published 1.0.1. The update target is RTK's newest stable GitHub
-release, never below the reviewed **1.0.1**; on native Windows, when WinGet lags that target, Token
+release, never below the reviewed **1.1.0**; on native Windows, when WinGet lags that target, Token
 Harness uses the exact official GitHub release asset `rtk-x86_64-pc-windows-msvc.zip` instead of
 pretending the stale package catalog is current.
 
