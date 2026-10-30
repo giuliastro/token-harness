@@ -624,7 +624,7 @@ describe('update', () => {
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(activePath, 'utf8'), /rtk 1\.0\.1/);
+      assert.match(readFileSync(activePath, 'utf8'), /rtk 1\.1\.0/);
       assert.match(readFileSync(shadowedPath, 'utf8'), /0\.42\.0 shadowed/);
       assert.ok(result.codes.includes('rtk-release-shadowed-executables'));
       assert.equal(result.data?.execution?.outcome, 'committed');
@@ -647,7 +647,7 @@ describe('update', () => {
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(executablePath, 'utf8'), /rtk 1\.0\.1/);
+      assert.match(readFileSync(executablePath, 'utf8'), /rtk 1\.1\.0/);
       assert.notEqual(statSync(executablePath).mode & 0o111, 0);
       assert.equal(
         result.asked.some((line) => line.startsWith('cargo search')),
