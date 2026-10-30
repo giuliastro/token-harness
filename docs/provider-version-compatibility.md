@@ -8,7 +8,7 @@ layers for provider detection, provider package replacement and managed harness 
 
 As reviewed on 2026-10-03, with RTK 1.0.1 re-checked on 2026-10-18 and RTK 1.1.0 release changes reviewed on 2026-10-30:
 
-- **RTK 1.1.0** (released 2026-10-25) is the latest release-notes-reviewed target. Its changes include opt-in fish shell rewriting, command hook background-check and integrity fixes, managed worktree guardrails, and unrelated analytics/command filtering fixes. This source/release-note review does **not** claim an exercised 1.1.0 native binary, hook JSON witness, historical benchmark tuple, or validated harness mutation row. CI and real runtime compatibility evidence are still separate gates. See https://github.com/rtk-ai/rtk/releases/tag/v1.1.0.
+- **RTK 1.1.0** (released 2026-10-25) is the latest release-notes-reviewed target. Its changes include opt-in fish shell rewriting, command hook background-check and integrity fixes, managed worktree guardrails, and unrelated analytics/command filtering fixes. A Linux x64 binary and hook JSON witness were exercised as described below. This does **not** claim a historical benchmark tuple, a validated harness mutation row, or native Windows/macOS runtime compatibility. See https://github.com/rtk-ai/rtk/releases/tag/v1.1.0.
 - **RTK 1.0.1** is the previous exercised RTK release. On 2026-10-18 the official
   `rtk-x86_64-pc-windows-msvc.zip` was exercised on Windows against every contract the adapter
   consumes: `rtk --version` still prints `rtk <version>`, `rtk hook claude` and `rtk hook codex`
@@ -33,6 +33,18 @@ As reviewed on 2026-10-03, with RTK 1.0.1 re-checked on 2026-10-18 and RTK 1.1.0
   recordings cover Codex 0.152.1/0.153.0 and Claude Code 2.1.269 with mcptoon 0.7.10. Version
   0.1.26 supports installation through an already-present pipx or uv; these package paths do not
   imply new live compatibility recordings or successful selection evidence.
+
+### RTK 1.1.0 Linux runtime witness (2026-10-30)
+
+The official `rtk-x86_64-unknown-linux-musl.tar.gz` release asset matched the published
+SHA-256 `9454ad1b9489daa57ab0a9f4ebe2faaf4dc82b8a0f26c9e5135151abd7c9378d`.
+The extracted binary ran from a temporary directory without replacing the installed RTK.
+`rtk --version` returned `rtk 1.1.0`. With isolated `HOME` and `RTK_DB_PATH`, a Claude
+`PreToolUse` Bash input for `git status` returned
+`hookSpecificOutput.updatedInput.command = "rtk git status"`; a Codex input with
+`hook_event_name = "PreToolUse"` and `permission_mode = "default"` returned the same
+rewrite with `permissionDecision = "allow"`. This is a direct hook contract check,
+not evidence of an agent executing a rewritten command.
 
 ## Detection policy
 
