@@ -858,7 +858,7 @@ export const GUIDE_DETAILS_JS = String.raw`
       t('Token Harness and optimizer updates'),
       available.length
         ? available.map(component => t('{name} has an update ready.', { name: optimizerInfo(component.providerId).name })).join(' ')
-        : t('Check available versions and review updates before installing.'),
+        : t('Check available versions and review updates before installing.') + ' ' + installationDescription(),
       actionButton(available.length ? t('Review updates') : t('Check for updates'), () => readOnlyOperation('updates'), available.length ? '' : 'secondary'),
     ));
 
