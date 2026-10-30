@@ -582,7 +582,7 @@ describe('update', () => {
           installed: { rtk: 'rtk 0.44.0' },
           channelStdout: { cargo: channelAnswer('0.1.0') },
           rtkExecutablePath: executablePath,
-          rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+          rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
         },
         undefined,
         true,
@@ -590,7 +590,7 @@ describe('update', () => {
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
       assert.equal(row(result.data, 'rtk')?.installed, '0.44.0');
-      assert.equal(row(result.data, 'rtk')?.available, '1.0.1');
+      assert.equal(row(result.data, 'rtk')?.available, '1.1.0');
       assert.equal(row(result.data, 'rtk')?.channel, 'github-release');
       assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
       assert.equal(
@@ -620,7 +620,7 @@ describe('update', () => {
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: activePath,
         rtkExecutablePaths: [activePath, shadowedPath],
-        rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+        rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
@@ -643,7 +643,7 @@ describe('update', () => {
         installed: { rtk: 'rtk 0.44.0' },
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: executablePath,
-        rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+        rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
