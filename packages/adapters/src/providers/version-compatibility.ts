@@ -28,7 +28,7 @@ const HEADROOM = providerId('headroom');
  */
 const PACKAGE_UPDATE_BASELINES: ReadonlyMap<ProviderId, { minimum: string; maximum: string }> =
   new Map([
-    [RTK, { minimum: '0.44.0', maximum: '1.0.1' }],
+    [RTK, { minimum: '0.44.0', maximum: '1.1.0' }],
     [HARNESSTRIM, { minimum: '0.0.5', maximum: '0.3.1' }],
     [
       MCPTOON,

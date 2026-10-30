@@ -582,7 +582,7 @@ describe('update', () => {
           installed: { rtk: 'rtk 0.44.0' },
           channelStdout: { cargo: channelAnswer('0.1.0') },
           rtkExecutablePath: executablePath,
-          rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+          rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
         },
         undefined,
         true,
@@ -590,7 +590,7 @@ describe('update', () => {
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
       assert.equal(row(result.data, 'rtk')?.installed, '0.44.0');
-      assert.equal(row(result.data, 'rtk')?.available, '1.0.1');
+      assert.equal(row(result.data, 'rtk')?.available, '1.1.0');
       assert.equal(row(result.data, 'rtk')?.channel, 'github-release');
       assert.equal(row(result.data, 'rtk')?.verdict, 'upgradable');
       assert.equal(
@@ -620,11 +620,11 @@ describe('update', () => {
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: activePath,
         rtkExecutablePaths: [activePath, shadowedPath],
-        rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+        rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(activePath, 'utf8'), /rtk 1\.0\.1/);
+      assert.match(readFileSync(activePath, 'utf8'), /rtk 1\.1\.0/);
       assert.match(readFileSync(shadowedPath, 'utf8'), /0\.42\.0 shadowed/);
       assert.ok(result.codes.includes('rtk-release-shadowed-executables'));
       assert.equal(result.data?.execution?.outcome, 'committed');
@@ -643,11 +643,11 @@ describe('update', () => {
         installed: { rtk: 'rtk 0.44.0' },
         channelStdout: { cargo: channelAnswer('0.1.0') },
         rtkExecutablePath: executablePath,
-        rtkReleaseFetch: rtkReleaseFetch('1.0.1'),
+        rtkReleaseFetch: rtkReleaseFetch('1.1.0'),
       });
 
       assert.equal(result.exitCode, EXIT_CODES.ok);
-      assert.match(readFileSync(executablePath, 'utf8'), /rtk 1\.0\.1/);
+      assert.match(readFileSync(executablePath, 'utf8'), /rtk 1\.1\.0/);
       assert.notEqual(statSync(executablePath).mode & 0o111, 0);
       assert.equal(
         result.asked.some((line) => line.startsWith('cargo search')),
