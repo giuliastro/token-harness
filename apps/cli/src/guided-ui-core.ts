@@ -903,13 +903,13 @@ export const GUIDE_CORE_IT: Readonly<Record<string, string>> = {
   'Running installation not yet verified. Check for updates to see its version and path; the global CLI status is unknown.':
     'Installazione in esecuzione non ancora verificata. Controlla gli aggiornamenti per visualizzarne versione e percorso; lo stato della CLI globale è sconosciuto.',
   'Verified global npm': 'npm globale verificato',
-  'Desktop': 'Desktop',
+  Desktop: 'Desktop',
   'Non-global (for example npx)': 'Non globale (per esempio npx)',
-  'Unverified': 'Non verificato',
+  Unverified: 'Non verificato',
   'Running copy: {source}; version {version}; path {path}. Updates shown here apply to this copy only. A separate global CLI installation has not been checked.':
     'Copia in esecuzione: {source}; versione {version}; percorso {path}. Gli aggiornamenti mostrati riguardano solo questa copia. Una eventuale CLI globale separata non è stata verificata.',
-  'unknown': 'sconosciuta',
-  'unavailable': 'non disponibile',
+  unknown: 'sconosciuta',
+  unavailable: 'non disponibile',
   'Restart required to finish the Token Harness update':
     'Riavvio necessario per completare l’aggiornamento di Token Harness',
   'Update status needs a new check': 'Serve un nuovo controllo dello stato degli aggiornamenti',
