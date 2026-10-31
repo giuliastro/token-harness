@@ -1,0 +1,31 @@
+# Linux desktop acceptance evidence — October 30, 2026
+
+The published v0.1.34 Linux x64 TAR.GZ SHA-256 was verified against its release
+checksum file: `6f3a20977389fc96470e700240dea79aee63af696e46df596108adaf7dcceaaf`.
+The extracted package's `--desktop-smoke` returned session 200, dashboard true,
+privileged false and displayed version `0.1.34`.
+
+With normal Electron launch under isolated HOME/XDG directories inside the user
+home, the startup dashboard appeared and detected Codex `0.164.0-alpha.11.1`, RTK
+`1.0.1` and HarnessTrim `0.3.1`. A `/tmp` state path was refused by the intended
+safety guard; moving the isolated state under home allowed the launch. The UI
+preview safely refused RTK, HarnessTrim and routing integration for the Codex
+alpha. In the isolated copy, a UI-reviewed RTK update from `1.0.1` to `1.1.0`
+re-read the active executable; `/home/giulio/.local/bin/rtk` remained `1.0.1`.
+
+With the host's full `PATH`, a passive inventory run invoked the installed Hermes
+bootstrapper through its `--version` probe; it populated about 319 MB under the
+isolated profile's `.hermes` directory. That test-owned directory was removed,
+and the later desktop run used a minimal `PATH` without Hermes. This side effect
+needs separate review before calling fresh-profile detection passive.
+
+The v0.1.34 release UI showed a stale update banner after success. A separate
+Linux unpacked desktop build from main `6c50a099` (including #403) passed
+`pnpm desktop:smoke`. Repeating the isolated RTK update in that build verified
+`1.1.0` and cleared the stale banner without a page refresh. The complete
+`pnpm desktop:package` archive build stopped with `ENOSPC` after assembling
+the unpacked app; no distributable archive was validated from this build.
+
+Full brownfield, undo/recovery and after-close native integration checks remain
+untested, as do Windows, macOS and Claude. This is partial Linux evidence and
+does not pass or close #379.
