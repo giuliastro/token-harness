@@ -170,5 +170,5 @@ Collect pairs before marking any of the four outstanding acceptance items as com
 Treat null as **not measured**, never zero. A real run must fill the relevant
 values and attach raw observations or auditable provenance. A pilot with only
 one trial per condition, shared account activity, or no routed execution cannot
-close #360. Keep the PR open until local Codex/Claude Code receipts and a
+close #360. Keep issue #360 open until local Codex/Claude Code receipts and a
 reviewed audit are attached.
