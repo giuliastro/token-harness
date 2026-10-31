@@ -1,4 +1,10 @@
-# Release checkpoint — 2026-10-24
+# Release checkpoint — 2026-10-31
+
+Token Harness `0.1.35` refreshes update notifications after verified provider changes and reports the running installation's version, source and path (#403). It also includes the desktop acceptance matrix (#404) and repeated paired-routing protocol (#405). Both protocols keep their live evidence gates open: #379 needs installed-package validation across platforms, and #360 needs repeated Codex/Claude measurements and reviewed receipts. No new savings claim is made.
+
+The release candidate must pass native Windows, macOS and Linux CI plus desktop package checks. After review and merge, create `release/v0.1.35` from the exact merged `main` commit; the bridge creates the immutable tag and dispatches exact-tag publication with its runtime, packaging, attestation and npm gates. See [0.1.35 release notes](releases/0.1.35.md).
+
+## Previous checkpoint — 2026-10-24
 
 Token Harness `0.1.34` ships the versioned read-only observe snapshot (#386):
 `token-harness observe --json` returns the schema-1 CLI envelope with the separate
