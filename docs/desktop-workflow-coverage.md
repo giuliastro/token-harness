@@ -49,7 +49,7 @@ run rather than a preceding PR's packages.
 ## Local Codex acceptance gate before closing #379
 
 The CI desktop builds and isolated smoke tests establish packaging feasibility, not full
-end-user acceptance. Keep this issue and PR open until the following evidence is attached.
+end-user acceptance. Keep issue #379 open until the following evidence is attached.
 
 Run against a **fresh installed desktop package** for each of Windows x64, macOS
 (available x64/arm64) and Linux x64; do not substitute `pnpm start` or the local
