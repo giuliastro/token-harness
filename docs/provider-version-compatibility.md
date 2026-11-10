@@ -6,9 +6,10 @@ layers for provider detection, provider package replacement and managed harness 
 
 ## Current upstream releases
 
-As reviewed on 2026-10-03, with RTK 1.0.1 re-checked on 2026-10-18 and RTK 1.1.0 release changes reviewed on 2026-10-30:
+As reviewed on 2026-10-03, with RTK 1.0.1 re-checked on 2026-10-18, RTK 1.1.0 release changes reviewed on 2026-10-30, and RTK 1.2.0 source changes reviewed on 2026-11-10:
 
-- **RTK 1.1.0** (released 2026-10-25) is the latest release-notes-reviewed target. Its changes include opt-in fish shell rewriting, command hook background-check and integrity fixes, managed worktree guardrails, and unrelated analytics/command filtering fixes. A Linux x64 binary and hook JSON witness were exercised as described below. This does **not** claim a historical benchmark tuple, a validated harness mutation row, or native Windows/macOS runtime compatibility. See https://github.com/rtk-ai/rtk/releases/tag/v1.1.0.
+- **RTK 1.2.0** (released 2026-11-08) is the latest source-reviewed package target. The upstream hook changes preserve the Claude `hookSpecificOutput.updatedInput.command` response and Codex rewrite response shape while changing command rewriting and Claude ask ownership. The `commands` history columns imported by Token Harness remain present; upstream's tracking changes adjust timing classification and command labels, not those columns. The official release still publishes the exact Linux x64, Linux arm64, and Windows x64 asset names selected by Token Harness, each with a SHA-256 digest. This is a source and release-metadata review, **not** a binary or live harness witness. No benchmark tuple, harness mutation row, or Windows/macOS runtime compatibility is claimed. See https://github.com/rtk-ai/rtk/releases/tag/v1.2.0 and https://github.com/rtk-ai/rtk/compare/v1.1.0...v1.2.0.
+- **RTK 1.1.0** (released 2026-10-25) is the previous runtime-exercised target. Its changes include opt-in fish shell rewriting, command hook background-check and integrity fixes, managed worktree guardrails, and unrelated analytics/command filtering fixes. A Linux x64 binary and hook JSON witness were exercised as described below. This does **not** claim a historical benchmark tuple, a validated harness mutation row, or native Windows/macOS runtime compatibility. See https://github.com/rtk-ai/rtk/releases/tag/v1.1.0.
 - **RTK 1.0.1** is the previous exercised RTK release. On 2026-10-18 the official
   `rtk-x86_64-pc-windows-msvc.zip` was exercised on Windows against every contract the adapter
   consumes: `rtk --version` still prints `rtk <version>`, `rtk hook claude` and `rtk hook codex`
@@ -115,7 +116,7 @@ The v-prefixed WinGet query/update path has been validated on a real Windows mac
 The historical Windows exercise observed WinGet at **v0.48.0**. The updater queries current channel
 state rather than assuming that catalog observation remains current. On 2026-10-18 WinGet still
 listed v0.50.0 while upstream had published 1.0.1. The update target is RTK's newest stable GitHub
-release, never below the reviewed **1.1.0**; on native Windows, when WinGet lags that target, Token
+release, never below the reviewed **1.2.0**; on native Windows, when WinGet lags that target, Token
 Harness uses the exact official GitHub release asset `rtk-x86_64-pc-windows-msvc.zip` instead of
 pretending the stale package catalog is current.
 
