@@ -563,6 +563,9 @@ export const GUIDE_DETAILS_JS = String.raw`
     const savings = current?.savings?.rows || [];
     for (const id of optimizerIds()) {
       const info = optimizerInfo(id);
+      // Evaluation-only entries have no managed connection or provider measurements.
+      // Their paired experiments appear as candidate evidence, not optimizer savings.
+      if (info.managed === false) continue;
       const component = managedComponent(id);
       const measured = savings.filter(row => row.providerId === id);
       const scope = component?.configuredHarnesses?.length

@@ -147,7 +147,7 @@ never evaluated as a shell expression. Finish previews it again; --yes runs it.
 routing-only, combined. Otherwise use baseline or optimized. Restore the same
 starting tree and use fresh coding sessions after hook changes.
 
---candidate accepts headroom, mcptoon, or gitnexus and labels the intended
+--candidate accepts headroom, mcptoon, gitnexus, or token-optimizer-mcp and labels the intended
 experiment target. It does not install, enable, disable, or prove that candidate
 is active. A later start for the same benchmark inherits valid stored candidate
 attribution so the baseline and optimized sides stay grouped.

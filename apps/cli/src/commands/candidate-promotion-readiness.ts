@@ -205,7 +205,7 @@ export function assessCandidatePromotionReadiness(
       'unreviewed',
       'the recommended stack has not been validated with independently verified candidate activation',
     ),
-    input.candidateId === 'headroom'
+    input.candidateId === 'headroom' || input.candidateId === 'token-optimizer-mcp'
       ? reviewedGate(
           'context-owner-admission',
           review.contextOwnerAdmission,

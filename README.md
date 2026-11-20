@@ -270,6 +270,7 @@ See [the routing RFC](docs/rfcs/0030-automatic-native-prompt-routing.md) for pol
 | [mcptoon](https://github.com/activeing123/mcptoon) | Compact MCP discovery/manifests | Optional; install through an existing pipx or uv. Missing prerequisites show installation options. |
 | [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Repository graph and MCP context | Optional reviewed integration; package/index preparation and license review are user responsibilities. |
 | [Headroom](https://github.com/headroomlabs-ai/headroom) | MCP context compression/retrieval | Optional configuration-only integration for an already-installed reviewed package. |
+| [Token Optimizer MCP](https://github.com/ooples/token-optimizer-mcp) | Incremental reads, context caching, project memory and optional hooks/proxy | Evaluation-only candidate: visible in Methods and accepted by paired benchmark commands; no managed installation or activation. |
 | [cclimits](https://github.com/cruzanstx/cclimits) / [ccusage](https://github.com/ccusage/ccusage) | Allowance / usage observations | Read-only evidence sources, rather than optimizers. Usage history is not remaining quota. |
 
 Current reviewed package targets are **RTK 1.0.1** and **HarnessTrim 0.3.1**; RTK updates follow its newest stable release. Package update

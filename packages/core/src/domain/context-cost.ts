@@ -26,7 +26,7 @@ export type OptimizationCandidateState =
   | 'benchmark-ready'
   | 'unsupported-version';
 
-export type OptimizationCandidateId = 'headroom' | 'mcptoon' | 'gitnexus';
+export type OptimizationCandidateId = 'headroom' | 'mcptoon' | 'gitnexus' | 'token-optimizer-mcp';
 export type OptimizationCandidateCategory =
   | 'context-minimization'
   | 'mcp-discovery'
@@ -39,6 +39,7 @@ export const OPTIMIZATION_CANDIDATE_CATEGORY_BY_ID: Readonly<
   headroom: 'context-minimization',
   mcptoon: 'mcp-discovery',
   gitnexus: 'repository-exploration',
+  'token-optimizer-mcp': 'context-minimization',
 };
 
 /** Bounded candidate metadata safe to project into product UI. No executable path or raw reason. */

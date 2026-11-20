@@ -78,6 +78,7 @@ describe('guided methods', () => {
       'mcptoon',
       'gitnexus',
       'headroom',
+      'token-optimizer-mcp',
     ]);
     const state = (key: string) => card(root, key).querySelector('.pill')!.textContent;
     assert.equal(state('rtk'), 'On');
@@ -85,12 +86,14 @@ describe('guided methods', () => {
     assert.equal(state('gitnexus'), 'Not installed');
     assert.equal(state('mcptoon'), 'Not available for your apps');
     assert.equal(state('headroom'), 'Not available for your apps');
+    assert.equal(state('token-optimizer-mcp'), 'Evaluation only');
+    assert.equal(card(root, 'token-optimizer-mcp').querySelectorAll('button').length, 0);
     // A method that cannot be used says why instead of offering an action.
     assert.match(card(root, 'mcptoon').textContent, /Needs pipx or uv\./);
     assert.match(card(root, 'headroom').textContent, /No supported coding app was found for it\./);
     // Filters count methods by state and never hide the counts behind another read.
     const filters = root.querySelectorAll('.filter').map((item) => item.textContent);
-    assert.match(filters[0]!, /^All · 8$/);
+    assert.match(filters[0]!, /^All · 9$/);
     root.querySelectorAll('.filter')[1]!.fire('click');
     assert.ok(
       get('methods-root')

@@ -33,7 +33,14 @@ describe('guided optional managed optimizers', () => {
     const keys = (index: number) =>
       grids[index]!.querySelectorAll('article.method').map((item) => item.dataset['method']);
     assert.deepEqual(keys(0), ['rtk', 'harnesstrim', 'routing']);
-    assert.deepEqual(keys(1), ['reasoning', 'guidance', 'mcptoon', 'gitnexus', 'headroom']);
+    assert.deepEqual(keys(1), [
+      'reasoning',
+      'guidance',
+      'mcptoon',
+      'gitnexus',
+      'headroom',
+      'token-optimizer-mcp',
+    ]);
   });
 
   it('keeps experimental benchmark evidence labeled in the unified results list', async () => {

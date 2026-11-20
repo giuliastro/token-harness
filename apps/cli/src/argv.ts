@@ -411,13 +411,18 @@ export function parseArgv(
         }
         break;
       case '--candidate':
-        if (value !== 'headroom' && value !== 'mcptoon' && value !== 'gitnexus') {
+        if (
+          value !== 'headroom' &&
+          value !== 'mcptoon' &&
+          value !== 'gitnexus' &&
+          value !== 'token-optimizer-mcp'
+        ) {
           diagnostics.push(
             diagnostic({
               severity: 'error',
               code: 'invalid-optimization-candidate',
               message: `Optimization candidate ${JSON.stringify(value)} is not supported`,
-              remediation: 'Use headroom, mcptoon, or gitnexus',
+              remediation: 'Use headroom, mcptoon, gitnexus, or token-optimizer-mcp',
             }),
           );
         } else {
