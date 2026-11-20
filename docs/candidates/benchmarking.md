@@ -151,7 +151,10 @@ reversibility.
 
 ## Candidate-specific setup
 
-Use `--candidate headroom`, `--candidate mcptoon` or `--candidate gitnexus` to attribute a pair.
+Use `--candidate headroom`, `--candidate mcptoon`, `--candidate gitnexus`, or
+`--candidate token-optimizer-mcp` to attribute a pair. Token Optimizer MCP is an
+evaluation-only candidate: no native activation witness or managed setup exists yet. Its
+specific boundaries are documented in [token-optimizer-mcp.md](token-optimizer-mcp.md).
 Candidate-specific activation and verification procedures remain separate until Token Harness has
 enough evidence to implement a reviewed managed integration. GitNexus-specific safety boundaries are
 documented in [gitnexus.md](gitnexus.md).

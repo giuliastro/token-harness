@@ -23,8 +23,8 @@ safety mechanism stays `blocked`.
 7. **Project maturity** — upstream release activity, maintenance and licensing have been reviewed.
 8. **Combined-stack validation** — the candidate has been validated together with the recommended
    Token Harness stack, not only in isolation.
-9. **Context-owner admission** — Headroom additionally has to pass the stricter broad-context-owner
-   admission gate. This gate is not applicable to mcptoon or GitNexus.
+9. **Context-owner admission** — Headroom and Token Optimizer MCP additionally have to pass the
+   stricter broad-context-owner admission gate. This gate is not applicable to mcptoon or GitNexus.
 
 Candidate promotion remains closed by default. Observers may report local progress, and a candidate
 may acquire reviewed lifecycle primitives or exact compatibility rows before it is admitted to the
@@ -92,6 +92,9 @@ substitutes for those gates.
 
 ## Candidate categories
 
-The canonical taxonomy currently maps Headroom to `context-minimization`, mcptoon to `mcp-discovery`,
-and GitNexus to `repository-exploration`. GitNexus is deliberately separate from broad context
-minimization because repository exploration is a distinct waste surface in RFC 0027.
+The canonical taxonomy currently maps Headroom and Token Optimizer MCP to
+`context-minimization`, mcptoon to `mcp-discovery`, and GitNexus to
+`repository-exploration`. Token Optimizer MCP is an evaluation-only candidate at this stage:
+it has no admitted provider or activation witness, and requires the broad context-owner gate.
+GitNexus is deliberately separate from broad context minimization because repository
+exploration is a distinct waste surface in RFC 0027.

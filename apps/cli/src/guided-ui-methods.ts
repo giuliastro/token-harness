@@ -33,6 +33,7 @@ export const GUIDE_METHODS_JS = String.raw`
       mcptoon: [t('Smaller context'), t('Loads MCP tool descriptions only when needed instead of keeping the full list in context.'), 'context'],
       gitnexus: [t('Code navigation'), t('Maps your code so the agent finds functions and dependencies without reading many files.'), 'code'],
       headroom: [t('Smaller context'), t('Compresses large tool results and retrieves only the relevant parts.'), 'context'],
+      'token-optimizer-mcp': [t('Smaller context'), t('Avoids repeated file reads and keeps project findings available across sessions.'), 'context'],
     }[id];
     return copy || [t('Optimizer'), optimizerInfo(id).role, 'output'];
   }
@@ -51,6 +52,14 @@ export const GUIDE_METHODS_JS = String.raw`
 
   function providerMethod(id) {
     const info = optimizerInfo(id);
+    if (info.managed === false) {
+      const [category, description, kind] = providerCopy(id);
+      return {
+        key: id, kind, name: info.name, category, description, info,
+        component: null, targets: [], connected: [], actionable: [], installed: false,
+        status: ['unavailable', t('Evaluation only')], recommended: false,
+      };
+    }
     const component = managedComponent(id);
     const targets = activeAgents()
       .map(agent => ({ agent, target: setupTarget(agent.id, id) }))
@@ -118,6 +127,8 @@ export const GUIDE_METHODS_JS = String.raw`
       if (on && method.actionable.length) foot.append(actionButton(t('Add to more apps'), () => reviewSetup(method.key), 'ghost'));
     } else if (method.actionable.length) {
       foot.append(node('span', undefined, 'grow'), actionButton(t('Install'), () => reviewSetup(method.key)));
+    } else if (method.info.managed === false) {
+      foot.append(node('span', t('No managed installation yet. Compare it with your current stack before enabling hooks or a proxy.'), 'grow caption'));
     } else {
       const reasons = method.targets.filter(item => item.target.reason).map(item => item.agent.name + ': ' + item.target.reason);
       foot.append(node('span', reasons[0] || t('No supported coding app was found for it.'), 'grow caption'));
@@ -326,6 +337,11 @@ export const GUIDE_METHODS_IT: Readonly<Record<string, string>> = {
     "Mappa il tuo codice così l'agente trova funzioni e dipendenze senza leggere tanti file.",
   'Compresses large tool results and retrieves only the relevant parts.':
     'Comprime i risultati grandi dei tool e recupera solo le parti utili.',
+  'Avoids repeated file reads and keeps project findings available across sessions.':
+    'Evita letture ripetute dei file e conserva le informazioni utili tra sessioni.',
+  'Evaluation only': 'Solo valutazione',
+  'No managed installation yet. Compare it with your current stack before enabling hooks or a proxy.':
+    'Installazione gestita non ancora disponibile. Confrontalo con gli ottimizzatori attivi prima di abilitare hook o proxy.',
   Optimizer: 'Ottimizzatore',
   'Needs a check': 'Da controllare',
   'Not installed': 'Non installato',

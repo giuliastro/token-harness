@@ -47,7 +47,7 @@ describe('guided loading layout', () => {
     assert.match(browser.get('updated').textContent, /Updated at/);
     assert.equal(browser.get('reading-spinner').hidden, true);
     assert.match(browser.get('home-root').textContent, /Token Harness is working/);
-    assert.equal(browser.get('methods-root').querySelectorAll('article.method').length, 8);
+    assert.equal(browser.get('methods-root').querySelectorAll('article.method').length, 9);
   });
 
   it('surfaces progressive read feedback without triggering another full refresh', () => {

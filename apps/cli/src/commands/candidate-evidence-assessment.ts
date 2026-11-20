@@ -96,7 +96,7 @@ function basePromotionBlockers(
     'the combined recommended stack still requires its own quality-safe validation',
   ];
   if (completedPairs < totalPairs) blockers.push('the standard benchmark campaign is not complete');
-  if (candidateId === 'headroom') {
+  if (candidateId === 'headroom' || candidateId === 'token-optimizer-mcp') {
     blockers.push(
       'a broad context owner must also pass the dedicated context-owner admission gate',
     );

@@ -101,6 +101,24 @@ describe('candidate benchmark evidence', () => {
       assert.equal(gitnexus.options.optimizationCandidate, 'gitnexus');
     }
 
+    const tokenOptimizer = parseArgv([
+      'benchmark-start',
+      '--benchmark-id',
+      'token-optimizer-standard-1',
+      '--candidate',
+      'token-optimizer-mcp',
+      '--variant',
+      'baseline',
+      '--task',
+      'standard',
+      '--harness',
+      'codex',
+    ]);
+    assert.equal(tokenOptimizer.kind, 'command');
+    if (tokenOptimizer.kind === 'command') {
+      assert.equal(tokenOptimizer.options.optimizationCandidate, 'token-optimizer-mcp');
+    }
+
     const invalid = parseArgv(['benchmark-start', '--candidate', 'unknown']);
     assert.equal(invalid.kind, 'usage-error');
     if (invalid.kind === 'usage-error')
@@ -164,7 +182,7 @@ describe('candidate benchmark evidence', () => {
     assert.equal('score' in summary, false);
   });
 
-  it('keeps Headroom, mcptoon and GitNexus evidence isolated', () => {
+  it('keeps Headroom, mcptoon, GitNexus and Token Optimizer evidence isolated', () => {
     const byCandidate = new Map<OptimizationCandidateId, CandidateBenchmarkEvidenceEntry[]>([
       [
         'headroom',
@@ -193,12 +211,21 @@ describe('candidate benchmark evidence', () => {
           }),
         ],
       ],
+      [
+        'token-optimizer-mcp',
+        [
+          entry('token-optimizer-1', {
+            verdict: 'optimized-better',
+            evidenceLevel: 'local-evidence',
+          }),
+        ],
+      ],
     ]);
 
     const evidence = buildCandidateBenchmarkEvidence(byCandidate);
     assert.deepEqual(
       evidence.map((row) => row.candidateId),
-      ['headroom', 'mcptoon', 'gitnexus'],
+      ['headroom', 'mcptoon', 'gitnexus', 'token-optimizer-mcp'],
     );
     assert.deepEqual(
       evidence.map((row) => [row.optimizedBetter, row.baselineBetter, row.equivalent]),
@@ -206,11 +233,12 @@ describe('candidate benchmark evidence', () => {
         [1, 0, 0],
         [0, 1, 0],
         [0, 0, 1],
+        [1, 0, 0],
       ],
     );
     assert.deepEqual(
       evidence.map((row) => row.evidenceCoveragePercent),
-      [100, 100, 100],
+      [100, 100, 100, 100],
     );
   });
 

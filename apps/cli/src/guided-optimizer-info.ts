@@ -100,4 +100,24 @@ export const GUIDE_OPTIMIZER_INFO = {
       source: 'https://github.com/headroomlabs-ai/headroom#proof',
     },
   },
+  'token-optimizer-mcp': {
+    name: 'Token Optimizer MCP',
+    role: 'Avoids redundant file reads and searches, and preserves reusable project findings.',
+    project: 'https://github.com/ooples/token-optimizer-mcp',
+    managed: false,
+    optional: true,
+    useful:
+      'Worth evaluating when coding agents repeatedly read the same files or rediscover conclusions across sessions. Compare its incremental value against RTK, HarnessTrim and Headroom.',
+    mechanism:
+      'Offers bounded MCP file tools, read-diff caching, a project knowledge graph and optional lifecycle hooks and context proxy. The MCP-only path is not equivalent to the full plugin.',
+    limitation:
+      'Evaluation only in this release: Token Harness does not install, enable or remove its MCP server, hooks or proxy. It may overlap with existing output reducers and other context owners. An experimental benchmark label is not proof that it ran.',
+    claim: {
+      headline: '29.5% less',
+      scope: '10 SWE-bench Verified tasks · Claude Sonnet',
+      context:
+        'The upstream default-assist comparison reports 0.705× relative cost with 7/7 tasks resolved in both arms. This small self-reported study is not an additive saving over Token Harness, nor evidence of subscription allowance savings.',
+      source: 'https://github.com/ooples/token-optimizer-mcp#does-it-pay-for-itself',
+    },
+  },
 };

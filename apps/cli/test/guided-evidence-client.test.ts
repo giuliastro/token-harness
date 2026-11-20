@@ -128,13 +128,14 @@ describe('guided evidence interactions', () => {
     const { get, reads, turn } = await startGuidedBrowser();
     await turn('methods');
     const cards = get('methods-root').querySelectorAll('article.method');
-    assert.equal(cards.length, 8);
+    assert.equal(cards.length, 9);
     const expected: Array<[string, string, string | null]> = [
       ['rtk', 'https://github.com/rtk-ai/rtk', 'up to 90% less'],
       ['harnesstrim', 'https://github.com/giuliastro/HarnessTrim', '75.8% less'],
       ['mcptoon', 'https://github.com/activeing123/mcptoon', '99.2% less'],
       ['gitnexus', 'https://github.com/abhigyanpatwari/GitNexus', null],
       ['headroom', 'https://github.com/headroomlabs-ai/headroom', '21–57% less'],
+      ['token-optimizer-mcp', 'https://github.com/ooples/token-optimizer-mcp', '29.5% less'],
     ];
     for (const [id, url, claim] of expected) {
       const card = cards.find((item) => item.dataset['method'] === id)!;
@@ -160,11 +161,12 @@ describe('guided evidence interactions', () => {
     const text = (id: string) => cards.find((item) => item.dataset['method'] === id)!.textContent;
     assert.match(text('mcptoon'), /name index, not full schemas or tool results/);
     assert.match(text('headroom'), /does not enable the project’s broader proxy features/);
+    assert.match(text('token-optimizer-mcp'), /does not install, enable or remove/);
     assert.match(text('rtk'), /whole-session saving/);
     // Upstream percentages never leak into measured results.
-    assert.doesNotMatch(get('home-root').textContent, /99\.2%|75\.8%|21–57%/);
+    assert.doesNotMatch(get('home-root').textContent, /99\.2%|75\.8%|21–57%|29\.5%/);
     await turn('details');
-    assert.doesNotMatch(get('result-evidence').textContent, /99\.2%|75\.8%|21–57%/);
+    assert.doesNotMatch(get('result-evidence').textContent, /99\.2%|75\.8%|21–57%|29\.5%/);
     await turn('methods');
     const before = reads.length;
     const disclosure = get('methods-root')
@@ -210,7 +212,7 @@ describe('guided evidence interactions', () => {
     assert.match(get('home-root').textContent, /No coding agent found/);
     await turn('methods');
     const root = get('methods-root');
-    assert.equal(root.querySelectorAll('article.method').length, 8);
+    assert.equal(root.querySelectorAll('article.method').length, 9);
     assert.match(root.textContent, /No coding agent found\./);
     assert.equal(buttons(root, 'Install').length, 0);
     assert.equal(

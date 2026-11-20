@@ -13,6 +13,7 @@ export const OPTIMIZATION_CANDIDATES: readonly OptimizationCandidateId[] = [
   'headroom',
   'mcptoon',
   'gitnexus',
+  'token-optimizer-mcp',
 ];
 
 const CANDIDATE_SET = new Set<string>(OPTIMIZATION_CANDIDATES);

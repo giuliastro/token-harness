@@ -189,4 +189,20 @@ describe('candidate promotion readiness', () => {
     assert.equal(result.nextGate, 'context-owner-admission');
     assert.ok(result.unreviewedGateIds.includes('context-owner-admission'));
   });
+
+  it('requires the same broad-context-owner gate for Token Optimizer MCP', () => {
+    const result = assessCandidatePromotionReadiness({
+      candidateId: 'token-optimizer-mcp',
+      assessment: evidence('token-optimizer-mcp'),
+      observation: null,
+      review: PASS,
+    });
+    assert.equal(result.promotionEligible, false);
+    assert.ok(result.unreviewedGateIds.includes('context-owner-admission'));
+    assert.ok(result.unreviewedGateIds.includes('benchmark-capability'));
+    assert.equal(
+      result.gates.find((gate) => gate.id === 'context-owner-admission')?.state,
+      'unreviewed',
+    );
+  });
 });
